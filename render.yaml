@@ -1,0 +1,47 @@
+services:
+  # Backend Core (Spring Boot)
+  - type: web
+    name: eam-backend-core
+    env: java
+    region: singapore # Good for Vietnam
+    plan: free
+    rootDir: backend-core
+    buildCommand: mvn clean package -DskipTests
+    startCommand: java -jar target/eam-backend-0.0.1-SNAPSHOT.jar
+    envVars:
+      - key: PORT
+        value: 8080
+      - key: DB_URL
+        fromDatabase:
+          name: eam-postgres
+          property: connectionString
+      - key: FRONTEND_URL
+        value: https://eam-project.vercel.app # Update with real Vercel URL later
+
+  # AI Service (FastAPI)
+  - type: web
+    name: eam-ai-service
+    env: python
+    region: singapore
+    plan: free
+    rootDir: ai-service
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PORT
+        value: 8000
+      - key: NEO4J_URI
+        sync: false # User needs to input this manually in dashboard
+      - key: NEO4J_USERNAME
+        sync: false
+      - key: NEO4J_PASSWORD
+        sync: false
+
+databases:
+  - name: eam-postgres
+    databaseName: eam_db
+    user: eam_user
+    plan: free
+    region: singapore
+
+# Note: Neo4j is hosted on AuraDB (external), so it's not listed as a Render database service.
