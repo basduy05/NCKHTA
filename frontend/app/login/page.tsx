@@ -1,11 +1,10 @@
 ﻿"use client";
 import { useState } from "react";
-import { BookOpen, Mail, Lock, LogIn, Shield, GraduationCap, Users } from "lucide-react";
+import { BookOpen, Mail, Lock, LogIn } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 
 export default function LoginPage() {
   const { login } = useAuth();
-  const [role, setRole] = useState("student");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -16,14 +15,11 @@ export default function LoginPage() {
     setIsLoading(true);
     setError("");
 
-    // Simulate network latency
-    setTimeout(async () => {
-      const success = await login(email, password, role);
-      if (!success) {
-        setError("Đăng nhập thất bại. Vui lòng kiểm tra lại thông tin.");
-        setIsLoading(false);
-      }
-    }, 1000);
+    const success = await login(email, password);
+    if (!success) {
+      setError("Đăng nhập thất bại. Vui lòng kiểm tra lại thông tin.");
+    }
+    setIsLoading(false);
   };
 
   return (
@@ -39,21 +35,6 @@ export default function LoginPage() {
 
         <div className="p-8">
           <form onSubmit={handleLogin} className="space-y-6">
-            <div className="grid grid-cols-3 gap-3 mb-6">
-              <button type="button" onClick={() => setRole("student")} className={`flex flex-col items-center p-3 rounded-xl border-2 transition ${role === 'student' ? 'border-indigo-600 bg-indigo-50 text-indigo-700' : 'border-gray-100 hover:border-gray-200'}`}>
-                <GraduationCap size={24} className="mb-1" />
-                <span className="text-xs font-semibold">Học sinh</span>
-              </button>
-              <button type="button" onClick={() => setRole("teacher")} className={`flex flex-col items-center p-3 rounded-xl border-2 transition ${role === 'teacher' ? 'border-indigo-600 bg-indigo-50 text-indigo-700' : 'border-gray-100 hover:border-gray-200'}`}>
-                <Users size={24} className="mb-1" />
-                <span className="text-xs font-semibold">Giáo viên</span>
-              </button>
-              <button type="button" onClick={() => setRole("admin")} className={`flex flex-col items-center p-3 rounded-xl border-2 transition ${role === 'admin' ? 'border-indigo-600 bg-indigo-50 text-indigo-700' : 'border-gray-100 hover:border-gray-200'}`}>
-                <Shield size={24} className="mb-1" />
-                <span className="text-xs font-semibold">Admin</span>
-              </button>
-            </div>
-
             {error && (
               <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm text-center">
                 {error}
@@ -62,10 +43,10 @@ export default function LoginPage() {
 
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Email ({role})</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
-                  <input type="email" required value={email} onChange={e => setEmail(e.target.value)} className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none" placeholder={`Ví dụ: ${role}@eam.com`} />
+                  <input type="email" required value={email} onChange={e => setEmail(e.target.value)} className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none" placeholder="your.email@example.com" />
                 </div>
               </div>
 
