@@ -67,4 +67,5 @@ class LessonCreate(BaseModel):
     class_id: int
     title: str
     content: Optional[str] = None
-
+
+
