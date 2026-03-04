@@ -166,40 +166,51 @@ async def import_vocab(file: UploadFile = File(...)):
     count = 0
     errors = []
     
-    for row in reader:
-        try:
-            word = row.get('word', '').strip()
-            if not word: continue
-            
-            pronunciation = row.get('pronunciation', '')
-            meaning = row.get('meaning', '')
-            level = row.get('level', 'A1')
-            word_type = row.get('type', 'noun')
-            example = row.get('example', '').strip()
-            
-            if not example:
-                try:
-                    example = llm_service.generate_example_sentence(word, meaning, level)
-                except Exception as e:
-                    print(f"LLM Error generating example for {word}: {e}")
-                    example = f"Example for {word}"
+    try:
+        for row in reader:
+            try:
+                word = (row.get('word') or '').strip()
+                if not word: continue
+                
+                pronunciation = (row.get('pronunciation') or '').strip()
+                meaning = (row.get('meaning') or '').strip()
+                level = (row.get('level') or 'A1').strip()
+                if not level: level = 'A1'
+                word_type = (row.get('type') or 'noun').strip()
+                if not word_type: word_type = 'noun'
+                example = (row.get('example') or '').strip()
+                
+                if not example:
+                    try:
+                        example = llm_service.generate_example_sentence(word, meaning, level)
+                    except Exception as e:
+                        print(f"LLM Error generating example for {word}: {e}")
+                        example = f"Example for {word}"
 
-            data = {
-                "word": word,
-                "pronunciation": pronunciation,
-                "meaning": meaning,
-                "level": level,
-                "type": word_type,
-                "example": example
-            }
-            
-            res = graph_service.create_vocab_node(data)
-            if res.get("status") == "success":
-                count += 1
-            else:
-                errors.append(f"Failed to add {word}: {res.get('message')}")
-        except Exception as e:
-             errors.append(f"Error processing row: {str(e)}")
+                data = {
+                    "word": word,
+                    "pronunciation": pronunciation,
+                    "meaning": meaning,
+                    "level": level,
+                    "type": word_type,
+                    "example": example
+                }
+                
+                res = graph_service.create_vocab_node(data)
+                if res.get("status") == "success":
+                    count += 1
+                else:
+                    errors.append(f"Failed to add {word}: {res.get('message')}")
+            except Exception as e:
+                 errors.append(f"Error processing row: {str(e)}")
+    except csv.Error as e:
+        raise HTTPException(status_code=400, detail=f"Invalid CSV format: {e}")
+    except Exception as e:
+        # Catch unexpected errors during iteration
+        if not errors and count == 0:
+             raise HTTPException(status_code=500, detail=f"Failed to process CSV: {str(e)}")
+        else:
+             errors.append(f"Processing interrupted: {str(e)}")
             
     return {"message": f"Successfully imported {count} words.", "errors": errors}
 
