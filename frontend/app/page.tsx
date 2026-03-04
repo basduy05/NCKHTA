@@ -1,49 +1,56 @@
-import Image from "next/image";
+import Link from "next/link";
+import { BookOpen, Users, ShieldCheck, Sparkles } from "lucide-react";
 
 export default function Home() {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-between p-24">
-      <div className="z-10 max-w-5xl w-full items-center justify-between font-mono text-sm lg:flex">
-        <p className="fixed left-0 top-0 flex w-full justify-center border-b border-gray-300 bg-gradient-to-b from-zinc-200 pb-6 pt-8 backdrop-blur-2xl dark:border-neutral-800 dark:bg-zinc-800/30 dark:from-inherit lg:static lg:w-auto  lg:rounded-xl lg:border lg:bg-gray-200 lg:p-4 lg:dark:bg-zinc-800/30">
-          EAM Project - NCKHTA 2025
-        </p>
-      </div>
-
-      <div className="mb-32 grid text-center lg:max-w-5xl lg:w-full lg:mb-0 lg:grid-cols-3 lg:text-left gap-4">
-        <a
-          href="https://nextjs.org/docs"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Frontend{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Built with Next.js & deployed on Vercel.
-          </p>
-        </a>
-
-        <div className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30">
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Backend Core
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Spring Boot managing Users & Classes.
+    <main className="min-h-screen bg-gradient-to-b from-indigo-50 to-white flex flex-col items-center justify-center p-8">
+      <div className="max-w-4xl w-full text-center space-y-8">
+        
+        {/* Header */}
+        <div className="space-y-4">
+          <div className="flex justify-center">
+            <div className="h-20 w-20 bg-indigo-600 text-white rounded-2xl shadow-xl flex items-center justify-center transform rotate-3">
+              <Sparkles size={40} />
+            </div>
+          </div>
+          <h1 className="text-5xl font-extrabold text-gray-900 tracking-tight">
+            EAM - Cổng Học Tập AI <span className="text-indigo-600">Thông Minh</span>
+          </h1>
+          <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+            Khám phá phương pháp học từ vựng và ngữ pháp đột phá với Đồ thị tri thức (Knowledge Graph) và Trí tuệ Nhân tạo.
           </p>
         </div>
 
-        <div className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30">
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            AI Service
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            FastAPI running GraphRAG & LLM logic.
-          </p>
+        {/* Role Selection */}
+        <div className="grid md:grid-cols-3 gap-6 pt-12">
+          {/* Admin */}
+          <Link href="/dashboard/admin" className="group p-8 bg-white rounded-2xl shadow-sm hover:shadow-xl hover:border-indigo-200 border border-gray-100 transition-all text-center">
+            <div className="mx-auto h-16 w-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mb-6 py-auto group-hover:scale-110 transition-transform">
+              <ShieldCheck size={32} />
+            </div>
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">Quản Trị Viên</h2>
+            <p className="text-gray-500 text-sm">Quản lý hệ thống, giáo viên, học sinh và kho từ vựng cốt lõi.</p>
+          </Link>
+
+          {/* Teacher */}
+          <Link href="/dashboard/teacher" className="group p-8 bg-white rounded-2xl shadow-sm hover:shadow-xl hover:border-indigo-200 border border-gray-100 transition-all text-center">
+            <div className="mx-auto h-16 w-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mb-6 py-auto group-hover:scale-110 transition-transform">
+              <Users size={32} />
+            </div>
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">Giáo Viên</h2>
+            <p className="text-gray-500 text-sm">Quản lý lớp học, giao bài tập và theo dõi tiến độ học sinh.</p>
+          </Link>
+
+          {/* Student */}
+          <Link href="/dashboard/student" className="group p-8 bg-white rounded-2xl shadow-sm hover:shadow-xl hover:border-indigo-200 border border-gray-100 transition-all text-center border-b-4 border-b-indigo-500">
+            <div className="mx-auto h-16 w-16 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center mb-6 py-auto group-hover:scale-110 transition-transform">
+              <BookOpen size={32} />
+            </div>
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">Học Sinh</h2>
+            <p className="text-gray-500 text-sm">Trải nghiệm phân tích văn bản, thi trắc nghiệm và Flashcard AI.</p>
+          </Link>
         </div>
+
       </div>
     </main>
   );

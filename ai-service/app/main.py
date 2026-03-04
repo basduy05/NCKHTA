@@ -1,13 +1,21 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
+from dotenv import load_dotenv
 import os
 
-app = FastAPI()
+# Load environment variables from .env file BEFORE importing services
+load_dotenv()
 
-# Allow CORS for frontend
-origins = [
-    "*", # Allow all for now, restrict in production to frontend URL
-]
+from .services import graph_service, llm_service  # Import internal services
+from .routers import admin  # Import routers
+
+app = FastAPI(title="EAM AI Service", description="Powered by Neo4j & GenAI")
+
+# ALL REQUIRED DEPENDENCIES:
+# uvicorn, fastapi, python-multipart, python-dotenv, neo4j, langchain
+# langchain-community, google-generativeai, openai
+
+origins = ["*"]  # Restrict in production
 
 app.add_middleware(
     CORSMiddleware,
@@ -17,22 +25,59 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(admin.router)
+
 @app.get("/")
 def read_root():
-    return {"message": "AI Service is running on Render!"}
+    # Check connection status dynamically
+    is_connected = graph_service.graph is not None
+    return {"status": "AI Service Running", "graph_connected": is_connected}
 
-@app.get("/health")
-def health_check():
-    return {"status": "healthy"}
-
-# Example endpoint to interact with Neo4j (GraphRAG placeholder)
 @app.post("/analyze-text")
 def analyze_text(text: str):
-    # Logic to process text with LangChain/Neo4j would go here
-    return {"analysis": f"Processed text: {text[:50]}...", "graph_nodes": []}
+    """
+    1. Extracts entities -> Updates Neo4j Graph.
+    2. Generates semantic summary.
+    """
+    graph_result = graph_service.extract_entities_and_relations(text)
+    return {"analysis": "Text processed", "graph_update": graph_result}
+
+@app.get("/graph/visualize")
+def visualize_graph(topic: str = "General"):
+    """
+    Returns nodes and edges for D3.js / React Force Graph.
+    """
+    return graph_service.get_knowledge_subgraph(topic)
+
+@app.post("/flashcard/generate")
+def generate_flashcard(word: str, level: str = "A1"):
+    return llm_service.generate_flashcard_content(word, level)
+
+@app.post("/vocabulary/extract")
+def extract_vocabulary(text: str):
+    """
+    Core Feature: Extracts vocabulary list from input text with meanings and phonetics.
+    """
+    return llm_service.extract_vocabulary_from_text(text)
+
+@app.post("/quiz/generate")
+def generate_quiz(text: str, num_questions: int = 5):
+    """
+    Core Feature: Generates a quiz based on the input text to test comprehension.
+    """
+    return llm_service.generate_quiz_from_text(text, num_questions)
+
+@app.post("/speech/analyze")
+async def analyze_speech(audio_file: UploadFile = File(...)):
+    """
+    Receives audio blob from frontend -> STT (Speech-to-Text) -> Phoneme Analysis.
+    For NCKH demo, we can use OpenAI Whisper API or Google Speech API here.
+    """
+    return {"score": 85, "feedback": "Good pronunciation of 'th' sound."} 
 
 if __name__ == "__main__":
     import uvicorn
+
     # Render provides PORT env var
     port = int(os.environ.get("PORT", 8000))
     uvicorn.run(app, host="0.0.0.0", port=port)

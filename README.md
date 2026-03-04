@@ -1,16 +1,26 @@
-# Deployment Guide for EAM Project (NCKHTA)
+# EAM Project - NCKHTA 2025 (Advanced AI Ecosystem)
 
-Welcome! This project structure is set up for a full-stack deployment using **Next.js**, **Spring Boot**, **FastAPI**, **PostgreSQL**, and **Neo4j**.
+Welcome! This is a cutting-edge educational platform built for the **Scientific Research Competition (NCKHTA 2025)**. It leverages **Knowledge Graphs (Neo4j)** and **Generative AI (LLMs)** to create a personalized, adaptive English learning experience.
+
+## 🌟 Key Innovations (Breakthrough Features)
+1. **Knowledge Graph Visualization:** See your brain's network grow as you learn new words.
+2. **AI Flashcard Generator:** Instantly create learning materials from any text using GPT-4/Gemini.
+3. **GraphRAG Chatbot:** An AI tutor that understands context and relationships between concepts, not just keywords.
+4. **Real-time Pronunciation Feedback:** (Planned) Analyze speech patterns for correction.
 
 ## 📂 Project Structure
 
-- `frontend/`: Next.js application (Web UI).
-- `backend-core/`: Java Spring Boot application (Core Logic, User Management).
-- `ai-service/`: Python FastAPI application (AI, GraphRAG).
-- `database/`: SQL scripts for PostgreSQL and Cypher scripts for Neo4j.
-- `render.yaml`: Blueprint to deploy both backends and the database on Render.com automatically.
+- `frontend/`: Next.js 14 + React Force Graph (3D Visualization).
+- `backend-core/`: Java Spring Boot (User & Progress Management).
+- `ai-service/`: Python FastAPI + LangChain + Neo4j (The "Brain").
+- `database/`: SQL scripts (Postgres) and Cypher scripts (Neo4j).
+- `render.yaml`: Automated Cloud Deployment Blueprint.
 
-## 🚀 Step-by-Step Deployment
+## 📅 Roadmap
+See [DEVELOPMENT_PLAN.md](./DEVELOPMENT_PLAN.md) for the detailed week-by-week execution plan.
+
+## 🚀 Step-by-Step Deployment (Updated)
+
 
 ### 1. Database Setup (Do this first!)
 **PostgreSQL (Relational DB):**

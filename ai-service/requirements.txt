@@ -3,5 +3,10 @@ uvicorn
 neo4j
 python-dotenv
 langchain
+langchain-core
+langchain-community
+langchain-openai
+langchain-google-genai
 pydantic
 requests
+python-multipart
