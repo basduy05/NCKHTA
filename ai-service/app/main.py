@@ -8,6 +8,9 @@ load_dotenv()
 
 from .services import graph_service, llm_service  # Import internal services
 from .routers import admin  # Import routers
+from .routers import auth  # Import Auth Router
+import sqlite3
+import os
 
 app = FastAPI(title="EAM AI Service", description="Powered by Neo4j & GenAI")
 
@@ -26,6 +29,7 @@ app.add_middleware(
 )
 
 app.include_router(admin.router)
+app.include_router(auth.router)
 
 @app.get("/")
 def read_root():

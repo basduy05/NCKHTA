@@ -16,6 +16,27 @@ def init_db():
             role TEXT NOT NULL
         )
     """)
+    
+    # --- MIGRATION FOR AUTHENTICATION ---
+    try:
+        cursor.execute("ALTER TABLE users ADD COLUMN password_hash TEXT")
+    except sqlite3.OperationalError: pass
+    
+    try:
+        cursor.execute("ALTER TABLE users ADD COLUMN otp TEXT")
+    except sqlite3.OperationalError: pass
+    
+    try:
+        cursor.execute("ALTER TABLE users ADD COLUMN is_verified BOOLEAN DEFAULT 0")
+    except sqlite3.OperationalError: pass
+    
+    try:
+        cursor.execute("ALTER TABLE users ADD COLUMN is_active BOOLEAN DEFAULT 1")
+    except sqlite3.OperationalError: pass
+
+    # -----------------------------------
+
+    cursor.execute("""
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS classes (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
