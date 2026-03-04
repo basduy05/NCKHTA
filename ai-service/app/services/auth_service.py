@@ -8,9 +8,15 @@ import random
 import string
 from passlib.context import CryptContext
 import sqlite3
-from .database import get_db
+from jose import JWTError, jwt
+from datetime import datetime, timedelta
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+# --- JWT CONFIG ---
+SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 hours
 
 # --- ENV CONFIG ---
 SMTP_SERVER = os.getenv("SMTP_SERVER", "smtp.gmail.com")
@@ -43,6 +49,32 @@ def verify_password(plain_password, hashed_password):
 
 def generate_otp(length=6):
     return "".join(random.choices(string.digits, k=length))
+
+def generate_access_token(user_id: int, email: str):
+    """Create JWT access token"""
+    payload = {
+        "sub": str(user_id),
+        "email": email,
+        "exp": datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
+        "iat": datetime.utcnow()
+    }
+    return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+
+def verify_access_token(token: str):
+    """Verify JWT and return user_id, email"""
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id = int(payload.get("sub"))
+        email = payload.get("email")
+        if user_id is None or email is None:
+            return None
+        return {"user_id": user_id, "email": email}
+    except JWTError:
+        return None
+
+def generate_reset_token(length=32):
+    """Generate random token for password reset"""
+    return "".join(random.choices(string.ascii_letters + string.digits, k=length))
 
 def send_email(to_email: str, subject: str, html_content: str):
     if not SMTP_USERNAME or not SMTP_PASSWORD:
@@ -103,6 +135,21 @@ def send_notification_email(to_email: str, title: str, message: str):
             <p>{message}</p>
             <hr>
             <p>EAM System Notification</p>
+        </body>
+    </html>
+    """
+    return send_email(to_email, subject, html)
+
+def send_password_reset_email(to_email: str, reset_token: str, reset_link: str):
+    subject = "Password Reset Request - EAM System"
+    html = f"""
+    <html>
+        <body>
+            <h2>Password Reset Request</h2>
+            <p>Click the link below to reset your password (expires in 1 hour):</p>
+            <p><a href="{reset_link}" style="background-color: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Reset Password</a></p>
+            <p>Or use this code: <strong>{reset_token}</strong></p>
+            <p>If you didn't request this, please ignore this email.</p>
         </body>
     </html>
     """

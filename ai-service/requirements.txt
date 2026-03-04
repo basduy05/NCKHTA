@@ -10,3 +10,7 @@ langchain-google-genai
 pydantic
 requests
 python-multipart
+passlib[bcrypt]
+bcrypt
+python-jose
+email-validator

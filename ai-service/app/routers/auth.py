@@ -1,10 +1,21 @@
 from fastapi import APIRouter, HTTPException, Depends, status
 import sqlite3
+import time
 from ..database import get_db, UserCreate
 from ..services import auth_service
-from .auth_service import UserRegister, UserLogin, OTPVerify
+from ..services.auth_service import UserRegister, UserLogin, OTPVerify
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
+
+class ForgotPasswordRequest:
+    def __init__(self, email: str):
+        self.email = email
+
+class ResetPasswordRequest:
+    def __init__(self, email: str, reset_token: str, new_password: str):
+        self.email = email
+        self.reset_token = reset_token
+        self.new_password = new_password
 
 @router.post("/register", status_code=status.HTTP_201_CREATED)
 async def register(user: UserRegister):
@@ -92,16 +103,111 @@ async def login(data: UserLogin):
     if not user['is_verified']:
         raise HTTPException(status_code=400, detail="Account not verified. Please verify OTP first.")
         
-    # Return mock token or user info session
+    # Generate JWT token
+    access_token = auth_service.generate_access_token(user['id'], data.email)
+    
     return {
-        "access_token": f"mock-token-{user['id']}", 
+        "access_token": access_token, 
         "token_type": "bearer",
         "user": {
             "id": user['id'],
             "name": user['name'],
+            "email": data.email,
             "role": user['role']
         }
     }
+
+@router.post("/logout")
+def logout():
+    """Logout endpoint - frontend should clear token from localStorage"""
+    return {"message": "Logged out successfully"}
+
+@router.post("/forgot-password")
+def forgot_password(email: str):
+    """
+    Send password reset email with reset token.
+    """
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    cursor.execute("SELECT id, name FROM users WHERE email = ?", (email,))
+    user = cursor.fetchone()
+    
+    if not user:
+        conn.close()
+        # Don't reveal if email exists for security
+        return {"message": "If email exists, password reset link has been sent."}
+    
+    # Generate reset token
+    reset_token = auth_service.generate_reset_token()
+    expires_at = int(time.time()) + 3600  # 1 hour
+    
+    try:
+        cursor.execute(
+            "UPDATE users SET password_reset_token = ?, password_reset_expires = ? WHERE id = ?",
+            (reset_token, expires_at, user['id'])
+        )
+        conn.commit()
+        
+        # Send reset email
+        reset_link = f"https://your-frontend-domain.com/reset-password?token={reset_token}&email={email}"
+        auth_service.send_password_reset_email(email, reset_token, reset_link)
+        
+    except Exception as e:
+        conn.close()
+        raise HTTPException(status_code=500, detail=str(e))
+    
+    conn.close()
+    return {"message": "If email exists, password reset link has been sent."}
+
+@router.post("/reset-password")
+def reset_password(email: str, reset_token: str, new_password: str):
+    """
+    Reset password using reset token from email.
+    """
+    if not new_password or len(new_password) < 6:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    cursor.execute(
+        "SELECT id, password_reset_token, password_reset_expires FROM users WHERE email = ?",
+        (email,)
+    )
+    user = cursor.fetchone()
+    
+    if not user:
+        conn.close()
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    if not user['password_reset_token']:
+        conn.close()
+        raise HTTPException(status_code=400, detail="No reset request found")
+    
+    if user['password_reset_token'] != reset_token:
+        conn.close()
+        raise HTTPException(status_code=400, detail="Invalid reset token")
+    
+    if int(time.time()) > user['password_reset_expires']:
+        conn.close()
+        raise HTTPException(status_code=400, detail="Reset token has expired")
+    
+    # Hash new password
+    hashed_password = auth_service.get_password_hash(new_password)
+    
+    try:
+        cursor.execute(
+            "UPDATE users SET password_hash = ?, password_reset_token = NULL, password_reset_expires = NULL WHERE id = ?",
+            (hashed_password, user['id'])
+        )
+        conn.commit()
+    except Exception as e:
+        conn.close()
+        raise HTTPException(status_code=500, detail=str(e))
+    
+    conn.close()
+    return {"message": "Password reset successfully. You can now login."}
 
 @router.post("/notify")
 def send_notification(email: str, title: str, message: str):

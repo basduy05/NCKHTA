@@ -33,10 +33,17 @@ def init_db():
     try:
         cursor.execute("ALTER TABLE users ADD COLUMN is_active BOOLEAN DEFAULT 1")
     except sqlite3.OperationalError: pass
+    
+    try:
+        cursor.execute("ALTER TABLE users ADD COLUMN password_reset_token TEXT")
+    except sqlite3.OperationalError: pass
+    
+    try:
+        cursor.execute("ALTER TABLE users ADD COLUMN password_reset_expires INTEGER")
+    except sqlite3.OperationalError: pass
 
     # -----------------------------------
 
-    cursor.execute("""
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS classes (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
