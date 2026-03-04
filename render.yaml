@@ -1,7 +1,7 @@
 services:
   # AI Service (FastAPI - Python)
   - type: web
-    name: eam-ai-service
+    name: iedu
     env: python
     region: singapore
     plan: free
