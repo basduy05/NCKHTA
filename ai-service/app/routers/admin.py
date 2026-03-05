@@ -70,6 +70,11 @@ def create_user(user: UserCreate):
         try:
              # Fallback for old schema
              cursor.execute("INSERT INTO users (name, email, role) VALUES (?, ?, ?)", (user.name, user.email, user.role.upper()))
+             conn.commit()
+        except Exception as e:
+             conn.close()
+             raise HTTPException(status_code=500, detail="Database schema mismatch")
+
     conn.close()
     return {"message": "User created successfully"}
 

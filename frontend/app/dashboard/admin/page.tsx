@@ -133,7 +133,7 @@ function UsersTab() {
 
   const handleEditClick = (u) => {
     setIsEditing(u.id);
-    setFormUser({ name: u.name, email: u.email, role: u.role });
+    setFormUser({ name: u.name, email: u.email, role: u.role, password: '' });
   }
 
   const resetForm = () => {
