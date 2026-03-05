@@ -34,7 +34,7 @@ app.include_router(auth.router)
 @app.get("/")
 def read_root():
     # Check connection status dynamically
-    is_connected = graph_service.graph is not None
+    is_connected = graph_service.get_graph() is not None
     return {"status": "AI Service Running", "graph_connected": is_connected}
 
 @app.post("/analyze-text")
