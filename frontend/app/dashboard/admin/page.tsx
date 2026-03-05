@@ -81,7 +81,7 @@ function UsersTab() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(null);
-  const [formUser, setFormUser] = useState({ name: '', email: '', role: 'STUDENT' });
+  const [formUser, setFormUser] = useState({ name: '', email: '', role: 'STUDENT', password: '' });
 
   const fetchUsers = async () => {
     try {
@@ -138,7 +138,7 @@ function UsersTab() {
 
   const resetForm = () => {
     setIsEditing(null);
-    setFormUser({ name: '', email: '', role: 'STUDENT' });
+    setFormUser({ name: '', email: '', role: 'STUDENT', password: '' });
   }
 
   return (
@@ -192,6 +192,12 @@ function UsersTab() {
             <label className="block text-sm font-medium mb-1">Email</label>
             <input type="email" value={formUser.email} onChange={e => setFormUser({...formUser, email: e.target.value})} className="w-full border rounded-lg p-2 focus:ring-2 outline-none" placeholder="email@domain.com" />
           </div>
+          {!isEditing && (
+            <div>
+              <label className="block text-sm font-medium mb-1">Mật khẩu (Mặc định: 123456)</label>
+              <input type="text" value={formUser.password || ''} onChange={e => setFormUser({...formUser, password: e.target.value})} className="w-full border rounded-lg p-2 focus:ring-2 outline-none" placeholder="123456" />
+            </div>
+          )}
           <div>
             <label className="block text-sm font-medium mb-1">Vai trò</label>
             <select value={formUser.role} onChange={e => setFormUser({...formUser, role: e.target.value})} className="w-full border rounded-lg p-2 bg-white outline-none">

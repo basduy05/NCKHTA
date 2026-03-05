@@ -1,7 +1,7 @@
 
 from fastapi import APIRouter, HTTPException, Depends, UploadFile, File
 from ..database import get_db, UserCreate, ClassCreate, LessonCreate
-from ..services import graph_service, llm_service
+from ..services import graph_service, llm_service, auth_service
 import sqlite3
 import csv
 import io
@@ -54,20 +54,22 @@ def create_user(user: UserCreate):
     conn = get_db()
     cursor = conn.cursor()
     try:
-        cursor.execute("INSERT INTO users (name, email, role, is_active) VALUES (?, ?, ?, ?)", (user.name, user.email, user.role, 1))
+        # If admin doesn't provide a password, generate a default one like '123456'
+        raw_password = user.password if user.password else "123456"
+        hashed_password = auth_service.get_password_hash(raw_password)
+        
+        cursor.execute(
+            "INSERT INTO users (name, email, role, is_active, password_hash, is_verified) VALUES (?, ?, ?, ?, ?, ?)",
+            (user.name, user.email, user.role.upper(), 1, hashed_password, 1)
+        )
         conn.commit()
     except sqlite3.IntegrityError:
         conn.close()
-        raise HTTPException(status_code=400, detail="Email already exists")
+        raise HTTPException(status_code=400, detail="Email already exists")   
     except sqlite3.OperationalError:
         try:
              # Fallback for old schema
-             cursor.execute("INSERT INTO users (name, email, role) VALUES (?, ?, ?)", (user.name, user.email, user.role))
-             conn.commit()
-        except:
-             conn.close()
-             raise HTTPException(status_code=500, detail="Database schema mismatch")
-    
+             cursor.execute("INSERT INTO users (name, email, role) VALUES (?, ?, ?)", (user.name, user.email, user.role.upper()))
     conn.close()
     return {"message": "User created successfully"}
 

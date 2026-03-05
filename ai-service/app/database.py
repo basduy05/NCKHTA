@@ -42,6 +42,17 @@ def init_db():
         cursor.execute("ALTER TABLE users ADD COLUMN password_reset_expires INTEGER")
     except sqlite3.OperationalError: pass
 
+    # --- MIGRATION: SET DEFAULT PASSWORDS FOR SEEDED USERS IF MISSING ---
+    try:
+        cursor.execute("SELECT id FROM users WHERE password_hash IS NULL OR password_hash = '' LIMIT 1")
+        if cursor.fetchone():
+            from .services.auth_service import get_password_hash
+            default_pw = get_password_hash("123456")
+            cursor.execute("UPDATE users SET password_hash = ?, is_verified = 1 WHERE password_hash IS NULL OR password_hash = ''", (default_pw,))
+            conn.commit()
+    except Exception as e:
+        print("Migration error:", e)
+
     # -----------------------------------
 
     cursor.execute("""
@@ -64,9 +75,15 @@ def init_db():
     
     cursor.execute("SELECT COUNT(*) FROM classes")
     if cursor.fetchone()[0] == 0:
-        cursor.execute("INSERT INTO users (name, email, role) VALUES ('Admin', 'admin@eam.edu.vn', 'ADMIN')")
-        cursor.execute("INSERT INTO users (name, email, role) VALUES ('Cô Nguyễn Lan', 'lan.nguyen@eam.edu.vn', 'TEACHER')")
-        cursor.execute("INSERT INTO users (name, email, role) VALUES ('Trần Huy', 'huytran123@gmail.com', 'STUDENT')")
+        try:
+            from .services.auth_service import get_password_hash
+            default_pwd = get_password_hash("123456")
+        except Exception:
+            default_pwd = ""
+            
+        cursor.execute("INSERT INTO users (name, email, role, password_hash, is_verified) VALUES ('Admin', 'admin@eam.edu.vn', 'ADMIN', ?, 1)", (default_pwd,))
+        cursor.execute("INSERT INTO users (name, email, role, password_hash, is_verified) VALUES ('Cô Nguyễn Lan', 'lan.nguyen@eam.edu.vn', 'TEACHER', ?, 1)", (default_pwd,))
+        cursor.execute("INSERT INTO users (name, email, role, password_hash, is_verified) VALUES ('Trần Huy', 'huytran123@gmail.com', 'STUDENT', ?, 1)", (default_pwd,))
         cursor.execute("INSERT INTO classes (name, teacher_name, students_count) VALUES ('Lớp TA-Căn bản 01', 'Cô Nguyễn Lan', 35)")
         cursor.execute("INSERT INTO classes (name, teacher_name, students_count) VALUES ('IELTS Bứt phá', 'Thầy David', 12)")
         cursor.execute("INSERT INTO lessons (class_id, title) VALUES (1, 'Bài 1: Thì hiện tại đơn')")
@@ -81,10 +98,13 @@ def get_db():
     conn.row_factory = sqlite3.Row
     return conn
 
+from typing import Optional
+
 class UserCreate(BaseModel):
     name: str
     email: str
     role: str
+    password: Optional[str] = None
 
 class ClassCreate(BaseModel):
     name: str
