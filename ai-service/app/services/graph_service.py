@@ -9,21 +9,31 @@ NEO4J_URI = os.getenv("NEO4J_URI", "neo4j+s://257692ed.databases.neo4j.io")
 NEO4J_USERNAME = os.getenv("NEO4J_USERNAME", "75e80b28")
 NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "password_placeholder")
 
-try:
-    print("Trying to connect to Neo4j...")
-    graph = Neo4jGraph(
-        url=NEO4J_URI,
-        username=NEO4J_USERNAME,
-        password=NEO4J_PASSWORD,
-        database=NEO4J_USERNAME
-    )
-    print("Successfully connected to Neo4j DB.")
-except Exception as e:
-    print(f"Warning: Neo4j connection failed or timed out: {e}")
-    graph = None
+graph = None
+
+def get_graph():
+    global graph
+    if graph is not None:
+        return graph
+    try:
+        print("Trying to connect to Neo4j...")
+        # Neo4j Aura thường có tên database trùng với tên đăng nhập
+        db_name = os.getenv("NEO4J_DATABASE", NEO4J_USERNAME)
+        graph = Neo4jGraph(
+            url=NEO4J_URI,
+            username=NEO4J_USERNAME,
+            password=NEO4J_PASSWORD,
+            database=db_name
+        )
+        print("Successfully connected to Neo4j DB.")
+        return graph
+    except Exception as e:
+        print(f"Warning: Neo4j connection failed or timed out: {e}")
+        return None
 
 def extract_entities_and_relations(text: str) -> Dict[str, list]:
-    if not graph:
+    g = get_graph()
+    if not g:
         return {"status": "skipped", "message": "Graph DB not connected"}       
     topic_name = "User Learning Session"
     if "English" in text: topic_name = "English Grammar"
@@ -34,23 +44,25 @@ def extract_entities_and_relations(text: str) -> Dict[str, list]:
     RETURN t, c
     """
     try:
-        graph.query(cypher_query, params={"topic": topic_name, "summary": text[:20]})
+        g.query(cypher_query, params={"topic": topic_name, "summary": text[:20]})
         return {"status": "success"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
 def get_knowledge_subgraph(topic: str) -> Dict:
-    if not graph:
+    g = get_graph()
+    if not g:
         return {"nodes": [], "links": [], "message": "Graph DB not connected"}  
     try:
         query = "RETURN 1"
-        graph.query(query)
+        g.query(query)
         return {"nodes": [], "links": []}
     except Exception as e:
         return {"nodes": [], "links": []}
 
 def create_vocab_node(word_data: Dict):
-    if not graph:
+    g = get_graph()
+    if not g:
         return {"status": "skipped", "message": "Graph DB not connected"}
         
     query = """
@@ -63,7 +75,7 @@ def create_vocab_node(word_data: Dict):
     RETURN w
     """
     try:
-        graph.query(query, params=word_data)
+        g.query(query, params=word_data)
         return {"status": "success"}
     except Exception as e:
         return {"status": "error", "message": str(e)}

@@ -25,8 +25,9 @@ def get_admin_stats():
 
     vocab_count = 0
     try:
-        if graph_service.graph:
-            res = graph_service.graph.query("MATCH (n) RETURN count(n) as count LIMIT 1")
+        g = graph_service.get_graph()
+        if g:
+            res = g.query("MATCH (n) RETURN count(n) as count LIMIT 1")
             if res and len(res) > 0:
                 vocab_count = res[0]["count"]
     except Exception as e:
