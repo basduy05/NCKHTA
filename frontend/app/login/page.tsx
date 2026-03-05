@@ -62,6 +62,11 @@ export default function LoginPage() {
             <button type="submit" disabled={isLoading || !email || !password} className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-medium transition flex items-center justify-center shadow-lg shadow-indigo-200 disabled:opacity-50">
               {isLoading ? "Đang xác thực..." : <><LogIn className="mr-2 h-5 w-5" /> Đăng nhập hệ thống</>}
             </button>
+            
+            <div className="flex items-center justify-between text-sm mt-4">
+              <a href="/forgot-password" className="text-gray-500 hover:text-indigo-600 transition">Quên mật khẩu?</a>
+              <a href="/register" className="text-gray-500 hover:text-indigo-600 transition font-semibold">Tạo tài khoản mới</a>
+            </div>
           </form>
         </div>
       </div>

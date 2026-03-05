@@ -1,9 +1,12 @@
 from langchain_community.graphs import Neo4jGraph
 from typing import List, Dict
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 NEO4J_URI = os.getenv("NEO4J_URI", "neo4j+s://257692ed.databases.neo4j.io")
-NEO4J_USERNAME = os.getenv("NEO4J_USERNAME", "neo4j")
+NEO4J_USERNAME = os.getenv("NEO4J_USERNAME", "75e80b28")
 NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "password_placeholder")
 
 try:
@@ -12,7 +15,7 @@ try:
         url=NEO4J_URI,
         username=NEO4J_USERNAME,
         password=NEO4J_PASSWORD,
-        timeout=3
+        database=NEO4J_USERNAME
     )
     print("Successfully connected to Neo4j DB.")
 except Exception as e:
