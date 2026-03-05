@@ -87,8 +87,8 @@ def send_email(to_email: str, subject: str, html_content: str):
         msg['To'] = to_email
         msg['Subject'] = subject
         msg.attach(MIMEText(html_content, 'html'))
-        
-        server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
+
+        server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=5)
         server.starttls()
         server.login(SMTP_USERNAME, SMTP_PASSWORD)
         server.send_message(msg)

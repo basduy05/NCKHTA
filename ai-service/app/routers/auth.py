@@ -19,42 +19,38 @@ class ResetPasswordRequest:
 
 @router.post("/register", status_code=status.HTTP_201_CREATED)
 async def register(user: UserRegister):
-    conn = get_db()
-    cursor = conn.cursor()
-    
-    # Check if user exists
-    cursor.execute("SELECT id FROM users WHERE email = ?", (user.email,))
-    if cursor.fetchone():
-        conn.close()
-        raise HTTPException(status_code=400, detail="Email already registered")
-        
-    # Generate OTP & Hash Password
-    otp = auth_service.generate_otp()
-    hashed_password = auth_service.get_password_hash(user.password)
-    
     try:
+        conn = get_db()
+        cursor = conn.cursor()
+
+        # Check if user exists
+        cursor.execute("SELECT id FROM users WHERE email = ?", (user.email,))     
+        if cursor.fetchone():
+            conn.close()
+            raise HTTPException(status_code=400, detail="Email already registered")
+
+        # Generate OTP & Hash Password
+        otp = auth_service.generate_otp()
+        hashed_password = auth_service.get_password_hash(user.password)
+
         cursor.execute(
             "INSERT INTO users (name, email, role, password_hash, otp, is_verified) VALUES (?, ?, ?, ?, ?, ?)",
-            (user.name, user.email, user.role, hashed_password, otp, 0)
+            (user.name, user.email, user.role, hashed_password, otp, 0)       
         )
         conn.commit()
-        
+
         # Send Email
-        # Background task ideally, but doing sync here for simplicity as requested
         auth_service.send_otp_email(user.email, otp)
         
-    except sqlite3.OperationalError as e:
         conn.close()
-        # Fallback if DB schema is not updated yet (for old users)
+        return {"message": "User registered. Please check email for OTP.", "email": user.email}
+
+    except sqlite3.OperationalError as e:
+        if 'conn' in locals() and conn: conn.close()
         raise HTTPException(status_code=500, detail=f"Database schema error: {e}. Please restart service to migrate.")
     except Exception as e:
-        conn.close()
-        raise HTTPException(status_code=500, detail=str(e))
-        
-    conn.close()
-    return {"message": "User registered. Please check email for OTP.", "email": user.email}
-
-@router.post("/verify-otp")
+        if 'conn' in locals() and conn: conn.close()
+        raise HTTPException(status_code=500, detail=f"Server error: {str(e)}")
 async def verify_otp(data: OTPVerify):
     conn = get_db()
     cursor = conn.cursor()
@@ -87,37 +83,40 @@ async def verify_otp(data: OTPVerify):
 
 @router.post("/login")
 async def login(data: UserLogin):
-    conn = get_db()
-    cursor = conn.cursor()
-    
-    cursor.execute("SELECT id, name, role, password_hash, is_verified FROM users WHERE email = ?", (data.email,))
-    user = cursor.fetchone()
-    conn.close()
-    
-    if not user:
-        raise HTTPException(status_code=400, detail="User not found")
-        
-    if not auth_service.verify_password(data.password, user['password_hash']):
-        raise HTTPException(status_code=400, detail="Incorrect password")
-        
-    if not user['is_verified']:
-        raise HTTPException(status_code=400, detail="Account not verified. Please verify OTP first.")
-        
-    # Generate JWT token
-    access_token = auth_service.generate_access_token(user['id'], data.email)
-    
-    return {
-        "access_token": access_token, 
-        "token_type": "bearer",
-        "user": {
-            "id": user['id'],
-            "name": user['name'],
-            "email": data.email,
-            "role": user['role']
-        }
-    }
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
 
-@router.post("/logout")
+        cursor.execute("SELECT id, name, role, password_hash, is_verified FROM users WHERE email = ?", (data.email,))
+        user = cursor.fetchone()
+        conn.close()
+
+        if not user:
+            raise HTTPException(status_code=400, detail="User not found")
+
+        if not auth_service.verify_password(data.password, user['password_hash']):
+            raise HTTPException(status_code=400, detail="Incorrect password")     
+
+        if not user['is_verified']:
+            raise HTTPException(status_code=400, detail="Account not verified. Please verify OTP first.")
+
+        # Generate JWT token
+        access_token = auth_service.generate_access_token(user['id'], data.email) 
+
+        return {
+            "access_token": access_token,
+            "token_type": "bearer",
+            "user": {
+                "id": user['id'],
+                "name": user['name'],
+                "email": data.email,
+                "role": user['role']
+            }
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Server error: {str(e)}")
 def logout():
     """Logout endpoint - frontend should clear token from localStorage"""
     return {"message": "Logged out successfully"}
