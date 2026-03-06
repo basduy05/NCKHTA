@@ -109,8 +109,13 @@ def send_email(to_email: str, subject: str, html_content: str):
         msg.attach(MIMEText(html_content, 'html'))
 
         print(f"Connecting to SMTP {smtp_server}:{smtp_port} as {smtp_username}...")
-        server = smtplib.SMTP(smtp_server, smtp_port, timeout=15)
-        server.starttls()
+        try:
+            # Try STARTTLS (port 587)
+            server = smtplib.SMTP(smtp_server, smtp_port, timeout=15)
+            server.starttls()
+        except Exception as e1:
+            print(f"STARTTLS failed on port {smtp_port}: {e1}, trying SSL on 465...")
+            server = smtplib.SMTP_SSL(smtp_server, 465, timeout=15)
         server.login(smtp_username, smtp_password)
         server.send_message(msg)
         server.quit()

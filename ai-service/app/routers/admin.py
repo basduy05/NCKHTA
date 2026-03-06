@@ -412,23 +412,27 @@ def test_email():
         return {"success": False, "steps": steps, "error": "SMTP_USERNAME or SMTP_PASSWORD not set"}
 
     try:
-        steps.append("Connecting to SMTP server...")
-        server = smtplib.SMTP(smtp_server, smtp_port, timeout=15)
-        steps.append("Connected OK")
-
-        steps.append("Starting TLS...")
-        server.starttls()
-        steps.append("TLS OK")
-
-        steps.append("Logging in...")
-        server.login(smtp_username, smtp_password)
-        steps.append("Login OK")
-
         msg = MIMEMultipart()
         msg['From'] = sender
         msg['To'] = sender
         msg['Subject'] = 'EAM Test Email'
         msg.attach(MIMEText('<h2>Test email from EAM</h2><p>SMTP is working!</p>', 'html'))
+
+        server = None
+        try:
+            steps.append(f"Trying STARTTLS on port {smtp_port}...")
+            server = smtplib.SMTP(smtp_server, smtp_port, timeout=15)
+            server.starttls()
+            steps.append("STARTTLS OK")
+        except Exception as e1:
+            steps.append(f"STARTTLS failed: {type(e1).__name__}: {e1}")
+            steps.append("Trying SSL on port 465...")
+            server = smtplib.SMTP_SSL(smtp_server, 465, timeout=15)
+            steps.append("SSL OK")
+
+        steps.append("Logging in...")
+        server.login(smtp_username, smtp_password)
+        steps.append("Login OK")
 
         steps.append("Sending email...")
         server.send_message(msg)
