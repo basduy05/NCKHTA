@@ -111,7 +111,11 @@ def _send_via_resend(to_email: str, subject: str, html_content: str) -> bool:
     req = urllib.request.Request(
         "https://api.resend.com/emails",
         data=data,
-        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+            "User-Agent": "EAM/1.0",
+        },
     )
     try:
         with urllib.request.urlopen(req, timeout=15) as resp:

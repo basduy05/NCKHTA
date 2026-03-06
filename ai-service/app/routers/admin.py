@@ -501,36 +501,60 @@ def update_settings(data: SettingsUpdate):
 @router.post("/settings/test-email")
 def test_email():
     """Send a test email using the configured provider (auto/resend/smtp)."""
+    import urllib.request
+    import json as _json
+
     provider = (auth_service._get_setting("EMAIL_PROVIDER") or "auto").lower().strip()
     sender = auth_service._get_setting("SENDER_EMAIL") or auth_service._get_setting("SMTP_USERNAME")
+    # For Resend free tier: can only send to account owner email
+    test_recipient = auth_service._get_setting("RESEND_TEST_EMAIL") or auth_service._get_setting("SMTP_USERNAME") or sender
 
-    steps = [f"Provider: {provider}", f"Sender: {sender}"]
+    steps = [f"Provider: {provider}", f"Sender: {sender}", f"Test recipient: {test_recipient}"]
 
     if not sender:
         return {"success": False, "steps": steps, "error": "SENDER_EMAIL not configured"}
 
-    result = auth_service.send_email(
-        sender,
-        "EAM Test Email",
-        "<h2>Test email from EAM</h2><p>Email is working!</p>"
-    )
-
-    if result:
-        steps.append("Email sent successfully!")
-        return {"success": True, "steps": steps, "message": f"Email sent to {sender}"}
-    else:
-        resend_key = auth_service._get_setting("RESEND_API_KEY")
-        smtp_user = auth_service._get_setting("SMTP_USERNAME")
-        if provider == "auto":
-            if resend_key:
-                steps.append("Resend API failed, SMTP also failed (port blocked on cloud?)")
-            else:
-                steps.append("SMTP failed (port likely blocked). Set RESEND_API_KEY to use HTTP email.")
-        elif provider == "resend":
-            steps.append("Resend API call failed. Check RESEND_API_KEY and SENDER_EMAIL domain.")
+    # Try sending with detailed error capture
+    if provider in ("resend", "auto"):
+        api_key = auth_service._get_setting("RESEND_API_KEY")
+        if api_key:
+            try:
+                data = _json.dumps({
+                    "from": f"EAM System <{sender}>",
+                    "to": [test_recipient],
+                    "subject": "EAM Test Email",
+                    "html": "<h2>Test email from EAM</h2><p>Email is working!</p>"
+                }).encode()
+                req = urllib.request.Request(
+                    "https://api.resend.com/emails",
+                    data=data,
+                    headers={
+                        "Authorization": f"Bearer {api_key}",
+                        "Content-Type": "application/json",
+                        "User-Agent": "EAM/1.0",
+                    },
+                )
+                with urllib.request.urlopen(req, timeout=15) as resp:
+                    result = _json.loads(resp.read())
+                    steps.append(f"Resend OK: {result}")
+                    return {"success": True, "steps": steps, "message": f"Email sent to {test_recipient}"}
+            except urllib.error.HTTPError as e:
+                body = e.read().decode()
+                steps.append(f"Resend HTTP {e.code}: {body}")
+            except Exception as e:
+                steps.append(f"Resend error: {type(e).__name__}: {e}")
         else:
-            steps.append("SMTP failed. Ports 587/465 may be blocked on this host.")
-        return {"success": False, "steps": steps, "error": "Email send failed. See steps for details."}
+            steps.append("RESEND_API_KEY not set")
+
+    if provider in ("smtp", "auto"):
+        result = auth_service._send_via_smtp(test_recipient, "EAM Test Email", "<h2>Test</h2><p>SMTP working!</p>")
+        if result:
+            steps.append("SMTP send OK")
+            return {"success": True, "steps": steps, "message": f"Email sent via SMTP to {test_recipient}"}
+        else:
+            steps.append("SMTP failed (ports 587/465 likely blocked on this host)")
+
+    return {"success": False, "steps": steps, "error": "Email send failed. See steps."}
 
 @router.post("/settings/test-neo4j")
 def test_neo4j():
