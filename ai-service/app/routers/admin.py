@@ -1,10 +1,12 @@
 
 from fastapi import APIRouter, HTTPException, Depends, UploadFile, File
-from ..database import get_db, UserCreate, ClassCreate, LessonCreate
+from ..database import get_db, UserCreate, ClassCreate, LessonCreate, get_all_settings, set_setting
 from ..services import graph_service, llm_service, auth_service
 import sqlite3
 import csv
 import io
+from pydantic import BaseModel
+from typing import Dict
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
 
@@ -231,4 +233,74 @@ async def import_vocab(file: UploadFile = File(...)):
             
     return {"message": f"Successfully imported {count} words.", "errors": errors}
 
+
+# --- SETTINGS ---
+
+SENSITIVE_KEYS = {"GOOGLE_API_KEY", "OPENAI_API_KEY", "NEO4J_PASSWORD", "SMTP_PASSWORD"}
+
+def _mask(value: str) -> str:
+    if not value or len(value) < 8:
+        return "****" if value else ""
+    return value[:4] + "*" * (len(value) - 8) + value[-4:]
+
+@router.get("/settings")
+def get_settings():
+    """Return all settings. Sensitive values are masked."""
+    raw = get_all_settings()
+    masked = {}
+    for k, v in raw.items():
+        masked[k] = _mask(v) if k in SENSITIVE_KEYS and v else v
+    return masked
+
+class SettingsUpdate(BaseModel):
+    settings: Dict[str, str]
+
+@router.put("/settings")
+def update_settings(data: SettingsUpdate):
+    """Update settings. Skips values that look masked (contain ****)."""
+    updated = []
+    for key, value in data.settings.items():
+        # Skip masked values (admin didn't change them)
+        if "****" in value:
+            continue
+        set_setting(key, value)
+        updated.append(key)
+
+    # Reconnect Neo4j if any Neo4j setting changed
+    neo4j_keys = {"NEO4J_URI", "NEO4J_USERNAME", "NEO4J_PASSWORD", "NEO4J_DATABASE"}
+    if neo4j_keys & set(updated):
+        try:
+            g = graph_service.reconnect_graph()
+            neo4j_status = "connected" if g else "failed"
+        except Exception as e:
+            neo4j_status = f"error: {e}"
+    else:
+        neo4j_status = "unchanged"
+
+    return {"message": f"Updated {len(updated)} settings.", "updated_keys": updated, "neo4j_status": neo4j_status}
+
+@router.post("/settings/test-email")
+def test_email():
+    """Send a test email to SENDER_EMAIL."""
+    sender = auth_service._get_setting("SENDER_EMAIL") or auth_service._get_setting("SMTP_USERNAME")
+    if not sender:
+        raise HTTPException(status_code=400, detail="SENDER_EMAIL / SMTP_USERNAME not configured.")
+    ok = auth_service.send_email(sender, "EAM Test Email", "<h2>Test email from EAM System</h2><p>If you see this, SMTP is working correctly!</p>")
+    if ok:
+        return {"message": f"Test email sent to {sender}"}
+    raise HTTPException(status_code=500, detail="Failed to send test email. Check SMTP settings and Render logs.")
+
+@router.post("/settings/test-neo4j")
+def test_neo4j():
+    """Force reconnect and test Neo4j."""
+    try:
+        g = graph_service.reconnect_graph()
+        if g:
+            return {"message": "Neo4j connected successfully!"}
+        err = getattr(graph_service, "last_error", "Unknown error")
+        raise HTTPException(status_code=500, detail=f"Neo4j connection failed: {err}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 

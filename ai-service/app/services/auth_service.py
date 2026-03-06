@@ -10,18 +10,29 @@ import bcrypt
 import sqlite3
 from jose import JWTError, jwt
 from datetime import datetime, timedelta
+from dotenv import load_dotenv
+
+load_dotenv()
+
+# --- Helper: read from DB settings first, then env ---
+def _get_setting(key, default=None):
+    try:
+        db_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "app.db")
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        cursor.execute("SELECT value FROM settings WHERE key = ?", (key,))
+        row = cursor.fetchone()
+        conn.close()
+        if row and row[0]:
+            return row[0]
+    except Exception:
+        pass
+    return os.getenv(key, default)
 
 # --- JWT CONFIG ---
 SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 hours
-
-# --- ENV CONFIG ---
-SMTP_SERVER = os.getenv("SMTP_SERVER", "smtp.gmail.com")
-SMTP_PORT = int(os.getenv("SMTP_PORT", 587))
-SMTP_USERNAME = os.getenv("SMTP_USERNAME")
-SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
-SENDER_EMAIL = os.getenv("SENDER_EMAIL", SMTP_USERNAME)
 
 # --- MODELS ---
 class UserRegister(BaseModel):
@@ -80,22 +91,30 @@ def generate_reset_token(length=32):
     return "".join(random.choices(string.ascii_letters + string.digits, k=length))
 
 def send_email(to_email: str, subject: str, html_content: str):
-    if not SMTP_USERNAME or not SMTP_PASSWORD:
-        print("SMTP credentials not configured. Email skipped.")
+    smtp_server = _get_setting("SMTP_SERVER", "smtp.gmail.com")
+    smtp_port = int(_get_setting("SMTP_PORT", "587"))
+    smtp_username = _get_setting("SMTP_USERNAME")
+    smtp_password = _get_setting("SMTP_PASSWORD")
+    sender_email = _get_setting("SENDER_EMAIL", smtp_username)
+
+    if not smtp_username or not smtp_password:
+        print(f"SMTP credentials not configured. SMTP_USERNAME={smtp_username!r}, SMTP_PASSWORD={'***' if smtp_password else None}")
         return False
-        
+
     try:
         msg = MIMEMultipart()
-        msg['From'] = SENDER_EMAIL
+        msg['From'] = sender_email
         msg['To'] = to_email
         msg['Subject'] = subject
         msg.attach(MIMEText(html_content, 'html'))
 
-        server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=5)
+        print(f"Connecting to SMTP {smtp_server}:{smtp_port} as {smtp_username}...")
+        server = smtplib.SMTP(smtp_server, smtp_port, timeout=15)
         server.starttls()
-        server.login(SMTP_USERNAME, SMTP_PASSWORD)
+        server.login(smtp_username, smtp_password)
         server.send_message(msg)
         server.quit()
+        print(f"Email sent successfully to {to_email}")
         return True
     except Exception as e:
         print(f"Failed to send email to {to_email}: {e}")

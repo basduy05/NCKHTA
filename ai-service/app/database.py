@@ -72,6 +72,26 @@ def init_db():
             FOREIGN KEY (class_id) REFERENCES classes (id)
         )
     """)
+
+    # --- SETTINGS TABLE ---
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS settings (
+            key TEXT PRIMARY KEY,
+            value TEXT
+        )
+    """)
+
+    # Seed settings from environment variables (only if not already set)
+    env_keys = [
+        "GOOGLE_API_KEY", "OPENAI_API_KEY",
+        "NEO4J_URI", "NEO4J_USERNAME", "NEO4J_PASSWORD", "NEO4J_DATABASE",
+        "SMTP_SERVER", "SMTP_PORT", "SMTP_USERNAME", "SMTP_PASSWORD", "SENDER_EMAIL",
+    ]
+    for k in env_keys:
+        val = os.getenv(k)
+        if val:
+            cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", (k, val))
+    conn.commit()
     
     cursor.execute("SELECT COUNT(*) FROM classes")
     if cursor.fetchone()[0] == 0:
@@ -97,6 +117,43 @@ def get_db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
+
+def get_setting(key, default=None):
+    """Read a single setting: DB first, then env var."""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT value FROM settings WHERE key = ?", (key,))
+    row = cursor.fetchone()
+    conn.close()
+    if row and row[0]:
+        return row[0]
+    return os.getenv(key, default)
+
+def set_setting(key, value):
+    """Upsert a setting."""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, value))
+    conn.commit()
+    conn.close()
+
+def get_all_settings():
+    """Return all settings as a dict, merged with env defaults."""
+    settings = {}
+    keys = [
+        "GOOGLE_API_KEY", "OPENAI_API_KEY",
+        "NEO4J_URI", "NEO4J_USERNAME", "NEO4J_PASSWORD", "NEO4J_DATABASE",
+        "SMTP_SERVER", "SMTP_PORT", "SMTP_USERNAME", "SMTP_PASSWORD", "SENDER_EMAIL",
+    ]
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    for k in keys:
+        cursor.execute("SELECT value FROM settings WHERE key = ?", (k,))
+        row = cursor.fetchone()
+        val = (row[0] if row and row[0] else os.getenv(k, "")) or ""
+        settings[k] = val
+    conn.close()
+    return settings
 
 from typing import Optional
 

@@ -1,7 +1,7 @@
 "use client";
 import { useState, Suspense, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
-import { Users, Database, Plus, UploadCloud, FileSpreadsheet, Save, Edit, Trash2, GraduationCap, X, Check, BookOpen, BookText } from "lucide-react";
+import { Users, Database, Plus, UploadCloud, FileSpreadsheet, Save, Edit, Trash2, GraduationCap, X, Check, BookOpen, BookText, Settings, RefreshCw, Mail, Eye, EyeOff } from "lucide-react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
@@ -19,6 +19,7 @@ function AdminDashboardContent() {
           {activeTab === 'classes' && 'Quản lý Lớp Học'}
           {activeTab === 'lessons' && 'Quản lý Bài Học'}
           {activeTab === 'grammar' && 'Kho Ngữ Pháp (AI)'}
+          {activeTab === 'settings' && 'Cài đặt hệ thống'}
         </h1>
       </div>
 
@@ -28,6 +29,7 @@ function AdminDashboardContent() {
       {activeTab === 'classes' && <ClassesTab />}
       {activeTab === 'lessons' && <LessonsTab />}
       {activeTab === 'grammar' && <GrammarTab />}
+      {activeTab === 'settings' && <SettingsTab />}
     </div>
   );
 }
@@ -450,4 +452,150 @@ function GrammarTab() {
        </div>
     </div>
   )
+}
+
+function SettingsTab() {
+  const [settings, setSettings] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [showPasswords, setShowPasswords] = useState<Record<string, boolean>>({});
+  const [testingEmail, setTestingEmail] = useState(false);
+  const [testingNeo4j, setTestingNeo4j] = useState(false);
+
+  const fetchSettings = async () => {
+    try {
+      const res = await fetch(`${API_URL}/admin/settings`);
+      if (res.ok) setSettings(await res.json());
+    } catch (err) { console.error(err); }
+    finally { setLoading(false); }
+  };
+
+  useEffect(() => { fetchSettings(); }, []);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const res = await fetch(`${API_URL}/admin/settings`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ settings })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        alert(`Saved ${data.updated_keys?.length || 0} settings. Neo4j: ${data.neo4j_status}`);
+        fetchSettings();
+      } else {
+        alert(data.detail || 'Error saving settings');
+      }
+    } catch (err) { alert('Server connection error'); }
+    finally { setSaving(false); }
+  };
+
+  const handleTestEmail = async () => {
+    setTestingEmail(true);
+    try {
+      const res = await fetch(`${API_URL}/admin/settings/test-email`, { method: 'POST' });
+      const data = await res.json();
+      alert(res.ok ? data.message : (data.detail || 'Email test failed'));
+    } catch { alert('Connection error'); }
+    finally { setTestingEmail(false); }
+  };
+
+  const handleTestNeo4j = async () => {
+    setTestingNeo4j(true);
+    try {
+      const res = await fetch(`${API_URL}/admin/settings/test-neo4j`, { method: 'POST' });
+      const data = await res.json();
+      alert(res.ok ? data.message : (data.detail || 'Neo4j connection failed'));
+    } catch { alert('Connection error'); }
+    finally { setTestingNeo4j(false); }
+  };
+
+  const toggleShow = (key: string) => setShowPasswords(p => ({...p, [key]: !p[key]}));
+
+  const sensitiveKeys = ['GOOGLE_API_KEY', 'OPENAI_API_KEY', 'NEO4J_PASSWORD', 'SMTP_PASSWORD'];
+
+  const renderField = (key: string, label: string, placeholder: string) => {
+    const isSensitive = sensitiveKeys.includes(key);
+    return (
+      <div key={key}>
+        <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+        <div className="relative">
+          <input
+            type={isSensitive && !showPasswords[key] ? "password" : "text"}
+            value={settings[key] || ''}
+            onChange={e => setSettings({...settings, [key]: e.target.value})}
+            className="w-full border border-gray-200 rounded-lg p-2.5 pr-10 focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
+            placeholder={placeholder}
+          />
+          {isSensitive && (
+            <button type="button" onClick={() => toggleShow(key)} className="absolute right-2 top-2.5 text-gray-400 hover:text-gray-600">
+              {showPasswords[key] ? <EyeOff size={18}/> : <Eye size={18}/>}
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  if (loading) return <p className="text-gray-500">Loading settings...</p>;
+
+  return (
+    <div className="space-y-6 animate-in fade-in duration-300">
+      {/* AI API Keys */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+        <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center">
+          <Settings className="mr-2 text-indigo-600" size={20}/> API Keys (AI)
+        </h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {renderField('GOOGLE_API_KEY', 'Google Gemini API Key', 'AIzaSy...')}
+          {renderField('OPENAI_API_KEY', 'OpenAI API Key (optional)', 'sk-...')}
+        </div>
+      </div>
+
+      {/* Neo4j */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-lg font-bold text-gray-900 flex items-center">
+            <Database className="mr-2 text-indigo-600" size={20}/> Neo4j Graph Database
+          </h2>
+          <button onClick={handleTestNeo4j} disabled={testingNeo4j} className="px-4 py-1.5 bg-indigo-100 text-indigo-700 rounded-lg text-sm font-medium hover:bg-indigo-200 disabled:opacity-50 flex items-center">
+            <RefreshCw size={14} className={`mr-1.5 ${testingNeo4j ? 'animate-spin' : ''}`}/> {testingNeo4j ? 'Testing...' : 'Test connection'}
+          </button>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {renderField('NEO4J_URI', 'Neo4j URI', 'neo4j+s://xxx.databases.neo4j.io')}
+          {renderField('NEO4J_USERNAME', 'Username', 'neo4j')}
+          {renderField('NEO4J_PASSWORD', 'Password', '***')}
+          {renderField('NEO4J_DATABASE', 'Database Name (empty = username)', '')}
+        </div>
+      </div>
+
+      {/* SMTP */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-lg font-bold text-gray-900 flex items-center">
+            <Mail className="mr-2 text-indigo-600" size={20}/> Email SMTP
+          </h2>
+          <button onClick={handleTestEmail} disabled={testingEmail} className="px-4 py-1.5 bg-green-100 text-green-700 rounded-lg text-sm font-medium hover:bg-green-200 disabled:opacity-50 flex items-center">
+            <Mail size={14} className="mr-1.5"/> {testingEmail ? 'Sending...' : 'Send test email'}
+          </button>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {renderField('SMTP_SERVER', 'SMTP Server', 'smtp.gmail.com')}
+          {renderField('SMTP_PORT', 'SMTP Port', '587')}
+          {renderField('SMTP_USERNAME', 'SMTP Username (Email)', 'your@gmail.com')}
+          {renderField('SMTP_PASSWORD', 'SMTP Password (App Password)', '***')}
+          {renderField('SENDER_EMAIL', 'Sender Email', 'your@gmail.com')}
+        </div>
+      </div>
+
+      {/* Save Button */}
+      <div className="flex justify-end">
+        <button onClick={handleSave} disabled={saving} className="px-8 py-3 bg-indigo-600 text-white rounded-xl font-medium hover:bg-indigo-700 disabled:opacity-50 transition shadow-lg flex items-center">
+          <Save size={18} className="mr-2"/> {saving ? 'Saving...' : 'Save all settings'}
+        </button>
+      </div>
+    </div>
+  );
 }

@@ -3,6 +3,24 @@ from langchain_openai import ChatOpenAI
 from langchain_core.prompts import PromptTemplate
 import os
 import json
+import sqlite3
+from dotenv import load_dotenv
+
+load_dotenv()
+
+def _get_setting(key, default=None):
+    try:
+        db_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "app.db")
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        cursor.execute("SELECT value FROM settings WHERE key = ?", (key,))
+        row = cursor.fetchone()
+        conn.close()
+        if row and row[0]:
+            return row[0]
+    except Exception:
+        pass
+    return os.getenv(key, default)
 
 def parse_json_response(text: str):
     try:
@@ -17,24 +35,22 @@ def parse_json_response(text: str):
         print("JSON parse error:", e)
         return []
 
-# Placeholder for API Keys (Set in environment variables)
-# os.environ["GOOGLE_API_KEY"] = "YOUR_GEMINI_KEY"
-# os.environ["OPENAI_API_KEY"] = "YOUR_OPENAI_KEY"
-
 def get_llm():
     """
     Factory to return the configured LLM instance.
-    Prefers Gemini (often free tier available) or OpenAI.
+    Reads API key from DB settings first, then environment variables.
     """
-    google_key = os.environ.get("GOOGLE_API_KEY", "AIzaSyBx_1S1HnKt9sHNhEBuGWO50scGDKm0_Oo")
-    os.environ["GOOGLE_API_KEY"] = google_key # Set it for langchain to pick up
+    google_key = _get_setting("GOOGLE_API_KEY")
     if google_key:
+        os.environ["GOOGLE_API_KEY"] = google_key
         return ChatGoogleGenerativeAI(model="models/gemini-2.5-flash")
-    elif os.environ.get("OPENAI_API_KEY"):
+
+    openai_key = _get_setting("OPENAI_API_KEY")
+    if openai_key:
+        os.environ["OPENAI_API_KEY"] = openai_key
         return ChatOpenAI(model="gpt-3.5-turbo")
-    else:
-        # Fallback for dev if no keys (Mock)
-        return None
+
+    return None
 
 def generate_flashcard_content(word: str, level: str = "A1"):
     llm = get_llm()

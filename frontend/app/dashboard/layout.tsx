@@ -2,7 +2,7 @@
 import React, { Suspense } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { BookOpen, Users, LayoutDashboard, Component, Database, GraduationCap, Library, BookText, FileSearch, LogOut } from "lucide-react";
+import { BookOpen, Users, LayoutDashboard, Component, Database, GraduationCap, Library, BookText, FileSearch, LogOut, Settings } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 
 function DashboardSidebar({ user, logout }: { user: any, logout: any }) {
@@ -24,6 +24,7 @@ function DashboardSidebar({ user, logout }: { user: any, logout: any }) {
       { name: "Quản lý Bài học", href: "/dashboard/admin?tab=lessons", icon: BookOpen, id: "lessons" },
       { name: "Kho Từ Vựng (Graph)", href: "/dashboard/admin?tab=vocab", icon: Database, id: "vocab" },
       { name: "Kho Ngữ Pháp (AI)", href: "/dashboard/admin?tab=grammar", icon: BookText, id: "grammar" },
+      { name: "Cài đặt hệ thống", href: "/dashboard/admin?tab=settings", icon: Settings, id: "settings" },
     ];
   } else if (isTeacher) {
     links = [

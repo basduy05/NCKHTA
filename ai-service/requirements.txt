@@ -5,12 +5,12 @@ python-dotenv
 langchain
 langchain-core
 langchain-community
+langchain-neo4j
 langchain-openai
 langchain-google-genai
 pydantic
 requests
 python-multipart
-passlib[bcrypt]
 bcrypt
-python-jose
+python-jose[cryptography]
 email-validator

@@ -1,13 +1,29 @@
-from langchain_community.graphs import Neo4jGraph
+try:
+    from langchain_neo4j import Neo4jGraph
+except ImportError:
+    from langchain_community.graphs import Neo4jGraph
+
 from typing import List, Dict
 import os
+import sqlite3
 from dotenv import load_dotenv
 
 load_dotenv()
 
-NEO4J_URI = os.getenv("NEO4J_URI", "neo4j+s://75e80b28.databases.neo4j.io")
-NEO4J_USERNAME = os.getenv("NEO4J_USERNAME", "75e80b28")
-NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "3RuJzYYjEpYHafQxx6S0tdba_GiDb3D1iFnBF0JYqb4")
+# Read settings from DB first, then env vars
+def _get_setting(key, default=None):
+    try:
+        db_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "app.db")
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        cursor.execute("SELECT value FROM settings WHERE key = ?", (key,))
+        row = cursor.fetchone()
+        conn.close()
+        if row and row[0]:
+            return row[0]
+    except Exception:
+        pass
+    return os.getenv(key, default)
 
 graph = None
 last_error = None
@@ -17,13 +33,21 @@ def get_graph():
     if graph is not None:
         return graph
     try:
-        print("Trying to connect to Neo4j...")
-        # Neo4j Aura thường có tên database trùng với tên đăng nhập
-        db_name = os.getenv("NEO4J_DATABASE", NEO4J_USERNAME)
+        uri = _get_setting("NEO4J_URI")
+        username = _get_setting("NEO4J_USERNAME")
+        password = _get_setting("NEO4J_PASSWORD")
+        db_name = _get_setting("NEO4J_DATABASE", username)
+
+        if not uri or not username or not password:
+            last_error = "Neo4j credentials not configured. Set them in Admin > Settings or environment variables."
+            print(f"Warning: {last_error}")
+            return None
+
+        print(f"Trying to connect to Neo4j at {uri} (db={db_name})...")
         graph = Neo4jGraph(
-            url=NEO4J_URI,
-            username=NEO4J_USERNAME,
-            password=NEO4J_PASSWORD,
+            url=uri,
+            username=username,
+            password=password,
             database=db_name
         )
         print("Successfully connected to Neo4j DB.")
@@ -31,8 +55,15 @@ def get_graph():
         return graph
     except Exception as e:
         last_error = str(e)
-        print(f"Warning: Neo4j connection failed or timed out: {e}")
+        print(f"Warning: Neo4j connection failed: {e}")
         return None
+
+def reconnect_graph():
+    """Force reconnection (e.g. after changing settings)."""
+    global graph, last_error
+    graph = None
+    last_error = None
+    return get_graph()
 
 def extract_entities_and_relations(text: str) -> Dict[str, list]:
     g = get_graph()
