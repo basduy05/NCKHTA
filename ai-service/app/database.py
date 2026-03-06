@@ -158,6 +158,18 @@ def init_db():
         )
     """)
 
+    # --- DICTIONARY CACHE TABLE (full AI lookup results) ---
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS dictionary_cache (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            word TEXT UNIQUE NOT NULL,
+            data_json TEXT NOT NULL,
+            meanings_count INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
     # --- MIGRATION: Add file columns to lessons ---
     try:
         cursor.execute("ALTER TABLE lessons ADD COLUMN file_name TEXT")

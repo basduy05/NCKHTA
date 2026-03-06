@@ -939,8 +939,12 @@ function AIToolsTab({ token }: { token: string | null }) {
                     </div>
                   </div>
                   {dictResult._source && (
-                    <span className={`px-3 py-1 rounded-lg text-xs font-bold ${dictResult._source === "graph" ? "bg-cyan-400/30 text-cyan-100" : "bg-amber-400/30 text-amber-100"}`}>
-                      {dictResult._source === "graph" ? "⚡ Từ Knowledge Graph" : "🤖 AI tra cứu"}
+                    <span className={`px-3 py-1 rounded-lg text-xs font-bold ${
+                      dictResult._source === "database" ? "bg-green-400/30 text-green-100" :
+                      dictResult._source === "graph" ? "bg-cyan-400/30 text-cyan-100" : "bg-amber-400/30 text-amber-100"
+                    }`}>
+                      {dictResult._source === "database" ? "💾 Từ Database" :
+                       dictResult._source === "graph" ? "⚡ Từ Knowledge Graph" : "🤖 AI tra cứu"}
                     </span>
                   )}
                 </div>

@@ -289,13 +289,27 @@ class DictionaryRequest(BaseModel):
 
 @router.post("/dictionary/lookup")
 def dictionary_lookup(req: DictionaryRequest, authorization: str = Header(...)):
-    """Dictionary lookup: Neo4j first → AI fallback → auto-save to Neo4j."""
+    """Dictionary lookup: DB cache → Neo4j → AI → save to DB + Neo4j."""
     _get_current_student(authorization)
-    word = req.word.strip()
+    word = req.word.strip().lower()
     if not word or len(word) > 100:
         raise HTTPException(status_code=400, detail="Invalid word")
 
-    # 1) Check Neo4j graph first (fast, no AI cost)
+    # 1) Check SQLite dictionary_cache first (persistent, full data)
+    conn = get_db()
+    try:
+        row = conn.execute("SELECT data_json FROM dictionary_cache WHERE word = ?", (word,)).fetchone()
+    finally:
+        conn.close()
+    if row:
+        import json
+        cached = json.loads(row["data_json"])
+        cached["_source"] = "database"
+        connections = graph_service.get_word_connections(word)
+        cached["graph_connections"] = connections.get("connections", [])
+        return cached
+
+    # 2) Check Neo4j graph (fast, no AI cost)
     graph_data = graph_service.find_word_in_graph(word)
     if graph_data:
         connections = graph_service.get_word_connections(word)
@@ -303,7 +317,7 @@ def dictionary_lookup(req: DictionaryRequest, authorization: str = Header(...)):
         graph_data["_source"] = "graph"
         return graph_data
 
-    # 2) Not in graph → ask AI
+    # 3) Not cached anywhere → ask AI
     llm = llm_service.get_llm()
     if not llm:
         raise HTTPException(status_code=503, detail="LLM service unavailable")
@@ -311,21 +325,41 @@ def dictionary_lookup(req: DictionaryRequest, authorization: str = Header(...)):
     if result.get("error"):
         raise HTTPException(status_code=500, detail=result["error"])
 
-    # 3) Auto-save AI result to Neo4j for future lookups
+    # 4) Save full AI result to SQLite for permanent cache
     try:
+        import json
+        meanings_count = len(result.get("meanings", []))
+        conn = get_db()
+        try:
+            conn.execute(
+                """INSERT INTO dictionary_cache (word, data_json, meanings_count)
+                   VALUES (?, ?, ?)
+                   ON CONFLICT(word) DO UPDATE SET data_json=excluded.data_json,
+                   meanings_count=excluded.meanings_count, updated_at=CURRENT_TIMESTAMP""",
+                (word, json.dumps(result, ensure_ascii=False), meanings_count)
+            )
+            conn.commit()
+        finally:
+            conn.close()
+    except Exception:
+        pass
+
+    # 5) Also save key data to Neo4j for graph relationships
+    try:
+        first_meaning = result.get("meanings", [{}])[0] if result.get("meanings") else {}
         graph_service.save_word_to_graph({
             "word": word,
-            "phonetic": result.get("phonetic", ""),
+            "phonetic": result.get("phonetic_uk", ""),
             "pos": result.get("pos", ""),
-            "meaning_en": result.get("meaning_en", ""),
-            "meaning_vn": result.get("meaning_vn", ""),
-            "example": result.get("example", ""),
+            "meaning_en": first_meaning.get("definition_en", ""),
+            "meaning_vn": first_meaning.get("definition_vn", ""),
+            "example": (first_meaning.get("examples") or [""])[0],
             "level": result.get("level", "B1"),
-            "synonyms": result.get("synonyms", []),
-            "antonyms": result.get("antonyms", []),
+            "synonyms": first_meaning.get("synonyms", []),
+            "antonyms": first_meaning.get("antonyms", []),
         })
     except Exception:
-        pass  # Non-critical — don't fail the lookup
+        pass
 
     connections = graph_service.get_word_connections(word)
     result["graph_connections"] = connections.get("connections", [])

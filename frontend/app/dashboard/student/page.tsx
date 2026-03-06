@@ -777,8 +777,12 @@ function DictionaryTab({ token }: { token: string | null }) {
                 )}
                 {/* Source badge */}
                 {result._source && (
-                  <span className={`px-3 py-1 rounded-lg text-xs font-bold ${result._source === "graph" ? "bg-cyan-400/30 text-cyan-100" : "bg-amber-400/30 text-amber-100"}`}>
-                    {result._source === "graph" ? "⚡ Từ Knowledge Graph" : "🤖 AI tra cứu"}
+                  <span className={`px-3 py-1 rounded-lg text-xs font-bold ${
+                    result._source === "database" ? "bg-green-400/30 text-green-100" :
+                    result._source === "graph" ? "bg-cyan-400/30 text-cyan-100" : "bg-amber-400/30 text-amber-100"
+                  }`}>
+                    {result._source === "database" ? "💾 Từ Database (không tốn AI)" :
+                     result._source === "graph" ? "⚡ Từ Knowledge Graph" : "🤖 AI tra cứu"}
                   </span>
                 )}
                 <button
