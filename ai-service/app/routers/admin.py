@@ -1,12 +1,14 @@
 
-from fastapi import APIRouter, HTTPException, Depends, UploadFile, File
+from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form, Query
+from fastapi.responses import Response
 from ..database import get_db, UserCreate, ClassCreate, LessonCreate, get_all_settings, set_setting
 from ..services import graph_service, llm_service, auth_service
 import sqlite3
 import csv
 import io
+import base64
 from pydantic import BaseModel
-from typing import Dict
+from typing import Dict, Optional
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
 
@@ -146,20 +148,41 @@ def delete_class(class_id: int):
 @router.get("/lessons")
 def get_lessons():
     conn = get_db()
-    cursor = conn.execute("SELECT lessons.id, lessons.title, lessons.content, classes.name as class_name FROM lessons JOIN classes ON lessons.class_id = classes.id ORDER BY lessons.id DESC")
+    cursor = conn.execute("SELECT lessons.id, lessons.class_id, lessons.title, lessons.content, lessons.file_name, classes.name as class_name FROM lessons JOIN classes ON lessons.class_id = classes.id ORDER BY lessons.id DESC")
     lessons = [dict(row) for row in cursor.fetchall()]
     conn.close()
     return lessons
 
 @router.post("/lessons")
-def create_lesson(lesson: LessonCreate):
+async def create_lesson(
+    class_id: int = Form(...),
+    title: str = Form(...),
+    content: str = Form(""),
+    file: Optional[UploadFile] = File(None)
+):
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute("INSERT INTO lessons (class_id, title, content) VALUES (?, ?, ?)",
-                   (lesson.class_id, lesson.title, lesson.content))
+    file_name = None
+    file_data = None
+    if file and file.filename:
+        file_name = file.filename
+        file_data = await file.read()
+    cursor.execute("INSERT INTO lessons (class_id, title, content, file_name, file_data) VALUES (?, ?, ?, ?, ?)",
+                   (class_id, title, content, file_name, file_data))
     conn.commit()
     conn.close()
     return {"message": "Lesson created successfully"}
+
+@router.get("/lessons/{lesson_id}/file")
+def get_lesson_file(lesson_id: int):
+    conn = get_db()
+    cursor = conn.execute("SELECT file_name, file_data FROM lessons WHERE id = ?", (lesson_id,))
+    row = cursor.fetchone()
+    conn.close()
+    if not row or not row['file_data']:
+        raise HTTPException(status_code=404, detail="No file attached")
+    return Response(content=row['file_data'], media_type="application/octet-stream",
+                    headers={"Content-Disposition": f"attachment; filename=\"{row['file_name']}\""})
 
 @router.delete("/lessons/{lesson_id}")
 def delete_lesson(lesson_id: int):
@@ -232,6 +255,96 @@ async def import_vocab(file: UploadFile = File(...)):
              errors.append(f"Processing interrupted: {str(e)}")
             
     return {"message": f"Successfully imported {count} words.", "errors": errors}
+
+# --- VOCAB LIST (from Neo4j) ---
+
+@router.get("/vocab/list")
+def list_vocab(level: str = "", limit: int = 100):
+    """List vocabulary words stored in Neo4j."""
+    g = graph_service.get_graph()
+    if not g:
+        return {"words": [], "error": "Graph DB not connected"}
+    try:
+        if level:
+            query = "MATCH (w:Word {level: $level}) RETURN w ORDER BY w.text LIMIT $limit"
+            results = g.query(query, params={"level": level, "limit": limit})
+        else:
+            query = "MATCH (w:Word) RETURN w ORDER BY w.text LIMIT $limit"
+            results = g.query(query, params={"limit": limit})
+        words = []
+        for r in results:
+            w = r.get("w", {})
+            words.append({
+                "word": w.get("text", ""),
+                "pronunciation": w.get("pronunciation", ""),
+                "meaning": w.get("meaning_vn", ""),
+                "level": w.get("level", ""),
+                "type": w.get("type", ""),
+                "example": w.get("example", ""),
+            })
+        return {"words": words, "total": len(words)}
+    except Exception as e:
+        return {"words": [], "error": str(e)}
+
+@router.delete("/vocab/{word}")
+def delete_vocab(word: str):
+    g = graph_service.get_graph()
+    if not g:
+        raise HTTPException(status_code=500, detail="Graph DB not connected")
+    try:
+        g.query("MATCH (w:Word {text: $word}) DETACH DELETE w", params={"word": word})
+        return {"message": f"Deleted '{word}'"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# --- GRAMMAR RULES CRUD ---
+
+@router.get("/grammar")
+def get_grammar_rules():
+    conn = get_db()
+    cursor = conn.execute("SELECT id, name, description, file_name, created_at FROM grammar_rules ORDER BY id DESC")
+    rules = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    return rules
+
+@router.post("/grammar")
+async def create_grammar_rule(
+    name: str = Form(...),
+    description: str = Form(""),
+    file: Optional[UploadFile] = File(None)
+):
+    conn = get_db()
+    cursor = conn.cursor()
+    file_name = None
+    file_data = None
+    if file and file.filename:
+        file_name = file.filename
+        file_data = await file.read()
+    cursor.execute("INSERT INTO grammar_rules (name, description, file_name, file_data) VALUES (?, ?, ?, ?)",
+                   (name, description, file_name, file_data))
+    conn.commit()
+    conn.close()
+    return {"message": "Grammar rule created"}
+
+@router.get("/grammar/{rule_id}/file")
+def get_grammar_file(rule_id: int):
+    conn = get_db()
+    cursor = conn.execute("SELECT file_name, file_data FROM grammar_rules WHERE id = ?", (rule_id,))
+    row = cursor.fetchone()
+    conn.close()
+    if not row or not row['file_data']:
+        raise HTTPException(status_code=404, detail="No file attached")
+    return Response(content=row['file_data'], media_type="application/octet-stream",
+                    headers={"Content-Disposition": f"attachment; filename=\"{row['file_name']}\""})
+
+@router.delete("/grammar/{rule_id}")
+def delete_grammar_rule(rule_id: int):
+    conn = get_db()
+    conn.execute("DELETE FROM grammar_rules WHERE id = ?", (rule_id,))
+    conn.commit()
+    conn.close()
+    return {"message": "Grammar rule deleted"}
 
 
 # --- SETTINGS ---

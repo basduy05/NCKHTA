@@ -81,6 +81,26 @@ def init_db():
         )
     """)
 
+    # --- GRAMMAR RULES TABLE ---
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS grammar_rules (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            description TEXT,
+            file_name TEXT,
+            file_data BLOB,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    # --- MIGRATION: Add file columns to lessons ---
+    try:
+        cursor.execute("ALTER TABLE lessons ADD COLUMN file_name TEXT")
+    except sqlite3.OperationalError: pass
+    try:
+        cursor.execute("ALTER TABLE lessons ADD COLUMN file_data BLOB")
+    except sqlite3.OperationalError: pass
+
     # Seed settings from environment variables (only if not already set)
     env_keys = [
         "GOOGLE_API_KEY", "OPENAI_API_KEY",

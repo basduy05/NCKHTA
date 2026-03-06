@@ -278,35 +278,40 @@ function ClassesTab() {
 }
 
 function LessonsTab() {
-  const [lessons, setLessons] = useState([]);
-  const [classes, setClasses] = useState([]);
-  
-  const fetchLessons = async () => {
-    const res = await fetch(`${API_URL}/admin/lessons`);
-    setLessons(await res.json());
-  };
+  const [lessons, setLessons] = useState<any[]>([]);
+  const [classes, setClasses] = useState<any[]>([]);
+  const [file, setFile] = useState<File | null>(null);
+  const [formLesson, setFormLesson] = useState({ class_id: '', title: '', content: '' });
+  const [uploading, setUploading] = useState(false);
 
+  const fetchLessons = async () => {
+    try { const res = await fetch(`${API_URL}/admin/lessons`); setLessons(await res.json()); } catch {}
+  };
   const fetchClasses = async () => {
-    const res = await fetch(`${API_URL}/admin/classes`);
-    setClasses(await res.json());
+    try { const res = await fetch(`${API_URL}/admin/classes`); setClasses(await res.json()); } catch {}
   };
 
   useEffect(() => { fetchLessons(); fetchClasses(); }, []);
 
-  const [formLesson, setFormLesson] = useState({ class_id: '', title: '', content: '' });
-
   const handleAddLesson = async () => {
     if(!formLesson.class_id || !formLesson.title) return alert("Hãy chọn lớp và nhập tên bài học");
-    await fetch(`${API_URL}/admin/lessons`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({...formLesson, class_id: parseInt(formLesson.class_id)})
-    });
-    setFormLesson({ class_id: '', title: '', content: '' });
-    fetchLessons();
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("class_id", formLesson.class_id);
+      fd.append("title", formLesson.title);
+      fd.append("content", formLesson.content);
+      if (file) fd.append("file", file);
+      const res = await fetch(`${API_URL}/admin/lessons`, { method: 'POST', body: fd });
+      if (!res.ok) { const e = await res.json(); throw new Error(e.detail || 'Error'); }
+      setFormLesson({ class_id: '', title: '', content: '' });
+      setFile(null);
+      fetchLessons();
+    } catch (err: any) { alert(err.message); }
+    finally { setUploading(false); }
   };
 
-  const handleDeleteLesson = async (id) => {
+  const handleDeleteLesson = async (id: number) => {
     if(confirm("Xóa bài học này?")) {
       await fetch(`${API_URL}/admin/lessons/${id}`, { method: 'DELETE' });
       fetchLessons();
@@ -316,33 +321,47 @@ function LessonsTab() {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-in fade-in duration-300">
        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-        <h2 className="text-lg font-bold text-gray-900 mb-4">Thêm Bài Học Mới</h2>
+        <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center"><BookOpen className="mr-2 text-orange-600" size={20}/> Thêm Bài Học Mới</h2>
         <div className="space-y-3">
-          <select 
-            value={formLesson.class_id} 
-            onChange={e=>setFormLesson({...formLesson, class_id: e.target.value})}
-            className="w-full border rounded-lg p-2 bg-white outline-none focus:ring-2"
-          >
+          <select value={formLesson.class_id} onChange={e=>setFormLesson({...formLesson, class_id: e.target.value})} className="w-full border rounded-lg p-2 bg-white outline-none focus:ring-2">
             <option value="">-- Chọn Lớp --</option>
-            {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            {classes.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
           <input type="text" value={formLesson.title} onChange={e=>setFormLesson({...formLesson, title: e.target.value})} placeholder="Tiêu đề bài học" className="w-full border rounded-lg p-2 outline-none focus:ring-2" />
           <textarea value={formLesson.content} onChange={e=>setFormLesson({...formLesson, content: e.target.value})} placeholder="Nội dung tóm tắt..." className="w-full border rounded-lg p-2 outline-none focus:ring-2 h-24" />
-          <button onClick={handleAddLesson} className="w-full py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition">+ Thêm Bài Học</button>
+          <div className="border-2 border-dashed rounded-xl p-4 text-center hover:border-orange-400 hover:bg-orange-50 transition">
+            <input type="file" className="hidden" id="lesson-file" onChange={e => e.target.files && setFile(e.target.files[0])} />
+            <label htmlFor="lesson-file" className="cursor-pointer text-gray-500 flex flex-col items-center text-sm">
+              <UploadCloud size={28} className={file ? "text-orange-600" : ""} />
+              <span className="mt-1 font-medium">{file ? file.name : "Đính kèm file (tuỳ chọn)"}</span>
+            </label>
+          </div>
+          <button onClick={handleAddLesson} disabled={uploading} className="w-full py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-50 transition">
+            {uploading ? "Đang tải..." : "+ Thêm Bài Học"}
+          </button>
         </div>
       </div>
 
        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 flex-grow">
         <h2 className="text-lg font-bold text-gray-900 mb-4">Danh sách Bài học</h2>
-        <ul className="space-y-3">
+        <ul className="space-y-3 max-h-[500px] overflow-y-auto">
           {lessons.length === 0 && <p className="text-gray-400 text-sm">Chưa có bài học nào.</p>}
-          {lessons.map((l) => (
-            <li key={l.id} className="p-3 border rounded-xl flex justify-between items-center bg-gray-50">
-              <div>
-                <p className="font-bold text-orange-700">{l.title}</p>
-                <p className="text-xs text-gray-500">Lớp: {classes.find(c => c.id === l.class_id)?.name || 'Unknown'}</p>
+          {lessons.map((l: any) => (
+            <li key={l.id} className="p-3 border rounded-xl bg-gray-50">
+              <div className="flex justify-between items-start">
+                <div className="flex-1">
+                  <p className="font-bold text-orange-700">{l.title}</p>
+                  <p className="text-xs text-gray-500">Lớp: {classes.find((c: any) => c.id === l.class_id)?.name || 'N/A'}</p>
+                  {l.content && <p className="text-xs text-gray-600 mt-1 line-clamp-2">{l.content}</p>}
+                  {l.file_name && (
+                    <a href={`${API_URL}/admin/lessons/${l.id}/file`} target="_blank" rel="noopener noreferrer"
+                       className="inline-flex items-center mt-2 text-xs text-indigo-600 hover:underline">
+                      <FileSpreadsheet size={14} className="mr-1"/> {l.file_name}
+                    </a>
+                  )}
+                </div>
+                <button onClick={() => handleDeleteLesson(l.id)} className="text-red-500 bg-red-50 p-1.5 rounded hover:bg-red-100 ml-2"><Trash2 size={16}/></button>
               </div>
-              <button onClick={() => handleDeleteLesson(l.id)} className="text-red-500 bg-red-50 p-1.5 rounded hover:bg-red-100"><Trash2 size={16}/></button>
             </li>
           ))}
         </ul>
@@ -354,100 +373,216 @@ function LessonsTab() {
 function VocabTab() {
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [words, setWords] = useState<any[]>([]);
+  const [loadingWords, setLoadingWords] = useState(true);
+  const [filterLevel, setFilterLevel] = useState('');
+
+  const fetchWords = async (level = '') => {
+    setLoadingWords(true);
+    try {
+      const url = level ? `${API_URL}/admin/vocab/list?level=${level}&limit=200` : `${API_URL}/admin/vocab/list?limit=200`;
+      const res = await fetch(url);
+      const data = await res.json();
+      setWords(data.words || []);
+    } catch { setWords([]); }
+    finally { setLoadingWords(false); }
+  };
+
+  useEffect(() => { fetchWords(); }, []);
+
   const handleUpload = async () => {
     if (!file) return;
     setUploading(true);
-    
     const formData = new FormData();
     formData.append("file", file);
-    
     try {
-      const res = await fetch(`${API_URL}/admin/vocab/import`, {
-        method: "POST",
-        body: formData,
-      });
-      
+      const res = await fetch(`${API_URL}/admin/vocab/import`, { method: "POST", body: formData });
       const result = await res.json();
       if (!res.ok) throw new Error(result.detail || "Upload failed");
-      
       alert(result.message);
-      if (result.errors && result.errors.length > 0) {
-        console.error("Errors:", result.errors);
-        alert(`Warning: ${result.errors.length} items failed. Check console.`);
-      }
+      if (result.errors?.length > 0) alert(`Cảnh báo: ${result.errors.length} lỗi. Xem console.`);
       setFile(null);
-    } catch (err: any) {
-      alert("Error: " + err.message);
-    } finally {
-      setUploading(false);
-    }
+      fetchWords(filterLevel);
+    } catch (err: any) { alert("Lỗi: " + err.message); }
+    finally { setUploading(false); }
+  };
+
+  const handleDeleteWord = async (word: string) => {
+    if (!confirm(`Xoá từ "${word}"?`)) return;
+    try {
+      const res = await fetch(`${API_URL}/admin/vocab/${encodeURIComponent(word)}`, { method: 'DELETE' });
+      if (res.ok) fetchWords(filterLevel);
+      else alert('Lỗi xoá từ');
+    } catch { alert('Lỗi kết nối'); }
+  };
+
+  const handleFilterChange = (level: string) => {
+    setFilterLevel(level);
+    fetchWords(level);
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-in fade-in duration-300">
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-        <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center"><FileSpreadsheet className="mr-2 text-indigo-600" /> Nhập Nhanh (CSV/Excel)</h2>
-        <p className="text-sm text-gray-500 mb-4">Upload file thêm hàng loạt từ vựng vào Neo4j Graph Database.</p>
-        <div className="border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer hover:border-indigo-400 hover:bg-gray-50 transition">
-          <input type="file" accept=".csv, .xlsx" className="hidden" id="file-upload" onChange={(e) => e.target.files && setFile(e.target.files[0]) }/>
-          <label htmlFor="file-upload" className="cursor-pointer text-gray-500 flex flex-col items-center">
-            {file ? <FileSpreadsheet size={40} className="text-indigo-600 mb-2"/> : <UploadCloud size={40} className="mb-2"/>}
-            <span className="font-medium text-gray-700">{file ? file.name : "Click chọn file .csv, .xlsx"}</span>
-          </label>
+    <div className="space-y-6 animate-in fade-in duration-300">
+      {/* Upload Section */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+          <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center"><FileSpreadsheet className="mr-2 text-indigo-600" /> Nhập Nhanh (CSV/Excel)</h2>
+          <p className="text-sm text-gray-500 mb-4">Upload file thêm hàng loạt từ vựng vào Neo4j Graph Database.</p>
+          <div className="border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer hover:border-indigo-400 hover:bg-gray-50 transition">
+            <input type="file" accept=".csv, .xlsx" className="hidden" id="file-upload" onChange={(e) => e.target.files && setFile(e.target.files[0]) }/>
+            <label htmlFor="file-upload" className="cursor-pointer text-gray-500 flex flex-col items-center">
+              {file ? <FileSpreadsheet size={40} className="text-indigo-600 mb-2"/> : <UploadCloud size={40} className="mb-2"/>}
+              <span className="font-medium text-gray-700">{file ? file.name : "Click chọn file .csv, .xlsx"}</span>
+            </label>
+          </div>
+          <button onClick={handleUpload} disabled={!file || uploading} className="w-full mt-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition">{uploading ? "Đang import..." : "Bắt đầu Import graph"}</button>
         </div>
-        <button onClick={handleUpload} disabled={!file || uploading} className="w-full mt-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition">{uploading ? "Đang import..." : "Bắt đầu Import graph"}</button>
+
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+          <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center"><Database className="mr-2 text-indigo-600" /> Thống kê</h2>
+          <div className="text-center py-8">
+            <p className="text-4xl font-bold text-indigo-600">{words.length}</p>
+            <p className="text-gray-500 mt-1">từ vựng trong Neo4j</p>
+          </div>
+          <div className="flex flex-wrap gap-2 justify-center">
+            {['', 'A1', 'A2', 'B1', 'B2', 'C1', 'C2'].map(level => (
+              <button key={level} onClick={() => handleFilterChange(level)}
+                className={`px-3 py-1 rounded-full text-sm font-medium transition ${filterLevel === level ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+                {level || 'Tất cả'}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
 
+      {/* Word List */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-        <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center"><Plus className="mr-2 text-indigo-600" /> Thêm Từng Từ Một (Cấu trúc đồ thị)</h2>
-        <form className="space-y-4">
-          <div><label className="block text-sm font-medium mb-1">Từ Tiếng Anh (Node trung tâm)</label><input type="text" className="w-full border rounded-lg p-2 outline-none focus:border-indigo-500" placeholder="Ví dụ: Ecosystem" /></div>
-          <div className="grid grid-cols-2 gap-4">
-            <div><label className="block text-sm font-medium mb-1">Phát âm</label><input type="text" className="w-full border rounded-lg p-2" placeholder="/ˈiːkəʊˌsɪstəm/" /></div>
-            <div><label className="block text-sm font-medium mb-1">Độ khó</label><select className="w-full border rounded-lg p-2"><option>A1</option><option>A2</option><option>B1</option><option>B2</option><option>C1</option><option>C2</option></select></div>
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-lg font-bold text-gray-900 flex items-center"><Database className="mr-2 text-indigo-600" size={20}/> Danh sách Từ Vựng trong Neo4j</h2>
+          <button onClick={() => fetchWords(filterLevel)} className="text-indigo-600 hover:text-indigo-800 text-sm flex items-center"><RefreshCw size={14} className="mr-1"/> Làm mới</button>
+        </div>
+        {loadingWords ? <p className="text-gray-400 text-sm py-4">Đang tải từ Neo4j...</p> : words.length === 0 ? <p className="text-gray-400 text-sm py-4">Chưa có từ vựng nào. Hãy import file CSV.</p> : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse text-sm">
+              <thead>
+                <tr className="border-b border-gray-200 text-gray-500">
+                  <th className="pb-3 font-medium">Từ</th>
+                  <th className="pb-3 font-medium">Phát âm</th>
+                  <th className="pb-3 font-medium">Nghĩa</th>
+                  <th className="pb-3 font-medium">Level</th>
+                  <th className="pb-3 font-medium">Loại từ</th>
+                  <th className="pb-3 font-medium">Ví dụ</th>
+                  <th className="pb-3 font-medium w-10"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {words.map((w: any, i: number) => (
+                  <tr key={i} className="border-b border-gray-50 hover:bg-gray-50">
+                    <td className="py-3 font-semibold text-indigo-700">{w.word}</td>
+                    <td className="py-3 text-gray-500">{w.pronunciation || '-'}</td>
+                    <td className="py-3 text-gray-700">{w.meaning || '-'}</td>
+                    <td className="py-3"><span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-medium">{w.level || '-'}</span></td>
+                    <td className="py-3 text-gray-500">{w.type || '-'}</td>
+                    <td className="py-3 text-gray-500 max-w-[200px] truncate">{w.example || '-'}</td>
+                    <td className="py-3"><button onClick={() => handleDeleteWord(w.word)} className="text-red-400 hover:text-red-600"><Trash2 size={15}/></button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-          <div><label className="block text-sm font-medium mb-1">Nghĩa tiếng Việt</label><input type="text" className="w-full border rounded-lg p-2" placeholder="Hệ sinh thái" /></div>
-          <button type="button" className="w-full py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition flex items-center justify-center"><Save size={18} className="mr-2"/> Nối Node vào Neo4j</button>
-        </form>
+        )}
       </div>
     </div>
   );
 }
 
 function GrammarTab() {
+  const [rules, setRules] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [file, setFile] = useState<File | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const fetchRules = async () => {
+    setLoading(true);
+    try { const res = await fetch(`${API_URL}/admin/grammar`); setRules(await res.json()); } catch {}
+    finally { setLoading(false); }
+  };
+
+  useEffect(() => { fetchRules(); }, []);
+
+  const handleAdd = async () => {
+    if (!name) return alert("Nhập tên cấu trúc ngữ pháp");
+    setSaving(true);
+    try {
+      const fd = new FormData();
+      fd.append("name", name);
+      fd.append("description", description);
+      if (file) fd.append("file", file);
+      const res = await fetch(`${API_URL}/admin/grammar`, { method: 'POST', body: fd });
+      if (!res.ok) throw new Error((await res.json()).detail || 'Error');
+      setName(''); setDescription(''); setFile(null);
+      fetchRules();
+    } catch (err: any) { alert(err.message); }
+    finally { setSaving(false); }
+  };
+
+  const handleDelete = async (id: number) => {
+    if (!confirm("Xoá cấu trúc ngữ pháp này?")) return;
+    await fetch(`${API_URL}/admin/grammar/${id}`, { method: 'DELETE' });
+    fetchRules();
+  };
+
   return (
     <div className="animate-in fade-in duration-300">
        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 mb-6">
           <h2 className="text-lg font-bold text-gray-900 mb-2 flex items-center"><BookText className="mr-2 text-teal-600"/> Kho Ngữ Pháp (Grammar Rules)</h2>
-          <p className="text-gray-500">Quản lý các cấu trúc ngữ pháp để AI sử dụng khi tạo bài tập.</p>
+          <p className="text-gray-500 text-sm">Quản lý các cấu trúc ngữ pháp để AI sử dụng khi tạo bài tập. Có thể đính kèm file tài liệu.</p>
        </div>
        
        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
-             <h3 className="font-bold mb-4">Thêm Cấu Trúc Mới</h3>
+             <h3 className="font-bold mb-4 flex items-center"><Plus className="mr-2 text-teal-600" size={18}/> Thêm Cấu Trúc Mới</h3>
              <div className="space-y-4">
-                <input className="w-full border p-2 rounded-lg" placeholder="Tên cấu trúc (VD: Present Perfect)" />
-                <textarea className="w-full border p-2 rounded-lg h-24" placeholder="Mô tả / Công thức..." />
-                <button className="w-full bg-teal-600 text-white py-2 rounded-lg hover:bg-teal-700">Lưu Cấu Trúc</button>
+                <input value={name} onChange={e => setName(e.target.value)} className="w-full border p-2 rounded-lg focus:ring-2 outline-none" placeholder="Tên cấu trúc (VD: Present Perfect)" />
+                <textarea value={description} onChange={e => setDescription(e.target.value)} className="w-full border p-2 rounded-lg h-24 focus:ring-2 outline-none" placeholder="Mô tả / Công thức..." />
+                <div className="border-2 border-dashed rounded-xl p-4 text-center hover:border-teal-400 hover:bg-teal-50 transition">
+                  <input type="file" className="hidden" id="grammar-file" onChange={e => e.target.files && setFile(e.target.files[0])} />
+                  <label htmlFor="grammar-file" className="cursor-pointer text-gray-500 flex flex-col items-center text-sm">
+                    <UploadCloud size={28} className={file ? "text-teal-600" : ""} />
+                    <span className="mt-1 font-medium">{file ? file.name : "Đính kèm file (tuỳ chọn)"}</span>
+                  </label>
+                </div>
+                <button onClick={handleAdd} disabled={saving} className="w-full bg-teal-600 text-white py-2 rounded-lg hover:bg-teal-700 disabled:opacity-50 transition">
+                  {saving ? "Đang lưu..." : "Lưu Cấu Trúc"}
+                </button>
              </div>
           </div>
           
           <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
              <h3 className="font-bold mb-4">Danh sách hiện có</h3>
-             <ul className="space-y-2">
-                <li className="p-3 bg-gray-50 rounded-lg border border-gray-200 flex justify-between">
-                   <span>Present Simple (Hiện tại đơn)</span>
-                   <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded">Active</span>
-                </li>
-                <li className="p-3 bg-gray-50 rounded-lg border border-gray-200 flex justify-between">
-                   <span>Past Perfect (Quá khứ hoàn thành)</span>
-                   <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded">Active</span>
-                </li>
-                <li className="p-3 bg-gray-50 rounded-lg border border-gray-200 flex justify-between">
-                   <span>Conditional Type 1 (Câu điều kiện loại 1)</span>
-                   <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded">Active</span>
-                </li>
-             </ul>
+             {loading ? <p className="text-gray-400 text-sm">Đang tải...</p> : rules.length === 0 ? <p className="text-gray-400 text-sm">Chưa có cấu trúc ngữ pháp nào.</p> : (
+               <ul className="space-y-2 max-h-[500px] overflow-y-auto">
+                  {rules.map((r: any) => (
+                    <li key={r.id} className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                       <div className="flex justify-between items-start">
+                         <div className="flex-1">
+                           <p className="font-semibold text-teal-700">{r.name}</p>
+                           {r.description && <p className="text-xs text-gray-500 mt-1 line-clamp-2">{r.description}</p>}
+                           {r.file_name && (
+                             <a href={`${API_URL}/admin/grammar/${r.id}/file`} target="_blank" rel="noopener noreferrer"
+                                className="inline-flex items-center mt-2 text-xs text-indigo-600 hover:underline">
+                               <FileSpreadsheet size={14} className="mr-1"/> {r.file_name}
+                             </a>
+                           )}
+                         </div>
+                         <button onClick={() => handleDelete(r.id)} className="text-red-500 bg-red-50 p-1.5 rounded hover:bg-red-100 ml-2"><Trash2 size={16}/></button>
+                       </div>
+                    </li>
+                  ))}
+               </ul>
+             )}
           </div>
        </div>
     </div>
