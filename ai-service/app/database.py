@@ -95,12 +95,61 @@ def init_db():
         )
     """)
 
+    # --- ENROLLMENTS TABLE ---
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS enrollments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            student_id INTEGER NOT NULL,
+            class_id INTEGER NOT NULL,
+            enrolled_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (student_id) REFERENCES users(id),
+            FOREIGN KEY (class_id) REFERENCES classes(id),
+            UNIQUE(student_id, class_id)
+        )
+    """)
+
+    # --- ASSIGNMENTS TABLE ---
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS assignments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            class_id INTEGER NOT NULL,
+            teacher_id INTEGER NOT NULL,
+            title TEXT NOT NULL,
+            description TEXT,
+            quiz_data TEXT,
+            due_date TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (class_id) REFERENCES classes(id),
+            FOREIGN KEY (teacher_id) REFERENCES users(id)
+        )
+    """)
+
+    # --- STUDENT SCORES TABLE ---
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS student_scores (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            student_id INTEGER NOT NULL,
+            assignment_id INTEGER NOT NULL,
+            score INTEGER DEFAULT 0,
+            max_score INTEGER DEFAULT 0,
+            submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (student_id) REFERENCES users(id),
+            FOREIGN KEY (assignment_id) REFERENCES assignments(id),
+            UNIQUE(student_id, assignment_id)
+        )
+    """)
+
     # --- MIGRATION: Add file columns to lessons ---
     try:
         cursor.execute("ALTER TABLE lessons ADD COLUMN file_name TEXT")
     except sqlite3.OperationalError: pass
     try:
         cursor.execute("ALTER TABLE lessons ADD COLUMN file_data BLOB")
+    except sqlite3.OperationalError: pass
+
+    # --- MIGRATION: Add teacher_id to classes ---
+    try:
+        cursor.execute("ALTER TABLE classes ADD COLUMN teacher_id INTEGER REFERENCES users(id)")
     except sqlite3.OperationalError: pass
 
     # Seed settings from environment variables (only if not already set)
@@ -201,5 +250,12 @@ class LessonCreate(BaseModel):
     class_id: int
     title: str
     content: Optional[str] = None
+
+class AssignmentCreate(BaseModel):
+    class_id: int
+    title: str
+    description: str = ""
+    quiz_data: str = ""
+    due_date: str = ""
 
 

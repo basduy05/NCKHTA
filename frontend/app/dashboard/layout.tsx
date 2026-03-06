@@ -2,7 +2,7 @@
 import React, { Suspense } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { BookOpen, Users, LayoutDashboard, Component, Database, GraduationCap, Library, BookText, FileSearch, LogOut, Settings } from "lucide-react";
+import { BookOpen, Users, LayoutDashboard, Component, Database, GraduationCap, Library, BookText, FileSearch, LogOut, Settings, ClipboardList, Sparkles } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 
 function DashboardSidebar({ user, logout }: { user: any, logout: any }) {
@@ -28,8 +28,12 @@ function DashboardSidebar({ user, logout }: { user: any, logout: any }) {
     ];
   } else if (isTeacher) {
     links = [
-      { name: "Lớp học của tôi", href: "/dashboard/teacher", icon: Users },
-      { name: "Thống kê", href: "/dashboard/teacher", icon: Component },
+      { name: "Tổng quan", href: "/dashboard/teacher?tab=overview", icon: LayoutDashboard, id: "overview" },
+      { name: "Lớp học của tôi", href: "/dashboard/teacher?tab=classes", icon: GraduationCap, id: "classes" },
+      { name: "Quản lý Học sinh", href: "/dashboard/teacher?tab=students", icon: Users, id: "students" },
+      { name: "Quản lý Bài học", href: "/dashboard/teacher?tab=lessons", icon: BookOpen, id: "lessons" },
+      { name: "Bài tập & Kiểm tra", href: "/dashboard/teacher?tab=assignments", icon: ClipboardList, id: "assignments" },
+      { name: "Công cụ AI", href: "/dashboard/teacher?tab=ai-tools", icon: Sparkles, id: "ai-tools" },
     ];
   } else {
     links = [
@@ -45,11 +49,11 @@ function DashboardSidebar({ user, logout }: { user: any, logout: any }) {
   return (
     <aside className="w-64 bg-white border-r border-gray-200 p-6 flex flex-col">
       <Link href="/" className="flex items-center text-indigo-600 font-bold text-2xl mb-10">
-        <Library className="mr-2" size={28} /> EAM Admin
+        <Library className="mr-2" size={28} /> {isAdmin ? "iEdu Admin" : isTeacher ? "iEdu Teacher" : "iEdu"}
       </Link>
       <nav className="space-y-2 flex-grow">
         {links.map((link, i) => {
-          const isActive = isAdmin ? link.id === currentTab : pathname === link.href;
+          const isActive = (isAdmin || isTeacher) ? link.id === currentTab : pathname === link.href;
           return (
             <Link key={i} href={link.href} className={`flex items-center p-3 rounded-xl transition ${isActive ? "bg-indigo-50 text-indigo-700 font-semibold" : "text-gray-600 hover:bg-gray-100"}`}>
               <link.icon className="mr-3" size={20} /> {link.name}

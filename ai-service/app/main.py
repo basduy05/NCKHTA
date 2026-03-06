@@ -22,12 +22,14 @@ print("[STARTUP] Loading routers...")
 try:
     from .routers import admin  # Import routers
     from .routers import auth  # Import Auth Router
+    from .routers import teacher  # Import Teacher Router
     print("[STARTUP] Routers loaded OK")
 except Exception as e:
     print(f"[STARTUP ERROR] Failed to load routers: {e}")
     traceback.print_exc()
     admin = None
     auth = None
+    teacher = None
 
 import sqlite3
 
@@ -53,6 +55,7 @@ app.add_middleware(
 
 app.include_router(admin.router) if admin else None
 app.include_router(auth.router) if auth else None
+app.include_router(teacher.router) if teacher else None
 
 print("[STARTUP] App ready!")
 
