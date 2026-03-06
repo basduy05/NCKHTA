@@ -89,15 +89,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   React.useEffect(() => {
     if (isInitialized && !user) {
-      router.push('/login');
+      router.push('/');
     } else if (isInitialized && user) {
       const role = user.role.toLowerCase();
-      if (pathname.includes('/admin') && role !== 'admin') {
-        router.push(`/dashboard/${role}`);
-      } else if (pathname.includes('/teacher') && role !== 'teacher' && role !== 'admin') {
-        router.push(`/dashboard/${role}`);
-      } else if (pathname.includes('/student') && role !== 'student' && role !== 'admin') {
-        router.push(`/dashboard/${role}`);
+      if (role !== 'admin') {
+        router.push('/');
       }
     }
   }, [isInitialized, user, router, pathname]);

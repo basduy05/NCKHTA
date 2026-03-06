@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowLeft, Brain, Network, BookOpen, Users, Sparkles, GraduationCap, BarChart3, Globe } from "lucide-react";
+import { ArrowLeft, Brain, Network, BookOpen, Users, Sparkles, GraduationCap, BarChart3, Globe, Mail } from "lucide-react";
 
 export default function AboutPage() {
   return (
@@ -173,11 +173,93 @@ export default function AboutPage() {
         </div>
       </section>
 
-      {/* Đội ngũ / Thông tin */}
+      {/* Tác giả & Thông tin Dự án */}
       <section className="max-w-6xl mx-auto px-6 py-20">
         <div className="text-center mb-16">
-          <h2 className="text-3xl font-bold text-gray-900 mb-4">Thông tin Dự án</h2>
+          <h2 className="text-3xl font-bold text-gray-900 mb-4">Tác giả & Thông tin Dự án</h2>
         </div>
+
+        {/* Author Card */}
+        <div className="bg-white rounded-3xl shadow-lg overflow-hidden border border-gray-100 mb-16">
+          <div className="flex flex-col lg:flex-row">
+            {/* Photo Gallery */}
+            <div className="lg:w-2/5">
+              <div className="grid grid-cols-2 gap-1 h-full">
+                <div className="relative aspect-[3/4] col-span-2 overflow-hidden">
+                  <Image src="/author-1.jpg" alt="Nguyễn Bá Duy" fill className="object-cover hover:scale-105 transition-transform duration-700" sizes="(max-width: 768px) 100vw, 40vw" />
+                </div>
+                <div className="relative aspect-square overflow-hidden">
+                  <Image src="/author-2.jpg" alt="Nguyễn Bá Duy" fill className="object-cover hover:scale-105 transition-transform duration-700" sizes="20vw" />
+                </div>
+                <div className="relative aspect-square overflow-hidden">
+                  <Image src="/author-3.jpg" alt="Nguyễn Bá Duy" fill className="object-cover hover:scale-105 transition-transform duration-700" sizes="20vw" />
+                </div>
+              </div>
+            </div>
+
+            {/* Author Info */}
+            <div className="lg:w-3/5 p-8 lg:p-12 flex flex-col justify-center space-y-6">
+              <div>
+                <h3 className="text-3xl font-extrabold text-gray-900 mb-1">Nguyễn Bá Duy</h3>
+                <p className="text-blue-600 font-semibold text-lg">Sinh viên & Nhà phát triển</p>
+              </div>
+
+              <div className="space-y-3 text-gray-600">
+                <div className="flex items-start gap-3">
+                  <GraduationCap size={20} className="text-blue-500 mt-0.5 flex-shrink-0" />
+                  <p>Sinh viên lớp <strong>74DCTT23</strong> - Khoa Công nghệ Thông tin, Trường Đại học Công nghệ Giao thông vận tải</p>
+                </div>
+                <div className="flex items-start gap-3">
+                  <Mail size={20} className="text-blue-500 mt-0.5 flex-shrink-0" />
+                  <p>basduy05@gmail.com</p>
+                </div>
+              </div>
+
+              <p className="text-gray-600 leading-relaxed">
+                Một sinh viên trẻ đầy nhiệt huyết với niềm đam mê công nghệ cháy bỏng, luôn tìm tòi và ứng dụng những giải pháp sáng tạo vào thực tiễn.
+                Với tình yêu đặc biệt dành cho AI, phát triển web và các sản phẩm công nghệ giáo dục,
+                Duy không ngừng học hỏi, thử nghiệm và xây dựng những sản phẩm có giá trị thực tiễn cho cộng đồng sinh viên.
+              </p>
+
+              <div className="space-y-2">
+                <h4 className="font-bold text-gray-900 text-sm uppercase tracking-wider">Hoạt động nổi bật</h4>
+                <div className="flex flex-wrap gap-2">
+                  {["Google Student Ambassador 2026", "UV BCH Đoàn TNCSHCM - ĐH CNGT Vận tải Khoá XI"].map((tag, i) => (
+                    <span key={i} className="px-3 py-1.5 bg-gradient-to-r from-blue-50 to-cyan-50 text-blue-700 rounded-full text-xs font-semibold border border-blue-100">
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-2 pt-2">
+                {["Next.js", "React", "FastAPI", "Python", "Neo4j", "AI/ML", "TypeScript"].map((skill, i) => (
+                  <span key={i} className="px-3 py-1 bg-gray-100 text-gray-600 rounded-lg text-xs font-medium">
+                    {skill}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* More photos */}
+          <div className="grid grid-cols-3 gap-1">
+            <div className="relative aspect-video overflow-hidden">
+              <Image src="/author-4.jpg" alt="Nguyễn Bá Duy" fill className="object-cover hover:scale-105 transition-transform duration-700" sizes="33vw" />
+            </div>
+            <div className="relative aspect-video overflow-hidden">
+              <Image src="/author-5.jpg" alt="Nguyễn Bá Duy" fill className="object-cover hover:scale-105 transition-transform duration-700" sizes="33vw" />
+            </div>
+            <div className="relative aspect-video bg-gradient-to-br from-blue-600 to-cyan-500 flex items-center justify-center">
+              <div className="text-center text-white p-4">
+                <p className="text-2xl font-extrabold mb-1">iEdu</p>
+                <p className="text-xs text-blue-100">Built with passion ❤️</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Project Info */}
         <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-3xl p-10 md:p-16">
           <div className="grid md:grid-cols-2 gap-12">
             <div className="space-y-6">
@@ -194,6 +276,10 @@ export default function AboutPage() {
                 <div className="flex items-start gap-3">
                   <div className="w-2 h-2 bg-blue-500 rounded-full mt-2 flex-shrink-0" />
                   <p><strong>Sản phẩm:</strong> Nền tảng web iEdu - Hệ thống học tập thông minh</p>
+                </div>
+                <div className="flex items-start gap-3">
+                  <div className="w-2 h-2 bg-blue-500 rounded-full mt-2 flex-shrink-0" />
+                  <p><strong>Tác giả:</strong> Nguyễn Bá Duy - Lớp 74DCTT23, Khoa CNTT</p>
                 </div>
               </div>
             </div>
@@ -234,7 +320,7 @@ export default function AboutPage() {
             <Image src="/logo.png" alt="iEdu" width={80} height={32} className="brightness-0 invert" />
             <span className="text-sm">Nền tảng Học tập Thông minh</span>
           </div>
-          <p className="text-sm">&copy; 2025 iEdu - Nghiên cứu Khoa học Công nghệ Ứng dụng</p>
+          <p className="text-sm">&copy; 2025 iEdu - Nguyễn Bá Duy - Lớp 74DCTT23</p>
         </div>
       </footer>
     </main>

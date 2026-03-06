@@ -152,7 +152,9 @@ def init_db():
         cursor.execute("ALTER TABLE classes ADD COLUMN teacher_id INTEGER REFERENCES users(id)")
     except sqlite3.OperationalError: pass
 
-    # Seed settings from environment variables (only if not already set)
+    # Seed settings from environment variables
+    # Use INSERT OR REPLACE so env vars always persist across redeployments
+    # (Render's ephemeral filesystem deletes app.db on each deploy)
     env_keys = [
         "GOOGLE_API_KEY", "OPENAI_API_KEY",
         "NEO4J_URI", "NEO4J_USERNAME", "NEO4J_PASSWORD", "NEO4J_DATABASE",
@@ -162,7 +164,7 @@ def init_db():
     for k in env_keys:
         val = os.getenv(k)
         if val:
-            cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", (k, val))
+            cursor.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (k, val))
     conn.commit()
     
     cursor.execute("SELECT COUNT(*) FROM classes")
