@@ -394,15 +394,50 @@ def update_settings(data: SettingsUpdate):
 
 @router.post("/settings/test-email")
 def test_email():
-    """Send a test email to SENDER_EMAIL."""
-    sender = auth_service._get_setting("SENDER_EMAIL") or auth_service._get_setting("SMTP_USERNAME")
-    if not sender:
-        raise HTTPException(status_code=400, detail="SENDER_EMAIL / SMTP_USERNAME not configured.")
-    result = auth_service.send_email(sender, "EAM Test Email", "<h2>Test email from EAM System</h2><p>If you see this, SMTP is working correctly!</p>")
-    if result is True:
-        return {"message": f"Test email sent to {sender}"}
-    detail = result if isinstance(result, str) else "Failed to send test email. Check SMTP settings."
-    raise HTTPException(status_code=500, detail=detail)
+    """Send a test email to SENDER_EMAIL with step-by-step diagnostics."""
+    import smtplib
+    from email.mime.text import MIMEText
+    from email.mime.multipart import MIMEMultipart
+
+    steps = []
+    smtp_server = auth_service._get_setting("SMTP_SERVER", "smtp.gmail.com")
+    smtp_port = int(auth_service._get_setting("SMTP_PORT", "587"))
+    smtp_username = auth_service._get_setting("SMTP_USERNAME")
+    smtp_password = auth_service._get_setting("SMTP_PASSWORD")
+    sender = auth_service._get_setting("SENDER_EMAIL", smtp_username)
+
+    steps.append(f"Config: server={smtp_server}, port={smtp_port}, user={smtp_username}, sender={sender}")
+
+    if not smtp_username or not smtp_password:
+        return {"success": False, "steps": steps, "error": "SMTP_USERNAME or SMTP_PASSWORD not set"}
+
+    try:
+        steps.append("Connecting to SMTP server...")
+        server = smtplib.SMTP(smtp_server, smtp_port, timeout=15)
+        steps.append("Connected OK")
+
+        steps.append("Starting TLS...")
+        server.starttls()
+        steps.append("TLS OK")
+
+        steps.append("Logging in...")
+        server.login(smtp_username, smtp_password)
+        steps.append("Login OK")
+
+        msg = MIMEMultipart()
+        msg['From'] = sender
+        msg['To'] = sender
+        msg['Subject'] = 'EAM Test Email'
+        msg.attach(MIMEText('<h2>Test email from EAM</h2><p>SMTP is working!</p>', 'html'))
+
+        steps.append("Sending email...")
+        server.send_message(msg)
+        steps.append("Send OK")
+        server.quit()
+        return {"success": True, "steps": steps, "message": f"Email sent to {sender}"}
+    except Exception as e:
+        steps.append(f"FAILED: {type(e).__name__}: {e}")
+        return {"success": False, "steps": steps, "error": str(e)}
 
 @router.post("/settings/test-neo4j")
 def test_neo4j():
