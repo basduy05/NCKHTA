@@ -1,8 +1,8 @@
 "use client";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { Brain, Network, Sparkles, GraduationCap, BarChart3, CheckCircle2, ArrowRight, ChevronRight, Globe, Zap, Target, TrendingUp, Play, Users, Mail } from "lucide-react";
+import { Brain, Network, Sparkles, GraduationCap, BarChart3, CheckCircle2, ArrowRight, ChevronRight, ChevronLeft, Globe, Zap, Target, TrendingUp, Play, Users, Mail, Award, Star } from "lucide-react";
 
 function useScrollReveal() {
   const ref = useRef<HTMLDivElement>(null);
@@ -26,6 +26,158 @@ function useScrollReveal() {
     return () => observer.disconnect();
   }, []);
   return ref;
+}
+
+const AUTHOR_PHOTOS = [
+  "/author-1.jpg",
+  "/author-2.jpg",
+  "/author-3.jpg",
+  "/author-4.jpg",
+  "/author-5.jpg",
+];
+
+function AuthorCard() {
+  const [current, setCurrent] = useState(0);
+  const [isHovered, setIsHovered] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const goTo = useCallback((idx: number) => {
+    setCurrent((idx + AUTHOR_PHOTOS.length) % AUTHOR_PHOTOS.length);
+  }, []);
+
+  useEffect(() => {
+    if (isHovered) return;
+    timerRef.current = setInterval(() => {
+      setCurrent((p) => (p + 1) % AUTHOR_PHOTOS.length);
+    }, 4000);
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  }, [isHovered]);
+
+  return (
+    <div className="bg-white rounded-3xl shadow-xl overflow-hidden border border-gray-100 max-w-5xl mx-auto hover:shadow-2xl transition-all duration-500 animate-glow-pulse">
+      <div className="flex flex-col lg:flex-row">
+        {/* Slideshow */}
+        <div
+          className="lg:w-1/2 relative group"
+          onMouseEnter={() => setIsHovered(true)}
+          onMouseLeave={() => setIsHovered(false)}
+        >
+          <div className="relative aspect-[4/5] overflow-hidden bg-gray-100">
+            {AUTHOR_PHOTOS.map((src, i) => (
+              <div
+                key={i}
+                className={`absolute inset-0 transition-all duration-700 ease-in-out ${
+                  i === current
+                    ? "opacity-100 scale-100"
+                    : i === (current - 1 + AUTHOR_PHOTOS.length) % AUTHOR_PHOTOS.length
+                    ? "opacity-0 scale-105 -translate-x-full"
+                    : "opacity-0 scale-105 translate-x-full"
+                }`}
+              >
+                <Image
+                  src={src}
+                  alt={`Nguyễn Bá Duy - Ảnh ${i + 1}`}
+                  fill
+                  className="object-cover"
+                  sizes="(max-width: 768px) 100vw, 50vw"
+                  priority={i === 0}
+                />
+              </div>
+            ))}
+
+            {/* Gradient overlay */}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent" />
+
+            {/* Nav arrows */}
+            <button
+              onClick={() => goTo(current - 1)}
+              className="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/80 backdrop-blur-sm flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300 hover:bg-white hover:scale-110 shadow-lg"
+            >
+              <ChevronLeft size={20} className="text-gray-700" />
+            </button>
+            <button
+              onClick={() => goTo(current + 1)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/80 backdrop-blur-sm flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300 hover:bg-white hover:scale-110 shadow-lg"
+            >
+              <ChevronRight size={20} className="text-gray-700" />
+            </button>
+
+            {/* Dots indicator */}
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2">
+              {AUTHOR_PHOTOS.map((_, i) => (
+                <button
+                  key={i}
+                  onClick={() => goTo(i)}
+                  className={`rounded-full transition-all duration-500 ${
+                    i === current
+                      ? "w-8 h-2.5 bg-white shadow-lg"
+                      : "w-2.5 h-2.5 bg-white/50 hover:bg-white/80"
+                  }`}
+                />
+              ))}
+            </div>
+
+            {/* Photo counter */}
+            <div className="absolute top-4 right-4 bg-black/40 backdrop-blur-sm text-white text-xs font-medium px-3 py-1.5 rounded-full">
+              {current + 1} / {AUTHOR_PHOTOS.length}
+            </div>
+          </div>
+        </div>
+
+        {/* Info */}
+        <div className="lg:w-1/2 p-8 lg:p-12 flex flex-col justify-center space-y-6">
+          <div>
+            <h3 className="text-3xl font-extrabold text-gray-900 mb-2">Nguyễn Bá Duy</h3>
+            <p className="text-blue-600 font-semibold text-lg">Full-stack Developer &amp; AI Enthusiast</p>
+          </div>
+          
+          <div className="space-y-3 text-gray-600">
+            <div className="flex items-start gap-3 group">
+              <GraduationCap size={20} className="text-blue-500 mt-0.5 flex-shrink-0 group-hover:scale-110 transition-transform" />
+              <p>Sinh viên lớp <strong>74DCTT23</strong> — Khoa Công nghệ Thông tin, Trường Đại học Công nghệ Giao thông vận tải</p>
+            </div>
+            <div className="flex items-start gap-3 group">
+              <Mail size={20} className="text-blue-500 mt-0.5 flex-shrink-0 group-hover:scale-110 transition-transform" />
+              <p>basduy05@gmail.com</p>
+            </div>
+          </div>
+
+          <p className="text-gray-600 leading-relaxed">
+            Một sinh viên trẻ đầy nhiệt huyết với niềm đam mê công nghệ cháy bỏng, luôn tìm tòi và ứng dụng những giải pháp sáng tạo vào thực tiễn. 
+            Với tình yêu đặc biệt dành cho AI, phát triển web và các sản phẩm công nghệ giáo dục, 
+            Duy không ngừng học hỏi, thử nghiệm và xây dựng những sản phẩm có giá trị thực tiễn cho cộng đồng sinh viên.
+          </p>
+
+          <div className="space-y-3">
+            <h4 className="font-bold text-gray-900 text-sm uppercase tracking-wider flex items-center gap-2">
+              <Award size={16} className="text-blue-500" /> Hoạt động nổi bật
+            </h4>
+            <div className="space-y-2">
+              <div className="flex items-center gap-3 px-4 py-3 bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl border border-blue-100 hover:shadow-md hover:-translate-y-0.5 transition-all duration-300">
+                <Star size={16} className="text-yellow-500 flex-shrink-0" />
+                <span className="text-sm font-semibold text-blue-800">Google Student Ambassador 2026</span>
+              </div>
+              <div className="flex items-center gap-3 px-4 py-3 bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl border border-blue-100 hover:shadow-md hover:-translate-y-0.5 transition-all duration-300">
+                <Star size={16} className="text-yellow-500 flex-shrink-0" />
+                <span className="text-sm font-semibold text-blue-800">Ủy viên Ban Chấp hành Đoàn Thanh niên Cộng sản Hồ Chí Minh — Trường Đại học Công nghệ Giao thông vận tải Khóa XI</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <h4 className="font-bold text-gray-900 text-sm uppercase tracking-wider">Kỹ năng</h4>
+            <div className="flex flex-wrap gap-2">
+              {["Next.js", "React", "FastAPI", "Python", "Neo4j", "AI/ML", "TypeScript", "Tailwind CSS"].map((skill, i) => (
+                <span key={i} className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-xs font-semibold hover:bg-blue-600 hover:text-white transition-all duration-300 cursor-default hover:scale-105 hover:shadow-md" style={{ animationDelay: `${i * 0.05}s` }}>
+                  {skill}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default function Home() {
@@ -275,94 +427,15 @@ export default function Home() {
       </section>
 
       {/* ===== AUTHOR SECTION ===== */}
-      <section id="author" className="bg-gradient-to-b from-gray-50 to-white py-24">
+      <section id="author" className="bg-gradient-to-b from-gray-50 to-white py-24 overflow-hidden">
         <div className="max-w-7xl mx-auto px-6">
           <div data-reveal className="opacity-0 translate-y-8 text-center mb-16">
             <span className="text-sm font-semibold text-blue-600 uppercase tracking-wider">Tác giả</span>
             <h2 className="text-4xl font-extrabold text-gray-900 mt-3 mb-4">Người phát triển</h2>
+            <p className="text-gray-600 max-w-2xl mx-auto text-lg">Đằng sau iEdu là niềm đam mê công nghệ và giáo dục</p>
           </div>
           <div data-reveal className="opacity-0 translate-y-8">
-            <div className="bg-white rounded-3xl shadow-xl overflow-hidden border border-gray-100 max-w-5xl mx-auto hover:shadow-2xl transition-shadow duration-500">
-              <div className="flex flex-col lg:flex-row">
-                {/* Photo Gallery */}
-                <div className="lg:w-1/2 relative">
-                  <div className="grid grid-cols-2 gap-1 h-full">
-                    <div className="relative aspect-[3/4] col-span-2 overflow-hidden">
-                      <Image src="/author-1.jpg" alt="Nguyễn Bá Duy" fill className="object-cover hover:scale-105 transition-transform duration-700" sizes="(max-width: 768px) 100vw, 50vw" />
-                    </div>
-                    <div className="relative aspect-square overflow-hidden">
-                      <Image src="/author-3.jpg" alt="Nguyễn Bá Duy" fill className="object-cover hover:scale-105 transition-transform duration-700" sizes="25vw" />
-                    </div>
-                    <div className="relative aspect-square overflow-hidden">
-                      <Image src="/author-4.jpg" alt="Nguyễn Bá Duy" fill className="object-cover hover:scale-105 transition-transform duration-700" sizes="25vw" />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Info */}
-                <div className="lg:w-1/2 p-8 lg:p-12 flex flex-col justify-center space-y-6">
-                  <div>
-                    <h3 className="text-3xl font-extrabold text-gray-900 mb-1">Nguyễn Bá Duy</h3>
-                    <p className="text-blue-600 font-semibold">Full-stack Developer &amp; AI Enthusiast</p>
-                  </div>
-                  
-                  <div className="space-y-3 text-gray-600">
-                    <div className="flex items-start gap-3">
-                      <GraduationCap size={20} className="text-blue-500 mt-0.5 flex-shrink-0" />
-                      <p>Sinh viên lớp <strong>74DCTT23</strong> - Khoa Công nghệ Thông tin, Trường Đại học Công nghệ Giao thông vận tải</p>
-                    </div>
-                    <div className="flex items-start gap-3">
-                      <Mail size={20} className="text-blue-500 mt-0.5 flex-shrink-0" />
-                      <p>basduy05@gmail.com</p>
-                    </div>
-                  </div>
-
-                  <p className="text-gray-600 leading-relaxed">
-                    Một sinh viên trẻ đầy nhiệt huyết với niềm đam mê công nghệ cháy bỏng, luôn tìm tòi và ứng dụng những giải pháp sáng tạo vào thực tiễn. 
-                    Với tình yêu đặc biệt dành cho AI, phát triển web và các sản phẩm công nghệ giáo dục, 
-                    Duy không ngừng học hỏi, thử nghiệm và xây dựng những sản phẩm có giá trị thực tiễn cho cộng đồng sinh viên.
-                  </p>
-
-                  <div className="space-y-2">
-                    <h4 className="font-bold text-gray-900 text-sm uppercase tracking-wider">Hoạt động nổi bật</h4>
-                    <div className="flex flex-wrap gap-2">
-                      {[
-                        "Google Student Ambassador 2026",
-                        "UV BCH Đoàn TNCSHCM - ĐH CNGT Vận tải Khoá XI",
-                      ].map((tag, i) => (
-                        <span key={i} className="px-3 py-1.5 bg-gradient-to-r from-blue-50 to-cyan-50 text-blue-700 rounded-full text-xs font-semibold border border-blue-100 hover:shadow-md transition">
-                          {tag}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="flex flex-wrap gap-2 pt-2">
-                    {["Next.js", "React", "FastAPI", "Python", "Neo4j", "AI/ML", "TypeScript"].map((skill, i) => (
-                      <span key={i} className="px-3 py-1 bg-gray-100 text-gray-600 rounded-lg text-xs font-medium hover:bg-blue-50 hover:text-blue-600 transition cursor-default">
-                        {skill}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              {/* More photos */}
-              <div className="grid grid-cols-3 gap-1">
-                <div className="relative aspect-video overflow-hidden">
-                  <Image src="/author-2.jpg" alt="Nguyễn Bá Duy" fill className="object-cover hover:scale-105 transition-transform duration-700" sizes="33vw" />
-                </div>
-                <div className="relative aspect-video overflow-hidden">
-                  <Image src="/author-5.jpg" alt="Nguyễn Bá Duy" fill className="object-cover hover:scale-105 transition-transform duration-700" sizes="33vw" />
-                </div>
-                <div className="relative aspect-video bg-gradient-to-br from-blue-600 to-cyan-500 flex items-center justify-center overflow-hidden">
-                  <div className="text-center text-white p-4">
-                    <p className="text-2xl font-extrabold mb-1">iEdu</p>
-                    <p className="text-xs text-blue-100">Built with passion ❤️</p>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <AuthorCard />
           </div>
         </div>
       </section>
