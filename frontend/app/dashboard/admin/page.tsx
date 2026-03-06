@@ -804,7 +804,7 @@ function SettingsTab() {
 
   const toggleShow = (key: string) => setShowPasswords(p => ({...p, [key]: !p[key]}));
 
-  const sensitiveKeys = ['GOOGLE_API_KEY', 'OPENAI_API_KEY', 'NEO4J_PASSWORD', 'SMTP_PASSWORD', 'RESEND_API_KEY', 'BREVO_API_KEY'];
+  const sensitiveKeys = ['GOOGLE_API_KEY', 'OPENAI_API_KEY', 'COHERE_API_KEY', 'NEO4J_PASSWORD', 'SMTP_PASSWORD', 'RESEND_API_KEY', 'BREVO_API_KEY'];
 
   const renderField = (key: string, label: string, placeholder: string) => {
     const isSensitive = sensitiveKeys.includes(key);
@@ -838,9 +838,10 @@ function SettingsTab() {
         <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center">
           <Settings className="mr-2 text-indigo-600" size={20}/> API Keys (AI)
         </h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {renderField('GOOGLE_API_KEY', 'Google Gemini API Key', 'AIzaSy...')}
           {renderField('OPENAI_API_KEY', 'OpenAI API Key (optional)', 'sk-...')}
+          {renderField('COHERE_API_KEY', 'Cohere API Key (optional)', 'c4-...')}
         </div>
       </div>
 
