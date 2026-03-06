@@ -1,21 +1,28 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { BookOpen, Mail, Lock, UserPlus, LogIn } from "lucide-react";
 import Link from "next/link";
 import { useAuth } from "../context/AuthContext";
 import { useRouter } from "next/navigation";
 
 export default function RegisterPage() {
-  const { register } = useAuth();
+  const { register, verifyOTP, user, isInitialized } = useAuth();
   const router = useRouter();
   
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState("STUDENT");
+  const [otp, setOtp] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
+
+  useEffect(() => {
+    if (isInitialized && user) {
+      router.push(`/dashboard/${user.role.toLowerCase()}`);
+    }
+  }, [isInitialized, user, router]);
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,14 +33,30 @@ export default function RegisterPage() {
       const result = await register(name, email, password, role);
       if (result) {
         setSuccess(true);
-        setTimeout(() => {
-          router.push("/login?registered=true");
-        }, 3000);
       } else {
         setError("Đăng kí thất bại. Email có thể đã tồn tại.");
       }
     } catch (err: any) {
       setError(err?.message || "Lỗi đăng kí");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleVerifyOTP = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setError("");
+
+    try {
+      const result = await verifyOTP(email, otp);
+      if (result) {
+        router.push("/login?registered=true");
+      } else {
+        setError("Mã OTP không hợp lệ hoặc đã hết hạn.");
+      }
+    } catch (err: any) {
+      setError(err?.message || "Lỗi xác thực OTP");
     } finally {
       setIsLoading(false);
     }
@@ -46,12 +69,30 @@ export default function RegisterPage() {
             <div className="inline-flex items-center justify-center w-16 h-16 bg-green-100 rounded-full mb-4">
               <UserPlus className="text-green-600 w-8 h-8" />
             </div>
-            <h2 className="text-2xl font-bold text-gray-800 mb-2">Đăng kí thành công!</h2>
-            <p className="text-gray-600 mb-6">Xin vui lòng kiểm tra email để xác thực OTP trước khi đăng nhập.</p>
-            <Link href="/login" className="inline-flex items-center justify-center px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-medium transition">
-              <LogIn className="w-5 h-5 mr-2" />
-              Đi tới Đăng nhập
-            </Link>
+            <h2 className="text-2xl font-bold text-gray-800 mb-2">Xác thực Email</h2>
+            <p className="text-gray-600 mb-6">Xin vui lòng kiểm tra email để lấy mã OTP và nhập vào bên dưới.</p>
+            
+            <form onSubmit={handleVerifyOTP} className="space-y-4">
+              {error && (
+                <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm text-center">
+                  {error}
+                </div>
+              )}
+              <div>
+                <input 
+                  type="text" 
+                  required 
+                  value={otp} 
+                  onChange={e => setOtp(e.target.value)} 
+                  className="w-full px-4 py-3 text-center tracking-widest text-lg border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none" 
+                  placeholder="Nhập mã OTP 6 số" 
+                  maxLength={6}
+                />
+              </div>
+              <button type="submit" disabled={isLoading || otp.length < 6} className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-medium transition flex items-center justify-center shadow-lg disabled:opacity-50">
+                {isLoading ? "Đang xác thực..." : "Xác nhận OTP"}
+              </button>
+            </form>
         </div>
       </div>
     );

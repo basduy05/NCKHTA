@@ -10,9 +10,10 @@ NEO4J_USERNAME = os.getenv("NEO4J_USERNAME", "75e80b28")
 NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "password_placeholder")
 
 graph = None
+last_error = None
 
 def get_graph():
-    global graph
+    global graph, last_error
     if graph is not None:
         return graph
     try:
@@ -26,8 +27,10 @@ def get_graph():
             database=db_name
         )
         print("Successfully connected to Neo4j DB.")
+        last_error = None
         return graph
     except Exception as e:
+        last_error = str(e)
         print(f"Warning: Neo4j connection failed or timed out: {e}")
         return None
 

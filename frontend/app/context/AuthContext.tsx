@@ -18,6 +18,7 @@ type AuthContextType = {
   logout: () => void;
   forgotPassword: (email: string) => Promise<boolean>;
   isLoading: boolean;
+  isInitialized: boolean;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -28,6 +29,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isInitialized, setIsInitialized] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -37,6 +39,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setToken(storedToken);
       setUser(JSON.parse(storedUser));
     }
+    setIsInitialized(true);
   }, []);
 
   const register = async (name: string, email: string, password: string, role: string) => {
@@ -150,7 +153,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, register, verifyOTP, login, logout, forgotPassword, isLoading }}>
+    <AuthContext.Provider value={{ user, token, register, verifyOTP, login, logout, forgotPassword, isLoading, isInitialized }}>
       {children}
     </AuthContext.Provider>
   );

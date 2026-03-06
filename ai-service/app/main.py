@@ -1,5 +1,6 @@
-from fastapi import FastAPI, UploadFile, File
+from fastapi import FastAPI, UploadFile, File, Body
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 from dotenv import load_dotenv
 import os
 
@@ -11,6 +12,10 @@ from .routers import admin  # Import routers
 from .routers import auth  # Import Auth Router
 import sqlite3
 import os
+
+class TextRequest(BaseModel):
+    text: str
+    num_questions: int = 5
 
 app = FastAPI(title="EAM AI Service", description="Powered by Neo4j & GenAI")
 
@@ -34,16 +39,25 @@ app.include_router(auth.router)
 @app.get("/")
 def read_root():
     # Check connection status dynamically
-    is_connected = graph_service.get_graph() is not None
-    return {"status": "AI Service Running", "graph_connected": is_connected}
+    try:
+        g = graph_service.get_graph()
+        is_connected = g is not None
+        error_msg = getattr(graph_service, "last_error", None)
+        return {
+            "status": "AI Service Running", 
+            "graph_connected": is_connected,
+            "error": error_msg if not is_connected else None
+        }
+    except Exception as e:
+        return {"status": "AI Service Running", "graph_connected": False, "error": str(e)}
 
 @app.post("/analyze-text")
-def analyze_text(text: str):
+def analyze_text(request: TextRequest):
     """
     1. Extracts entities -> Updates Neo4j Graph.
     2. Generates semantic summary.
     """
-    graph_result = graph_service.extract_entities_and_relations(text)
+    graph_result = graph_service.extract_entities_and_relations(request.text)
     return {"analysis": "Text processed", "graph_update": graph_result}
 
 @app.get("/graph/visualize")
@@ -58,18 +72,18 @@ def generate_flashcard(word: str, level: str = "A1"):
     return llm_service.generate_flashcard_content(word, level)
 
 @app.post("/vocabulary/extract")
-def extract_vocabulary(text: str):
+def extract_vocabulary(request: TextRequest):
     """
     Core Feature: Extracts vocabulary list from input text with meanings and phonetics.
     """
-    return llm_service.extract_vocabulary_from_text(text)
+    return llm_service.extract_vocabulary_from_text(request.text)
 
 @app.post("/quiz/generate")
-def generate_quiz(text: str, num_questions: int = 5):
+def generate_quiz(request: TextRequest):
     """
     Core Feature: Generates a quiz based on the input text to test comprehension.
     """
-    return llm_service.generate_quiz_from_text(text, num_questions)
+    return llm_service.generate_quiz_from_text(request.text, request.num_questions)
 
 @app.post("/speech/analyze")
 async def analyze_speech(audio_file: UploadFile = File(...)):

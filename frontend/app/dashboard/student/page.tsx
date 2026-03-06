@@ -13,27 +13,67 @@ export default function StudentDashboard() {
   const [submitted, setSubmitted] = useState(false);
   const [score, setScore] = useState(0);
 
-  const analyzeText = () => {
+  const analyzeText = async () => {
     if (!text) return;
     setLoading(true);
     setResult(null);
     setAnswers({});
     setSubmitted(false);
     
-    setTimeout(() => {
-      setResult({
-        words: [
-          { word: "Artificial", phon: "/ˌɑːtɪˈfɪʃl/", meaning: "Nhân tạo", example: "AI stands for Artificial Intelligence.", level: "B2" },
-          { word: "Intelligence", phon: "/ɪnˈtelɪdʒəns/", meaning: "Trí thông minh", example: "He showed high intelligence.", level: "B2" },
-          { word: "Analyze", phon: "/ˈænəlaɪz/", meaning: "Phân tích", example: "We need time to analyze the data.", level: "B1" }
-        ],
-        quiz: [
-          { q: "What does 'Artificial' mean?", options: ["Tự nhiên", "Nhân tạo", "Máy móc", "Xây dựng"], ans: 1 },
-          { q: "Choose the correct pronunciation for 'Analyze'", options: ["/ˈænəlaɪz/", "/əˈnælɪsɪs/", "/ˈænəlɪst/"], ans: 0 }
-        ]
-      });
+    try {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+      
+      const [vocabRes, quizRes] = await Promise.all([
+        fetch(`${API_URL}/vocabulary/extract`, { 
+          method: "POST", 
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text }) 
+        }),
+        fetch(`${API_URL}/quiz/generate`, { 
+          method: "POST", 
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text, num_questions: 5 }) 
+        })
+      ]);
+
+      const vocabData = await vocabRes.json();
+      const quizDataRaw = await quizRes.json();
+      
+      // Standardize the output for frontend display
+      const quizData = Array.isArray(quizDataRaw) ? quizDataRaw.map((q: any) => {
+        // Find correct answer index if it's a string, otherwise use it directly or default to 0
+        let ansIndex = 0;
+        if (typeof q.correct_answer === "number") {
+          ansIndex = q.correct_answer;
+        } else if (typeof q.correct_answer === "string" && Array.isArray(q.options)) {
+          const idx = q.options.findIndex((o: string) => o.toLowerCase() === q.correct_answer.toLowerCase());
+          if (idx !== -1) ansIndex = idx;
+        } else if (q.ans !== undefined) {
+           ansIndex = q.ans;
+        }
+        
+        return {
+          q: q.question || q.q || "Unknown question",
+          options: q.options || ["A", "B", "C", "D"],
+          ans: ansIndex
+        };
+      }) : [];
+
+      const words = Array.isArray(vocabData) ? vocabData.map((w: any) => ({
+        word: w.word || "Unknown",
+        phon: w.phonetic || w.phon || "",
+        meaning: w.meaning || w.vietnamese_meaning || "No meaning",
+        example: w.example || w.english_definition || "",
+        level: w.level || "B1"
+      })) : [];
+
+      setResult({ words, quiz: quizData });
+    } catch (error) {
+      console.error("Analysis error:", error);
+      alert("Đã có lỗi xảy ra khi phân tích văn bản. Vui lòng thử lại.");
+    } finally {
       setLoading(false);
-    }, 1500);
+    }
   };
 
   const handleSelectAnswer = (qIndex: number, optIndex: number) => {

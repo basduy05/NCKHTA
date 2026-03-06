@@ -76,7 +76,32 @@ function DashboardSidebar({ user, logout }: { user: any, logout: any }) {
 }
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const { user, logout } = useAuth();
+  const { user, logout, isInitialized } = useAuth();
+  const router = require('next/navigation').useRouter();
+  const pathname = require('next/navigation').usePathname();
+
+  React.useEffect(() => {
+    if (isInitialized && !user) {
+      router.push('/login');
+    } else if (isInitialized && user) {
+      const role = user.role.toLowerCase();
+      if (pathname.includes('/admin') && role !== 'admin') {
+        router.push(`/dashboard/${role}`);
+      } else if (pathname.includes('/teacher') && role !== 'teacher' && role !== 'admin') {
+        router.push(`/dashboard/${role}`);
+      } else if (pathname.includes('/student') && role !== 'student' && role !== 'admin') {
+        router.push(`/dashboard/${role}`);
+      }
+    }
+  }, [isInitialized, user, router, pathname]);
+
+  if (!isInitialized || !user) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-gray-50">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+      </div>
+    );
+  }
   
   return (
     <div className="flex h-screen bg-gray-50">

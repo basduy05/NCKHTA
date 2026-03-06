@@ -1,14 +1,22 @@
 ﻿"use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { BookOpen, Mail, Lock, LogIn } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
+import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
-  const { login } = useAuth();
+  const { login, user, isInitialized } = useAuth();
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (isInitialized && user) {
+      router.push(`/dashboard/${user.role.toLowerCase()}`);
+    }
+  }, [isInitialized, user, router]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
