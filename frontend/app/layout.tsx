@@ -6,8 +6,8 @@ import { AuthProvider } from './context/AuthContext';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'EAM Project - NCKHTA 2025',
-  description: 'AI-powered English vocabulary and quiz generation platform',
+  title: 'iEdu - Nền tảng Học tập Thông minh',
+  description: 'Nền tảng học tiếng Anh thông minh với Đồ thị Tri thức và Trí tuệ Nhân tạo',
 };
 
 export default function RootLayout({

@@ -2,7 +2,8 @@
 import React, { Suspense } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { BookOpen, Users, LayoutDashboard, Component, Database, GraduationCap, Library, BookText, FileSearch, LogOut, Settings, ClipboardList, Sparkles } from "lucide-react";
+import Image from "next/image";
+import { BookOpen, Users, LayoutDashboard, Component, Database, GraduationCap, BookText, FileSearch, LogOut, Settings, ClipboardList, Sparkles } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 
 function DashboardSidebar({ user, logout }: { user: any, logout: any }) {
@@ -48,14 +49,15 @@ function DashboardSidebar({ user, logout }: { user: any, logout: any }) {
 
   return (
     <aside className="w-64 bg-white border-r border-gray-200 p-6 flex flex-col">
-      <Link href="/" className="flex items-center text-indigo-600 font-bold text-2xl mb-10">
-        <Library className="mr-2" size={28} /> {isAdmin ? "iEdu Admin" : isTeacher ? "iEdu Teacher" : "iEdu"}
+      <Link href="/" className="flex items-center mb-10">
+        <Image src="/logo.png" alt="iEdu" width={100} height={40} />
+        <span className="ml-2 text-sm font-medium text-gray-500">{isAdmin ? "Admin" : isTeacher ? "Teacher" : ""}</span>
       </Link>
       <nav className="space-y-2 flex-grow">
         {links.map((link, i) => {
           const isActive = (isAdmin || isTeacher) ? link.id === currentTab : pathname === link.href;
           return (
-            <Link key={i} href={link.href} className={`flex items-center p-3 rounded-xl transition ${isActive ? "bg-indigo-50 text-indigo-700 font-semibold" : "text-gray-600 hover:bg-gray-100"}`}>
+            <Link key={i} href={link.href} className={`flex items-center p-3 rounded-xl transition ${isActive ? "bg-blue-50 text-blue-700 font-semibold" : "text-gray-600 hover:bg-gray-100"}`}>
               <link.icon className="mr-3" size={20} /> {link.name}
             </Link>
           )
@@ -63,7 +65,7 @@ function DashboardSidebar({ user, logout }: { user: any, logout: any }) {
       </nav>
       <div className="pt-6 border-t border-gray-100 flex items-center justify-between">
          <div className="flex items-center">
-           <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-700 font-bold mr-3">
+           <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center text-blue-700 font-bold mr-3">
              {user ? user.name.charAt(0).toUpperCase() : (isAdmin ? "A" : isTeacher ? "T" : "S")}
            </div>
            <div>
@@ -103,7 +105,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   if (!isInitialized || !user) {
     return (
       <div className="flex h-screen items-center justify-center bg-gray-50">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
       </div>
     );
   }
