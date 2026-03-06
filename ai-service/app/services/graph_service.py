@@ -5,9 +5,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-NEO4J_URI = os.getenv("NEO4J_URI", "neo4j+s://257692ed.databases.neo4j.io")
+NEO4J_URI = os.getenv("NEO4J_URI", "neo4j+s://75e80b28.databases.neo4j.io")
 NEO4J_USERNAME = os.getenv("NEO4J_USERNAME", "75e80b28")
-NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "password_placeholder")
+NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "3RuJzYYjEpYHafQxx6S0tdba_GiDb3D1iFnBF0JYqb4")
 
 graph = None
 last_error = None

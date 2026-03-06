@@ -26,7 +26,9 @@ def get_llm():
     Factory to return the configured LLM instance.
     Prefers Gemini (often free tier available) or OpenAI.
     """
-    if os.environ.get("GOOGLE_API_KEY"):
+    google_key = os.environ.get("GOOGLE_API_KEY", "AIzaSyBx_1S1HnKt9sHNhEBuGWO50scGDKm0_Oo")
+    os.environ["GOOGLE_API_KEY"] = google_key # Set it for langchain to pick up
+    if google_key:
         return ChatGoogleGenerativeAI(model="models/gemini-2.5-flash")
     elif os.environ.get("OPENAI_API_KEY"):
         return ChatOpenAI(model="gpt-3.5-turbo")
