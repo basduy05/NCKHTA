@@ -1,11 +1,13 @@
 import sqlite3
 import os
+import traceback
 from pydantic import BaseModel
 from typing import List, Optional
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "app.db")
 
 def init_db():
+    print(f"[DB] Initializing database at {DB_PATH}")
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute("""
@@ -130,8 +132,13 @@ def init_db():
         cursor.execute("INSERT INTO lessons (class_id, title) VALUES (2, 'Reading Task 1')")
         conn.commit()
     conn.close()
+    print("[DB] Database initialized OK")
 
-init_db()
+try:
+    init_db()
+except Exception as e:
+    print(f"[DB ERROR] init_db failed: {e}")
+    traceback.print_exc()
 
 def get_db():
     conn = sqlite3.connect(DB_PATH)

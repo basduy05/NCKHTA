@@ -3,15 +3,33 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
 import os
+import traceback
 
 # Load environment variables from .env file BEFORE importing services
 load_dotenv()
 
-from .services import graph_service, llm_service  # Import internal services
-from .routers import admin  # Import routers
-from .routers import auth  # Import Auth Router
+print("[STARTUP] Loading services...")
+try:
+    from .services import graph_service, llm_service  # Import internal services
+    print("[STARTUP] Services loaded OK")
+except Exception as e:
+    print(f"[STARTUP ERROR] Failed to load services: {e}")
+    traceback.print_exc()
+    graph_service = None
+    llm_service = None
+
+print("[STARTUP] Loading routers...")
+try:
+    from .routers import admin  # Import routers
+    from .routers import auth  # Import Auth Router
+    print("[STARTUP] Routers loaded OK")
+except Exception as e:
+    print(f"[STARTUP ERROR] Failed to load routers: {e}")
+    traceback.print_exc()
+    admin = None
+    auth = None
+
 import sqlite3
-import os
 
 class TextRequest(BaseModel):
     text: str
@@ -33,8 +51,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(admin.router)
-app.include_router(auth.router)
+app.include_router(admin.router) if admin else None
+app.include_router(auth.router) if auth else None
+
+print("[STARTUP] App ready!")
 
 @app.get("/")
 def read_root():
@@ -45,7 +65,8 @@ def read_root():
 
 @app.get("/health/graph")
 def health_graph():
-    # Check connection status dynamically
+    if not graph_service:
+        return {"graph_connected": False, "error": "graph_service not loaded"}
     try:
         g = graph_service.get_graph()
         is_connected = g is not None

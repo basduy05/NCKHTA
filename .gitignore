@@ -20,6 +20,9 @@ dist/
 .DS_Store
 *.pem
 
+# Database
+*.db
+
 # Environment variables
 .env
 .env.local
