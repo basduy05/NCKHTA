@@ -38,7 +38,11 @@ function DashboardSidebar({ user, logout }: { user: any, logout: any }) {
     ];
   } else {
     links = [
-      { name: "Học Trí Tuệ (AI)", href: "/dashboard/student", icon: FileSearch },
+      { name: "Tổng quan", href: "/dashboard/student?tab=overview", icon: LayoutDashboard, id: "overview" },
+      { name: "Lớp học của tôi", href: "/dashboard/student?tab=classes", icon: GraduationCap, id: "classes" },
+      { name: "Bài tập & Kiểm tra", href: "/dashboard/student?tab=assignments", icon: ClipboardList, id: "assignments" },
+      { name: "Học với AI", href: "/dashboard/student?tab=ai-tools", icon: Sparkles, id: "ai-tools" },
+      { name: "Kết quả học tập", href: "/dashboard/student?tab=scores", icon: Component, id: "scores" },
     ];
   }
 
@@ -51,11 +55,11 @@ function DashboardSidebar({ user, logout }: { user: any, logout: any }) {
     <aside className="w-64 bg-white border-r border-gray-200 p-6 flex flex-col">
       <Link href="/" className="flex items-center mb-10">
         <Image src="/logo.png" alt="iEdu" width={100} height={40} />
-        <span className="ml-2 text-sm font-medium text-gray-500">{isAdmin ? "Admin" : isTeacher ? "Teacher" : ""}</span>
+        <span className="ml-2 text-sm font-medium text-gray-500">{isAdmin ? "Admin" : isTeacher ? "Teacher" : isStudent ? "Student" : ""}</span>
       </Link>
       <nav className="space-y-2 flex-grow">
         {links.map((link, i) => {
-          const isActive = (isAdmin || isTeacher) ? link.id === currentTab : pathname === link.href;
+          const isActive = (isAdmin || isTeacher || isStudent) ? link.id === currentTab : pathname === link.href;
           return (
             <Link key={i} href={link.href} className={`flex items-center p-3 rounded-xl transition ${isActive ? "bg-blue-50 text-blue-700 font-semibold" : "text-gray-600 hover:bg-gray-100"}`}>
               <link.icon className="mr-3" size={20} /> {link.name}
@@ -92,8 +96,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       router.push('/');
     } else if (isInitialized && user) {
       const role = user.role.toLowerCase();
-      if (role !== 'admin') {
-        router.push('/');
+      const segment = pathname.split('/')[2];
+      if (segment && segment !== role) {
+        router.push(`/dashboard/${role}`);
       }
     }
   }, [isInitialized, user, router, pathname]);

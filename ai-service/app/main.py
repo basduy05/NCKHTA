@@ -23,6 +23,7 @@ try:
     from .routers import admin  # Import routers
     from .routers import auth  # Import Auth Router
     from .routers import teacher  # Import Teacher Router
+    from .routers import student  # Import Student Router
     print("[STARTUP] Routers loaded OK")
 except Exception as e:
     print(f"[STARTUP ERROR] Failed to load routers: {e}")
@@ -30,6 +31,7 @@ except Exception as e:
     admin = None
     auth = None
     teacher = None
+    student = None
 
 import sqlite3
 
@@ -56,6 +58,7 @@ app.add_middleware(
 app.include_router(admin.router) if admin else None
 app.include_router(auth.router) if auth else None
 app.include_router(teacher.router) if teacher else None
+app.include_router(student.router) if student else None
 
 print("[STARTUP] App ready!")
 

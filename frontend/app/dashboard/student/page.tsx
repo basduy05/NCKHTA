@@ -1,14 +1,446 @@
 "use client";
-import { useState } from "react";
-import { FileSearch, Sparkles, BrainCircuit, Flame, Trophy, PlayCircle, CheckCircle2, XCircle } from "lucide-react";
+import { useState, useEffect, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
+import { useAuth } from "../../context/AuthContext";
+import {
+  BookOpen, Sparkles, BrainCircuit, Trophy, PlayCircle, CheckCircle2, XCircle,
+  GraduationCap, ClipboardList, BarChart3, FileText, ChevronRight, Clock,
+  Award, TrendingUp, Layers
+} from "lucide-react";
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://iedu-ksk7.onrender.com";
+
+function getAuthHeader(token: string | null) {
+  return { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
+}
+
+function StudentDashboardContent() {
+  const searchParams = useSearchParams();
+  const activeTab = searchParams.get("tab") || "overview";
+  const { user, token } = useAuth();
+
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center mb-2">
+        <h1 className="text-2xl font-bold text-gray-900">
+          {activeTab === "overview" && "Tổng quan"}
+          {activeTab === "classes" && "Lớp học của tôi"}
+          {activeTab === "assignments" && "Bài tập & Kiểm tra"}
+          {activeTab === "ai-tools" && "Học với AI"}
+          {activeTab === "scores" && "Kết quả học tập"}
+        </h1>
+        <p className="text-sm text-gray-500">Xin chào, <span className="font-semibold text-blue-600">{user?.name}</span></p>
+      </div>
+
+      {activeTab === "overview" && <OverviewTab token={token} user={user} />}
+      {activeTab === "classes" && <ClassesTab token={token} />}
+      {activeTab === "assignments" && <AssignmentsTab token={token} />}
+      {activeTab === "ai-tools" && <AIToolsTab token={token} />}
+      {activeTab === "scores" && <ScoresTab token={token} />}
+    </div>
+  );
+}
 
 export default function StudentDashboard() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center py-20"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" /></div>}>
+      <StudentDashboardContent />
+    </Suspense>
+  );
+}
+
+// ==================== OVERVIEW TAB ====================
+function OverviewTab({ token, user }: { token: string | null; user: any }) {
+  const [stats, setStats] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch(`${API_URL}/student/stats`, { headers: getAuthHeader(token) });
+        if (res.ok) setStats(await res.json());
+      } catch (e) { console.error(e); }
+      finally { setLoading(false); }
+    })();
+  }, [token]);
+
+  if (loading) return <div className="flex justify-center py-20"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" /></div>;
+
+  const cards = [
+    { label: "Lớp đã tham gia", value: stats?.classes_enrolled ?? 0, icon: GraduationCap, color: "blue" },
+    { label: "Bài tập đã giao", value: stats?.assignments_total ?? 0, icon: ClipboardList, color: "purple" },
+    { label: "Đã nộp bài", value: stats?.assignments_submitted ?? 0, icon: CheckCircle2, color: "green" },
+    { label: "Chưa làm", value: stats?.assignments_pending ?? 0, icon: Clock, color: "orange" },
+  ];
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-gradient-to-r from-blue-600 to-cyan-500 rounded-2xl p-8 text-white shadow-lg relative overflow-hidden">
+        <div className="relative z-10">
+          <h2 className="text-2xl font-extrabold mb-2">Chào mừng trở lại, {user?.name}! 🎓</h2>
+          <p className="text-blue-100 text-lg">Tiếp tục hành trình học tập thông minh với iEdu.</p>
+        </div>
+        <div className="absolute right-4 bottom-4 flex items-center gap-3 bg-white/15 backdrop-blur-sm px-5 py-3 rounded-xl">
+          <div className="text-center">
+            <p className="text-xs text-blue-100 uppercase font-medium">Điểm TB</p>
+            <p className="text-2xl font-extrabold flex items-center"><Trophy size={20} className="mr-1 text-yellow-300" />{stats?.average_percent ?? 0}%</p>
+          </div>
+        </div>
+        <BrainCircuit className="absolute -right-8 -bottom-8 text-white/10 w-48 h-48" />
+      </div>
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {cards.map((c, i) => {
+          const colors: Record<string, string> = {
+            blue: "bg-blue-50 text-blue-600",
+            purple: "bg-purple-50 text-purple-600",
+            green: "bg-green-50 text-green-600",
+            orange: "bg-orange-50 text-orange-600",
+          };
+          return (
+            <div key={i} className="bg-white rounded-xl p-5 border border-gray-100 shadow-sm hover:shadow-md transition">
+              <div className={`w-10 h-10 ${colors[c.color]} rounded-lg flex items-center justify-center mb-3`}>
+                <c.icon size={20} />
+              </div>
+              <p className="text-2xl font-extrabold text-gray-900">{c.value}</p>
+              <p className="text-sm text-gray-500">{c.label}</p>
+            </div>
+          );
+        })}
+      </div>
+
+      {stats && stats.assignments_submitted > 0 && (
+        <div className="bg-white rounded-xl p-6 border border-gray-100 shadow-sm">
+          <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2"><BarChart3 size={20} className="text-blue-600" /> Tổng kết điểm số</h3>
+          <div className="grid grid-cols-3 gap-6 text-center">
+            <div>
+              <p className="text-3xl font-extrabold text-blue-600">{stats.total_score}/{stats.total_max_score}</p>
+              <p className="text-sm text-gray-500 mt-1">Tổng điểm</p>
+            </div>
+            <div>
+              <p className="text-3xl font-extrabold text-green-600">{stats.average_percent}%</p>
+              <p className="text-sm text-gray-500 mt-1">Điểm trung bình</p>
+            </div>
+            <div>
+              <p className="text-3xl font-extrabold text-purple-600">{stats.assignments_submitted}</p>
+              <p className="text-sm text-gray-500 mt-1">Bài đã hoàn thành</p>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ==================== CLASSES TAB ====================
+function ClassesTab({ token }: { token: string | null }) {
+  const [classes, setClasses] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedClass, setSelectedClass] = useState<number | null>(null);
+  const [lessons, setLessons] = useState<any[]>([]);
+  const [lessonsLoading, setLessonsLoading] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch(`${API_URL}/student/my-classes`, { headers: getAuthHeader(token) });
+        if (res.ok) setClasses(await res.json());
+      } catch (e) { console.error(e); }
+      finally { setLoading(false); }
+    })();
+  }, [token]);
+
+  const loadLessons = async (classId: number) => {
+    if (selectedClass === classId) { setSelectedClass(null); return; }
+    setSelectedClass(classId);
+    setLessonsLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/student/my-classes/${classId}/lessons`, { headers: getAuthHeader(token) });
+      if (res.ok) setLessons(await res.json());
+    } catch (e) { console.error(e); }
+    finally { setLessonsLoading(false); }
+  };
+
+  if (loading) return <div className="flex justify-center py-20"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" /></div>;
+
+  if (classes.length === 0) {
+    return (
+      <div className="bg-white rounded-xl p-12 border border-gray-100 text-center">
+        <GraduationCap size={48} className="mx-auto text-gray-300 mb-4" />
+        <h3 className="text-lg font-bold text-gray-700 mb-2">Chưa có lớp học nào</h3>
+        <p className="text-gray-500">Bạn chưa được ghi danh vào lớp nào. Hãy liên hệ giáo viên để được thêm vào lớp.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {classes.map((c) => (
+        <div key={c.id} className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+          <div
+            onClick={() => loadLessons(c.id)}
+            className="p-5 flex items-center justify-between cursor-pointer hover:bg-gray-50 transition"
+          >
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center">
+                <GraduationCap size={24} />
+              </div>
+              <div>
+                <h3 className="font-bold text-gray-900">{c.name}</h3>
+                <p className="text-sm text-gray-500">GV: {c.teacher_name} · {c.lesson_count} bài học · {c.assignment_count} bài tập</p>
+              </div>
+            </div>
+            <ChevronRight size={20} className={`text-gray-400 transition-transform ${selectedClass === c.id ? "rotate-90" : ""}`} />
+          </div>
+
+          {selectedClass === c.id && (
+            <div className="border-t border-gray-100 px-5 pb-5">
+              {lessonsLoading ? (
+                <div className="py-6 text-center text-gray-400">Đang tải bài học...</div>
+              ) : lessons.length === 0 ? (
+                <div className="py-6 text-center text-gray-400">Lớp này chưa có bài học nào</div>
+              ) : (
+                <div className="mt-4 space-y-3">
+                  {lessons.map((l, i) => (
+                    <div key={l.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg hover:bg-blue-50 transition">
+                      <div className="w-8 h-8 bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center text-sm font-bold">{i + 1}</div>
+                      <div className="flex-1">
+                        <p className="font-medium text-gray-800">{l.title}</p>
+                        {l.content && <p className="text-xs text-gray-500 mt-0.5 line-clamp-1">{l.content}</p>}
+                      </div>
+                      {l.file_name && (
+                        <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-md flex items-center gap-1">
+                          <FileText size={12} /> {l.file_name}
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ==================== ASSIGNMENTS TAB ====================
+function AssignmentsTab({ token }: { token: string | null }) {
+  const [assignments, setAssignments] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [takingQuiz, setTakingQuiz] = useState<any>(null);
+  const [quizAnswers, setQuizAnswers] = useState<Record<string, string>>({});
+  const [submitting, setSubmitting] = useState(false);
+  const [quizResult, setQuizResult] = useState<any>(null);
+
+  const fetchAssignments = async () => {
+    try {
+      const res = await fetch(`${API_URL}/student/assignments`, { headers: getAuthHeader(token) });
+      if (res.ok) setAssignments(await res.json());
+    } catch (e) { console.error(e); }
+    finally { setLoading(false); }
+  };
+
+  useEffect(() => { fetchAssignments(); }, [token]);
+
+  const startQuiz = async (id: number) => {
+    try {
+      const res = await fetch(`${API_URL}/student/assignments/${id}`, { headers: getAuthHeader(token) });
+      if (res.ok) {
+        const data = await res.json();
+        setTakingQuiz(data);
+        setQuizAnswers({});
+        setQuizResult(null);
+      }
+    } catch (e) { console.error(e); }
+  };
+
+  const submitQuiz = async () => {
+    if (!takingQuiz) return;
+    setSubmitting(true);
+    try {
+      const res = await fetch(`${API_URL}/student/assignments/${takingQuiz.id}/submit`, {
+        method: "POST",
+        headers: getAuthHeader(token),
+        body: JSON.stringify({ answers: quizAnswers }),
+      });
+      if (res.ok) {
+        const result = await res.json();
+        setQuizResult(result);
+        fetchAssignments();
+      } else {
+        const err = await res.json();
+        alert(err.detail || "Lỗi khi nộp bài");
+      }
+    } catch (e) { console.error(e); alert("Lỗi kết nối"); }
+    finally { setSubmitting(false); }
+  };
+
+  if (loading) return <div className="flex justify-center py-20"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" /></div>;
+
+  // Quiz-taking view
+  if (takingQuiz) {
+    const questions = takingQuiz.quiz_data || [];
+
+    // Show result
+    if (quizResult) {
+      return (
+        <div className="space-y-6">
+          <div className={`p-6 rounded-xl text-center ${quizResult.percent >= 80 ? "bg-green-50 border border-green-200" : quizResult.percent >= 50 ? "bg-yellow-50 border border-yellow-200" : "bg-red-50 border border-red-200"}`}>
+            <Trophy size={48} className={`mx-auto mb-3 ${quizResult.percent >= 80 ? "text-green-500" : quizResult.percent >= 50 ? "text-yellow-500" : "text-red-500"}`} />
+            <h2 className="text-2xl font-extrabold text-gray-900 mb-1">Kết quả: {quizResult.score}/{quizResult.max_score}</h2>
+            <p className="text-lg font-semibold">{quizResult.percent}%</p>
+          </div>
+          <div className="space-y-4">
+            {quizResult.details.map((d: any, i: number) => (
+              <div key={i} className={`p-4 rounded-xl border-2 ${d.is_correct ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"}`}>
+                <p className="font-bold text-gray-800 mb-2"><span className="text-sm bg-gray-200 rounded-lg px-2 py-0.5 mr-2">Câu {i + 1}</span>{d.question}</p>
+                <div className="flex gap-4 text-sm">
+                  <p>Bạn chọn: <span className={d.is_correct ? "text-green-700 font-bold" : "text-red-700 font-bold"}>{d.student_answer || "(không chọn)"}</span></p>
+                  {!d.is_correct && <p>Đáp án đúng: <span className="text-green-700 font-bold">{d.correct_answer}</span></p>}
+                </div>
+              </div>
+            ))}
+          </div>
+          <button onClick={() => { setTakingQuiz(null); setQuizResult(null); }} className="btn-primary px-6 py-2 rounded-xl">
+            Quay lại danh sách
+          </button>
+        </div>
+      );
+    }
+
+    // Quiz form
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-xl font-bold text-gray-900">{takingQuiz.title}</h2>
+            <p className="text-sm text-gray-500">{takingQuiz.class_name} · {questions.length} câu hỏi</p>
+          </div>
+          <button onClick={() => setTakingQuiz(null)} className="text-sm text-gray-500 hover:text-red-600 transition">Hủy bỏ</button>
+        </div>
+
+        {takingQuiz.submitted ? (
+          <div className="bg-green-50 border border-green-200 rounded-xl p-6 text-center">
+            <CheckCircle2 size={40} className="mx-auto text-green-500 mb-3" />
+            <p className="font-bold text-green-800">Bạn đã nộp bài này rồi!</p>
+            <p className="text-green-600 text-lg font-semibold mt-1">Điểm: {takingQuiz.score}/{takingQuiz.max_score}</p>
+            <button onClick={() => setTakingQuiz(null)} className="mt-4 text-sm text-blue-600 hover:underline">Quay lại</button>
+          </div>
+        ) : (
+          <>
+            <div className="space-y-5">
+              {questions.map((q: any, i: number) => {
+                const opts = q.options || [];
+                return (
+                  <div key={i} className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm">
+                    <p className="font-bold text-gray-800 mb-4 flex items-start">
+                      <span className="bg-blue-100 text-blue-700 w-7 h-7 rounded-lg flex items-center justify-center mr-3 shrink-0 text-sm">{i + 1}</span>
+                      {q.question || q.q}
+                    </p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pl-10">
+                      {opts.map((opt: string, oi: number) => {
+                        const isSelected = quizAnswers[String(i)] === opt;
+                        return (
+                          <div
+                            key={oi}
+                            onClick={() => setQuizAnswers(prev => ({ ...prev, [String(i)]: opt }))}
+                            className={`p-3 rounded-xl border-2 cursor-pointer transition-all ${isSelected ? "border-blue-500 bg-blue-50 shadow-sm" : "border-gray-100 hover:border-blue-300 hover:bg-blue-50/50"}`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${isSelected ? "border-blue-600" : "border-gray-300"}`}>
+                                {isSelected && <div className="w-2.5 h-2.5 bg-blue-600 rounded-full" />}
+                              </div>
+                              <span className="text-gray-700 font-medium">{opt}</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="text-center pt-4">
+              <button
+                onClick={submitQuiz}
+                disabled={submitting || Object.keys(quizAnswers).length === 0}
+                className="btn-primary px-10 py-3 rounded-xl text-lg shadow-md hover:shadow-lg disabled:opacity-50 transition"
+              >
+                {submitting ? "Đang nộp bài..." : "Nộp bài & Xem kết quả"}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    );
+  }
+
+  // Assignment list
+  const pending = assignments.filter(a => !a.submitted_at);
+  const completed = assignments.filter(a => a.submitted_at);
+
+  return (
+    <div className="space-y-6">
+      {assignments.length === 0 ? (
+        <div className="bg-white rounded-xl p-12 border border-gray-100 text-center">
+          <ClipboardList size={48} className="mx-auto text-gray-300 mb-4" />
+          <h3 className="text-lg font-bold text-gray-700 mb-2">Chưa có bài tập nào</h3>
+          <p className="text-gray-500">Giáo viên chưa giao bài tập cho các lớp bạn tham gia.</p>
+        </div>
+      ) : (
+        <>
+          {pending.length > 0 && (
+            <div>
+              <h3 className="font-bold text-gray-900 mb-3 flex items-center gap-2"><Clock size={18} className="text-orange-500" /> Chưa làm ({pending.length})</h3>
+              <div className="space-y-3">
+                {pending.map((a) => (
+                  <div key={a.id} className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm flex items-center justify-between hover:shadow-md transition">
+                    <div>
+                      <h4 className="font-bold text-gray-900">{a.title}</h4>
+                      <p className="text-sm text-gray-500">{a.class_name}{a.due_date ? ` · Hạn: ${a.due_date}` : ""}</p>
+                      {a.description && <p className="text-sm text-gray-400 mt-1">{a.description}</p>}
+                    </div>
+                    <button onClick={() => startQuiz(a.id)} className="btn-primary px-5 py-2 rounded-lg text-sm flex items-center gap-1 shrink-0">
+                      Làm bài <ChevronRight size={16} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {completed.length > 0 && (
+            <div>
+              <h3 className="font-bold text-gray-900 mb-3 flex items-center gap-2"><CheckCircle2 size={18} className="text-green-500" /> Đã hoàn thành ({completed.length})</h3>
+              <div className="space-y-3">
+                {completed.map((a) => (
+                  <div key={a.id} className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm flex items-center justify-between">
+                    <div>
+                      <h4 className="font-bold text-gray-900">{a.title}</h4>
+                      <p className="text-sm text-gray-500">{a.class_name} · Nộp: {new Date(a.submitted_at).toLocaleDateString("vi-VN")}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-lg font-extrabold text-green-600">{a.score}/{a.max_score}</p>
+                      <p className="text-xs text-gray-400">{a.max_score > 0 ? Math.round(a.score / a.max_score * 100) : 0}%</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+// ==================== AI TOOLS TAB ====================
+function AIToolsTab({ token }: { token: string | null }) {
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [flippedWord, setFlippedWord] = useState<number | null>(null);
-  
-  // Quiz State
   const [answers, setAnswers] = useState<Record<number, number>>({});
   const [submitted, setSubmitted] = useState(false);
   const [score, setScore] = useState(0);
@@ -19,261 +451,248 @@ export default function StudentDashboard() {
     setResult(null);
     setAnswers({});
     setSubmitted(false);
-    
+
     try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://iedu-ksk7.onrender.com";
-      
-      const [vocabRes, quizRes] = await Promise.all([
-        fetch(`${API_URL}/vocabulary/extract`, { 
-          method: "POST", 
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text }) 
-        }),
-        fetch(`${API_URL}/quiz/generate`, { 
-          method: "POST", 
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text, num_questions: 5 }) 
-        })
-      ]);
+      const res = await fetch(`${API_URL}/student/analyze-text`, {
+        method: "POST",
+        headers: getAuthHeader(token),
+        body: JSON.stringify({ text, num_questions: 5 }),
+      });
+      if (!res.ok) throw new Error("API error");
+      const data = await res.json();
 
-      const vocabData = await vocabRes.json();
-      const quizDataRaw = await quizRes.json();
-      
-      // Standardize the output for frontend display
-      const quizData = Array.isArray(quizDataRaw) ? quizDataRaw.map((q: any) => {
-        // Find correct answer index if it's a string, otherwise use it directly or default to 0
-        let ansIndex = 0;
-        if (typeof q.correct_answer === "number") {
-          ansIndex = q.correct_answer;
-        } else if (typeof q.correct_answer === "string" && Array.isArray(q.options)) {
-          const idx = q.options.findIndex((o: string) => o.toLowerCase() === q.correct_answer.toLowerCase());
-          if (idx !== -1) ansIndex = idx;
-        } else if (q.ans !== undefined) {
-           ansIndex = q.ans;
-        }
-        
-        return {
-          q: q.question || q.q || "Unknown question",
-          options: q.options || ["A", "B", "C", "D"],
-          ans: ansIndex
-        };
-      }) : [];
-
-      const words = Array.isArray(vocabData) ? vocabData.map((w: any) => ({
+      const words = Array.isArray(data.vocabulary) ? data.vocabulary.map((w: any) => ({
         word: w.word || "Unknown",
         phon: w.phonetic || w.phon || "",
-        meaning: w.meaning || w.vietnamese_meaning || "No meaning",
+        meaning: w.meaning || w.vietnamese_meaning || "",
         example: w.example || w.english_definition || "",
         level: w.level || "B1"
       })) : [];
 
-      setResult({ words, quiz: quizData });
-    } catch (error) {
-      console.error("Analysis error:", error);
-      alert("Đã có lỗi xảy ra khi phân tích văn bản. Vui lòng thử lại.");
+      const quiz = Array.isArray(data.quiz) ? data.quiz.map((q: any) => {
+        let ansIndex = 0;
+        if (typeof q.correct_answer === "number") ansIndex = q.correct_answer;
+        else if (typeof q.correct_answer === "string" && Array.isArray(q.options)) {
+          const idx = q.options.findIndex((o: string) => o.toLowerCase() === q.correct_answer.toLowerCase());
+          if (idx !== -1) ansIndex = idx;
+        } else if (q.ans !== undefined) ansIndex = q.ans;
+        return { q: q.question || q.q || "", options: q.options || [], ans: ansIndex };
+      }) : [];
+
+      setResult({ words, quiz });
+    } catch (e) {
+      console.error(e);
+      alert("Lỗi khi phân tích văn bản. Vui lòng thử lại.");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSelectAnswer = (qIndex: number, optIndex: number) => {
-    if (submitted) return;
-    setAnswers(prev => ({ ...prev, [qIndex]: optIndex }));
-  };
-
   const handleSubmitQuiz = () => {
-    if (!result || !result.quiz) return;
+    if (!result?.quiz) return;
     let s = 0;
-    result.quiz.forEach((q: any, i: number) => {
-       if (answers[i] === q.ans) s += 1;
-    });
+    result.quiz.forEach((q: any, i: number) => { if (answers[i] === q.ans) s++; });
     setScore(s);
     setSubmitted(true);
   };
 
   return (
     <div className="space-y-6">
-      <div className="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-3xl p-8 text-white shadow-xl overflow-hidden relative">
-        <div className="relative z-10 flex flex-col md:flex-row justify-between items-center">
-          <div>
-            <h1 className="text-3xl font-extrabold mb-2">Xin chào, Học viên! 🚀</h1>
-            <p className="text-indigo-100 max-w-xl text-lg">Hôm nay bạn muốn học gì? Dán văn bản tiếng Anh vào đây và để AI tạo Flashcard & Quiz cho bạn.</p>
-          </div>
-          <div className="mt-4 md:mt-0 flex items-center space-x-4 bg-white/20 px-6 py-3 rounded-2xl backdrop-blur-md">
-            <div className="flex flex-col items-center border-r border-white/30 pr-4">
-              <span className="text-sm font-medium text-indigo-100 uppercase">Streak</span>
-              <div className="flex items-center font-bold text-2xl text-orange-300">
-                <Flame className="mr-1 fill-orange-300" /> 12
-              </div>
-            </div>
-            <div className="flex flex-col items-center pl-2">
-              <span className="text-sm font-medium text-indigo-100 uppercase">Điểm KN</span>
-              <div className="flex items-center font-bold text-2xl text-yellow-300">
-                <Trophy className="mr-1 fill-yellow-300" /> {450 + (score * 10)}
-              </div>
-            </div>
-          </div>
+      <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
+        <h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+          <Sparkles size={20} className="text-blue-600" /> Phân tích văn bản với AI
+        </h2>
+        <textarea
+          rows={5}
+          className="w-full bg-gray-50 border border-gray-200 rounded-xl p-4 text-gray-700 focus:bg-white focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 outline-none resize-none transition text-base"
+          placeholder="Dán một đoạn văn bản tiếng Anh vào đây để AI trích xuất từ vựng và tạo câu hỏi trắc nghiệm..."
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+        />
+        <div className="flex justify-end mt-3">
+          <button
+            onClick={analyzeText}
+            disabled={loading || !text.trim()}
+            className="btn-primary py-2.5 px-6 rounded-xl flex items-center gap-2 shadow-md disabled:opacity-50 transition"
+          >
+            {loading ? "AI đang xử lý..." : <><Sparkles size={18} /> Phân tích</>}
+          </button>
         </div>
-        <BrainCircuit className="absolute -right-10 -bottom-10 text-white/10 w-64 h-64" />
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        <div className="xl:col-span-2 space-y-6">
-          <div className="card bg-white p-6 rounded-2xl border border-gray-100 shadow-sm border-0 shadow-indigo-100/50">
-            <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center">
-              <div className="bg-indigo-100 p-2 rounded-lg justify-center mr-3"><FileSearch size={24} className="text-indigo-600"/></div> 
-              Kho Trí Tuệ (Phân tích Văn bản)
-            </h2>
-            <textarea 
-              rows={6}
-              className="w-full bg-gray-50 border border-gray-200 rounded-2xl p-5 text-gray-700 focus:bg-white focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none resize-none transition-all text-lg"
-              placeholder="Dán một đoạn báo, essay hoặc bất kỳ văn bản tiếng Anh nào bạn muốn học..."
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-            ></textarea>
-            <div className="flex justify-end mt-4">
-              <button 
-                onClick={analyzeText}
-                disabled={loading || !text}
-                className="btn-primary py-3 px-8 text-lg rounded-xl flex items-center shadow-lg shadow-indigo-300 hover:shadow-indigo-400 disabled:opacity-50 disabled:shadow-none hover:-translate-y-0.5 transition-all"
-              >
-                {loading ? "AI đang đọc và bóc tách dữ liệu..." : <><Sparkles size={20} className="mr-2" /> Xử lý bằng LLM</>}
-              </button>
-            </div>
-          </div>
-
-          {result && (
-            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-6 duration-700">
-              <div>
-                <h3 className="text-xl font-bold text-gray-900 mb-4 flex items-center">Flashcard Từ Vựng <span className="ml-3 px-3 py-1 bg-purple-100 text-purple-700 text-sm rounded-full font-bold">{result.words.length} từ</span></h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5">
-                  {result.words.map((w: any, idx: number) => (
-                    <div 
-                      key={idx} 
-                      onClick={() => setFlippedWord(flippedWord === idx ? null : idx)}
-                      className="relative h-48 cursor-pointer perspective-1000"
-                    >
-                      <div className={`w-full h-full transition-transform duration-500 transform-style-3d ${flippedWord === idx ? 'rotate-y-180' : ''}`}>
-                        
-                        <div className="absolute w-full h-full backface-hidden bg-white border-2 border-indigo-100 rounded-2xl shadow-sm hover:shadow-md hover:border-indigo-300 flex flex-col items-center justify-center p-6">
-                           <h4 className="text-2xl font-black text-indigo-700 mb-2">{w.word}</h4>
-                           <p className="text-gray-400 font-mono flex items-center"><PlayCircle size={16} className="mr-1"/> {w.phon}</p>
-                           <span className="absolute top-3 right-3 px-2 py-1 bg-gray-100 text-xs font-bold text-gray-500 rounded-md">{w.level}</span>
-                        </div>
-
-                        <div className="absolute w-full h-full backface-hidden bg-indigo-600 rounded-2xl shadow-lg flex flex-col items-center justify-center p-6 rotate-y-180 text-white text-center">
-                           <h4 className="text-xl font-bold mb-3">{w.meaning}</h4>
-                           <p className="text-indigo-200 text-sm italic border-t border-indigo-500/50 pt-3">"{w.example}"</p>
-                        </div>
+      {result && (
+        <div className="space-y-8">
+          {result.words.length > 0 && (
+            <div>
+              <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                <Layers size={20} className="text-purple-600" /> Flashcard Từ Vựng
+                <span className="px-2 py-0.5 bg-purple-100 text-purple-700 text-xs rounded-full font-bold">{result.words.length} từ</span>
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                {result.words.map((w: any, idx: number) => (
+                  <div
+                    key={idx}
+                    onClick={() => setFlippedWord(flippedWord === idx ? null : idx)}
+                    className="relative h-44 cursor-pointer perspective-1000"
+                  >
+                    <div className={`w-full h-full transition-transform duration-500 transform-style-3d ${flippedWord === idx ? "rotate-y-180" : ""}`}>
+                      <div className="absolute w-full h-full backface-hidden bg-white border-2 border-blue-100 rounded-xl shadow-sm hover:shadow-md hover:border-blue-300 flex flex-col items-center justify-center p-5 transition">
+                        <h4 className="text-2xl font-extrabold text-blue-700 mb-1">{w.word}</h4>
+                        <p className="text-gray-400 font-mono text-sm flex items-center"><PlayCircle size={14} className="mr-1" /> {w.phon}</p>
+                        <span className="absolute top-2 right-2 px-2 py-0.5 bg-gray-100 text-xs font-bold text-gray-500 rounded">{w.level}</span>
+                      </div>
+                      <div className="absolute w-full h-full backface-hidden bg-blue-600 rounded-xl shadow-lg flex flex-col items-center justify-center p-5 rotate-y-180 text-white text-center">
+                        <h4 className="text-lg font-bold mb-2">{w.meaning}</h4>
+                        {w.example && <p className="text-blue-200 text-sm italic border-t border-blue-500/50 pt-2">&ldquo;{w.example}&rdquo;</p>}
                       </div>
                     </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="card bg-gradient-to-b from-white to-gray-50/50 border-0 shadow-lg shadow-gray-200/50 p-6 rounded-2xl">
-                <h3 className="text-xl font-bold text-gray-900 mb-6 border-b pb-4">Quiz Thử Thách</h3>
-                
-                {submitted && (
-                  <div className={`mb-6 p-4 rounded-xl flex items-center ${score === result.quiz.length ? 'bg-emerald-100 text-emerald-800' : 'bg-yellow-100 text-yellow-800'}`}>
-                    <Trophy className="mr-3" size={28}/> 
-                    <div>
-                      <p className="font-bold text-lg">Bạn đã đạt {score}/{result.quiz.length} điểm!</p>
-                      <p className="text-sm opacity-80">Bạn nhận được +{score * 10} Điểm KN</p>
-                    </div>
                   </div>
-                )}
-
-                <div className="space-y-6">
-                  {result.quiz.map((q: any, i: number) => (
-                    <div key={i} className="bg-white p-5 border border-gray-100 rounded-2xl shadow-sm">
-                      <p className="font-bold text-gray-800 text-lg mb-4 flex items-start">
-                        <span className="bg-indigo-100 text-indigo-700 w-8 h-8 rounded-lg flex items-center justify-center mr-3 shrink-0">{i+1}</span> 
-                        {q.q}
-                      </p>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pl-11">
-                        {q.options.map((opt: string, optIdx: number) => {
-                          const isSelected = answers[i] === optIdx;
-                          let optClass = "border-gray-100 hover:border-indigo-400 hover:bg-indigo-50 cursor-pointer";
-                          let icon = null;
-
-                          if (submitted) {
-                            if (optIdx === q.ans) {
-                              optClass = "border-emerald-500 bg-emerald-50 cursor-default";
-                              icon = <CheckCircle2 className="text-emerald-500" size={20} />;
-                            } else if (isSelected) {
-                              optClass = "border-red-500 bg-red-50 cursor-default";
-                              icon = <XCircle className="text-red-500" size={20} />;
-                            } else {
-                              optClass = "border-gray-100 opacity-50 cursor-default";
-                            }
-                          } else if (isSelected) {
-                            optClass = "border-indigo-500 bg-indigo-50 shadow-sm";
-                          }
-
-                          return (
-                            <div key={optIdx} onClick={() => handleSelectAnswer(i, optIdx)} className={`flex justify-between items-center p-4 rounded-xl border-2 transition-all ${optClass}`}>
-                              <div className="flex items-center">
-                                <div className={`w-5 h-5 rounded-full border-2 mr-3 flex justify-center items-center ${isSelected ? 'border-indigo-600' : 'border-gray-300'}`}>
-                                  {isSelected && !submitted && <div className="w-2.5 h-2.5 bg-indigo-600 rounded-full"></div>}
-                                </div>
-                                <span className={submitted && optIdx === q.ans ? "text-emerald-700 font-bold" : "text-gray-700 font-medium"}>{opt}</span>
-                              </div>
-                              {icon}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                
-                {!submitted && Object.keys(answers).length > 0 && (
-                  <div className="mt-8 text-center">
-                    <button onClick={handleSubmitQuiz} className="btn-primary flex mx-auto py-3 px-10 rounded-xl text-lg shadow-md hover:shadow-lg transition">Nộp Bài & Chấm Điểm</button>
-                  </div>
-                )}
+                ))}
               </div>
             </div>
           )}
-        </div>
 
-        <div className="space-y-6">
-          <div className="card bg-white p-6 rounded-2xl shadow-md border-0">
-             <div className="relative h-40 bg-gray-900 rounded-xl flex flex-col items-center justify-center overflow-hidden mb-6 group">
-                <div className="text-white z-10 flex flex-col items-center">
-                  <BrainCircuit className="mb-2 text-indigo-400 group-hover:scale-110 transition duration-300" size={32} />
-                  <p className="font-bold">Đồ thị tư duy (Graph)</p>
-                  <button className="mt-3 px-4 py-1.5 bg-white/10 hover:bg-white/20 border border-white/20 rounded-lg backdrop-blur-md transition text-sm">Khám phá không gian 3D</button>
-                </div>
-                <div className="absolute inset-0 opacity-40 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-indigo-900 via-gray-900 to-black"></div>
-                <div className="absolute inset-0 opacity-20" style={{ backgroundImage: 'radial-gradient(circle at center, #818cf8 1px, transparent 1px)', backgroundSize: '15px 15px'}}></div>
-             </div>
+          {result.quiz.length > 0 && (
+            <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
+              <h3 className="text-lg font-bold text-gray-900 mb-6 flex items-center gap-2">
+                <Award size={20} className="text-green-600" /> Quiz Thử Thách
+              </h3>
 
-            <h3 className="font-bold text-gray-900 mb-4 pb-2 border-b">Tiến độ tuần này</h3>
-             <div>
-                <div className="flex justify-between text-sm mb-2">
-                  <span className="text-gray-600 font-medium">Từ mới đã học</span>
-                  <span className="font-bold text-indigo-600">35 / 50</span>
-                </div>
-                <div className="w-full bg-indigo-50 rounded-full h-3 mb-6">
-                  <div className="bg-indigo-600 h-3 rounded-full relative" style={{ width: '70%' }}>
-                    <div className="absolute right-0 top-1/2 -translate-y-1/2 w-4 h-4 bg-white rounded-full shadow-md border border-indigo-200"></div>
+              {submitted && (
+                <div className={`mb-6 p-4 rounded-xl flex items-center gap-3 ${score === result.quiz.length ? "bg-green-50 text-green-800 border border-green-200" : "bg-yellow-50 text-yellow-800 border border-yellow-200"}`}>
+                  <Trophy size={28} />
+                  <div>
+                    <p className="font-bold text-lg">Bạn đạt {score}/{result.quiz.length} điểm!</p>
                   </div>
                 </div>
+              )}
 
-                <div className="flex justify-between text-sm mb-2">
-                  <span className="text-gray-600 font-medium">Điểm Quiz trung bình</span>
-                  <span className="font-bold text-emerald-600">8.5 / 10</span>
-                </div>
-                <div className="w-full bg-emerald-50 rounded-full h-3">
-                  <div className="bg-emerald-500 h-3 rounded-full relative" style={{ width: '85%' }}>
-                    <div className="absolute right-0 top-1/2 -translate-y-1/2 w-4 h-4 bg-white rounded-full shadow-md border border-emerald-200"></div>
+              <div className="space-y-5">
+                {result.quiz.map((q: any, i: number) => (
+                  <div key={i} className="p-4 border border-gray-100 rounded-xl">
+                    <p className="font-bold text-gray-800 mb-3 flex items-start">
+                      <span className="bg-blue-100 text-blue-700 w-7 h-7 rounded-lg flex items-center justify-center mr-2 shrink-0 text-sm">{i + 1}</span>
+                      {q.q}
+                    </p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 pl-9">
+                      {q.options.map((opt: string, oi: number) => {
+                        const isSelected = answers[i] === oi;
+                        let cls = "border-gray-100 hover:border-blue-300 hover:bg-blue-50/50 cursor-pointer";
+                        let icon = null;
+                        if (submitted) {
+                          if (oi === q.ans) { cls = "border-green-400 bg-green-50"; icon = <CheckCircle2 size={18} className="text-green-500" />; }
+                          else if (isSelected) { cls = "border-red-400 bg-red-50"; icon = <XCircle size={18} className="text-red-500" />; }
+                          else cls = "border-gray-100 opacity-50";
+                        } else if (isSelected) cls = "border-blue-500 bg-blue-50";
+
+                        return (
+                          <div key={oi} onClick={() => !submitted && setAnswers(prev => ({ ...prev, [i]: oi }))} className={`flex items-center justify-between p-3 rounded-lg border-2 transition ${cls}`}>
+                            <div className="flex items-center gap-2">
+                              <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${isSelected ? "border-blue-600" : "border-gray-300"}`}>
+                                {isSelected && !submitted && <div className="w-2 h-2 bg-blue-600 rounded-full" />}
+                              </div>
+                              <span className="text-sm font-medium text-gray-700">{opt}</span>
+                            </div>
+                            {icon}
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
+                ))}
               </div>
-          </div>
+
+              {!submitted && Object.keys(answers).length > 0 && (
+                <div className="mt-6 text-center">
+                  <button onClick={handleSubmitQuiz} className="btn-primary px-8 py-2.5 rounded-xl shadow-md">Nộp bài & Chấm điểm</button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
+      )}
+    </div>
+  );
+}
+
+// ==================== SCORES TAB ====================
+function ScoresTab({ token }: { token: string | null }) {
+  const [scores, setScores] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch(`${API_URL}/student/scores`, { headers: getAuthHeader(token) });
+        if (res.ok) setScores(await res.json());
+      } catch (e) { console.error(e); }
+      finally { setLoading(false); }
+    })();
+  }, [token]);
+
+  if (loading) return <div className="flex justify-center py-20"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" /></div>;
+
+  if (scores.length === 0) {
+    return (
+      <div className="bg-white rounded-xl p-12 border border-gray-100 text-center">
+        <BarChart3 size={48} className="mx-auto text-gray-300 mb-4" />
+        <h3 className="text-lg font-bold text-gray-700 mb-2">Chưa có kết quả nào</h3>
+        <p className="text-gray-500">Hoàn thành bài tập để xem kết quả tại đây.</p>
+      </div>
+    );
+  }
+
+  const totalScore = scores.reduce((s, r) => s + r.score, 0);
+  const totalMax = scores.reduce((s, r) => s + r.max_score, 0);
+  const avgPercent = totalMax > 0 ? Math.round(totalScore / totalMax * 100) : 0;
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-3 gap-4">
+        <div className="bg-white rounded-xl p-5 border border-gray-100 shadow-sm text-center">
+          <p className="text-3xl font-extrabold text-blue-600">{scores.length}</p>
+          <p className="text-sm text-gray-500">Bài đã làm</p>
+        </div>
+        <div className="bg-white rounded-xl p-5 border border-gray-100 shadow-sm text-center">
+          <p className="text-3xl font-extrabold text-green-600">{totalScore}/{totalMax}</p>
+          <p className="text-sm text-gray-500">Tổng điểm</p>
+        </div>
+        <div className="bg-white rounded-xl p-5 border border-gray-100 shadow-sm text-center">
+          <p className="text-3xl font-extrabold text-purple-600">{avgPercent}%</p>
+          <p className="text-sm text-gray-500">Trung bình</p>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+        <table className="w-full">
+          <thead className="bg-gray-50 border-b border-gray-100">
+            <tr>
+              <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase">Bài tập</th>
+              <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase">Lớp</th>
+              <th className="text-center px-5 py-3 text-xs font-semibold text-gray-500 uppercase">Điểm</th>
+              <th className="text-right px-5 py-3 text-xs font-semibold text-gray-500 uppercase">Ngày nộp</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-50">
+            {scores.map((s) => {
+              const pct = s.max_score > 0 ? Math.round(s.score / s.max_score * 100) : 0;
+              return (
+                <tr key={s.id} className="hover:bg-gray-50 transition">
+                  <td className="px-5 py-4 font-medium text-gray-900">{s.assignment_title}</td>
+                  <td className="px-5 py-4 text-sm text-gray-500">{s.class_name}</td>
+                  <td className="px-5 py-4 text-center">
+                    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-sm font-bold ${pct >= 80 ? "bg-green-100 text-green-700" : pct >= 50 ? "bg-yellow-100 text-yellow-700" : "bg-red-100 text-red-700"}`}>
+                      {s.score}/{s.max_score}
+                    </span>
+                  </td>
+                  <td className="px-5 py-4 text-right text-sm text-gray-500">
+                    {new Date(s.submitted_at).toLocaleDateString("vi-VN")}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
     </div>
   );

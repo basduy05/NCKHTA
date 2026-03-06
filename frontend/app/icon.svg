@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 540 540" width="128" height="128">
+  <!-- Row 1 -->
+  <rect x="0" y="0" width="180" height="180" fill="#ffffff"/>
+  <rect x="180" y="0" width="180" height="180" fill="#2563eb"/>
+  <rect x="360" y="0" width="180" height="180" fill="#3b82f6"/>
+  <!-- Row 2 -->
+  <rect x="0" y="180" width="180" height="180" fill="#00e5ff"/>
+  <rect x="180" y="180" width="180" height="180" fill="#0a1929"/>
+  <rect x="360" y="180" width="180" height="180" fill="#2563eb"/>
+  <!-- Row 3 -->
+  <rect x="0" y="360" width="180" height="180" fill="#ffffff"/>
+  <rect x="180" y="360" width="180" height="180" fill="#00e5ff"/>
+  <rect x="360" y="360" width="180" height="180" fill="#ffffff"/>
+  <!-- Cyan diagonal bottom-left -->
+  <polygon points="0,360 180,360 0,540" fill="#00e5ff"/>
+  <polygon points="0,360 0,540 180,540" fill="#00e5ff"/>
+  <!-- Blue circle bottom-left -->
+  <circle cx="130" cy="460" r="55" fill="#2563eb"/>
+  <!-- Cyan stripe top of bottom-left -->
+  <polygon points="0,360 180,540 0,540" fill="#00e5ff"/>
+</svg>
