@@ -289,20 +289,47 @@ class DictionaryRequest(BaseModel):
 
 @router.post("/dictionary/lookup")
 def dictionary_lookup(req: DictionaryRequest, authorization: str = Header(...)):
-    """AI-powered dictionary lookup with Cambridge/Oxford style data."""
+    """Dictionary lookup: Neo4j first → AI fallback → auto-save to Neo4j."""
     _get_current_student(authorization)
-    llm = llm_service.get_llm()
-    if not llm:
-        raise HTTPException(status_code=503, detail="LLM service unavailable")
     word = req.word.strip()
     if not word or len(word) > 100:
         raise HTTPException(status_code=400, detail="Invalid word")
+
+    # 1) Check Neo4j graph first (fast, no AI cost)
+    graph_data = graph_service.find_word_in_graph(word)
+    if graph_data:
+        connections = graph_service.get_word_connections(word)
+        graph_data["graph_connections"] = connections.get("connections", [])
+        graph_data["_source"] = "graph"
+        return graph_data
+
+    # 2) Not in graph → ask AI
+    llm = llm_service.get_llm()
+    if not llm:
+        raise HTTPException(status_code=503, detail="LLM service unavailable")
     result = llm_service.lookup_dictionary(word)
     if result.get("error"):
         raise HTTPException(status_code=500, detail=result["error"])
-    # Also get graph connections if available
+
+    # 3) Auto-save AI result to Neo4j for future lookups
+    try:
+        graph_service.save_word_to_graph({
+            "word": word,
+            "phonetic": result.get("phonetic", ""),
+            "pos": result.get("pos", ""),
+            "meaning_en": result.get("meaning_en", ""),
+            "meaning_vn": result.get("meaning_vn", ""),
+            "example": result.get("example", ""),
+            "level": result.get("level", "B1"),
+            "synonyms": result.get("synonyms", []),
+            "antonyms": result.get("antonyms", []),
+        })
+    except Exception:
+        pass  # Non-critical — don't fail the lookup
+
     connections = graph_service.get_word_connections(word)
     result["graph_connections"] = connections.get("connections", [])
+    result["_source"] = "ai"
     return result
 
 

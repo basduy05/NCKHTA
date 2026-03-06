@@ -1,9 +1,13 @@
-from fastapi import FastAPI, UploadFile, File, Body
+from fastapi import FastAPI, UploadFile, File, Body, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 import os
 import traceback
+import asyncio
+import time
 
 # Load environment variables from .env file BEFORE importing services
 load_dotenv()
@@ -39,7 +43,28 @@ class TextRequest(BaseModel):
     text: str
     num_questions: int = 5
 
-app = FastAPI(title="EAM AI Service", description="Powered by Neo4j & GenAI")
+
+# ─── LIFESPAN: warm up connections at startup ─────────────────────────────────
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup: pre-warm Neo4j connection
+    print("[STARTUP] Pre-warming Neo4j connection...")
+    if graph_service:
+        try:
+            graph_service.get_graph()
+        except Exception as e:
+            print(f"[STARTUP] Neo4j warm-up skipped: {e}")
+    print("[STARTUP] App ready!")
+    yield
+    # Shutdown: cleanup
+    print("[SHUTDOWN] Cleaning up...")
+
+
+app = FastAPI(
+    title="EAM AI Service",
+    description="Powered by Neo4j & GenAI",
+    lifespan=lifespan,
+)
 
 # ALL REQUIRED DEPENDENCIES:
 # uvicorn, fastapi, python-multipart, python-dotenv, neo4j, langchain
@@ -55,12 +80,84 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+# ─── GLOBAL EXCEPTION HANDLER: prevent crashes from bubbling up ──────────────
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """Catch any unhandled exception so the server never crashes."""
+    print(f"[UNHANDLED ERROR] {request.method} {request.url.path}: {type(exc).__name__}: {exc}")
+    traceback.print_exc()
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error. Please try again later."},
+    )
+
+
+# ─── REQUEST TIMEOUT MIDDLEWARE ───────────────────────────────────────────────
+REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", "120"))  # seconds
+
+@app.middleware("http")
+async def timeout_middleware(request: Request, call_next):
+    """Kill requests that take too long (protects against LLM hangs)."""
+    try:
+        response = await asyncio.wait_for(
+            call_next(request),
+            timeout=REQUEST_TIMEOUT,
+        )
+        return response
+    except asyncio.TimeoutError:
+        print(f"[TIMEOUT] {request.method} {request.url.path} exceeded {REQUEST_TIMEOUT}s")
+        return JSONResponse(
+            status_code=504,
+            content={"detail": f"Request timed out after {REQUEST_TIMEOUT}s"},
+        )
+    except Exception as e:
+        print(f"[MIDDLEWARE ERROR] {request.method} {request.url.path}: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Internal server error"},
+        )
+
+
+# ─── SIMPLE RATE LIMITER (in-memory, per-IP) ─────────────────────────────────
+_rate_store: dict = {}  # ip -> [timestamps]
+RATE_LIMIT = int(os.getenv("RATE_LIMIT", "30"))       # max requests
+RATE_WINDOW = int(os.getenv("RATE_WINDOW", "60"))      # per N seconds
+
+@app.middleware("http")
+async def rate_limit_middleware(request: Request, call_next):
+    """Simple per-IP rate limiting for AI-heavy endpoints."""
+    path = request.url.path
+    # Only rate-limit expensive AI endpoints
+    if any(p in path for p in ["/dictionary/", "/analyze-text", "/generate-quiz", "/generate-vocab", "/flashcard/", "/vocabulary/extract", "/quiz/generate"]):
+        client_ip = request.client.host if request.client else "unknown"
+        now = time.time()
+        window_start = now - RATE_WINDOW
+
+        timestamps = _rate_store.get(client_ip, [])
+        timestamps = [t for t in timestamps if t > window_start]
+
+        if len(timestamps) >= RATE_LIMIT:
+            return JSONResponse(
+                status_code=429,
+                content={"detail": f"Too many requests. Max {RATE_LIMIT} per {RATE_WINDOW}s. Try again later."},
+            )
+
+        timestamps.append(now)
+        _rate_store[client_ip] = timestamps
+
+        # Cleanup old IPs periodically (every 100 requests)
+        if len(_rate_store) > 500:
+            cutoff = now - RATE_WINDOW * 2
+            _rate_store.clear()
+
+    return await call_next(request)
+
 app.include_router(admin.router) if admin else None
 app.include_router(auth.router) if auth else None
 app.include_router(teacher.router) if teacher else None
 app.include_router(student.router) if student else None
 
-print("[STARTUP] App ready!")
 
 @app.get("/")
 def read_root():
@@ -68,6 +165,11 @@ def read_root():
         "status": "AI Service Running", 
         "message": "Welcome to EAM Project"
     }
+
+@app.get("/health")
+def health_check():
+    """Quick health check for uptime monitors."""
+    return {"status": "ok"}
 
 @app.get("/health/graph")
 def health_graph():

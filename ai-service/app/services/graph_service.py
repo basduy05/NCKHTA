@@ -3,6 +3,7 @@ from langchain_neo4j import Neo4jGraph
 from typing import List, Dict
 import os
 import sqlite3
+import time
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -24,11 +25,20 @@ def _get_setting(key, default=None):
 
 graph = None
 last_error = None
+_last_connect_attempt = 0
+_RECONNECT_COOLDOWN = 30  # seconds between reconnect attempts
 
 def get_graph():
-    global graph, last_error
+    global graph, last_error, _last_connect_attempt
     if graph is not None:
         return graph
+
+    # Cooldown: don't spam reconnect attempts
+    now = time.time()
+    if now - _last_connect_attempt < _RECONNECT_COOLDOWN:
+        return None
+    _last_connect_attempt = now
+
     try:
         uri = _get_setting("NEO4J_URI")
         username = _get_setting("NEO4J_USERNAME")
@@ -55,11 +65,31 @@ def get_graph():
         print(f"Warning: Neo4j connection failed: {e}")
         return None
 
+def _safe_query(query: str, params: dict = None):
+    """Execute a Cypher query with auto-reconnect on connection loss."""
+    global graph
+    g = get_graph()
+    if not g:
+        return None
+    try:
+        return g.query(query, params=params or {})
+    except Exception as e:
+        error_str = str(e).lower()
+        # If it's a connection error, reset and retry once
+        if any(k in error_str for k in ["connection", "refused", "timeout", "closed", "reset", "unavailable"]):
+            print(f"[Neo4j] Connection lost, reconnecting... ({e})")
+            graph = None
+            g = get_graph()
+            if g:
+                return g.query(query, params=params or {})
+        raise
+
 def reconnect_graph():
     """Force reconnection (e.g. after changing settings)."""
-    global graph, last_error
+    global graph, last_error, _last_connect_attempt
     graph = None
     last_error = None
+    _last_connect_attempt = 0  # Reset cooldown
     return get_graph()
 
 def extract_entities_and_relations(text: str) -> Dict[str, list]:
@@ -75,10 +105,69 @@ def extract_entities_and_relations(text: str) -> Dict[str, list]:
     RETURN t, c
     """
     try:
-        g.query(cypher_query, params={"topic": topic_name, "summary": text[:200]})
+        _safe_query(cypher_query, {"topic": topic_name, "summary": text[:200]})
         return {"status": "success"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
+
+
+def find_word_in_graph(word: str) -> Dict:
+    """Check if a word already exists in Neo4j and return its data."""
+    g = get_graph()
+    if not g:
+        return None
+    try:
+        results = _safe_query("""
+            MATCH (w:Word {text: $word})
+            OPTIONAL MATCH (w)-[r]-(related)
+            RETURN w, type(r) as rel_type, related.text as related_word,
+                   labels(related) as related_labels
+        """, {"word": word.lower().strip()})
+
+        if not results:
+            return None
+
+        first = results[0]
+        w = first.get("w")
+        if not w or not w.get("text"):
+            return None
+
+        # Build full word data from graph
+        word_data = {
+            "word": w.get("text", ""),
+            "phonetic_uk": w.get("phonetic", ""),
+            "phonetic_us": w.get("phonetic", ""),
+            "pos": w.get("pos", ""),
+            "level": w.get("level", ""),
+            "meanings": [{
+                "pos": w.get("pos", ""),
+                "definition_en": w.get("meaning_en", ""),
+                "definition_vn": w.get("meaning_vn", ""),
+                "examples": [w.get("example", "")] if w.get("example") else [],
+                "synonyms": [],
+                "antonyms": [],
+            }],
+            "word_family": [],
+            "collocations": [],
+            "sources": ["Neo4j Knowledge Graph"],
+            "_from_graph": True,
+        }
+
+        # Collect relationships
+        for record in results:
+            rel = record.get("rel_type", "")
+            related = record.get("related_word", "")
+            if not related:
+                continue
+            if rel == "SYNONYM":
+                word_data["meanings"][0]["synonyms"].append(related)
+            elif rel == "ANTONYM":
+                word_data["meanings"][0]["antonyms"].append(related)
+
+        return word_data
+    except Exception as e:
+        print(f"find_word_in_graph error: {e}")
+        return None
 
 
 def save_word_to_graph(word_data: Dict) -> Dict:
@@ -127,7 +216,7 @@ def save_word_to_graph(word_data: Dict) -> Dict:
         if isinstance(antonyms, list) and len(antonyms) > 0 and isinstance(antonyms[0], list):
             antonyms = [a for sub in antonyms for a in sub]
 
-        g.query(query, params={
+        _safe_query(query, {
             "word": word,
             "phonetic": word_data.get("phonetic", word_data.get("phonetic_uk", "")),
             "pos": word_data.get("pos", ""),
@@ -158,7 +247,7 @@ def get_knowledge_subgraph(topic: str = "all", limit: int = 100) -> Dict:
             OPTIONAL MATCH (w)-[r]-(related)
             RETURN w, type(r) as rel_type, related, labels(related) as related_labels
             """
-            results = g.query(query, params={"topic": topic, "limit": limit})
+            results = _safe_query(query, {"topic": topic, "limit": limit})
         else:
             query = """
             MATCH (w:Word)
@@ -166,7 +255,10 @@ def get_knowledge_subgraph(topic: str = "all", limit: int = 100) -> Dict:
             OPTIONAL MATCH (w)-[r]-(related)
             RETURN w, type(r) as rel_type, related, labels(related) as related_labels
             """
-            results = g.query(query, params={"limit": limit})
+            results = _safe_query(query, {"limit": limit})
+
+        if not results:
+            return {"nodes": [], "links": []}
 
         nodes = {}
         links = []
@@ -221,15 +313,16 @@ def get_word_connections(word: str) -> Dict:
         RETURN type(r) as relation, related.text as related_word,
                related.meaning_vn as meaning, labels(related) as labels
         """
-        results = g.query(query, params={"word": word.lower().strip()})
+        results = _safe_query(query, {"word": word.lower().strip()})
         connections = []
-        for record in results:
-            connections.append({
-                "relation": record.get("relation", ""),
-                "word": record.get("related_word", ""),
-                "meaning": record.get("meaning", ""),
-                "type": record.get("labels", [""])[0] if record.get("labels") else "",
-            })
+        if results:
+            for record in results:
+                connections.append({
+                    "relation": record.get("relation", ""),
+                    "word": record.get("related_word", ""),
+                    "meaning": record.get("meaning", ""),
+                    "type": record.get("labels", [""])[0] if record.get("labels") else "",
+                })
         return {"word": word, "connections": connections}
     except Exception as e:
         return {"word": word, "connections": [], "error": str(e)}

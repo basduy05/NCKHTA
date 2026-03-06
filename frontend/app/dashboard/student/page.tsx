@@ -775,6 +775,12 @@ function DictionaryTab({ token }: { token: string | null }) {
                 {result.level && (
                   <span className="bg-white/20 px-3 py-1 rounded-lg text-sm font-bold">{result.level}</span>
                 )}
+                {/* Source badge */}
+                {result._source && (
+                  <span className={`px-3 py-1 rounded-lg text-xs font-bold ${result._source === "graph" ? "bg-cyan-400/30 text-cyan-100" : "bg-amber-400/30 text-amber-100"}`}>
+                    {result._source === "graph" ? "⚡ Từ Knowledge Graph" : "🤖 AI tra cứu"}
+                  </span>
+                )}
                 <button
                   onClick={saveWord}
                   disabled={saving || saved}
@@ -788,11 +794,19 @@ function DictionaryTab({ token }: { token: string | null }) {
 
           {/* Meanings */}
           <div className="p-6 space-y-6">
+            {result.meanings?.length > 0 && (
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-sm font-bold text-gray-500">{result.meanings.length} nghĩa được tìm thấy</span>
+              </div>
+            )}
             {result.meanings?.map((m: any, i: number) => (
               <div key={i} className="border-l-4 border-blue-400 pl-4">
                 <div className="flex items-center gap-2 mb-2">
                   <span className="bg-blue-100 text-blue-700 px-2.5 py-0.5 rounded-lg text-sm font-bold">{m.pos || result.pos}</span>
                   <span className="text-xs text-gray-400">Nghĩa {i + 1}</span>
+                  {m.register && (
+                    <span className="bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-lg text-xs font-medium italic">{m.register}</span>
+                  )}
                 </div>
                 <p className="text-gray-900 font-medium text-lg">{m.definition_en}</p>
                 <p className="text-blue-700 font-medium mt-1">{m.definition_vn}</p>
@@ -865,6 +879,17 @@ function DictionaryTab({ token }: { token: string | null }) {
                 </div>
               )}
             </div>
+
+            {/* Sources */}
+            {result.sources?.length > 0 && (
+              <div className="pt-4 border-t border-gray-100">
+                <p className="text-xs text-gray-400 flex items-center gap-1.5">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                  Nguồn tham chiếu: {result.sources.join(" • ")}
+                  {result._from_cache && " (cached)"}
+                </p>
+              </div>
+            )}
           </div>
         </div>
       )}

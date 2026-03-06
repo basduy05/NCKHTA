@@ -921,25 +921,43 @@ function AIToolsTab({ token }: { token: string | null }) {
           {dictResult && (
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
               <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-6 text-white">
-                <h2 className="text-3xl font-extrabold">{dictResult.word}</h2>
-                <div className="flex items-center gap-4 mt-2">
-                  {dictResult.phonetic_uk && (
-                    <button onClick={() => speak(dictResult.word, "en-GB")} className="flex items-center gap-1.5 bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-lg transition">
-                      <Volume2 size={16} /> UK {dictResult.phonetic_uk}
-                    </button>
+                <div className="flex items-start justify-between">
+                  <div>
+                    <h2 className="text-3xl font-extrabold">{dictResult.word}</h2>
+                    <div className="flex items-center gap-4 mt-2">
+                      {dictResult.phonetic_uk && (
+                        <button onClick={() => speak(dictResult.word, "en-GB")} className="flex items-center gap-1.5 bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-lg transition">
+                          <Volume2 size={16} /> UK {dictResult.phonetic_uk}
+                        </button>
+                      )}
+                      {dictResult.phonetic_us && (
+                        <button onClick={() => speak(dictResult.word, "en-US")} className="flex items-center gap-1.5 bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-lg transition">
+                          <Volume2 size={16} /> US {dictResult.phonetic_us}
+                        </button>
+                      )}
+                      {dictResult.level && <span className="bg-white/20 px-3 py-1 rounded-lg text-sm font-bold">{dictResult.level}</span>}
+                    </div>
+                  </div>
+                  {dictResult._source && (
+                    <span className={`px-3 py-1 rounded-lg text-xs font-bold ${dictResult._source === "graph" ? "bg-cyan-400/30 text-cyan-100" : "bg-amber-400/30 text-amber-100"}`}>
+                      {dictResult._source === "graph" ? "⚡ Từ Knowledge Graph" : "🤖 AI tra cứu"}
+                    </span>
                   )}
-                  {dictResult.phonetic_us && (
-                    <button onClick={() => speak(dictResult.word, "en-US")} className="flex items-center gap-1.5 bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-lg transition">
-                      <Volume2 size={16} /> US {dictResult.phonetic_us}
-                    </button>
-                  )}
-                  {dictResult.level && <span className="bg-white/20 px-3 py-1 rounded-lg text-sm font-bold">{dictResult.level}</span>}
                 </div>
               </div>
               <div className="p-6 space-y-4">
+                {dictResult.meanings?.length > 0 && (
+                  <p className="text-sm font-bold text-gray-500 mb-2">{dictResult.meanings.length} nghĩa được tìm thấy</p>
+                )}
                 {dictResult.meanings?.map((m: any, i: number) => (
                   <div key={i} className="border-l-4 border-blue-400 pl-4">
-                    <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-lg text-sm font-bold">{m.pos || dictResult.pos}</span>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-lg text-sm font-bold">{m.pos || dictResult.pos}</span>
+                      <span className="text-xs text-gray-400">Nghĩa {i + 1}</span>
+                      {m.register && (
+                        <span className="bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-lg text-xs font-medium italic">{m.register}</span>
+                      )}
+                    </div>
                     <p className="text-gray-900 font-medium mt-1">{m.definition_en}</p>
                     <p className="text-blue-700 font-medium">{m.definition_vn}</p>
                     {m.examples?.map((ex: string, j: number) => (
@@ -969,6 +987,12 @@ function AIToolsTab({ token }: { token: string | null }) {
                     </div>
                   )}
                 </div>
+                {/* Sources */}
+                {dictResult.sources?.length > 0 && (
+                  <div className="pt-3 border-t border-gray-100">
+                    <p className="text-xs text-gray-400">📚 Nguồn tham chiếu: {dictResult.sources.join(" • ")}</p>
+                  </div>
+                )}
               </div>
             </div>
           )}

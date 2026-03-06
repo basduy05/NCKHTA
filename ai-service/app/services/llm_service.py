@@ -4,9 +4,36 @@ from langchain_core.prompts import PromptTemplate
 import os
 import json
 import sqlite3
+import time
+import threading
 from dotenv import load_dotenv
 
 load_dotenv()
+
+# ─── IN-MEMORY CACHE for dictionary lookups ──────────────────────────────────
+_dict_cache: dict = {}      # word -> {"data": ..., "ts": timestamp}
+_cache_lock = threading.Lock()
+CACHE_TTL = 3600 * 24       # 24 hours
+CACHE_MAX_SIZE = 500
+
+def _cache_get(word: str):
+    """Get cached dictionary result if still valid."""
+    key = word.lower().strip()
+    with _cache_lock:
+        entry = _dict_cache.get(key)
+        if entry and (time.time() - entry["ts"]) < CACHE_TTL:
+            return entry["data"]
+    return None
+
+def _cache_set(word: str, data: dict):
+    """Cache dictionary result."""
+    key = word.lower().strip()
+    with _cache_lock:
+        # Evict oldest entries if cache is full
+        if len(_dict_cache) >= CACHE_MAX_SIZE:
+            oldest_key = min(_dict_cache, key=lambda k: _dict_cache[k]["ts"])
+            del _dict_cache[oldest_key]
+        _dict_cache[key] = {"data": data, "ts": time.time()}
 
 def _get_setting(key, default=None):
     try:
@@ -52,6 +79,29 @@ def get_llm():
 
     return None
 
+# ─── SAFE LLM INVOKE with retry ──────────────────────────────────────────────
+MAX_RETRIES = 2
+RETRY_DELAY = 1.5  # seconds
+
+def _safe_invoke(chain, params: dict, retries: int = MAX_RETRIES):
+    """Invoke LLM chain with automatic retry on transient failures."""
+    last_error = None
+    for attempt in range(retries + 1):
+        try:
+            response = chain.invoke(params)
+            return response
+        except Exception as e:
+            last_error = e
+            error_str = str(e).lower()
+            # Don't retry on auth/quota errors
+            if any(k in error_str for k in ["api_key", "quota", "unauthorized", "forbidden", "invalid"]):
+                raise
+            if attempt < retries:
+                print(f"[LLM RETRY] Attempt {attempt + 1} failed: {e}. Retrying in {RETRY_DELAY}s...")
+                time.sleep(RETRY_DELAY)
+    raise last_error
+
+
 def generate_flashcard_content(word: str, level: str = "A1"):
     llm = get_llm()
     if not llm:
@@ -67,7 +117,7 @@ def generate_flashcard_content(word: str, level: str = "A1"):
     )
     
     chain = prompt | llm
-    response = chain.invoke({"word": word, "level": level})
+    response = _safe_invoke(chain, {"word": word, "level": level})
     return response.content
 
 def extract_vocabulary_from_text(text: str):
@@ -95,7 +145,7 @@ def extract_vocabulary_from_text(text: str):
 
     chain = prompt | llm
     try:
-        response = chain.invoke({"text": text})
+        response = _safe_invoke(chain, {"text": text})
         result = parse_json_response(response.content)
         if isinstance(result, list) and len(result) > 0:
             return result
@@ -124,7 +174,7 @@ def generate_quiz_from_text(text: str, num_questions: int = 5):
 
     chain = prompt | llm
     try:
-        response = chain.invoke({"text": text, "num": num_questions})
+        response = _safe_invoke(chain, {"text": text, "num": num_questions})
         result = parse_json_response(response.content)
         if isinstance(result, list) and len(result) > 0:
             return result
@@ -144,7 +194,7 @@ def generate_example_sentence(word: str, meaning: str = "", level: str = "B1"):
 
     chain = prompt | llm
     try:
-        response = chain.invoke({"word": word, "meaning": meaning, "level": level})
+        response = _safe_invoke(chain, {"word": word, "meaning": meaning, "level": level})
         return response.content
     except Exception as e:
         print(f"LLM Error: {e}")
@@ -154,38 +204,51 @@ def generate_example_sentence(word: str, meaning: str = "", level: str = "B1"):
 def lookup_dictionary(word: str):
     """
     AI-powered dictionary lookup combining Cambridge/Oxford style data.
-    Returns comprehensive word data.
+    Returns comprehensive word data. Uses in-memory cache.
     """
+    # Check cache first
+    cached = _cache_get(word)
+    if cached:
+        cached["_from_cache"] = True
+        return cached
+
     llm = get_llm()
     if not llm:
         return {"word": word, "error": "LLM not configured"}
 
     prompt = PromptTemplate.from_template(
-        "You are an advanced English dictionary (like Cambridge and Oxford combined).\n"
+        "You are an advanced English dictionary combining data from Cambridge Dictionary, "
+        "Oxford Advanced Learner's Dictionary, and Longman Dictionary of Contemporary English.\n"
         "Look up the English word: '{word}'\n\n"
+        "IMPORTANT: Provide ALL distinct meanings/senses of the word (at least 3-5 if the word has "
+        "multiple senses). Cover different parts of speech (noun, verb, adjective, etc.) and "
+        "different usage contexts. Each meaning should be a separate entry.\n\n"
         "Return a JSON object with these EXACT keys:\n"
         '- "word": the word\n'
         '- "phonetic_uk": UK IPA pronunciation (e.g. /ˈwɜː.tər/)\n'
         '- "phonetic_us": US IPA pronunciation (e.g. /ˈwɝː.t̬ɚ/)\n'
         '- "pos": primary part of speech\n'
-        '- "meanings": array of objects, each with:\n'
-        '    - "pos": part of speech for this meaning\n'
-        '    - "definition_en": English definition\n'
-        '    - "definition_vn": Vietnamese translation\n'
-        '    - "examples": array of 2 example sentences\n'
-        '    - "synonyms": array of 2-3 synonyms\n'
-        '    - "antonyms": array of 1-2 antonyms (if applicable, else empty)\n'
+        '- "meanings": array of 3-5+ objects (one per distinct sense), each with:\n'
+        '    - "pos": part of speech for this meaning (noun, verb, adj, adv, etc.)\n'
+        '    - "definition_en": clear English definition from that sense\n'
+        '    - "definition_vn": accurate Vietnamese translation\n'
+        '    - "examples": array of 2-3 natural example sentences showing this specific sense\n'
+        '    - "synonyms": array of 2-3 synonyms specific to this sense\n'
+        '    - "antonyms": array of 1-2 antonyms (if applicable, else empty array)\n'
+        '    - "register": usage register if notable (formal/informal/slang/literary, else null)\n'
         '- "level": CEFR level (A1/A2/B1/B2/C1/C2)\n'
-        '- "word_family": array of related word forms (e.g. ["beauty", "beautiful", "beautifully"])\n'
-        '- "collocations": array of 3-4 common collocations\n\n'
+        '- "word_family": array of related word forms (e.g. ["beauty", "beautiful", "beautifully", "beautify"])\n'
+        '- "collocations": array of 4-6 common collocations\n'
+        '- "sources": ["Cambridge Dictionary", "Oxford Advanced Learner\'s Dictionary", "Longman Dictionary"]\n\n'
         "Return ONLY valid JSON. No markdown, no extra text."
     )
 
     chain = prompt | llm
     try:
-        response = chain.invoke({"word": word})
+        response = _safe_invoke(chain, {"word": word})
         result = parse_json_response(response.content)
         if isinstance(result, dict) and "word" in result:
+            _cache_set(word, result)  # Cache successful result
             return result
         return {"word": word, "error": "Could not parse dictionary data"}
     except Exception as e:
