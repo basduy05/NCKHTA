@@ -455,7 +455,7 @@ async def update_grammar_rule(
 
 # --- SETTINGS ---
 
-SENSITIVE_KEYS = {"GOOGLE_API_KEY", "OPENAI_API_KEY", "NEO4J_PASSWORD", "SMTP_PASSWORD"}
+SENSITIVE_KEYS = {"GOOGLE_API_KEY", "OPENAI_API_KEY", "NEO4J_PASSWORD", "SMTP_PASSWORD", "RESEND_API_KEY", "BREVO_API_KEY"}
 
 def _mask(value: str) -> str:
     if not value or len(value) < 8:
@@ -500,44 +500,67 @@ def update_settings(data: SettingsUpdate):
 
 @router.post("/settings/test-email")
 def test_email():
-    """Send a test email using the configured provider (auto/resend/smtp)."""
+    """Send a test email using the configured provider."""
     import urllib.request
     import json as _json
 
     provider = (auth_service._get_setting("EMAIL_PROVIDER") or "auto").lower().strip()
     sender = auth_service._get_setting("SENDER_EMAIL") or auth_service._get_setting("SMTP_USERNAME")
-    # For Resend free tier: can only send to account owner email
-    test_recipient = auth_service._get_setting("RESEND_TEST_EMAIL") or auth_service._get_setting("SMTP_USERNAME") or sender
+    test_recipient = auth_service._get_setting("SMTP_USERNAME") or sender
 
-    steps = [f"Provider: {provider}", f"Sender: {sender}", f"Test recipient: {test_recipient}"]
+    steps = [f"Provider: {provider}", f"Sender: {sender}", f"Recipient: {test_recipient}"]
 
     if not sender:
         return {"success": False, "steps": steps, "error": "SENDER_EMAIL not configured"}
 
-    # Try sending with detailed error capture
+    # Try Brevo
+    if provider in ("brevo", "auto"):
+        brevo_key = auth_service._get_setting("BREVO_API_KEY")
+        if brevo_key:
+            try:
+                data = _json.dumps({
+                    "sender": {"name": "EAM System", "email": sender},
+                    "to": [{"email": test_recipient}],
+                    "subject": "EAM Test Email",
+                    "htmlContent": "<h2>Test email from EAM</h2><p>Brevo is working!</p>"
+                }).encode()
+                req = urllib.request.Request(
+                    "https://api.brevo.com/v3/smtp/email",
+                    data=data,
+                    headers={"api-key": brevo_key, "Content-Type": "application/json", "User-Agent": "EAM/1.0"},
+                )
+                with urllib.request.urlopen(req, timeout=15) as resp:
+                    result = _json.loads(resp.read())
+                    steps.append(f"Brevo OK: {result}")
+                    return {"success": True, "steps": steps, "message": f"Email sent via Brevo to {test_recipient}"}
+            except urllib.error.HTTPError as e:
+                body = e.read().decode()
+                steps.append(f"Brevo HTTP {e.code}: {body}")
+            except Exception as e:
+                steps.append(f"Brevo error: {type(e).__name__}: {e}")
+        else:
+            steps.append("BREVO_API_KEY not set")
+
+    # Try Resend
     if provider in ("resend", "auto"):
-        api_key = auth_service._get_setting("RESEND_API_KEY")
-        if api_key:
+        resend_key = auth_service._get_setting("RESEND_API_KEY")
+        if resend_key:
             try:
                 data = _json.dumps({
                     "from": f"EAM System <{sender}>",
                     "to": [test_recipient],
                     "subject": "EAM Test Email",
-                    "html": "<h2>Test email from EAM</h2><p>Email is working!</p>"
+                    "html": "<h2>Test email from EAM</h2><p>Resend is working!</p>"
                 }).encode()
                 req = urllib.request.Request(
                     "https://api.resend.com/emails",
                     data=data,
-                    headers={
-                        "Authorization": f"Bearer {api_key}",
-                        "Content-Type": "application/json",
-                        "User-Agent": "EAM/1.0",
-                    },
+                    headers={"Authorization": f"Bearer {resend_key}", "Content-Type": "application/json", "User-Agent": "EAM/1.0"},
                 )
                 with urllib.request.urlopen(req, timeout=15) as resp:
                     result = _json.loads(resp.read())
                     steps.append(f"Resend OK: {result}")
-                    return {"success": True, "steps": steps, "message": f"Email sent to {test_recipient}"}
+                    return {"success": True, "steps": steps, "message": f"Email sent via Resend to {test_recipient}"}
             except urllib.error.HTTPError as e:
                 body = e.read().decode()
                 steps.append(f"Resend HTTP {e.code}: {body}")
@@ -546,15 +569,16 @@ def test_email():
         else:
             steps.append("RESEND_API_KEY not set")
 
+    # Try SMTP
     if provider in ("smtp", "auto"):
         result = auth_service._send_via_smtp(test_recipient, "EAM Test Email", "<h2>Test</h2><p>SMTP working!</p>")
         if result:
             steps.append("SMTP send OK")
             return {"success": True, "steps": steps, "message": f"Email sent via SMTP to {test_recipient}"}
         else:
-            steps.append("SMTP failed (ports 587/465 likely blocked on this host)")
+            steps.append("SMTP failed (ports 587/465 likely blocked)")
 
-    return {"success": False, "steps": steps, "error": "Email send failed. See steps."}
+    return {"success": False, "steps": steps, "error": "All providers failed. See steps."}
 
 @router.post("/settings/test-neo4j")
 def test_neo4j():

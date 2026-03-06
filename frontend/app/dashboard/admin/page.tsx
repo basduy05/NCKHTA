@@ -804,7 +804,7 @@ function SettingsTab() {
 
   const toggleShow = (key: string) => setShowPasswords(p => ({...p, [key]: !p[key]}));
 
-  const sensitiveKeys = ['GOOGLE_API_KEY', 'OPENAI_API_KEY', 'NEO4J_PASSWORD', 'SMTP_PASSWORD', 'RESEND_API_KEY'];
+  const sensitiveKeys = ['GOOGLE_API_KEY', 'OPENAI_API_KEY', 'NEO4J_PASSWORD', 'SMTP_PASSWORD', 'RESEND_API_KEY', 'BREVO_API_KEY'];
 
   const renderField = (key: string, label: string, placeholder: string) => {
     const isSensitive = sensitiveKeys.includes(key);
@@ -873,8 +873,8 @@ function SettingsTab() {
           </button>
         </div>
         <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4 text-sm text-amber-800">
-          <strong>Lưu ý:</strong> Render free tier chặn SMTP (port 587/465). Hãy dùng <strong>Resend</strong> (miễn phí 100 email/ngày).
-          Đăng ký tại <a href="https://resend.com" target="_blank" rel="noopener noreferrer" className="underline font-semibold">resend.com</a>, lấy API Key, và đặt Provider = resend.
+          <strong>Lưu ý:</strong> Render free tier chặn SMTP (port 587/465). Dùng <strong>Brevo</strong> (300 email/ngày miễn phí, gửi được đến bất kỳ ai).
+          Đăng ký tại <a href="https://app.brevo.com" target="_blank" rel="noopener noreferrer" className="underline font-semibold">brevo.com</a> → SMTP & API → API Keys.
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
@@ -884,12 +884,14 @@ function SettingsTab() {
               onChange={e => setSettings({...settings, EMAIL_PROVIDER: e.target.value})}
               className="w-full border border-gray-200 rounded-lg p-2.5 focus:ring-2 focus:ring-indigo-500 outline-none text-sm bg-white"
             >
-              <option value="auto">Auto (Resend → SMTP fallback)</option>
-              <option value="resend">Resend (HTTP API - works on cloud)</option>
-              <option value="smtp">SMTP only (works locally)</option>
+              <option value="auto">Auto (Brevo → Resend → SMTP)</option>
+              <option value="brevo">Brevo (recommended - gửi đến bất kỳ ai)</option>
+              <option value="resend">Resend (chỉ gửi đến chủ tài khoản nếu free)</option>
+              <option value="smtp">SMTP only (chỉ hoạt động local)</option>
             </select>
           </div>
-          {renderField('RESEND_API_KEY', 'Resend API Key', 're_xxxxxxxx')}
+          {renderField('BREVO_API_KEY', 'Brevo API Key', 'xkeysib-xxxxxxxx')}
+          {renderField('RESEND_API_KEY', 'Resend API Key (backup)', 're_xxxxxxxx')}
           {renderField('SENDER_EMAIL', 'Sender Email', 'your@gmail.com')}
           <div className="md:col-span-2"><hr className="border-gray-200"/></div>
           {renderField('SMTP_SERVER', 'SMTP Server', 'smtp.gmail.com')}

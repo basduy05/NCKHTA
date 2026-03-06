@@ -131,6 +131,48 @@ def _send_via_resend(to_email: str, subject: str, html_content: str) -> bool:
         return False
 
 
+def _send_via_brevo(to_email: str, subject: str, html_content: str) -> bool:
+    """Send email via Brevo (Sendinblue) HTTP API. Free 300 emails/day, sends to anyone."""
+    import urllib.request
+    import json as _json
+
+    api_key = _get_setting("BREVO_API_KEY")
+    sender = _get_setting("SENDER_EMAIL") or _get_setting("SMTP_USERNAME")
+    sender_name = _get_setting("SENDER_NAME") or "EAM System"
+    if not api_key:
+        print("BREVO_API_KEY not configured")
+        return False
+
+    data = _json.dumps({
+        "sender": {"name": sender_name, "email": sender},
+        "to": [{"email": to_email}],
+        "subject": subject,
+        "htmlContent": html_content,
+    }).encode()
+
+    req = urllib.request.Request(
+        "https://api.brevo.com/v3/smtp/email",
+        data=data,
+        headers={
+            "api-key": api_key,
+            "Content-Type": "application/json",
+            "User-Agent": "EAM/1.0",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            result = _json.loads(resp.read())
+            print(f"Brevo OK: {result}")
+            return True
+    except urllib.error.HTTPError as e:
+        body = e.read().decode()
+        print(f"Brevo HTTP {e.code}: {body}")
+        return False
+    except Exception as e:
+        print(f"Brevo failed: {type(e).__name__}: {e}")
+        return False
+
+
 def _send_via_smtp(to_email: str, subject: str, html_content: str) -> bool:
     """Send email via SMTP (works locally, blocked on some cloud hosts)."""
     smtp_server = _get_setting("SMTP_SERVER", "smtp.gmail.com")
@@ -172,14 +214,20 @@ def send_email(to_email: str, subject: str, html_content: str) -> bool:
 
     if provider == "resend":
         return _send_via_resend(to_email, subject, html_content)
+    elif provider == "brevo":
+        return _send_via_brevo(to_email, subject, html_content)
     elif provider == "smtp":
         return _send_via_smtp(to_email, subject, html_content)
     else:
-        # auto: try Resend first (works on cloud), fall back to SMTP (works locally)
+        # auto: try Brevo first, then Resend, then SMTP
+        if _get_setting("BREVO_API_KEY"):
+            if _send_via_brevo(to_email, subject, html_content):
+                return True
+            print("Brevo failed, trying next...")
         if _get_setting("RESEND_API_KEY"):
             if _send_via_resend(to_email, subject, html_content):
                 return True
-            print("Resend failed, falling back to SMTP...")
+            print("Resend failed, trying SMTP...")
         return _send_via_smtp(to_email, subject, html_content)
 
 # --- EMAIL TEMPLATES ---

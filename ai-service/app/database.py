@@ -108,7 +108,7 @@ def init_db():
         "GOOGLE_API_KEY", "OPENAI_API_KEY",
         "NEO4J_URI", "NEO4J_USERNAME", "NEO4J_PASSWORD", "NEO4J_DATABASE",
         "SMTP_SERVER", "SMTP_PORT", "SMTP_USERNAME", "SMTP_PASSWORD", "SENDER_EMAIL",
-        "EMAIL_PROVIDER", "RESEND_API_KEY", "FRONTEND_URL",
+        "EMAIL_PROVIDER", "RESEND_API_KEY", "BREVO_API_KEY", "FRONTEND_URL",
     ]
     for k in env_keys:
         val = os.getenv(k)
@@ -172,7 +172,7 @@ def get_all_settings():
         "GOOGLE_API_KEY", "OPENAI_API_KEY",
         "NEO4J_URI", "NEO4J_USERNAME", "NEO4J_PASSWORD", "NEO4J_DATABASE",
         "SMTP_SERVER", "SMTP_PORT", "SMTP_USERNAME", "SMTP_PASSWORD", "SENDER_EMAIL",
-        "EMAIL_PROVIDER", "RESEND_API_KEY", "FRONTEND_URL",
+        "EMAIL_PROVIDER", "RESEND_API_KEY", "BREVO_API_KEY", "FRONTEND_URL",
     ]
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
