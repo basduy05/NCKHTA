@@ -42,10 +42,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsInitialized(true);
   }, []);
 
+  // Helper: retry fetch logic
+  async function retryFetch(url: string, options: any, maxRetries = 2): Promise<Response> {
+    let lastErr: any;
+    for (let i = 0; i <= maxRetries; i++) {
+      try {
+        const res = await fetch(url, options);
+        if (res.status === 502 || res.status === 503) throw new Error('Backend unavailable');
+        return res;
+      } catch (err: any) {
+        lastErr = err;
+        if (i < maxRetries) await new Promise(r => setTimeout(r, 1500));
+      }
+    }
+    throw lastErr;
+  }
+
   const register = async (name: string, email: string, password: string, role: string) => {
     setIsLoading(true);
     try {
-      const res = await fetch(`${API_URL}/auth/register`, {
+      const res = await retryFetch(`${API_URL}/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, email, password, role })
@@ -57,9 +73,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       alert('Registration successful! Check your email for OTP.');
       return true;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Register error:', error);
-      alert('Failed to register. Please try again.');
+      alert(error?.message || 'Failed to register. Please try again.');
       return false;
     } finally {
       setIsLoading(false);
@@ -69,7 +85,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const verifyOTP = async (email: string, otp: string) => {
     setIsLoading(true);
     try {
-      const res = await fetch(`${API_URL}/auth/verify-otp`, {
+      const res = await retryFetch(`${API_URL}/auth/verify-otp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, otp })
@@ -81,9 +97,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       alert('Account verified! You can now login.');
       return true;
-    } catch (error) {
+    } catch (error: any) {
       console.error('OTP verify error:', error);
-      alert('Failed to verify OTP. Please try again.');
+      alert(error?.message || 'Failed to verify OTP. Please try again.');
       return false;
     } finally {
       setIsLoading(false);
@@ -93,7 +109,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = async (email: string, password: string) => {
     setIsLoading(true);
     try {
-      const res = await fetch(`${API_URL}/auth/login`, {
+      const res = await retryFetch(`${API_URL}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password })
@@ -112,9 +128,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       router.push(`/dashboard/${userData.role.toLowerCase()}`);
       return true;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Login error:', error);
-      alert('Failed to login. Please try again.');
+      alert(error?.message || 'Failed to login. Please try again.');
       return false;
     } finally {
       setIsLoading(false);
@@ -132,7 +148,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const forgotPassword = async (email: string) => {
     setIsLoading(true);
     try {
-      const res = await fetch(`${API_URL}/auth/forgot-password?email=${encodeURIComponent(email)}`, {
+      const res = await retryFetch(`${API_URL}/auth/forgot-password?email=${encodeURIComponent(email)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' }
       });
@@ -143,9 +159,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       alert(data.message);
       return true;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Forgot password error:', error);
-      alert('Failed to send reset email. Please try again.');
+      alert(error?.message || 'Failed to send reset email. Please try again.');
       return false;
     } finally {
       setIsLoading(false);
