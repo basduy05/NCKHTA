@@ -233,56 +233,189 @@ def send_email(to_email: str, subject: str, html_content: str) -> bool:
 # --- EMAIL TEMPLATES ---
 
 def send_otp_email(to_email: str, otp_code: str):
-    subject = "Verify your account - EAM System"
+    subject = "🔐 Xác thực tài khoản - Hệ thống iEdu"
     html = f"""
     <html>
-        <body>
-            <h2>Welcome to EAM!</h2>
-            <p>Your verification code is: <strong>{otp_code}</strong></p>
-            <p>This code will expire in 10 minutes.</p>
-        </body>
+    <head>
+        <meta charset="utf-8">
+    </head>
+    <body style="margin:0;padding:0;background-color:#f4f7fa;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;">
+        <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f7fa;padding:40px 0;">
+            <tr><td align="center">
+                <table width="520" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;box-shadow:0 2px 12px rgba(0,0,0,0.08);overflow:hidden;">
+                    <!-- Header -->
+                    <tr>
+                        <td style="background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);padding:30px 40px;text-align:center;">
+                            <h1 style="margin:0;color:#ffffff;font-size:24px;font-weight:700;">📚 iEdu</h1>
+                            <p style="margin:5px 0 0;color:rgba(255,255,255,0.85);font-size:13px;">English Assessment &amp; Management</p>
+                        </td>
+                    </tr>
+                    <!-- Body -->
+                    <tr>
+                        <td style="padding:35px 40px;">
+                            <h2 style="margin:0 0 15px;color:#2d3748;font-size:20px;">Xác thực tài khoản</h2>
+                            <p style="color:#4a5568;font-size:15px;line-height:1.6;margin:0 0 25px;">
+                                Chào bạn! Cảm ơn bạn đã đăng ký tài khoản trên hệ thống <strong>iEdu</strong>. Vui lòng sử dụng mã OTP bên dưới để hoàn tất xác thực:
+                            </p>
+                            <div style="background:#f0f4ff;border:2px dashed #667eea;border-radius:10px;padding:20px;text-align:center;margin:0 0 25px;">
+                                <span style="font-size:36px;font-weight:800;letter-spacing:8px;color:#667eea;">{otp_code}</span>
+                            </div>
+                            <p style="color:#718096;font-size:13px;line-height:1.5;margin:0 0 10px;">
+                                ⏰ Mã này sẽ hết hạn sau <strong>10 phút</strong>.<br>
+                                🔒 Nếu bạn không yêu cầu mã này, vui lòng bỏ qua email.
+                            </p>
+                        </td>
+                    </tr>
+                    <!-- Footer -->
+                    <tr>
+                        <td style="background:#f8fafc;padding:20px 40px;border-top:1px solid #e2e8f0;text-align:center;">
+                            <p style="margin:0;color:#a0aec0;font-size:12px;">© 2025 iEdu - English Assessment &amp; Management System</p>
+                        </td>
+                    </tr>
+                </table>
+            </td></tr>
+        </table>
+    </body>
     </html>
     """
     return send_email(to_email, subject, html)
 
 def send_welcome_email(to_email: str, name: str):
-    subject = "Welcome to EAM System!"
+    frontend_url = _get_setting("FRONTEND_URL") or "https://nckhta-1wfu.vercel.app"
+    subject = "🎉 Chào mừng bạn đến với iEdu!"
     html = f"""
     <html>
-        <body>
-            <h2>Hello {name},</h2>
-            <p>Welcome to our English Assessment & Management platform!</p>
-            <p>Your account has been verified successfully. You can now log in and start learning.</p>
-        </body>
+    <head>
+        <meta charset="utf-8">
+    </head>
+    <body style="margin:0;padding:0;background-color:#f4f7fa;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;">
+        <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f7fa;padding:40px 0;">
+            <tr><td align="center">
+                <table width="520" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;box-shadow:0 2px 12px rgba(0,0,0,0.08);overflow:hidden;">
+                    <!-- Header -->
+                    <tr>
+                        <td style="background:linear-gradient(135deg,#38b2ac 0%,#4fd1c5 100%);padding:30px 40px;text-align:center;">
+                            <h1 style="margin:0;color:#ffffff;font-size:28px;">🎊 Chúc mừng!</h1>
+                            <p style="margin:8px 0 0;color:rgba(255,255,255,0.9);font-size:14px;">Tài khoản đã được xác thực thành công</p>
+                        </td>
+                    </tr>
+                    <!-- Body -->
+                    <tr>
+                        <td style="padding:35px 40px;">
+                            <h2 style="margin:0 0 15px;color:#2d3748;font-size:20px;">Xin chào {name} 👋</h2>
+                            <p style="color:#4a5568;font-size:15px;line-height:1.7;margin:0 0 20px;">
+                                Chào mừng bạn đến với <strong>iEdu</strong> – Hệ thống Đánh giá &amp; Quản lý Tiếng Anh! Tài khoản của bạn đã được kích hoạt thành công.
+                            </p>
+                            <div style="background:#f0fff4;border-left:4px solid #38b2ac;border-radius:8px;padding:15px 20px;margin:0 0 25px;">
+                                <p style="margin:0;color:#2d3748;font-size:14px;line-height:1.6;">
+                                    ✅ Tài khoản: <strong>{to_email}</strong><br>
+                                    ✅ Trạng thái: <strong style="color:#38b2ac;">Đã xác thực</strong>
+                                </p>
+                            </div>
+                            <p style="color:#4a5568;font-size:15px;line-height:1.7;margin:0 0 25px;">
+                                Bạn có thể đăng nhập ngay để bắt đầu hành trình học tập:
+                            </p>
+                            <div style="text-align:center;margin:0 0 25px;">
+                                <a href="{frontend_url}/login" style="display:inline-block;background:linear-gradient(135deg,#38b2ac,#4fd1c5);color:#ffffff;font-size:16px;font-weight:600;padding:14px 40px;border-radius:8px;text-decoration:none;">
+                                    🚀 Đăng nhập ngay
+                                </a>
+                            </div>
+                            <div style="background:#fefcbf;border-radius:8px;padding:15px 20px;margin:0 0 10px;">
+                                <p style="margin:0;color:#744210;font-size:13px;line-height:1.5;">
+                                    💡 <strong>Mẹo:</strong> Sau khi đăng nhập, hãy khám phá các bài học, từ vựng và bài kiểm tra để nâng cao trình độ tiếng Anh của bạn!
+                                </p>
+                            </div>
+                        </td>
+                    </tr>
+                    <!-- Footer -->
+                    <tr>
+                        <td style="background:#f8fafc;padding:20px 40px;border-top:1px solid #e2e8f0;text-align:center;">
+                            <p style="margin:0;color:#a0aec0;font-size:12px;">© 2025 iEdu - English Assessment &amp; Management System</p>
+                        </td>
+                    </tr>
+                </table>
+            </td></tr>
+        </table>
+    </body>
     </html>
     """
     return send_email(to_email, subject, html)
 
 def send_notification_email(to_email: str, title: str, message: str):
-    subject = f"Notification: {title}"
+    subject = f"📢 {title} - iEdu"
     html = f"""
     <html>
-        <body>
-            <h3>{title}</h3>
-            <p>{message}</p>
-            <hr>
-            <p>EAM System Notification</p>
-        </body>
+    <head><meta charset="utf-8"></head>
+    <body style="margin:0;padding:0;background-color:#f4f7fa;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;">
+        <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f7fa;padding:40px 0;">
+            <tr><td align="center">
+                <table width="520" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;box-shadow:0 2px 12px rgba(0,0,0,0.08);overflow:hidden;">
+                    <tr>
+                        <td style="background:linear-gradient(135deg,#ed8936 0%,#f6ad55 100%);padding:25px 40px;text-align:center;">
+                            <h1 style="margin:0;color:#ffffff;font-size:22px;">📢 Thông báo từ iEdu</h1>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding:30px 40px;">
+                            <h2 style="margin:0 0 15px;color:#2d3748;font-size:18px;">{title}</h2>
+                            <p style="color:#4a5568;font-size:15px;line-height:1.7;margin:0;">{message}</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="background:#f8fafc;padding:20px 40px;border-top:1px solid #e2e8f0;text-align:center;">
+                            <p style="margin:0;color:#a0aec0;font-size:12px;">© 2025 iEdu - English Assessment &amp; Management System</p>
+                        </td>
+                    </tr>
+                </table>
+            </td></tr>
+        </table>
+    </body>
     </html>
     """
     return send_email(to_email, subject, html)
 
 def send_password_reset_email(to_email: str, reset_token: str, reset_link: str):
-    subject = "Password Reset Request - EAM System"
+    subject = "🔑 Đặt lại mật khẩu - iEdu"
     html = f"""
     <html>
-        <body>
-            <h2>Password Reset Request</h2>
-            <p>Click the link below to reset your password (expires in 1 hour):</p>
-            <p><a href="{reset_link}" style="background-color: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Reset Password</a></p>
-            <p>Or use this code: <strong>{reset_token}</strong></p>
-            <p>If you didn't request this, please ignore this email.</p>
-        </body>
+    <head><meta charset="utf-8"></head>
+    <body style="margin:0;padding:0;background-color:#f4f7fa;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;">
+        <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f7fa;padding:40px 0;">
+            <tr><td align="center">
+                <table width="520" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;box-shadow:0 2px 12px rgba(0,0,0,0.08);overflow:hidden;">
+                    <tr>
+                        <td style="background:linear-gradient(135deg,#e53e3e 0%,#fc8181 100%);padding:25px 40px;text-align:center;">
+                            <h1 style="margin:0;color:#ffffff;font-size:22px;">🔑 Đặt lại mật khẩu</h1>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding:35px 40px;">
+                            <p style="color:#4a5568;font-size:15px;line-height:1.7;margin:0 0 25px;">
+                                Bạn đã yêu cầu đặt lại mật khẩu cho tài khoản <strong>{to_email}</strong>. Nhấn nút bên dưới để tiếp tục (hết hạn sau 1 giờ):
+                            </p>
+                            <div style="text-align:center;margin:0 0 25px;">
+                                <a href="{reset_link}" style="display:inline-block;background:linear-gradient(135deg,#e53e3e,#fc8181);color:#ffffff;font-size:16px;font-weight:600;padding:14px 40px;border-radius:8px;text-decoration:none;">
+                                    🔓 Đặt lại mật khẩu
+                                </a>
+                            </div>
+                            <div style="background:#fff5f5;border:2px dashed #e53e3e;border-radius:10px;padding:15px;text-align:center;margin:0 0 25px;">
+                                <p style="margin:0 0 5px;color:#718096;font-size:13px;">Hoặc sử dụng mã:</p>
+                                <span style="font-size:28px;font-weight:800;letter-spacing:6px;color:#e53e3e;">{reset_token}</span>
+                            </div>
+                            <p style="color:#718096;font-size:13px;line-height:1.5;margin:0;">
+                                ⚠️ Nếu bạn không yêu cầu đặt lại mật khẩu, vui lòng bỏ qua email này. Tài khoản của bạn vẫn an toàn.
+                            </p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="background:#f8fafc;padding:20px 40px;border-top:1px solid #e2e8f0;text-align:center;">
+                            <p style="margin:0;color:#a0aec0;font-size:12px;">© 2025 iEdu - English Assessment &amp; Management System</p>
+                        </td>
+                    </tr>
+                </table>
+            </td></tr>
+        </table>
+    </body>
     </html>
     """
     return send_email(to_email, subject, html)
