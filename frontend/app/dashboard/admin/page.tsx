@@ -218,57 +218,70 @@ function UsersTab() {
 }
 
 function ClassesTab() {
-  const [classes, setClasses] = useState([]);
-  
+  const [classes, setClasses] = useState<any[]>([]);
+  const [isEditing, setIsEditing] = useState<number | null>(null);
+  const [formClass, setFormClass] = useState({ name: '', teacher_name: '', students_count: 0 });
+
   const fetchClasses = async () => {
-    const res = await fetch(`${API_URL}/admin/classes`);
-    setClasses(await res.json());
+    try { const res = await fetch(`${API_URL}/admin/classes`); setClasses(await res.json()); } catch {}
   };
 
   useEffect(() => { fetchClasses(); }, []);
 
-  const [formClass, setFormClass] = useState({ name: '', teacher_name: '', students_count: 0 });
-
-  const handleAddClass = async () => {
-    if(!formClass.name || !formClass.teacher_name) return;
-    await fetch(`${API_URL}/admin/classes`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(formClass)
-    });
-    setFormClass({ name: '', teacher_name: '', students_count: 0 });
+  const handleSave = async () => {
+    if(!formClass.name || !formClass.teacher_name) return alert("Điền đủ thông tin!");
+    const url = isEditing ? `${API_URL}/admin/classes/${isEditing}` : `${API_URL}/admin/classes`;
+    const method = isEditing ? 'PUT' : 'POST';
+    await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(formClass) });
+    resetForm();
     fetchClasses();
   };
 
-  const handleDeleteClass = async (id) => {
+  const handleEdit = (c: any) => {
+    setIsEditing(c.id);
+    setFormClass({ name: c.name, teacher_name: c.teacher_name, students_count: c.students_count || 0 });
+  };
+
+  const handleDelete = async (id: number) => {
     if(confirm("Xoá lớp này?")) {
       await fetch(`${API_URL}/admin/classes/${id}`, { method: 'DELETE' });
       fetchClasses();
     }
   };
 
+  const resetForm = () => { setIsEditing(null); setFormClass({ name: '', teacher_name: '', students_count: 0 }); };
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-in fade-in duration-300">
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-        <h2 className="text-lg font-bold text-gray-900 mb-4">Tạo Lớp Học Mới</h2>
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-lg font-bold text-gray-900">{isEditing ? 'Sửa Lớp Học' : 'Tạo Lớp Học Mới'}</h2>
+          {isEditing && <button onClick={resetForm} className="text-gray-400 hover:text-gray-600"><X size={18}/></button>}
+        </div>
         <div className="space-y-3">
           <input type="text" value={formClass.name} onChange={e=>setFormClass({...formClass, name: e.target.value})} placeholder="Tên Lớp (VD: IELTS Căn bản)" className="w-full border rounded-lg p-2 focus:ring-2 outline-none" />
           <input type="text" value={formClass.teacher_name} onChange={e=>setFormClass({...formClass, teacher_name: e.target.value})} placeholder="Tên Giáo viên phụ trách" className="w-full border rounded-lg p-2 focus:ring-2 outline-none" />
-          <button onClick={handleAddClass} className="w-full py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition">+ Thêm Lớp Này</button>
+          <input type="number" value={formClass.students_count} onChange={e=>setFormClass({...formClass, students_count: parseInt(e.target.value)||0})} placeholder="Sĩ số" className="w-full border rounded-lg p-2 focus:ring-2 outline-none" />
+          <button onClick={handleSave} className="w-full py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition">
+            {isEditing ? <><Check size={18} className="inline mr-1"/> Lưu thay đổi</> : '+ Thêm Lớp Này'}
+          </button>
         </div>
       </div>
 
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 flex-grow">
         <h2 className="text-lg font-bold text-gray-900 mb-4">Danh sách Lớp</h2>
-        <ul className="space-y-3">
+        <ul className="space-y-3 max-h-[500px] overflow-y-auto">
           {classes.length === 0 && <p className="text-gray-400 text-sm">Chưa có lớp nào.</p>}
-          {classes.map((c) => (
+          {classes.map((c: any) => (
             <li key={c.id} className="p-3 border rounded-xl flex justify-between items-center bg-gray-50">
               <div>
                 <p className="font-bold text-purple-700">{c.name}</p>
-                <p className="text-xs text-gray-500">GV: {c.teacher_name}</p>
+                <p className="text-xs text-gray-500">GV: {c.teacher_name} | Sĩ số: {c.students_count || 0}</p>
               </div>
-              <button onClick={() => handleDeleteClass(c.id)} className="text-red-500 bg-red-50 p-1.5 rounded hover:bg-red-100"><Trash2 size={16}/></button>
+              <div className="flex gap-1">
+                <button onClick={() => handleEdit(c)} className="text-blue-500 bg-blue-50 p-1.5 rounded hover:bg-blue-100"><Edit size={16}/></button>
+                <button onClick={() => handleDelete(c.id)} className="text-red-500 bg-red-50 p-1.5 rounded hover:bg-red-100"><Trash2 size={16}/></button>
+              </div>
             </li>
           ))}
         </ul>
@@ -283,6 +296,7 @@ function LessonsTab() {
   const [file, setFile] = useState<File | null>(null);
   const [formLesson, setFormLesson] = useState({ class_id: '', title: '', content: '' });
   const [uploading, setUploading] = useState(false);
+  const [isEditing, setIsEditing] = useState<number | null>(null);
 
   const fetchLessons = async () => {
     try { const res = await fetch(`${API_URL}/admin/lessons`); setLessons(await res.json()); } catch {}
@@ -293,7 +307,7 @@ function LessonsTab() {
 
   useEffect(() => { fetchLessons(); fetchClasses(); }, []);
 
-  const handleAddLesson = async () => {
+  const handleSave = async () => {
     if(!formLesson.class_id || !formLesson.title) return alert("Hãy chọn lớp và nhập tên bài học");
     setUploading(true);
     try {
@@ -302,26 +316,42 @@ function LessonsTab() {
       fd.append("title", formLesson.title);
       fd.append("content", formLesson.content);
       if (file) fd.append("file", file);
-      const res = await fetch(`${API_URL}/admin/lessons`, { method: 'POST', body: fd });
+      const url = isEditing ? `${API_URL}/admin/lessons/${isEditing}` : `${API_URL}/admin/lessons`;
+      const method = isEditing ? 'PUT' : 'POST';
+      const res = await fetch(url, { method, body: fd });
       if (!res.ok) { const e = await res.json(); throw new Error(e.detail || 'Error'); }
-      setFormLesson({ class_id: '', title: '', content: '' });
-      setFile(null);
+      resetForm();
       fetchLessons();
     } catch (err: any) { alert(err.message); }
     finally { setUploading(false); }
   };
 
-  const handleDeleteLesson = async (id: number) => {
+  const handleEdit = (l: any) => {
+    setIsEditing(l.id);
+    setFormLesson({ class_id: String(l.class_id), title: l.title, content: l.content || '' });
+    setFile(null);
+  };
+
+  const handleDelete = async (id: number) => {
     if(confirm("Xóa bài học này?")) {
       await fetch(`${API_URL}/admin/lessons/${id}`, { method: 'DELETE' });
       fetchLessons();
     }
   };
 
+  const resetForm = () => {
+    setIsEditing(null);
+    setFormLesson({ class_id: '', title: '', content: '' });
+    setFile(null);
+  };
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-in fade-in duration-300">
        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-        <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center"><BookOpen className="mr-2 text-orange-600" size={20}/> Thêm Bài Học Mới</h2>
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-lg font-bold text-gray-900 flex items-center"><BookOpen className="mr-2 text-orange-600" size={20}/> {isEditing ? 'Sửa Bài Học' : 'Thêm Bài Học Mới'}</h2>
+          {isEditing && <button onClick={resetForm} className="text-gray-400 hover:text-gray-600"><X size={18}/></button>}
+        </div>
         <div className="space-y-3">
           <select value={formLesson.class_id} onChange={e=>setFormLesson({...formLesson, class_id: e.target.value})} className="w-full border rounded-lg p-2 bg-white outline-none focus:ring-2">
             <option value="">-- Chọn Lớp --</option>
@@ -330,14 +360,14 @@ function LessonsTab() {
           <input type="text" value={formLesson.title} onChange={e=>setFormLesson({...formLesson, title: e.target.value})} placeholder="Tiêu đề bài học" className="w-full border rounded-lg p-2 outline-none focus:ring-2" />
           <textarea value={formLesson.content} onChange={e=>setFormLesson({...formLesson, content: e.target.value})} placeholder="Nội dung tóm tắt..." className="w-full border rounded-lg p-2 outline-none focus:ring-2 h-24" />
           <div className="border-2 border-dashed rounded-xl p-4 text-center hover:border-orange-400 hover:bg-orange-50 transition">
-            <input type="file" className="hidden" id="lesson-file" onChange={e => e.target.files && setFile(e.target.files[0])} />
+            <input type="file" className="hidden" id="lesson-file" onChange={e => { if(e.target.files) setFile(e.target.files[0]); }} />
             <label htmlFor="lesson-file" className="cursor-pointer text-gray-500 flex flex-col items-center text-sm">
               <UploadCloud size={28} className={file ? "text-orange-600" : ""} />
               <span className="mt-1 font-medium">{file ? file.name : "Đính kèm file (tuỳ chọn)"}</span>
             </label>
           </div>
-          <button onClick={handleAddLesson} disabled={uploading} className="w-full py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-50 transition">
-            {uploading ? "Đang tải..." : "+ Thêm Bài Học"}
+          <button onClick={handleSave} disabled={uploading} className="w-full py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-50 transition">
+            {uploading ? "Đang lưu..." : isEditing ? <><Check size={18} className="inline mr-1"/> Lưu thay đổi</> : "+ Thêm Bài Học"}
           </button>
         </div>
       </div>
@@ -351,7 +381,7 @@ function LessonsTab() {
               <div className="flex justify-between items-start">
                 <div className="flex-1">
                   <p className="font-bold text-orange-700">{l.title}</p>
-                  <p className="text-xs text-gray-500">Lớp: {classes.find((c: any) => c.id === l.class_id)?.name || 'N/A'}</p>
+                  <p className="text-xs text-gray-500">Lớp: {l.class_name || classes.find((c: any) => c.id === l.class_id)?.name || 'N/A'}</p>
                   {l.content && <p className="text-xs text-gray-600 mt-1 line-clamp-2">{l.content}</p>}
                   {l.file_name && (
                     <a href={`${API_URL}/admin/lessons/${l.id}/file`} target="_blank" rel="noopener noreferrer"
@@ -360,7 +390,10 @@ function LessonsTab() {
                     </a>
                   )}
                 </div>
-                <button onClick={() => handleDeleteLesson(l.id)} className="text-red-500 bg-red-50 p-1.5 rounded hover:bg-red-100 ml-2"><Trash2 size={16}/></button>
+                <div className="flex gap-1 ml-2">
+                  <button onClick={() => handleEdit(l)} className="text-blue-500 bg-blue-50 p-1.5 rounded hover:bg-blue-100"><Edit size={16}/></button>
+                  <button onClick={() => handleDelete(l.id)} className="text-red-500 bg-red-50 p-1.5 rounded hover:bg-red-100"><Trash2 size={16}/></button>
+                </div>
               </div>
             </li>
           ))}
@@ -374,17 +407,29 @@ function VocabTab() {
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [words, setWords] = useState<any[]>([]);
+  const [totalWords, setTotalWords] = useState(0);
   const [loadingWords, setLoadingWords] = useState(true);
   const [filterLevel, setFilterLevel] = useState('');
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(0);
+  const PAGE_SIZE = 50;
 
-  const fetchWords = async (level = '') => {
+  // Edit / Create single word
+  const [editingWord, setEditingWord] = useState<string | null>(null); // null = not editing, '' = creating new
+  const [formWord, setFormWord] = useState({ word: '', pronunciation: '', meaning: '', level: 'A1', type: 'noun', example: '' });
+  const [savingWord, setSavingWord] = useState(false);
+
+  const fetchWords = async (level = filterLevel, skip = page * PAGE_SIZE, searchQ = search) => {
     setLoadingWords(true);
     try {
-      const url = level ? `${API_URL}/admin/vocab/list?level=${level}&limit=200` : `${API_URL}/admin/vocab/list?limit=200`;
-      const res = await fetch(url);
+      const params = new URLSearchParams({ limit: String(PAGE_SIZE), skip: String(skip) });
+      if (level) params.set('level', level);
+      if (searchQ) params.set('search', searchQ);
+      const res = await fetch(`${API_URL}/admin/vocab/list?${params}`);
       const data = await res.json();
       setWords(data.words || []);
-    } catch { setWords([]); }
+      setTotalWords(data.total || 0);
+    } catch { setWords([]); setTotalWords(0); }
     finally { setLoadingWords(false); }
   };
 
@@ -400,9 +445,8 @@ function VocabTab() {
       const result = await res.json();
       if (!res.ok) throw new Error(result.detail || "Upload failed");
       alert(result.message);
-      if (result.errors?.length > 0) alert(`Cảnh báo: ${result.errors.length} lỗi. Xem console.`);
       setFile(null);
-      fetchWords(filterLevel);
+      fetchWords();
     } catch (err: any) { alert("Lỗi: " + err.message); }
     finally { setUploading(false); }
   };
@@ -411,40 +455,79 @@ function VocabTab() {
     if (!confirm(`Xoá từ "${word}"?`)) return;
     try {
       const res = await fetch(`${API_URL}/admin/vocab/${encodeURIComponent(word)}`, { method: 'DELETE' });
-      if (res.ok) fetchWords(filterLevel);
+      if (res.ok) fetchWords();
       else alert('Lỗi xoá từ');
     } catch { alert('Lỗi kết nối'); }
   };
 
   const handleFilterChange = (level: string) => {
     setFilterLevel(level);
-    fetchWords(level);
+    setPage(0);
+    fetchWords(level, 0, search);
   };
+
+  const handleSearch = () => {
+    setPage(0);
+    fetchWords(filterLevel, 0, search);
+  };
+
+  const handlePageChange = (newPage: number) => {
+    setPage(newPage);
+    fetchWords(filterLevel, newPage * PAGE_SIZE, search);
+  };
+
+  const handleEditWord = (w: any) => {
+    setEditingWord(w.word);
+    setFormWord({ word: w.word, pronunciation: w.pronunciation || '', meaning: w.meaning || '', level: w.level || 'A1', type: w.type || 'noun', example: w.example || '' });
+  };
+
+  const handleNewWord = () => {
+    setEditingWord('');
+    setFormWord({ word: '', pronunciation: '', meaning: '', level: 'A1', type: 'noun', example: '' });
+  };
+
+  const handleSaveWord = async () => {
+    if (!formWord.word) return alert("Nhập từ vựng!");
+    setSavingWord(true);
+    try {
+      const isNew = editingWord === '';
+      const url = isNew ? `${API_URL}/admin/vocab` : `${API_URL}/admin/vocab/${encodeURIComponent(editingWord!)}`;
+      const method = isNew ? 'POST' : 'PUT';
+      const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(formWord) });
+      if (!res.ok) { const e = await res.json(); throw new Error(e.detail || 'Error'); }
+      setEditingWord(null);
+      setFormWord({ word: '', pronunciation: '', meaning: '', level: 'A1', type: 'noun', example: '' });
+      fetchWords();
+    } catch (err: any) { alert(err.message); }
+    finally { setSavingWord(false); }
+  };
+
+  const totalPages = Math.ceil(totalWords / PAGE_SIZE);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
-      {/* Upload Section */}
+      {/* Upload + Stats */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-          <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center"><FileSpreadsheet className="mr-2 text-indigo-600" /> Nhập Nhanh (CSV/Excel)</h2>
+          <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center"><FileSpreadsheet className="mr-2 text-indigo-600" /> Nhập Nhanh (CSV)</h2>
           <p className="text-sm text-gray-500 mb-4">Upload file thêm hàng loạt từ vựng vào Neo4j Graph Database.</p>
           <div className="border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer hover:border-indigo-400 hover:bg-gray-50 transition">
-            <input type="file" accept=".csv, .xlsx" className="hidden" id="file-upload" onChange={(e) => e.target.files && setFile(e.target.files[0]) }/>
+            <input type="file" accept=".csv" className="hidden" id="file-upload" onChange={(e) => e.target.files && setFile(e.target.files[0]) }/>
             <label htmlFor="file-upload" className="cursor-pointer text-gray-500 flex flex-col items-center">
               {file ? <FileSpreadsheet size={40} className="text-indigo-600 mb-2"/> : <UploadCloud size={40} className="mb-2"/>}
-              <span className="font-medium text-gray-700">{file ? file.name : "Click chọn file .csv, .xlsx"}</span>
+              <span className="font-medium text-gray-700">{file ? file.name : "Click chọn file .csv"}</span>
             </label>
           </div>
-          <button onClick={handleUpload} disabled={!file || uploading} className="w-full mt-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition">{uploading ? "Đang import..." : "Bắt đầu Import graph"}</button>
+          <button onClick={handleUpload} disabled={!file || uploading} className="w-full mt-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition">{uploading ? "Đang import..." : "Bắt đầu Import"}</button>
         </div>
 
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-          <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center"><Database className="mr-2 text-indigo-600" /> Thống kê</h2>
-          <div className="text-center py-8">
-            <p className="text-4xl font-bold text-indigo-600">{words.length}</p>
+          <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center"><Database className="mr-2 text-indigo-600" /> Thống kê & Tạo từ</h2>
+          <div className="text-center py-4">
+            <p className="text-4xl font-bold text-indigo-600">{totalWords}</p>
             <p className="text-gray-500 mt-1">từ vựng trong Neo4j</p>
           </div>
-          <div className="flex flex-wrap gap-2 justify-center">
+          <div className="flex flex-wrap gap-2 justify-center mb-4">
             {['', 'A1', 'A2', 'B1', 'B2', 'C1', 'C2'].map(level => (
               <button key={level} onClick={() => handleFilterChange(level)}
                 className={`px-3 py-1 rounded-full text-sm font-medium transition ${filterLevel === level ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
@@ -452,44 +535,89 @@ function VocabTab() {
               </button>
             ))}
           </div>
+          <button onClick={handleNewWord} className="w-full py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition flex items-center justify-center">
+            <Plus size={18} className="mr-1"/> Thêm từ vựng mới
+          </button>
         </div>
       </div>
 
-      {/* Word List */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-lg font-bold text-gray-900 flex items-center"><Database className="mr-2 text-indigo-600" size={20}/> Danh sách Từ Vựng trong Neo4j</h2>
-          <button onClick={() => fetchWords(filterLevel)} className="text-indigo-600 hover:text-indigo-800 text-sm flex items-center"><RefreshCw size={14} className="mr-1"/> Làm mới</button>
-        </div>
-        {loadingWords ? <p className="text-gray-400 text-sm py-4">Đang tải từ Neo4j...</p> : words.length === 0 ? <p className="text-gray-400 text-sm py-4">Chưa có từ vựng nào. Hãy import file CSV.</p> : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse text-sm">
-              <thead>
-                <tr className="border-b border-gray-200 text-gray-500">
-                  <th className="pb-3 font-medium">Từ</th>
-                  <th className="pb-3 font-medium">Phát âm</th>
-                  <th className="pb-3 font-medium">Nghĩa</th>
-                  <th className="pb-3 font-medium">Level</th>
-                  <th className="pb-3 font-medium">Loại từ</th>
-                  <th className="pb-3 font-medium">Ví dụ</th>
-                  <th className="pb-3 font-medium w-10"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {words.map((w: any, i: number) => (
-                  <tr key={i} className="border-b border-gray-50 hover:bg-gray-50">
-                    <td className="py-3 font-semibold text-indigo-700">{w.word}</td>
-                    <td className="py-3 text-gray-500">{w.pronunciation || '-'}</td>
-                    <td className="py-3 text-gray-700">{w.meaning || '-'}</td>
-                    <td className="py-3"><span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-medium">{w.level || '-'}</span></td>
-                    <td className="py-3 text-gray-500">{w.type || '-'}</td>
-                    <td className="py-3 text-gray-500 max-w-[200px] truncate">{w.example || '-'}</td>
-                    <td className="py-3"><button onClick={() => handleDeleteWord(w.word)} className="text-red-400 hover:text-red-600"><Trash2 size={15}/></button></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      {/* Edit / Create Form */}
+      {editingWord !== null && (
+        <div className="bg-white rounded-2xl border border-indigo-200 shadow-sm p-6">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-lg font-bold text-gray-900">{editingWord === '' ? 'Thêm Từ Vựng Mới' : `Sửa: ${editingWord}`}</h2>
+            <button onClick={() => setEditingWord(null)} className="text-gray-400 hover:text-gray-600"><X size={18}/></button>
           </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <input value={formWord.word} onChange={e => setFormWord({...formWord, word: e.target.value})} placeholder="Từ vựng *" className="border rounded-lg p-2 focus:ring-2 outline-none" />
+            <input value={formWord.pronunciation} onChange={e => setFormWord({...formWord, pronunciation: e.target.value})} placeholder="Phát âm" className="border rounded-lg p-2 focus:ring-2 outline-none" />
+            <input value={formWord.meaning} onChange={e => setFormWord({...formWord, meaning: e.target.value})} placeholder="Nghĩa tiếng Việt" className="border rounded-lg p-2 focus:ring-2 outline-none" />
+            <select value={formWord.level} onChange={e => setFormWord({...formWord, level: e.target.value})} className="border rounded-lg p-2 bg-white outline-none">
+              {['A1','A2','B1','B2','C1','C2'].map(l => <option key={l} value={l}>{l}</option>)}
+            </select>
+            <select value={formWord.type} onChange={e => setFormWord({...formWord, type: e.target.value})} className="border rounded-lg p-2 bg-white outline-none">
+              {['noun','verb','adjective','adverb','preposition','conjunction','pronoun','interjection','phrase'].map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+            <input value={formWord.example} onChange={e => setFormWord({...formWord, example: e.target.value})} placeholder="Ví dụ" className="border rounded-lg p-2 focus:ring-2 outline-none" />
+          </div>
+          <button onClick={handleSaveWord} disabled={savingWord} className="mt-4 px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition">
+            {savingWord ? 'Đang lưu...' : <><Check size={18} className="inline mr-1"/> Lưu</>}
+          </button>
+        </div>
+      )}
+
+      {/* Word List with search + pagination */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-3">
+          <h2 className="text-lg font-bold text-gray-900 flex items-center"><Database className="mr-2 text-indigo-600" size={20}/> Danh sách Từ Vựng</h2>
+          <div className="flex gap-2">
+            <input value={search} onChange={e => setSearch(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSearch()} placeholder="Tìm từ..." className="border rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-2 w-48" />
+            <button onClick={handleSearch} className="px-3 py-1.5 bg-indigo-100 text-indigo-700 rounded-lg text-sm hover:bg-indigo-200">Tìm</button>
+            <button onClick={() => fetchWords()} className="text-indigo-600 hover:text-indigo-800 text-sm flex items-center"><RefreshCw size={14} className="mr-1"/> Làm mới</button>
+          </div>
+        </div>
+        {loadingWords ? <p className="text-gray-400 text-sm py-4">Đang tải từ Neo4j...</p> : words.length === 0 ? <p className="text-gray-400 text-sm py-4">Không có từ vựng nào.</p> : (
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse text-sm">
+                <thead>
+                  <tr className="border-b border-gray-200 text-gray-500">
+                    <th className="pb-3 font-medium">Từ</th>
+                    <th className="pb-3 font-medium">Phát âm</th>
+                    <th className="pb-3 font-medium">Nghĩa</th>
+                    <th className="pb-3 font-medium">Level</th>
+                    <th className="pb-3 font-medium">Loại từ</th>
+                    <th className="pb-3 font-medium">Ví dụ</th>
+                    <th className="pb-3 font-medium w-20"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {words.map((w: any, i: number) => (
+                    <tr key={i} className="border-b border-gray-50 hover:bg-gray-50">
+                      <td className="py-3 font-semibold text-indigo-700">{w.word}</td>
+                      <td className="py-3 text-gray-500">{w.pronunciation || '-'}</td>
+                      <td className="py-3 text-gray-700">{w.meaning || '-'}</td>
+                      <td className="py-3"><span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-medium">{w.level || '-'}</span></td>
+                      <td className="py-3 text-gray-500">{w.type || '-'}</td>
+                      <td className="py-3 text-gray-500 max-w-[200px] truncate">{w.example || '-'}</td>
+                      <td className="py-3 flex gap-1">
+                        <button onClick={() => handleEditWord(w)} className="text-blue-400 hover:text-blue-600"><Edit size={15}/></button>
+                        <button onClick={() => handleDeleteWord(w.word)} className="text-red-400 hover:text-red-600"><Trash2 size={15}/></button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {/* Pagination */}
+            <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-100">
+              <p className="text-sm text-gray-500">Trang {page + 1} / {totalPages || 1} ({totalWords} từ)</p>
+              <div className="flex gap-2">
+                <button onClick={() => handlePageChange(page - 1)} disabled={page === 0} className="px-3 py-1 rounded-lg text-sm border disabled:opacity-30 hover:bg-gray-100">Trước</button>
+                <button onClick={() => handlePageChange(page + 1)} disabled={page + 1 >= totalPages} className="px-3 py-1 rounded-lg text-sm border disabled:opacity-30 hover:bg-gray-100">Sau</button>
+              </div>
+            </div>
+          </>
         )}
       </div>
     </div>
@@ -503,6 +631,7 @@ function GrammarTab() {
   const [description, setDescription] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
+  const [isEditing, setIsEditing] = useState<number | null>(null);
 
   const fetchRules = async () => {
     setLoading(true);
@@ -512,7 +641,7 @@ function GrammarTab() {
 
   useEffect(() => { fetchRules(); }, []);
 
-  const handleAdd = async () => {
+  const handleSave = async () => {
     if (!name) return alert("Nhập tên cấu trúc ngữ pháp");
     setSaving(true);
     try {
@@ -520,18 +649,34 @@ function GrammarTab() {
       fd.append("name", name);
       fd.append("description", description);
       if (file) fd.append("file", file);
-      const res = await fetch(`${API_URL}/admin/grammar`, { method: 'POST', body: fd });
+      const url = isEditing ? `${API_URL}/admin/grammar/${isEditing}` : `${API_URL}/admin/grammar`;
+      const method = isEditing ? 'PUT' : 'POST';
+      const res = await fetch(url, { method, body: fd });
       if (!res.ok) throw new Error((await res.json()).detail || 'Error');
-      setName(''); setDescription(''); setFile(null);
+      resetForm();
       fetchRules();
     } catch (err: any) { alert(err.message); }
     finally { setSaving(false); }
+  };
+
+  const handleEdit = (r: any) => {
+    setIsEditing(r.id);
+    setName(r.name);
+    setDescription(r.description || '');
+    setFile(null);
   };
 
   const handleDelete = async (id: number) => {
     if (!confirm("Xoá cấu trúc ngữ pháp này?")) return;
     await fetch(`${API_URL}/admin/grammar/${id}`, { method: 'DELETE' });
     fetchRules();
+  };
+
+  const resetForm = () => {
+    setIsEditing(null);
+    setName('');
+    setDescription('');
+    setFile(null);
   };
 
   return (
@@ -543,19 +688,22 @@ function GrammarTab() {
        
        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
-             <h3 className="font-bold mb-4 flex items-center"><Plus className="mr-2 text-teal-600" size={18}/> Thêm Cấu Trúc Mới</h3>
+             <div className="flex justify-between items-center mb-4">
+               <h3 className="font-bold flex items-center"><Plus className="mr-2 text-teal-600" size={18}/> {isEditing ? 'Sửa Cấu Trúc' : 'Thêm Cấu Trúc Mới'}</h3>
+               {isEditing && <button onClick={resetForm} className="text-gray-400 hover:text-gray-600"><X size={18}/></button>}
+             </div>
              <div className="space-y-4">
                 <input value={name} onChange={e => setName(e.target.value)} className="w-full border p-2 rounded-lg focus:ring-2 outline-none" placeholder="Tên cấu trúc (VD: Present Perfect)" />
                 <textarea value={description} onChange={e => setDescription(e.target.value)} className="w-full border p-2 rounded-lg h-24 focus:ring-2 outline-none" placeholder="Mô tả / Công thức..." />
                 <div className="border-2 border-dashed rounded-xl p-4 text-center hover:border-teal-400 hover:bg-teal-50 transition">
-                  <input type="file" className="hidden" id="grammar-file" onChange={e => e.target.files && setFile(e.target.files[0])} />
+                  <input type="file" className="hidden" id="grammar-file" onChange={e => { if(e.target.files) setFile(e.target.files[0]); }} />
                   <label htmlFor="grammar-file" className="cursor-pointer text-gray-500 flex flex-col items-center text-sm">
                     <UploadCloud size={28} className={file ? "text-teal-600" : ""} />
                     <span className="mt-1 font-medium">{file ? file.name : "Đính kèm file (tuỳ chọn)"}</span>
                   </label>
                 </div>
-                <button onClick={handleAdd} disabled={saving} className="w-full bg-teal-600 text-white py-2 rounded-lg hover:bg-teal-700 disabled:opacity-50 transition">
-                  {saving ? "Đang lưu..." : "Lưu Cấu Trúc"}
+                <button onClick={handleSave} disabled={saving} className="w-full bg-teal-600 text-white py-2 rounded-lg hover:bg-teal-700 disabled:opacity-50 transition">
+                  {saving ? "Đang lưu..." : isEditing ? <><Check size={18} className="inline mr-1"/> Lưu thay đổi</> : "Lưu Cấu Trúc"}
                 </button>
              </div>
           </div>
@@ -577,7 +725,10 @@ function GrammarTab() {
                              </a>
                            )}
                          </div>
-                         <button onClick={() => handleDelete(r.id)} className="text-red-500 bg-red-50 p-1.5 rounded hover:bg-red-100 ml-2"><Trash2 size={16}/></button>
+                         <div className="flex gap-1 ml-2">
+                           <button onClick={() => handleEdit(r)} className="text-blue-500 bg-blue-50 p-1.5 rounded hover:bg-blue-100"><Edit size={16}/></button>
+                           <button onClick={() => handleDelete(r.id)} className="text-red-500 bg-red-50 p-1.5 rounded hover:bg-red-100"><Trash2 size={16}/></button>
+                         </div>
                        </div>
                     </li>
                   ))}

@@ -192,6 +192,28 @@ def delete_lesson(lesson_id: int):
     conn.close()
     return {"message": "Lesson deleted"}
 
+@router.put("/lessons/{lesson_id}")
+async def update_lesson(
+    lesson_id: int,
+    class_id: int = Form(...),
+    title: str = Form(...),
+    content: str = Form(""),
+    file: Optional[UploadFile] = File(None)
+):
+    conn = get_db()
+    cursor = conn.cursor()
+    if file and file.filename:
+        file_name = file.filename
+        file_data = await file.read()
+        cursor.execute("UPDATE lessons SET class_id=?, title=?, content=?, file_name=?, file_data=? WHERE id=?",
+                       (class_id, title, content, file_name, file_data, lesson_id))
+    else:
+        cursor.execute("UPDATE lessons SET class_id=?, title=?, content=? WHERE id=?",
+                       (class_id, title, content, lesson_id))
+    conn.commit()
+    conn.close()
+    return {"message": "Lesson updated"}
+
 @router.post("/vocab/import")
 async def import_vocab(file: UploadFile = File(...)):
     if not file.filename.endswith('.csv'):
@@ -259,18 +281,34 @@ async def import_vocab(file: UploadFile = File(...)):
 # --- VOCAB LIST (from Neo4j) ---
 
 @router.get("/vocab/list")
-def list_vocab(level: str = "", limit: int = 100):
-    """List vocabulary words stored in Neo4j."""
+def list_vocab(level: str = "", limit: int = 50, skip: int = 0, search: str = ""):
+    """List vocabulary words stored in Neo4j with pagination."""
     g = graph_service.get_graph()
     if not g:
-        return {"words": [], "error": "Graph DB not connected"}
+        return {"words": [], "total": 0, "error": "Graph DB not connected"}
     try:
+        # Count total
         if level:
-            query = "MATCH (w:Word {level: $level}) RETURN w ORDER BY w.text LIMIT $limit"
-            results = g.query(query, params={"level": level, "limit": limit})
+            count_q = "MATCH (w:Word {level: $level}) RETURN count(w) as total"
+            count_res = g.query(count_q, params={"level": level})
+        elif search:
+            count_q = "MATCH (w:Word) WHERE toLower(w.text) CONTAINS toLower($search) OR toLower(w.meaning_vn) CONTAINS toLower($search) RETURN count(w) as total"
+            count_res = g.query(count_q, params={"search": search})
         else:
-            query = "MATCH (w:Word) RETURN w ORDER BY w.text LIMIT $limit"
-            results = g.query(query, params={"limit": limit})
+            count_q = "MATCH (w:Word) RETURN count(w) as total"
+            count_res = g.query(count_q)
+        total = count_res[0]["total"] if count_res else 0
+
+        # Fetch page
+        if level:
+            query = "MATCH (w:Word {level: $level}) RETURN w ORDER BY w.text SKIP $skip LIMIT $limit"
+            results = g.query(query, params={"level": level, "skip": skip, "limit": limit})
+        elif search:
+            query = "MATCH (w:Word) WHERE toLower(w.text) CONTAINS toLower($search) OR toLower(w.meaning_vn) CONTAINS toLower($search) RETURN w ORDER BY w.text SKIP $skip LIMIT $limit"
+            results = g.query(query, params={"search": search, "skip": skip, "limit": limit})
+        else:
+            query = "MATCH (w:Word) RETURN w ORDER BY w.text SKIP $skip LIMIT $limit"
+            results = g.query(query, params={"skip": skip, "limit": limit})
         words = []
         for r in results:
             w = r.get("w", {})
@@ -282,9 +320,56 @@ def list_vocab(level: str = "", limit: int = 100):
                 "type": w.get("type", ""),
                 "example": w.get("example", ""),
             })
-        return {"words": words, "total": len(words)}
+        return {"words": words, "total": total}
     except Exception as e:
-        return {"words": [], "error": str(e)}
+        return {"words": [], "total": 0, "error": str(e)}
+
+class VocabUpdate(BaseModel):
+    word: str
+    pronunciation: str = ""
+    meaning: str = ""
+    level: str = "A1"
+    type: str = "noun"
+    example: str = ""
+
+@router.post("/vocab")
+def create_single_vocab(data: VocabUpdate):
+    """Create a single vocabulary word in Neo4j."""
+    res = graph_service.create_vocab_node({
+        "word": data.word, "pronunciation": data.pronunciation,
+        "meaning": data.meaning, "level": data.level,
+        "type": data.type, "example": data.example
+    })
+    if res.get("status") == "success":
+        return {"message": f"Created '{data.word}'"}
+    raise HTTPException(status_code=500, detail=res.get("message", "Failed"))
+
+@router.put("/vocab/{word}")
+def update_vocab(word: str, data: VocabUpdate):
+    """Update an existing vocabulary word in Neo4j."""
+    g = graph_service.get_graph()
+    if not g:
+        raise HTTPException(status_code=500, detail="Graph DB not connected")
+    try:
+        query = """
+        MATCH (w:Word {text: $old_word})
+        SET w.text = $word, w.pronunciation = $pronunciation,
+            w.meaning_vn = $meaning, w.level = $level,
+            w.type = $type, w.example = $example
+        RETURN w
+        """
+        result = g.query(query, params={
+            "old_word": word, "word": data.word,
+            "pronunciation": data.pronunciation, "meaning": data.meaning,
+            "level": data.level, "type": data.type, "example": data.example
+        })
+        if not result:
+            raise HTTPException(status_code=404, detail=f"Word '{word}' not found")
+        return {"message": f"Updated '{word}'"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.delete("/vocab/{word}")
 def delete_vocab(word: str):
@@ -345,6 +430,27 @@ def delete_grammar_rule(rule_id: int):
     conn.commit()
     conn.close()
     return {"message": "Grammar rule deleted"}
+
+@router.put("/grammar/{rule_id}")
+async def update_grammar_rule(
+    rule_id: int,
+    name: str = Form(...),
+    description: str = Form(""),
+    file: Optional[UploadFile] = File(None)
+):
+    conn = get_db()
+    cursor = conn.cursor()
+    if file and file.filename:
+        file_name = file.filename
+        file_data = await file.read()
+        cursor.execute("UPDATE grammar_rules SET name=?, description=?, file_name=?, file_data=? WHERE id=?",
+                       (name, description, file_name, file_data, rule_id))
+    else:
+        cursor.execute("UPDATE grammar_rules SET name=?, description=? WHERE id=?",
+                       (name, description, rule_id))
+    conn.commit()
+    conn.close()
+    return {"message": "Grammar rule updated"}
 
 
 # --- SETTINGS ---
