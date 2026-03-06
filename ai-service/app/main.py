@@ -38,18 +38,24 @@ app.include_router(auth.router)
 
 @app.get("/")
 def read_root():
+    return {
+        "status": "AI Service Running", 
+        "message": "Welcome to EAM Project"
+    }
+
+@app.get("/health/graph")
+def health_graph():
     # Check connection status dynamically
     try:
         g = graph_service.get_graph()
         is_connected = g is not None
         error_msg = getattr(graph_service, "last_error", None)
         return {
-            "status": "AI Service Running", 
             "graph_connected": is_connected,
             "error": error_msg if not is_connected else None
         }
     except Exception as e:
-        return {"status": "AI Service Running", "graph_connected": False, "error": str(e)}
+        return {"graph_connected": False, "error": str(e)}
 
 @app.post("/analyze-text")
 def analyze_text(request: TextRequest):
