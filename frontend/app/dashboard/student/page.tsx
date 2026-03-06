@@ -21,7 +21,7 @@ export default function StudentDashboard() {
     setSubmitted(false);
     
     try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://iedu-ksk7.onrender.com";
       
       const [vocabRes, quizRes] = await Promise.all([
         fetch(`${API_URL}/vocabulary/extract`, { 
