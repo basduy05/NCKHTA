@@ -3,7 +3,7 @@ import React, { Suspense } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import Image from "next/image";
-import { BookOpen, Users, LayoutDashboard, Component, Database, GraduationCap, BookText, FileSearch, LogOut, Settings, ClipboardList, Sparkles } from "lucide-react";
+import { BookOpen, Users, LayoutDashboard, Component, Database, GraduationCap, BookText, FileSearch, LogOut, Settings, ClipboardList, Sparkles, Search, BookMarked } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 
 function DashboardSidebar({ user, logout }: { user: any, logout: any }) {
@@ -41,6 +41,8 @@ function DashboardSidebar({ user, logout }: { user: any, logout: any }) {
       { name: "Tổng quan", href: "/dashboard/student?tab=overview", icon: LayoutDashboard, id: "overview" },
       { name: "Lớp học của tôi", href: "/dashboard/student?tab=classes", icon: GraduationCap, id: "classes" },
       { name: "Bài tập & Kiểm tra", href: "/dashboard/student?tab=assignments", icon: ClipboardList, id: "assignments" },
+      { name: "Tra từ điển", href: "/dashboard/student?tab=dictionary", icon: Search, id: "dictionary" },
+      { name: "Từ vựng đã lưu", href: "/dashboard/student?tab=vocabulary", icon: BookMarked, id: "vocabulary" },
       { name: "Học với AI", href: "/dashboard/student?tab=ai-tools", icon: Sparkles, id: "ai-tools" },
       { name: "Kết quả học tập", href: "/dashboard/student?tab=scores", icon: Component, id: "scores" },
     ];

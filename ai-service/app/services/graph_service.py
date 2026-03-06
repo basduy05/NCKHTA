@@ -65,7 +65,7 @@ def reconnect_graph():
 def extract_entities_and_relations(text: str) -> Dict[str, list]:
     g = get_graph()
     if not g:
-        return {"status": "skipped", "message": "Graph DB not connected"}       
+        return {"status": "skipped", "message": "Graph DB not connected"}
     topic_name = "User Learning Session"
     if "English" in text: topic_name = "English Grammar"
     cypher_query = """
@@ -75,40 +75,168 @@ def extract_entities_and_relations(text: str) -> Dict[str, list]:
     RETURN t, c
     """
     try:
-        g.query(cypher_query, params={"topic": topic_name, "summary": text[:20]})
+        g.query(cypher_query, params={"topic": topic_name, "summary": text[:200]})
         return {"status": "success"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
-def get_knowledge_subgraph(topic: str) -> Dict:
-    g = get_graph()
-    if not g:
-        return {"nodes": [], "links": [], "message": "Graph DB not connected"}  
-    try:
-        query = "RETURN 1"
-        g.query(query)
-        return {"nodes": [], "links": []}
-    except Exception as e:
-        return {"nodes": [], "links": []}
 
-def create_vocab_node(word_data: Dict):
+def save_word_to_graph(word_data: Dict) -> Dict:
+    """Save a word and its relationships to Neo4j knowledge graph."""
     g = get_graph()
     if not g:
         return {"status": "skipped", "message": "Graph DB not connected"}
-        
+
+    word = word_data.get("word", "").lower().strip()
+    if not word:
+        return {"status": "error", "message": "No word provided"}
+
     query = """
     MERGE (w:Word {text: $word})
-    SET w.pronunciation = $pronunciation,
-        w.meaning_vn = $meaning,
+    SET w.phonetic = $phonetic,
+        w.pos = $pos,
+        w.meaning_vn = $meaning_vn,
+        w.meaning_en = $meaning_en,
+        w.example = $example,
         w.level = $level,
-        w.type = $type,
-        w.example = $example
+        w.updated_at = datetime()
+
+    WITH w
+    MERGE (lvl:Level {name: $level})
+    MERGE (w)-[:HAS_LEVEL]->(lvl)
+
+    WITH w
+    FOREACH (syn IN $synonyms |
+        MERGE (s:Word {text: syn})
+        MERGE (w)-[:SYNONYM]->(s)
+    )
+
+    WITH w
+    FOREACH (ant IN $antonyms |
+        MERGE (a:Word {text: ant})
+        MERGE (w)-[:ANTONYM]->(a)
+    )
+
     RETURN w
     """
     try:
-        g.query(query, params=word_data)
+        synonyms = word_data.get("synonyms", [])
+        antonyms = word_data.get("antonyms", [])
+        if isinstance(synonyms, list) and len(synonyms) > 0 and isinstance(synonyms[0], list):
+            synonyms = [s for sub in synonyms for s in sub]
+        if isinstance(antonyms, list) and len(antonyms) > 0 and isinstance(antonyms[0], list):
+            antonyms = [a for sub in antonyms for a in sub]
+
+        g.query(query, params={
+            "word": word,
+            "phonetic": word_data.get("phonetic", word_data.get("phonetic_uk", "")),
+            "pos": word_data.get("pos", ""),
+            "meaning_vn": word_data.get("meaning_vn", word_data.get("definition_vn", "")),
+            "meaning_en": word_data.get("meaning_en", word_data.get("definition_en", "")),
+            "example": word_data.get("example", ""),
+            "level": word_data.get("level", "B1"),
+            "synonyms": [s.lower().strip() for s in synonyms[:5] if isinstance(s, str)],
+            "antonyms": [a.lower().strip() for a in antonyms[:3] if isinstance(a, str)],
+        })
         return {"status": "success"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
+
+
+def get_knowledge_subgraph(topic: str = "all", limit: int = 100) -> Dict:
+    """Get vocabulary knowledge graph for visualization."""
+    g = get_graph()
+    if not g:
+        return {"nodes": [], "links": [], "message": "Graph DB not connected"}
+    try:
+        if topic and topic != "all":
+            query = """
+            MATCH (w:Word)
+            WHERE toLower(w.text) CONTAINS toLower($topic)
+               OR toLower(w.meaning_vn) CONTAINS toLower($topic)
+            WITH w LIMIT $limit
+            OPTIONAL MATCH (w)-[r]-(related)
+            RETURN w, type(r) as rel_type, related, labels(related) as related_labels
+            """
+            results = g.query(query, params={"topic": topic, "limit": limit})
+        else:
+            query = """
+            MATCH (w:Word)
+            WITH w ORDER BY w.updated_at DESC LIMIT $limit
+            OPTIONAL MATCH (w)-[r]-(related)
+            RETURN w, type(r) as rel_type, related, labels(related) as related_labels
+            """
+            results = g.query(query, params={"limit": limit})
+
+        nodes = {}
+        links = []
+        for record in results:
+            w = record.get("w")
+            if w:
+                wid = w.get("text", "")
+                if wid and wid not in nodes:
+                    nodes[wid] = {
+                        "id": wid,
+                        "label": wid,
+                        "type": "Word",
+                        "level": w.get("level", ""),
+                        "meaning_vn": w.get("meaning_vn", ""),
+                        "pos": w.get("pos", ""),
+                    }
+            related = record.get("related")
+            rel_type = record.get("rel_type", "RELATED")
+            related_labels = record.get("related_labels", [])
+            if related and w:
+                rid = related.get("text") or related.get("name") or ""
+                if rid:
+                    rtype = related_labels[0] if related_labels else "Word"
+                    if rid not in nodes:
+                        nodes[rid] = {
+                            "id": rid,
+                            "label": rid,
+                            "type": rtype,
+                            "level": related.get("level", ""),
+                            "meaning_vn": related.get("meaning_vn", ""),
+                        }
+                    links.append({
+                        "source": w.get("text", ""),
+                        "target": rid,
+                        "type": rel_type,
+                    })
+
+        return {"nodes": list(nodes.values()), "links": links}
+    except Exception as e:
+        print(f"get_knowledge_subgraph error: {e}")
+        return {"nodes": [], "links": [], "error": str(e)}
+
+
+def get_word_connections(word: str) -> Dict:
+    """Get all connections for a specific word."""
+    g = get_graph()
+    if not g:
+        return {"word": word, "connections": [], "message": "Graph DB not connected"}
+    try:
+        query = """
+        MATCH (w:Word {text: $word})-[r]-(related)
+        RETURN type(r) as relation, related.text as related_word,
+               related.meaning_vn as meaning, labels(related) as labels
+        """
+        results = g.query(query, params={"word": word.lower().strip()})
+        connections = []
+        for record in results:
+            connections.append({
+                "relation": record.get("relation", ""),
+                "word": record.get("related_word", ""),
+                "meaning": record.get("meaning", ""),
+                "type": record.get("labels", [""])[0] if record.get("labels") else "",
+            })
+        return {"word": word, "connections": connections}
+    except Exception as e:
+        return {"word": word, "connections": [], "error": str(e)}
+
+
+def create_vocab_node(word_data: Dict):
+    """Legacy function - delegates to save_word_to_graph."""
+    return save_word_to_graph(word_data)
 
 

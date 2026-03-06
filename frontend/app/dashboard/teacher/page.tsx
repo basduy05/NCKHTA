@@ -5,7 +5,8 @@ import { useAuth } from "../../context/AuthContext";
 import {
   Users, BookOpen, Plus, Edit, Trash2, GraduationCap, X, Check,
   FileText, Upload, Download, ClipboardList, Sparkles, Brain,
-  BarChart3, UserPlus, UserMinus, ChevronDown, ChevronUp, Eye
+  BarChart3, UserPlus, UserMinus, ChevronDown, ChevronUp, Eye,
+  Search, Volume2, ArrowRight, Bookmark, Network
 } from "lucide-react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://iedu-ksk7.onrender.com";
@@ -692,7 +693,17 @@ function AIToolsTab({ token }: { token: string | null }) {
   const [loading, setLoading] = useState(false);
   const [vocabResult, setVocabResult] = useState<any[]>([]);
   const [quizResult, setQuizResult] = useState<any[]>([]);
-  const [activeAI, setActiveAI] = useState<"vocab" | "quiz">("vocab");
+  const [activeAI, setActiveAI] = useState<"vocab" | "quiz" | "dict" | "graph">("vocab");
+
+  // Dictionary state
+  const [dictWord, setDictWord] = useState("");
+  const [dictResult, setDictResult] = useState<any>(null);
+  const [dictLoading, setDictLoading] = useState(false);
+
+  // Knowledge graph state
+  const [graphData, setGraphData] = useState<any>(null);
+  const [graphLoading, setGraphLoading] = useState(false);
+  const [graphTopic, setGraphTopic] = useState("all");
 
   const handleExtractVocab = async () => {
     if (!text.trim()) return;
@@ -729,82 +740,296 @@ function AIToolsTab({ token }: { token: string | null }) {
     finally { setLoading(false); }
   };
 
+  const handleDictLookup = async () => {
+    if (!dictWord.trim()) return;
+    setDictLoading(true); setDictResult(null);
+    try {
+      const res = await fetch(`${API_URL}/teacher/dictionary/lookup`, {
+        method: "POST",
+        headers: { ...getAuthHeader(token), "Content-Type": "application/json" },
+        body: JSON.stringify({ word: dictWord.trim() }),
+      });
+      if (res.ok) setDictResult(await res.json());
+      else {
+        const err = await res.json().catch(() => ({}));
+        alert(err.detail || "Lỗi tra từ điển");
+      }
+    } catch (e) { console.error(e); alert("Lỗi kết nối"); }
+    finally { setDictLoading(false); }
+  };
+
+  const handleLoadGraph = async () => {
+    setGraphLoading(true); setGraphData(null);
+    try {
+      const res = await fetch(`${API_URL}/teacher/knowledge-graph?topic=${encodeURIComponent(graphTopic)}`, {
+        headers: getAuthHeader(token)
+      });
+      if (res.ok) setGraphData(await res.json());
+    } catch (e) { console.error(e); }
+    finally { setGraphLoading(false); }
+  };
+
+  const speak = (text: string, lang: string = "en-GB") => {
+    if (typeof window !== "undefined" && window.speechSynthesis) {
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = lang;
+      u.rate = 0.85;
+      window.speechSynthesis.speak(u);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="bg-gradient-to-r from-amber-500 to-orange-500 rounded-2xl p-6 text-white">
         <h2 className="text-xl font-bold flex items-center gap-2"><Sparkles size={24} /> Công cụ AI cho Giáo viên</h2>
-        <p className="text-amber-100 mt-1">Dán văn bản tiếng Anh để AI trích xuất từ vựng hoặc tạo câu hỏi trắc nghiệm.</p>
+        <p className="text-amber-100 mt-1">Trích xuất từ vựng, tạo quiz, tra từ điển, và xem đồ thị tri thức.</p>
       </div>
 
-      <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
-        <textarea value={text} onChange={e => setText(e.target.value)} rows={6}
-          placeholder="Dán đoạn văn, bài báo, hoặc nội dung bài học tiếng Anh vào đây..."
-          className="w-full border rounded-xl p-4 focus:ring-2 focus:ring-indigo-500 outline-none resize-none text-gray-700" />
-        <div className="flex gap-3 mt-4">
-          <button onClick={() => { setActiveAI("vocab"); handleExtractVocab(); }} disabled={loading || !text.trim()}
-            className="flex items-center gap-2 px-5 py-2.5 bg-purple-600 text-white rounded-xl hover:bg-purple-700 disabled:opacity-50">
-            <BookOpen size={18} /> {loading && activeAI === "vocab" ? "Đang xử lý..." : "Trích xuất Từ vựng"}
-          </button>
-          <button onClick={() => { setActiveAI("quiz"); handleGenerateQuiz(); }} disabled={loading || !text.trim()}
-            className="flex items-center gap-2 px-5 py-2.5 bg-green-600 text-white rounded-xl hover:bg-green-700 disabled:opacity-50">
-            <Brain size={18} /> {loading && activeAI === "quiz" ? "Đang tạo..." : "Tạo Quiz"}
-          </button>
-        </div>
+      {/* Tool tabs */}
+      <div className="flex gap-2 flex-wrap">
+        {[
+          { id: "vocab", label: "Trích xuất & Quiz", icon: BookOpen, color: "purple" },
+          { id: "dict", label: "Tra từ điển", icon: Search, color: "blue" },
+          { id: "graph", label: "Đồ thị tri thức", icon: Network, color: "cyan" },
+        ].map((tab) => {
+          const colors: Record<string, string> = { purple: "bg-purple-600", blue: "bg-blue-600", cyan: "bg-cyan-600" };
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveAI(tab.id as any)}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium transition ${activeAI === tab.id ? `${colors[tab.color]} text-white shadow-md` : "bg-white text-gray-600 border border-gray-200 hover:bg-gray-50"}`}
+            >
+              <tab.icon size={18} /> {tab.label}
+            </button>
+          );
+        })}
       </div>
 
-      {/* Vocabulary results */}
-      {vocabResult.length > 0 && (
-        <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
-          <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
-            <BookOpen size={20} className="text-purple-600" /> Từ vựng trích xuất ({vocabResult.length} từ)
-          </h3>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead>
-                <tr className="border-b border-gray-200 text-gray-500">
-                  <th className="pb-3 font-medium">Từ</th>
-                  <th className="pb-3 font-medium">Phiên âm</th>
-                  <th className="pb-3 font-medium">Loại từ</th>
-                  <th className="pb-3 font-medium">Nghĩa</th>
-                  <th className="pb-3 font-medium">Định nghĩa EN</th>
-                </tr>
-              </thead>
-              <tbody>
-                {vocabResult.map((w: any, i: number) => (
-                  <tr key={i} className="border-b border-gray-50 hover:bg-gray-50">
-                    <td className="py-3 font-bold text-indigo-700">{w.word}</td>
-                    <td className="py-3 text-gray-500 font-mono text-xs">{w.phonetic || w.phon || ""}</td>
-                    <td className="py-3 text-gray-500">{w.part_of_speech || w.type || ""}</td>
-                    <td className="py-3">{w.vietnamese_meaning || w.meaning || ""}</td>
-                    <td className="py-3 text-gray-600">{w.english_definition || w.definition || ""}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      {/* Vocab/Quiz tool */}
+      {(activeAI === "vocab" || activeAI === "quiz") && (
+        <>
+          <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
+            <textarea value={text} onChange={e => setText(e.target.value)} rows={6}
+              placeholder="Dán đoạn văn, bài báo, hoặc nội dung bài học tiếng Anh vào đây..."
+              className="w-full border rounded-xl p-4 focus:ring-2 focus:ring-indigo-500 outline-none resize-none text-gray-700" />
+            <div className="flex gap-3 mt-4">
+              <button onClick={() => { setActiveAI("vocab"); handleExtractVocab(); }} disabled={loading || !text.trim()}
+                className="flex items-center gap-2 px-5 py-2.5 bg-purple-600 text-white rounded-xl hover:bg-purple-700 disabled:opacity-50">
+                <BookOpen size={18} /> {loading && activeAI === "vocab" ? "Đang xử lý..." : "Trích xuất Từ vựng"}
+              </button>
+              <button onClick={() => { setActiveAI("quiz"); handleGenerateQuiz(); }} disabled={loading || !text.trim()}
+                className="flex items-center gap-2 px-5 py-2.5 bg-green-600 text-white rounded-xl hover:bg-green-700 disabled:opacity-50">
+                <Brain size={18} /> {loading && activeAI === "quiz" ? "Đang tạo..." : "Tạo Quiz"}
+              </button>
+            </div>
           </div>
+
+          {/* Vocabulary results */}
+          {vocabResult.length > 0 && (
+            <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
+              <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
+                <BookOpen size={20} className="text-purple-600" /> Từ vựng trích xuất ({vocabResult.length} từ)
+              </h3>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-200 text-gray-500">
+                      <th className="pb-3 font-medium">Từ</th>
+                      <th className="pb-3 font-medium">Phiên âm</th>
+                      <th className="pb-3 font-medium">Loại từ</th>
+                      <th className="pb-3 font-medium">Nghĩa tiếng Việt</th>
+                      <th className="pb-3 font-medium">Nghĩa tiếng Anh</th>
+                      <th className="pb-3 font-medium">Level</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {vocabResult.map((w: any, i: number) => (
+                      <tr key={i} className="border-b border-gray-50 hover:bg-gray-50">
+                        <td className="py-3 font-bold text-indigo-700">
+                          <div className="flex items-center gap-1">
+                            {w.word}
+                            <button onClick={() => speak(w.word)} className="text-gray-400 hover:text-blue-600"><Volume2 size={14} /></button>
+                          </div>
+                        </td>
+                        <td className="py-3 text-gray-500 font-mono text-xs">{w.phonetic || w.phon || ""}</td>
+                        <td className="py-3"><span className="text-xs bg-purple-50 text-purple-600 px-2 py-0.5 rounded">{w.pos || w.part_of_speech || w.type || ""}</span></td>
+                        <td className="py-3 font-medium">{w.meaning_vn || w.vietnamese_meaning || w.meaning || ""}</td>
+                        <td className="py-3 text-gray-600">{w.meaning_en || w.english_definition || w.definition || ""}</td>
+                        <td className="py-3"><span className="text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded font-bold">{w.level || ""}</span></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* Quiz results */}
+          {quizResult.length > 0 && (
+            <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
+              <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
+                <Brain size={20} className="text-green-600" /> Quiz đã tạo ({quizResult.length} câu)
+              </h3>
+              <div className="space-y-3">
+                {quizResult.map((q: any, i: number) => {
+                  const correctAns = q.correct_answer || q.answer || "";
+                  return (
+                    <div key={i} className="bg-gray-50 p-4 rounded-xl">
+                      <p className="font-medium text-gray-900">{i + 1}. {q.question || q.q}</p>
+                      <div className="ml-4 mt-2 space-y-1">
+                        {(q.options || []).map((opt: string, j: number) => {
+                          const isCorrect = opt === correctAns || j === q.ans;
+                          return (
+                            <p key={j} className={`text-sm ${isCorrect ? "text-green-700 font-bold" : "text-gray-600"}`}>
+                              {String.fromCharCode(65 + j)}. {opt} {isCorrect ? " ✓" : ""}
+                            </p>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Dictionary tool */}
+      {activeAI === "dict" && (
+        <div className="space-y-6">
+          <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
+            <div className="flex items-center gap-3">
+              <div className="relative flex-1">
+                <Search size={20} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  className="w-full pl-12 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-gray-700 focus:bg-white focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 outline-none transition"
+                  placeholder="Nhập từ tiếng Anh cần tra..."
+                  value={dictWord}
+                  onChange={(e) => setDictWord(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleDictLookup()}
+                />
+              </div>
+              <button onClick={handleDictLookup} disabled={dictLoading || !dictWord.trim()}
+                className="btn-primary py-3 px-6 rounded-xl flex items-center gap-2 disabled:opacity-50">
+                {dictLoading ? "Đang tra..." : <><Search size={18} /> Tra từ</>}
+              </button>
+            </div>
+          </div>
+
+          {dictResult && (
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+              <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-6 text-white">
+                <h2 className="text-3xl font-extrabold">{dictResult.word}</h2>
+                <div className="flex items-center gap-4 mt-2">
+                  {dictResult.phonetic_uk && (
+                    <button onClick={() => speak(dictResult.word, "en-GB")} className="flex items-center gap-1.5 bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-lg transition">
+                      <Volume2 size={16} /> UK {dictResult.phonetic_uk}
+                    </button>
+                  )}
+                  {dictResult.phonetic_us && (
+                    <button onClick={() => speak(dictResult.word, "en-US")} className="flex items-center gap-1.5 bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-lg transition">
+                      <Volume2 size={16} /> US {dictResult.phonetic_us}
+                    </button>
+                  )}
+                  {dictResult.level && <span className="bg-white/20 px-3 py-1 rounded-lg text-sm font-bold">{dictResult.level}</span>}
+                </div>
+              </div>
+              <div className="p-6 space-y-4">
+                {dictResult.meanings?.map((m: any, i: number) => (
+                  <div key={i} className="border-l-4 border-blue-400 pl-4">
+                    <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-lg text-sm font-bold">{m.pos || dictResult.pos}</span>
+                    <p className="text-gray-900 font-medium mt-1">{m.definition_en}</p>
+                    <p className="text-blue-700 font-medium">{m.definition_vn}</p>
+                    {m.examples?.map((ex: string, j: number) => (
+                      <p key={j} className="text-gray-500 text-sm italic mt-1"><ArrowRight size={12} className="inline mr-1" />{ex}</p>
+                    ))}
+                    <div className="flex gap-4 mt-2 text-sm">
+                      {m.synonyms?.length > 0 && <span className="text-green-600">Đồng nghĩa: {m.synonyms.join(", ")}</span>}
+                      {m.antonyms?.length > 0 && <span className="text-red-500">Trái nghĩa: {m.antonyms.join(", ")}</span>}
+                    </div>
+                  </div>
+                ))}
+                <div className="flex gap-4 pt-4 border-t border-gray-100 flex-wrap">
+                  {dictResult.word_family?.length > 0 && (
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs text-gray-400 font-bold uppercase">Họ từ:</span>
+                      {dictResult.word_family.map((w: string, i: number) => (
+                        <button key={i} onClick={() => setDictWord(w)} className="text-sm px-2 py-0.5 bg-purple-50 text-purple-700 rounded hover:bg-purple-100">{w}</button>
+                      ))}
+                    </div>
+                  )}
+                  {dictResult.collocations?.length > 0 && (
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs text-gray-400 font-bold uppercase">Collocations:</span>
+                      {dictResult.collocations.map((c: string, i: number) => (
+                        <span key={i} className="text-sm px-2 py-0.5 bg-orange-50 text-orange-700 rounded">{c}</span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
-      {/* Quiz results */}
-      {quizResult.length > 0 && (
-        <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
-          <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
-            <Brain size={20} className="text-green-600" /> Quiz đã tạo ({quizResult.length} câu)
-          </h3>
-          <div className="space-y-3">
-            {quizResult.map((q: any, i: number) => (
-              <div key={i} className="bg-gray-50 p-4 rounded-xl">
-                <p className="font-medium text-gray-900">{i + 1}. {q.question || q.q}</p>
-                <div className="ml-4 mt-2 space-y-1">
-                  {(q.options || []).map((opt: string, j: number) => (
-                    <p key={j} className={`text-sm ${j === (q.correct_answer ?? q.ans) ? "text-green-700 font-bold" : "text-gray-600"}`}>
-                      {String.fromCharCode(65 + j)}. {opt} {j === (q.correct_answer ?? q.ans) ? " ✓" : ""}
-                    </p>
+      {/* Knowledge Graph */}
+      {activeAI === "graph" && (
+        <div className="space-y-6">
+          <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
+            <div className="flex items-center gap-3">
+              <input
+                type="text"
+                className="flex-1 border border-gray-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-cyan-500/30 focus:border-cyan-500 outline-none"
+                placeholder="Chủ đề (để trống = tất cả)..."
+                value={graphTopic}
+                onChange={(e) => setGraphTopic(e.target.value || "all")}
+              />
+              <button onClick={handleLoadGraph} disabled={graphLoading}
+                className="flex items-center gap-2 px-6 py-3 bg-cyan-600 text-white rounded-xl hover:bg-cyan-700 disabled:opacity-50">
+                <Network size={18} /> {graphLoading ? "Đang tải..." : "Tải đồ thị"}
+              </button>
+            </div>
+          </div>
+
+          {graphData && (
+            <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
+              <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
+                <Network size={20} className="text-cyan-600" />
+                Đồ thị tri thức ({graphData.nodes?.length || 0} nodes, {graphData.links?.length || 0} links)
+              </h3>
+              {graphData.nodes?.length === 0 ? (
+                <p className="text-gray-400 text-center py-8">Chưa có dữ liệu trong đồ thị. Tra từ điển hoặc phân tích văn bản để xây dựng đồ thị.</p>
+              ) : (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {graphData.nodes?.map((n: any, i: number) => (
+                    <div key={i} className={`p-3 rounded-xl border ${n.type === "Level" ? "bg-yellow-50 border-yellow-200" : "bg-cyan-50 border-cyan-200"}`}>
+                      <p className="font-bold text-gray-900">{n.label}</p>
+                      {n.meaning_vn && <p className="text-sm text-gray-600">{n.meaning_vn}</p>}
+                      <div className="flex gap-1 mt-1">
+                        {n.type && <span className="text-xs bg-white px-1.5 py-0.5 rounded text-gray-500">{n.type}</span>}
+                        {n.level && <span className="text-xs bg-white px-1.5 py-0.5 rounded text-blue-600 font-bold">{n.level}</span>}
+                      </div>
+                    </div>
                   ))}
                 </div>
-              </div>
-            ))}
-          </div>
+              )}
+              {graphData.links?.length > 0 && (
+                <div className="mt-4 pt-4 border-t border-gray-100">
+                  <h4 className="text-sm font-bold text-gray-600 mb-2">Quan hệ:</h4>
+                  <div className="flex flex-wrap gap-2">
+                    {graphData.links.map((l: any, i: number) => (
+                      <span key={i} className="text-xs bg-gray-100 px-2 py-1 rounded-lg">
+                        {l.source} <span className="text-cyan-600 font-bold">{l.type}</span> {l.target}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>

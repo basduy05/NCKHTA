@@ -80,15 +80,29 @@ def extract_vocabulary_from_text(text: str):
         return [{"word": "Error", "meaning": "LLM not configured"}]
         
     prompt = PromptTemplate.from_template(
-        "Analyze the following text and extract 5-10 key English vocabulary words suitable for learning. "
-        "For each word, provide: phonetic, part of speech, Vietnamese meaning, and English definition. "
-        "Text: {text} \n"
-        "Return strictly a JSON list of objects."
+        "Analyze the following English text and extract 5-10 key vocabulary words suitable for learning.\n"
+        "Text: {text}\n\n"
+        "For EACH word, return these EXACT JSON keys:\n"
+        '- "word": the English word\n'
+        '- "phonetic": IPA phonetic transcription (e.g. /əˈbaʊt/)\n'
+        '- "pos": part of speech (noun, verb, adjective, etc.)\n'
+        '- "meaning_vn": Vietnamese meaning\n'
+        '- "meaning_en": English definition\n'
+        '- "example": example sentence using the word\n'
+        '- "level": CEFR level (A1/A2/B1/B2/C1/C2)\n\n'
+        "Return ONLY a valid JSON array. No markdown, no explanation."
     )
-    
+
     chain = prompt | llm
-    response = chain.invoke({"text": text})
-    return parse_json_response(response.content)
+    try:
+        response = chain.invoke({"text": text})
+        result = parse_json_response(response.content)
+        if isinstance(result, list) and len(result) > 0:
+            return result
+        return [{"word": "(no vocabulary found)", "meaning_vn": "Không tìm thấy từ vựng"}]
+    except Exception as e:
+        print(f"extract_vocabulary error: {e}")
+        return [{"word": "Error", "meaning_vn": str(e)}]
 
 def generate_quiz_from_text(text: str, num_questions: int = 5):
     """
@@ -99,24 +113,35 @@ def generate_quiz_from_text(text: str, num_questions: int = 5):
         return []
         
     prompt = PromptTemplate.from_template(
-        "Generate {num} multiple-choice questions based on the vocabulary and context of this text: "
-        "'{text}'. \n"
-        "Return strictly a JSON list where each object has: 'question', 'options' (list of 4), and 'correct_answer'."
+        "Generate {num} multiple-choice questions based on the vocabulary and context of this English text:\n"
+        "{text}\n\n"
+        "For EACH question, return these EXACT JSON keys:\n"
+        '- "question": the question text\n'
+        '- "options": array of exactly 4 answer choices\n'
+        '- "correct_answer": the correct option (must be one of the options exactly)\n\n'
+        "Return ONLY a valid JSON array. No markdown, no explanation."
     )
-    
+
     chain = prompt | llm
-    response = chain.invoke({"text": text, "num": num_questions})
-    return parse_json_response(response.content)
+    try:
+        response = chain.invoke({"text": text, "num": num_questions})
+        result = parse_json_response(response.content)
+        if isinstance(result, list) and len(result) > 0:
+            return result
+        return []
+    except Exception as e:
+        print(f"generate_quiz error: {e}")
+        return []
 
 def generate_example_sentence(word: str, meaning: str = "", level: str = "B1"):
     llm = get_llm()
     if not llm:
         return f"Example for {word} (Auto-generated placeholder)"
-        
+
     prompt = PromptTemplate.from_template(
         "Generate a short, clear English example sentence for the word '{word}' (meaning: '{meaning}') at CEFR level {level}. Return ONLY the sentence text, no quotes."
     )
-    
+
     chain = prompt | llm
     try:
         response = chain.invoke({"word": word, "meaning": meaning, "level": level})
@@ -124,4 +149,46 @@ def generate_example_sentence(word: str, meaning: str = "", level: str = "B1"):
     except Exception as e:
         print(f"LLM Error: {e}")
         return f"This is an example sentence for {word}."
+
+
+def lookup_dictionary(word: str):
+    """
+    AI-powered dictionary lookup combining Cambridge/Oxford style data.
+    Returns comprehensive word data.
+    """
+    llm = get_llm()
+    if not llm:
+        return {"word": word, "error": "LLM not configured"}
+
+    prompt = PromptTemplate.from_template(
+        "You are an advanced English dictionary (like Cambridge and Oxford combined).\n"
+        "Look up the English word: '{word}'\n\n"
+        "Return a JSON object with these EXACT keys:\n"
+        '- "word": the word\n'
+        '- "phonetic_uk": UK IPA pronunciation (e.g. /ˈwɜː.tər/)\n'
+        '- "phonetic_us": US IPA pronunciation (e.g. /ˈwɝː.t̬ɚ/)\n'
+        '- "pos": primary part of speech\n'
+        '- "meanings": array of objects, each with:\n'
+        '    - "pos": part of speech for this meaning\n'
+        '    - "definition_en": English definition\n'
+        '    - "definition_vn": Vietnamese translation\n'
+        '    - "examples": array of 2 example sentences\n'
+        '    - "synonyms": array of 2-3 synonyms\n'
+        '    - "antonyms": array of 1-2 antonyms (if applicable, else empty)\n'
+        '- "level": CEFR level (A1/A2/B1/B2/C1/C2)\n'
+        '- "word_family": array of related word forms (e.g. ["beauty", "beautiful", "beautifully"])\n'
+        '- "collocations": array of 3-4 common collocations\n\n'
+        "Return ONLY valid JSON. No markdown, no extra text."
+    )
+
+    chain = prompt | llm
+    try:
+        response = chain.invoke({"word": word})
+        result = parse_json_response(response.content)
+        if isinstance(result, dict) and "word" in result:
+            return result
+        return {"word": word, "error": "Could not parse dictionary data"}
+    except Exception as e:
+        print(f"lookup_dictionary error: {e}")
+        return {"word": word, "error": str(e)}
 

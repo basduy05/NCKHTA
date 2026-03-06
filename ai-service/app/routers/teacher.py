@@ -1,7 +1,8 @@
 from fastapi import APIRouter, HTTPException, Header, UploadFile, File, Form, Query
 from fastapi.responses import Response
 from ..database import get_db, AssignmentCreate
-from ..services import auth_service, llm_service
+from ..services import auth_service, llm_service, graph_service
+from pydantic import BaseModel
 from typing import Optional
 import json
 
@@ -420,8 +421,9 @@ def get_assignment_scores(assignment_id: int, authorization: str = Header(...)):
 def generate_quiz_for_class(authorization: str = Header(...), text: str = Form(...), num_questions: int = Form(5)):
     """Use AI to generate quiz from text for teacher to assign."""
     _get_current_teacher(authorization)
-    if not llm_service:
-        raise HTTPException(status_code=500, detail="LLM service not available")
+    llm = llm_service.get_llm()
+    if not llm:
+        raise HTTPException(status_code=503, detail="LLM service not available — configure API key in Admin settings")
     result = llm_service.generate_quiz_from_text(text, num_questions)
     return result
 
@@ -429,7 +431,37 @@ def generate_quiz_for_class(authorization: str = Header(...), text: str = Form(.
 def generate_vocab_for_class(authorization: str = Header(...), text: str = Form(...)):
     """Use AI to extract vocabulary from text."""
     _get_current_teacher(authorization)
-    if not llm_service:
-        raise HTTPException(status_code=500, detail="LLM service not available")
+    llm = llm_service.get_llm()
+    if not llm:
+        raise HTTPException(status_code=503, detail="LLM service not available — configure API key in Admin settings")
     result = llm_service.extract_vocabulary_from_text(text)
     return result
+
+
+class TeacherDictRequest(BaseModel):
+    word: str
+
+
+@router.post("/dictionary/lookup")
+def teacher_dictionary_lookup(req: TeacherDictRequest, authorization: str = Header(...)):
+    """Teacher dictionary lookup."""
+    _get_current_teacher(authorization)
+    llm = llm_service.get_llm()
+    if not llm:
+        raise HTTPException(status_code=503, detail="LLM service unavailable")
+    word = req.word.strip()
+    if not word or len(word) > 100:
+        raise HTTPException(status_code=400, detail="Invalid word")
+    result = llm_service.lookup_dictionary(word)
+    if result.get("error"):
+        raise HTTPException(status_code=500, detail=result["error"])
+    connections = graph_service.get_word_connections(word)
+    result["graph_connections"] = connections.get("connections", [])
+    return result
+
+
+@router.get("/knowledge-graph")
+def teacher_knowledge_graph(authorization: str = Header(...), topic: str = "all"):
+    """Get vocabulary knowledge graph for visualization."""
+    _get_current_teacher(authorization)
+    return graph_service.get_knowledge_subgraph(topic)

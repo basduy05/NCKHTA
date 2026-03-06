@@ -5,7 +5,8 @@ import { useAuth } from "../../context/AuthContext";
 import {
   BookOpen, Sparkles, BrainCircuit, Trophy, PlayCircle, CheckCircle2, XCircle,
   GraduationCap, ClipboardList, BarChart3, FileText, ChevronRight, Clock,
-  Award, TrendingUp, Layers
+  Award, TrendingUp, Layers, Search, BookMarked, Volume2, Save, Trash2,
+  ExternalLink, Star, Filter, X, ArrowRight, Bookmark, Network
 } from "lucide-react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://iedu-ksk7.onrender.com";
@@ -26,6 +27,8 @@ function StudentDashboardContent() {
           {activeTab === "overview" && "Tổng quan"}
           {activeTab === "classes" && "Lớp học của tôi"}
           {activeTab === "assignments" && "Bài tập & Kiểm tra"}
+          {activeTab === "dictionary" && "Tra từ điển"}
+          {activeTab === "vocabulary" && "Từ vựng đã lưu"}
           {activeTab === "ai-tools" && "Học với AI"}
           {activeTab === "scores" && "Kết quả học tập"}
         </h1>
@@ -35,6 +38,8 @@ function StudentDashboardContent() {
       {activeTab === "overview" && <OverviewTab token={token} user={user} />}
       {activeTab === "classes" && <ClassesTab token={token} />}
       {activeTab === "assignments" && <AssignmentsTab token={token} />}
+      {activeTab === "dictionary" && <DictionaryTab token={token} />}
+      {activeTab === "vocabulary" && <VocabularyTab token={token} />}
       {activeTab === "ai-tools" && <AIToolsTab token={token} />}
       {activeTab === "scores" && <ScoresTab token={token} />}
     </div>
@@ -464,9 +469,11 @@ function AIToolsTab({ token }: { token: string | null }) {
       const words = Array.isArray(data.vocabulary) ? data.vocabulary.map((w: any) => ({
         word: w.word || "Unknown",
         phon: w.phonetic || w.phon || "",
-        meaning: w.meaning || w.vietnamese_meaning || "",
-        example: w.example || w.english_definition || "",
-        level: w.level || "B1"
+        meaning: w.meaning_vn || w.meaning || w.vietnamese_meaning || "",
+        meaning_en: w.meaning_en || w.english_definition || "",
+        example: w.example || "",
+        level: w.level || "B1",
+        pos: w.pos || ""
       })) : [];
 
       const quiz = Array.isArray(data.quiz) ? data.quiz.map((q: any) => {
@@ -532,20 +539,36 @@ function AIToolsTab({ token }: { token: string | null }) {
                 {result.words.map((w: any, idx: number) => (
                   <div
                     key={idx}
-                    onClick={() => setFlippedWord(flippedWord === idx ? null : idx)}
-                    className="relative h-44 cursor-pointer perspective-1000"
+                    className="relative h-52 cursor-pointer perspective-1000"
                   >
-                    <div className={`w-full h-full transition-transform duration-500 transform-style-3d ${flippedWord === idx ? "rotate-y-180" : ""}`}>
+                    <div onClick={() => setFlippedWord(flippedWord === idx ? null : idx)} className={`w-full h-full transition-transform duration-500 transform-style-3d ${flippedWord === idx ? "rotate-y-180" : ""}`}>
                       <div className="absolute w-full h-full backface-hidden bg-white border-2 border-blue-100 rounded-xl shadow-sm hover:shadow-md hover:border-blue-300 flex flex-col items-center justify-center p-5 transition">
                         <h4 className="text-2xl font-extrabold text-blue-700 mb-1">{w.word}</h4>
                         <p className="text-gray-400 font-mono text-sm flex items-center"><PlayCircle size={14} className="mr-1" /> {w.phon}</p>
+                        {w.pos && <span className="text-xs text-purple-600 bg-purple-50 px-2 py-0.5 rounded mt-1">{w.pos}</span>}
                         <span className="absolute top-2 right-2 px-2 py-0.5 bg-gray-100 text-xs font-bold text-gray-500 rounded">{w.level}</span>
                       </div>
                       <div className="absolute w-full h-full backface-hidden bg-blue-600 rounded-xl shadow-lg flex flex-col items-center justify-center p-5 rotate-y-180 text-white text-center">
-                        <h4 className="text-lg font-bold mb-2">{w.meaning}</h4>
+                        <h4 className="text-lg font-bold mb-1">{w.meaning}</h4>
+                        {w.meaning_en && <p className="text-blue-200 text-xs mb-2">{w.meaning_en}</p>}
                         {w.example && <p className="text-blue-200 text-sm italic border-t border-blue-500/50 pt-2">&ldquo;{w.example}&rdquo;</p>}
                       </div>
                     </div>
+                    <button
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        try {
+                          const res = await fetch(`${API_URL}/student/vocabulary/save`, {
+                            method: "POST", headers: getAuthHeader(token),
+                            body: JSON.stringify({ word: w.word, phonetic: w.phon, pos: w.pos || "", meaning_en: w.meaning_en || "", meaning_vn: w.meaning, example: w.example, level: w.level, source: "ai-analysis" })
+                          });
+                          if (res.ok) alert(`Đã lưu "${w.word}" vào kho từ vựng!`);
+                        } catch {}
+                      }}
+                      className="absolute bottom-2 right-2 z-10 p-1.5 bg-white/90 hover:bg-green-50 border border-gray-200 rounded-lg transition shadow-sm" title="Lưu từ"
+                    >
+                      <Bookmark size={14} className="text-green-600" />
+                    </button>
                   </div>
                 ))}
               </div>
@@ -609,6 +632,376 @@ function AIToolsTab({ token }: { token: string | null }) {
               )}
             </div>
           )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ==================== DICTIONARY TAB ====================
+function DictionaryTab({ token }: { token: string | null }) {
+  const [word, setWord] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<any>(null);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [history, setHistory] = useState<string[]>([]);
+
+  const lookup = async () => {
+    if (!word.trim()) return;
+    setLoading(true);
+    setResult(null);
+    setSaved(false);
+    try {
+      const res = await fetch(`${API_URL}/student/dictionary/lookup`, {
+        method: "POST",
+        headers: getAuthHeader(token),
+        body: JSON.stringify({ word: word.trim() }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || "Lookup failed");
+      }
+      const data = await res.json();
+      setResult(data);
+      setHistory(prev => {
+        const next = [word.trim().toLowerCase(), ...prev.filter(w => w !== word.trim().toLowerCase())];
+        return next.slice(0, 20);
+      });
+    } catch (e: any) {
+      alert(e.message || "Lỗi khi tra từ điển");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const saveWord = async () => {
+    if (!result) return;
+    setSaving(true);
+    try {
+      const firstMeaning = result.meanings?.[0] || {};
+      const res = await fetch(`${API_URL}/student/vocabulary/save`, {
+        method: "POST",
+        headers: getAuthHeader(token),
+        body: JSON.stringify({
+          word: result.word,
+          phonetic: result.phonetic_uk || result.phonetic_us || "",
+          pos: result.pos || firstMeaning.pos || "",
+          meaning_en: firstMeaning.definition_en || "",
+          meaning_vn: firstMeaning.definition_vn || "",
+          example: firstMeaning.examples?.[0] || "",
+          level: result.level || "B1",
+          source: "dictionary",
+        }),
+      });
+      if (res.ok) setSaved(true);
+    } catch {}
+    finally { setSaving(false); }
+  };
+
+  const speak = (text: string, lang: string = "en-GB") => {
+    if (typeof window !== "undefined" && window.speechSynthesis) {
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = lang;
+      u.rate = 0.85;
+      window.speechSynthesis.speak(u);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Search bar */}
+      <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
+        <div className="flex items-center gap-3">
+          <div className="relative flex-1">
+            <Search size={20} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              type="text"
+              className="w-full pl-12 pr-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl text-gray-700 focus:bg-white focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 outline-none transition text-lg"
+              placeholder="Nhập từ tiếng Anh cần tra (vd: accomplish, serendipity, ...)"
+              value={word}
+              onChange={(e) => setWord(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && lookup()}
+            />
+          </div>
+          <button
+            onClick={lookup}
+            disabled={loading || !word.trim()}
+            className="btn-primary py-3.5 px-8 rounded-xl flex items-center gap-2 shadow-md disabled:opacity-50 transition text-lg"
+          >
+            {loading ? (
+              <div className="flex items-center gap-2"><div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white" /> Đang tra...</div>
+            ) : (
+              <><Search size={20} /> Tra từ</>
+            )}
+          </button>
+        </div>
+
+        {/* Search history */}
+        {history.length > 0 && (
+          <div className="mt-3 flex items-center gap-2 flex-wrap">
+            <span className="text-xs text-gray-400">Gần đây:</span>
+            {history.slice(0, 10).map((h, i) => (
+              <button key={i} onClick={() => { setWord(h); }} className="text-xs px-2.5 py-1 bg-gray-100 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition">
+                {h}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Result */}
+      {result && (
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+          {/* Word header */}
+          <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-6 text-white">
+            <div className="flex items-start justify-between">
+              <div>
+                <h2 className="text-3xl font-extrabold mb-1">{result.word}</h2>
+                <div className="flex items-center gap-4 mt-2">
+                  {result.phonetic_uk && (
+                    <button onClick={() => speak(result.word, "en-GB")} className="flex items-center gap-1.5 bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-lg transition">
+                      <Volume2 size={16} /> <span className="text-sm">UK</span> <span className="font-mono text-sm">{result.phonetic_uk}</span>
+                    </button>
+                  )}
+                  {result.phonetic_us && (
+                    <button onClick={() => speak(result.word, "en-US")} className="flex items-center gap-1.5 bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-lg transition">
+                      <Volume2 size={16} /> <span className="text-sm">US</span> <span className="font-mono text-sm">{result.phonetic_us}</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {result.level && (
+                  <span className="bg-white/20 px-3 py-1 rounded-lg text-sm font-bold">{result.level}</span>
+                )}
+                <button
+                  onClick={saveWord}
+                  disabled={saving || saved}
+                  className={`flex items-center gap-1.5 px-4 py-2 rounded-lg transition font-medium ${saved ? "bg-green-500 text-white" : "bg-white text-blue-600 hover:bg-blue-50"}`}
+                >
+                  {saved ? <><CheckCircle2 size={16} /> Đã lưu</> : saving ? "Đang lưu..." : <><Bookmark size={16} /> Lưu từ</>}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Meanings */}
+          <div className="p-6 space-y-6">
+            {result.meanings?.map((m: any, i: number) => (
+              <div key={i} className="border-l-4 border-blue-400 pl-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="bg-blue-100 text-blue-700 px-2.5 py-0.5 rounded-lg text-sm font-bold">{m.pos || result.pos}</span>
+                  <span className="text-xs text-gray-400">Nghĩa {i + 1}</span>
+                </div>
+                <p className="text-gray-900 font-medium text-lg">{m.definition_en}</p>
+                <p className="text-blue-700 font-medium mt-1">{m.definition_vn}</p>
+
+                {m.examples?.length > 0 && (
+                  <div className="mt-3 space-y-1.5">
+                    {m.examples.map((ex: string, j: number) => (
+                      <div key={j} className="flex items-start gap-2">
+                        <ArrowRight size={14} className="text-gray-400 mt-1 shrink-0" />
+                        <p className="text-gray-600 italic">{ex}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="flex gap-6 mt-3 text-sm">
+                  {m.synonyms?.length > 0 && (
+                    <div>
+                      <span className="text-gray-400 text-xs uppercase font-semibold">Đồng nghĩa: </span>
+                      {m.synonyms.map((s: string, k: number) => (
+                        <button key={k} onClick={() => setWord(s)} className="text-green-600 hover:underline mr-2">{s}</button>
+                      ))}
+                    </div>
+                  )}
+                  {m.antonyms?.length > 0 && (
+                    <div>
+                      <span className="text-gray-400 text-xs uppercase font-semibold">Trái nghĩa: </span>
+                      {m.antonyms.map((a: string, k: number) => (
+                        <button key={k} onClick={() => setWord(a)} className="text-red-500 hover:underline mr-2">{a}</button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+
+            {/* Word family, collocations, graph connections */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t border-gray-100">
+              {result.word_family?.length > 0 && (
+                <div className="bg-purple-50 rounded-xl p-4">
+                  <h4 className="text-sm font-bold text-purple-700 mb-2">Họ từ (Word Family)</h4>
+                  <div className="flex flex-wrap gap-2">
+                    {result.word_family.map((w: string, i: number) => (
+                      <button key={i} onClick={() => setWord(w)} className="bg-white text-purple-700 text-sm px-2.5 py-1 rounded-lg border border-purple-200 hover:bg-purple-100 transition">{w}</button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {result.collocations?.length > 0 && (
+                <div className="bg-orange-50 rounded-xl p-4">
+                  <h4 className="text-sm font-bold text-orange-700 mb-2">Kết hợp từ (Collocations)</h4>
+                  <div className="flex flex-wrap gap-2">
+                    {result.collocations.map((c: string, i: number) => (
+                      <span key={i} className="bg-white text-orange-700 text-sm px-2.5 py-1 rounded-lg border border-orange-200">{c}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {result.graph_connections?.length > 0 && (
+                <div className="bg-cyan-50 rounded-xl p-4">
+                  <h4 className="text-sm font-bold text-cyan-700 mb-2 flex items-center gap-1"><Network size={14} /> Đồ thị tri thức</h4>
+                  <div className="space-y-1">
+                    {result.graph_connections.map((c: any, i: number) => (
+                      <div key={i} className="flex items-center gap-2 text-sm">
+                        <span className="text-cyan-600 font-mono text-xs bg-cyan-100 px-1.5 rounded">{c.relation}</span>
+                        <button onClick={() => setWord(c.word)} className="text-cyan-800 hover:underline">{c.word}</button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ==================== VOCABULARY TAB ====================
+function VocabularyTab({ token }: { token: string | null }) {
+  const [words, setWords] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [levelFilter, setLevelFilter] = useState("");
+  const [deleting, setDeleting] = useState<number | null>(null);
+
+  const fetchWords = async () => {
+    try {
+      const params = new URLSearchParams();
+      if (search) params.set("search", search);
+      if (levelFilter) params.set("level", levelFilter);
+      const res = await fetch(`${API_URL}/student/vocabulary?${params}`, { headers: getAuthHeader(token) });
+      if (res.ok) setWords(await res.json());
+    } catch (e) { console.error(e); }
+    finally { setLoading(false); }
+  };
+
+  useEffect(() => { fetchWords(); }, [token, search, levelFilter]);
+
+  const deleteWord = async (id: number) => {
+    if (!confirm("Xóa từ này khỏi kho từ vựng?")) return;
+    setDeleting(id);
+    try {
+      const res = await fetch(`${API_URL}/student/vocabulary/${id}`, {
+        method: "DELETE", headers: getAuthHeader(token)
+      });
+      if (res.ok) setWords(prev => prev.filter(w => w.id !== id));
+    } catch {}
+    finally { setDeleting(null); }
+  };
+
+  const speak = (text: string) => {
+    if (typeof window !== "undefined" && window.speechSynthesis) {
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = "en-US";
+      u.rate = 0.85;
+      window.speechSynthesis.speak(u);
+    }
+  };
+
+  const levels = ["A1", "A2", "B1", "B2", "C1", "C2"];
+
+  if (loading) return <div className="flex justify-center py-20"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" /></div>;
+
+  return (
+    <div className="space-y-6">
+      {/* Stats + filters */}
+      <div className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm">
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div className="flex items-center gap-4">
+            <div className="bg-blue-50 text-blue-600 px-4 py-2 rounded-xl font-bold">
+              <BookMarked size={18} className="inline mr-1" /> {words.length} từ đã lưu
+            </div>
+            {/* Level distribution */}
+            <div className="hidden md:flex items-center gap-1">
+              {levels.map(l => {
+                const count = words.filter(w => w.level === l).length;
+                if (count === 0) return null;
+                const colors: Record<string, string> = { A1: "bg-green-100 text-green-700", A2: "bg-green-100 text-green-700", B1: "bg-blue-100 text-blue-700", B2: "bg-blue-100 text-blue-700", C1: "bg-purple-100 text-purple-700", C2: "bg-purple-100 text-purple-700" };
+                return <span key={l} className={`text-xs px-2 py-0.5 rounded-full font-bold ${colors[l]}`}>{l}: {count}</span>;
+              })}
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Tìm từ vựng..."
+                className="pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 outline-none w-48"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+            <select
+              value={levelFilter}
+              onChange={(e) => setLevelFilter(e.target.value)}
+              className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 outline-none"
+            >
+              <option value="">Tất cả level</option>
+              {levels.map(l => <option key={l} value={l}>{l}</option>)}
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* Word list */}
+      {words.length === 0 ? (
+        <div className="bg-white rounded-xl p-12 border border-gray-100 text-center">
+          <BookMarked size={48} className="mx-auto text-gray-300 mb-4" />
+          <h3 className="text-lg font-bold text-gray-700 mb-2">{search || levelFilter ? "Không tìm thấy từ phù hợp" : "Chưa lưu từ vựng nào"}</h3>
+          <p className="text-gray-500">Tra từ điển hoặc phân tích văn bản để lưu từ mới.</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {words.map((w) => {
+            const levelColors: Record<string, string> = { A1: "bg-green-100 text-green-700", A2: "bg-green-50 text-green-600", B1: "bg-blue-100 text-blue-700", B2: "bg-blue-50 text-blue-600", C1: "bg-purple-100 text-purple-700", C2: "bg-purple-50 text-purple-600" };
+            return (
+              <div key={w.id} className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 hover:shadow-md transition group">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <h3 className="text-lg font-extrabold text-blue-700">{w.word}</h3>
+                      <button onClick={() => speak(w.word)} className="text-gray-400 hover:text-blue-600 transition"><Volume2 size={16} /></button>
+                      {w.pos && <span className="text-xs text-purple-600 bg-purple-50 px-2 py-0.5 rounded">{w.pos}</span>}
+                      <span className={`text-xs px-2 py-0.5 rounded font-bold ${levelColors[w.level] || "bg-gray-100 text-gray-600"}`}>{w.level}</span>
+                    </div>
+                    {w.phonetic && <p className="text-gray-400 text-sm font-mono mb-1">{w.phonetic}</p>}
+                    {w.meaning_vn && <p className="text-gray-800 font-medium">{w.meaning_vn}</p>}
+                    {w.meaning_en && <p className="text-gray-500 text-sm mt-0.5">{w.meaning_en}</p>}
+                    {w.example && <p className="text-gray-400 text-sm italic mt-1.5 border-l-2 border-gray-200 pl-2">{w.example}</p>}
+                  </div>
+                  <div className="flex flex-col items-end gap-2 ml-3">
+                    <span className="text-xs text-gray-400">{w.source}</span>
+                    <button
+                      onClick={() => deleteWord(w.id)}
+                      disabled={deleting === w.id}
+                      className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-600 transition p-1 rounded"
+                      title="Xóa từ"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                </div>
+                <div className="text-xs text-gray-300 mt-2">{new Date(w.created_at).toLocaleDateString("vi-VN")}</div>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

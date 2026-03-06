@@ -139,6 +139,25 @@ def init_db():
         )
     """)
 
+    # --- SAVED VOCABULARY TABLE ---
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS saved_vocabulary (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            word TEXT NOT NULL,
+            phonetic TEXT,
+            pos TEXT,
+            meaning_en TEXT,
+            meaning_vn TEXT,
+            example TEXT,
+            level TEXT DEFAULT 'B1',
+            source TEXT DEFAULT 'manual',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id),
+            UNIQUE(user_id, word)
+        )
+    """)
+
     # --- MIGRATION: Add file columns to lessons ---
     try:
         cursor.execute("ALTER TABLE lessons ADD COLUMN file_name TEXT")

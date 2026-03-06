@@ -1,8 +1,8 @@
 from fastapi import APIRouter, HTTPException, Header, Query
 from ..database import get_db
-from ..services import auth_service, llm_service
+from ..services import auth_service, llm_service, graph_service
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 import json
 
 router = APIRouter(prefix="/student", tags=["Student"])
@@ -273,8 +273,136 @@ class TextAnalysisRequest(BaseModel):
 @router.post("/analyze-text")
 def analyze_text(req: TextAnalysisRequest, authorization: str = Header(...)):
     _get_current_student(authorization)
-    if not llm_service:
-        raise HTTPException(status_code=503, detail="LLM service unavailable")
+    llm = llm_service.get_llm()
+    if not llm:
+        raise HTTPException(status_code=503, detail="LLM service unavailable — configure API key in Admin settings")
     vocab = llm_service.extract_vocabulary_from_text(req.text)
     quiz = llm_service.generate_quiz_from_text(req.text, req.num_questions)
     return {"vocabulary": vocab, "quiz": quiz}
+
+
+# ─── DICTIONARY LOOKUP ────────────────────────────────────────────────────────
+
+class DictionaryRequest(BaseModel):
+    word: str
+
+
+@router.post("/dictionary/lookup")
+def dictionary_lookup(req: DictionaryRequest, authorization: str = Header(...)):
+    """AI-powered dictionary lookup with Cambridge/Oxford style data."""
+    _get_current_student(authorization)
+    llm = llm_service.get_llm()
+    if not llm:
+        raise HTTPException(status_code=503, detail="LLM service unavailable")
+    word = req.word.strip()
+    if not word or len(word) > 100:
+        raise HTTPException(status_code=400, detail="Invalid word")
+    result = llm_service.lookup_dictionary(word)
+    if result.get("error"):
+        raise HTTPException(status_code=500, detail=result["error"])
+    # Also get graph connections if available
+    connections = graph_service.get_word_connections(word)
+    result["graph_connections"] = connections.get("connections", [])
+    return result
+
+
+# ─── SAVED VOCABULARY ─────────────────────────────────────────────────────────
+
+class SaveVocabRequest(BaseModel):
+    word: str
+    phonetic: str = ""
+    pos: str = ""
+    meaning_en: str = ""
+    meaning_vn: str = ""
+    example: str = ""
+    level: str = "B1"
+    source: str = "dictionary"
+
+
+@router.post("/vocabulary/save")
+def save_vocabulary(req: SaveVocabRequest, authorization: str = Header(...)):
+    """Save a word to personal vocabulary list + Neo4j graph."""
+    student = _get_current_student(authorization)
+    word = req.word.strip().lower()
+    if not word or len(word) > 100:
+        raise HTTPException(status_code=400, detail="Invalid word")
+
+    conn = get_db()
+    try:
+        conn.execute(
+            """INSERT INTO saved_vocabulary (user_id, word, phonetic, pos, meaning_en, meaning_vn, example, level, source)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+               ON CONFLICT(user_id, word) DO UPDATE SET
+                   phonetic=excluded.phonetic, pos=excluded.pos,
+                   meaning_en=excluded.meaning_en, meaning_vn=excluded.meaning_vn,
+                   example=excluded.example, level=excluded.level, source=excluded.source""",
+            (student["id"], word, req.phonetic, req.pos, req.meaning_en, req.meaning_vn, req.example, req.level, req.source)
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    # Also save to Neo4j knowledge graph
+    graph_service.save_word_to_graph({
+        "word": word, "phonetic": req.phonetic, "pos": req.pos,
+        "meaning_en": req.meaning_en, "meaning_vn": req.meaning_vn,
+        "example": req.example, "level": req.level,
+    })
+
+    return {"status": "saved", "word": word}
+
+
+@router.get("/vocabulary")
+def list_vocabulary(
+    authorization: str = Header(...),
+    search: str = "",
+    level: str = "",
+):
+    """List saved vocabulary with optional filters."""
+    student = _get_current_student(authorization)
+    conn = get_db()
+    query = "SELECT * FROM saved_vocabulary WHERE user_id = ?"
+    params: list = [student["id"]]
+
+    if search:
+        query += " AND (word LIKE ? OR meaning_vn LIKE ? OR meaning_en LIKE ?)"
+        s = f"%{search}%"
+        params.extend([s, s, s])
+    if level:
+        query += " AND level = ?"
+        params.append(level)
+
+    query += " ORDER BY created_at DESC"
+    rows = conn.execute(query, params).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+@router.delete("/vocabulary/{vocab_id}")
+def delete_vocabulary(vocab_id: int, authorization: str = Header(...)):
+    """Delete a saved word."""
+    student = _get_current_student(authorization)
+    conn = get_db()
+    row = conn.execute(
+        "SELECT id FROM saved_vocabulary WHERE id = ? AND user_id = ?",
+        (vocab_id, student["id"])
+    ).fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Word not found")
+    conn.execute("DELETE FROM saved_vocabulary WHERE id = ?", (vocab_id,))
+    conn.commit()
+    conn.close()
+    return {"status": "deleted"}
+
+
+# ─── KNOWLEDGE GRAPH VISUALIZATION ───────────────────────────────────────────
+
+@router.get("/knowledge-graph")
+def student_knowledge_graph(
+    authorization: str = Header(...),
+    topic: str = "all",
+):
+    """Get the student's vocabulary knowledge graph for visualization."""
+    _get_current_student(authorization)
+    return graph_service.get_knowledge_subgraph(topic)
