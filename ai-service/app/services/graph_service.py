@@ -1,7 +1,4 @@
-try:
-    from langchain_neo4j import Neo4jGraph
-except ImportError:
-    from langchain_community.graphs import Neo4jGraph
+from langchain_neo4j import Neo4jGraph
 
 from typing import List, Dict
 import os
