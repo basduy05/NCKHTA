@@ -2,6 +2,20 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import PromptTemplate
 import os
+import json
+
+def parse_json_response(text: str):
+    try:
+        if text.startswith("```json"):
+            text = text[7:]
+        if text.startswith("```"):
+            text = text[3:]
+        if text.endswith("```"):
+            text = text[:-3]
+        return json.loads(text.strip())
+    except Exception as e:
+        print("JSON parse error:", e)
+        return []
 
 # Placeholder for API Keys (Set in environment variables)
 # os.environ["GOOGLE_API_KEY"] = "YOUR_GEMINI_KEY"
@@ -13,7 +27,7 @@ def get_llm():
     Prefers Gemini (often free tier available) or OpenAI.
     """
     if os.environ.get("GOOGLE_API_KEY"):
-        return ChatGoogleGenerativeAI(model="gemini-pro")
+        return ChatGoogleGenerativeAI(model="models/gemini-2.5-flash")
     elif os.environ.get("OPENAI_API_KEY"):
         return ChatOpenAI(model="gpt-3.5-turbo")
     else:
@@ -56,7 +70,7 @@ def extract_vocabulary_from_text(text: str):
     
     chain = prompt | llm
     response = chain.invoke({"text": text})
-    return response.content # Expecting JSON string
+    return parse_json_response(response.content)
 
 def generate_quiz_from_text(text: str, num_questions: int = 5):
     """
@@ -74,7 +88,7 @@ def generate_quiz_from_text(text: str, num_questions: int = 5):
     
     chain = prompt | llm
     response = chain.invoke({"text": text, "num": num_questions})
-    return response.content
+    return parse_json_response(response.content)
 
 def generate_example_sentence(word: str, meaning: str = "", level: str = "B1"):
     llm = get_llm()
