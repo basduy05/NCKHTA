@@ -500,54 +500,37 @@ def update_settings(data: SettingsUpdate):
 
 @router.post("/settings/test-email")
 def test_email():
-    """Send a test email to SENDER_EMAIL with step-by-step diagnostics."""
-    import smtplib
-    from email.mime.text import MIMEText
-    from email.mime.multipart import MIMEMultipart
+    """Send a test email using the configured provider (auto/resend/smtp)."""
+    provider = (auth_service._get_setting("EMAIL_PROVIDER") or "auto").lower().strip()
+    sender = auth_service._get_setting("SENDER_EMAIL") or auth_service._get_setting("SMTP_USERNAME")
 
-    steps = []
-    smtp_server = auth_service._get_setting("SMTP_SERVER", "smtp.gmail.com")
-    smtp_port = int(auth_service._get_setting("SMTP_PORT", "587"))
-    smtp_username = auth_service._get_setting("SMTP_USERNAME")
-    smtp_password = auth_service._get_setting("SMTP_PASSWORD")
-    sender = auth_service._get_setting("SENDER_EMAIL", smtp_username)
+    steps = [f"Provider: {provider}", f"Sender: {sender}"]
 
-    steps.append(f"Config: server={smtp_server}, port={smtp_port}, user={smtp_username}, sender={sender}")
+    if not sender:
+        return {"success": False, "steps": steps, "error": "SENDER_EMAIL not configured"}
 
-    if not smtp_username or not smtp_password:
-        return {"success": False, "steps": steps, "error": "SMTP_USERNAME or SMTP_PASSWORD not set"}
+    result = auth_service.send_email(
+        sender,
+        "EAM Test Email",
+        "<h2>Test email from EAM</h2><p>Email is working!</p>"
+    )
 
-    try:
-        msg = MIMEMultipart()
-        msg['From'] = sender
-        msg['To'] = sender
-        msg['Subject'] = 'EAM Test Email'
-        msg.attach(MIMEText('<h2>Test email from EAM</h2><p>SMTP is working!</p>', 'html'))
-
-        server = None
-        try:
-            steps.append(f"Trying STARTTLS on port {smtp_port}...")
-            server = smtplib.SMTP(smtp_server, smtp_port, timeout=15)
-            server.starttls()
-            steps.append("STARTTLS OK")
-        except Exception as e1:
-            steps.append(f"STARTTLS failed: {type(e1).__name__}: {e1}")
-            steps.append("Trying SSL on port 465...")
-            server = smtplib.SMTP_SSL(smtp_server, 465, timeout=15)
-            steps.append("SSL OK")
-
-        steps.append("Logging in...")
-        server.login(smtp_username, smtp_password)
-        steps.append("Login OK")
-
-        steps.append("Sending email...")
-        server.send_message(msg)
-        steps.append("Send OK")
-        server.quit()
+    if result:
+        steps.append("Email sent successfully!")
         return {"success": True, "steps": steps, "message": f"Email sent to {sender}"}
-    except Exception as e:
-        steps.append(f"FAILED: {type(e).__name__}: {e}")
-        return {"success": False, "steps": steps, "error": str(e)}
+    else:
+        resend_key = auth_service._get_setting("RESEND_API_KEY")
+        smtp_user = auth_service._get_setting("SMTP_USERNAME")
+        if provider == "auto":
+            if resend_key:
+                steps.append("Resend API failed, SMTP also failed (port blocked on cloud?)")
+            else:
+                steps.append("SMTP failed (port likely blocked). Set RESEND_API_KEY to use HTTP email.")
+        elif provider == "resend":
+            steps.append("Resend API call failed. Check RESEND_API_KEY and SENDER_EMAIL domain.")
+        else:
+            steps.append("SMTP failed. Ports 587/465 may be blocked on this host.")
+        return {"success": False, "steps": steps, "error": "Email send failed. See steps for details."}
 
 @router.post("/settings/test-neo4j")
 def test_neo4j():

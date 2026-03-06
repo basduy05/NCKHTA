@@ -782,7 +782,12 @@ function SettingsTab() {
     try {
       const res = await fetch(`${API_URL}/admin/settings/test-email`, { method: 'POST' });
       const data = await res.json();
-      alert(res.ok ? data.message : (data.detail || 'Email test failed'));
+      const steps = data.steps ? '\n' + data.steps.join('\n') : '';
+      if (data.success) {
+        alert(`✅ ${data.message}${steps}`);
+      } else {
+        alert(`❌ ${data.error || 'Email test failed'}${steps}`);
+      }
     } catch { alert('Connection error'); }
     finally { setTestingEmail(false); }
   };
@@ -799,7 +804,7 @@ function SettingsTab() {
 
   const toggleShow = (key: string) => setShowPasswords(p => ({...p, [key]: !p[key]}));
 
-  const sensitiveKeys = ['GOOGLE_API_KEY', 'OPENAI_API_KEY', 'NEO4J_PASSWORD', 'SMTP_PASSWORD'];
+  const sensitiveKeys = ['GOOGLE_API_KEY', 'OPENAI_API_KEY', 'NEO4J_PASSWORD', 'SMTP_PASSWORD', 'RESEND_API_KEY'];
 
   const renderField = (key: string, label: string, placeholder: string) => {
     const isSensitive = sensitiveKeys.includes(key);
@@ -857,22 +862,50 @@ function SettingsTab() {
         </div>
       </div>
 
-      {/* SMTP */}
+      {/* Email Configuration */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-lg font-bold text-gray-900 flex items-center">
-            <Mail className="mr-2 text-indigo-600" size={20}/> Email SMTP
+            <Mail className="mr-2 text-indigo-600" size={20}/> Email Configuration
           </h2>
           <button onClick={handleTestEmail} disabled={testingEmail} className="px-4 py-1.5 bg-green-100 text-green-700 rounded-lg text-sm font-medium hover:bg-green-200 disabled:opacity-50 flex items-center">
             <Mail size={14} className="mr-1.5"/> {testingEmail ? 'Sending...' : 'Send test email'}
           </button>
         </div>
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4 text-sm text-amber-800">
+          <strong>Lưu ý:</strong> Render free tier chặn SMTP (port 587/465). Hãy dùng <strong>Resend</strong> (miễn phí 100 email/ngày).
+          Đăng ký tại <a href="https://resend.com" target="_blank" rel="noopener noreferrer" className="underline font-semibold">resend.com</a>, lấy API Key, và đặt Provider = resend.
+        </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Email Provider</label>
+            <select
+              value={settings['EMAIL_PROVIDER'] || 'auto'}
+              onChange={e => setSettings({...settings, EMAIL_PROVIDER: e.target.value})}
+              className="w-full border border-gray-200 rounded-lg p-2.5 focus:ring-2 focus:ring-indigo-500 outline-none text-sm bg-white"
+            >
+              <option value="auto">Auto (Resend → SMTP fallback)</option>
+              <option value="resend">Resend (HTTP API - works on cloud)</option>
+              <option value="smtp">SMTP only (works locally)</option>
+            </select>
+          </div>
+          {renderField('RESEND_API_KEY', 'Resend API Key', 're_xxxxxxxx')}
+          {renderField('SENDER_EMAIL', 'Sender Email', 'your@gmail.com')}
+          <div className="md:col-span-2"><hr className="border-gray-200"/></div>
           {renderField('SMTP_SERVER', 'SMTP Server', 'smtp.gmail.com')}
           {renderField('SMTP_PORT', 'SMTP Port', '587')}
-          {renderField('SMTP_USERNAME', 'SMTP Username (Email)', 'your@gmail.com')}
-          {renderField('SMTP_PASSWORD', 'SMTP Password (App Password)', '***')}
-          {renderField('SENDER_EMAIL', 'Sender Email', 'your@gmail.com')}
+          {renderField('SMTP_USERNAME', 'SMTP Username', 'your@gmail.com')}
+          {renderField('SMTP_PASSWORD', 'SMTP App Password', '***')}
+        </div>
+      </div>
+
+      {/* Frontend URL */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+        <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center">
+          <Settings className="mr-2 text-indigo-600" size={20}/> Frontend URL
+        </h2>
+        <div className="grid grid-cols-1 gap-4">
+          {renderField('FRONTEND_URL', 'Frontend URL (for password reset links)', 'https://your-app.vercel.app')}
         </div>
       </div>
 

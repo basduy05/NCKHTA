@@ -90,7 +90,45 @@ def generate_reset_token(length=32):
     """Generate random token for password reset"""
     return "".join(random.choices(string.ascii_letters + string.digits, k=length))
 
-def send_email(to_email: str, subject: str, html_content: str) -> bool:
+def _send_via_resend(to_email: str, subject: str, html_content: str) -> bool:
+    """Send email via Resend HTTP API (works on Render/cloud where SMTP is blocked)."""
+    import urllib.request
+    import json as _json
+
+    api_key = _get_setting("RESEND_API_KEY")
+    sender = _get_setting("SENDER_EMAIL") or _get_setting("SMTP_USERNAME")
+    if not api_key:
+        print("RESEND_API_KEY not configured")
+        return False
+
+    data = _json.dumps({
+        "from": f"EAM System <{sender}>",
+        "to": [to_email],
+        "subject": subject,
+        "html": html_content,
+    }).encode()
+
+    req = urllib.request.Request(
+        "https://api.resend.com/emails",
+        data=data,
+        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            result = _json.loads(resp.read())
+            print(f"Resend OK: {result}")
+            return True
+    except urllib.error.HTTPError as e:
+        body = e.read().decode()
+        print(f"Resend HTTP {e.code}: {body}")
+        return False
+    except Exception as e:
+        print(f"Resend failed: {type(e).__name__}: {e}")
+        return False
+
+
+def _send_via_smtp(to_email: str, subject: str, html_content: str) -> bool:
+    """Send email via SMTP (works locally, blocked on some cloud hosts)."""
     smtp_server = _get_setting("SMTP_SERVER", "smtp.gmail.com")
     smtp_port = int(_get_setting("SMTP_PORT", "587"))
     smtp_username = _get_setting("SMTP_USERNAME")
@@ -110,7 +148,6 @@ def send_email(to_email: str, subject: str, html_content: str) -> bool:
 
         print(f"Connecting to SMTP {smtp_server}:{smtp_port} as {smtp_username}...")
         try:
-            # Try STARTTLS (port 587)
             server = smtplib.SMTP(smtp_server, smtp_port, timeout=15)
             server.starttls()
         except Exception as e1:
@@ -124,6 +161,22 @@ def send_email(to_email: str, subject: str, html_content: str) -> bool:
     except Exception as e:
         print(f"Failed to send email to {to_email}: {type(e).__name__}: {e}")
         return False
+
+
+def send_email(to_email: str, subject: str, html_content: str) -> bool:
+    provider = (_get_setting("EMAIL_PROVIDER") or "auto").lower().strip()
+
+    if provider == "resend":
+        return _send_via_resend(to_email, subject, html_content)
+    elif provider == "smtp":
+        return _send_via_smtp(to_email, subject, html_content)
+    else:
+        # auto: try Resend first (works on cloud), fall back to SMTP (works locally)
+        if _get_setting("RESEND_API_KEY"):
+            if _send_via_resend(to_email, subject, html_content):
+                return True
+            print("Resend failed, falling back to SMTP...")
+        return _send_via_smtp(to_email, subject, html_content)
 
 # --- EMAIL TEMPLATES ---
 
