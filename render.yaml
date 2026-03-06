@@ -1,7 +1,7 @@
 services:
   # AI Service (FastAPI - Python)
   - type: web
-    name: iedu
+    name: eam-ai-service
     env: python
     region: singapore
     plan: free
@@ -16,6 +16,8 @@ services:
       - key: NEO4J_USERNAME
         sync: false
       - key: NEO4J_PASSWORD
+        sync: false
+      - key: NEO4J_DATABASE
         sync: false
       - key: GOOGLE_API_KEY
         sync: false
