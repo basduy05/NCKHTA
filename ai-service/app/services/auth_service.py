@@ -90,7 +90,7 @@ def generate_reset_token(length=32):
     """Generate random token for password reset"""
     return "".join(random.choices(string.ascii_letters + string.digits, k=length))
 
-def send_email(to_email: str, subject: str, html_content: str):
+def send_email(to_email: str, subject: str, html_content: str) -> bool:
     smtp_server = _get_setting("SMTP_SERVER", "smtp.gmail.com")
     smtp_port = int(_get_setting("SMTP_PORT", "587"))
     smtp_username = _get_setting("SMTP_USERNAME")
@@ -123,7 +123,7 @@ def send_email(to_email: str, subject: str, html_content: str):
         return True
     except Exception as e:
         print(f"Failed to send email to {to_email}: {type(e).__name__}: {e}")
-        return str(e)
+        return False
 
 # --- EMAIL TEMPLATES ---
 

@@ -150,9 +150,12 @@ def forgot_password(email: str):
         )
         conn.commit()
         
-        # Send reset email
-        reset_link = f"https://your-frontend-domain.com/reset-password?token={reset_token}&email={email}"
-        auth_service.send_password_reset_email(email, reset_token, reset_link)
+        # Send reset email using configured frontend URL
+        frontend_url = auth_service._get_setting("FRONTEND_URL", "http://localhost:3000").rstrip("/")
+        reset_link = f"{frontend_url}/reset-password?token={reset_token}&email={email}"
+        sent = auth_service.send_password_reset_email(email, reset_token, reset_link)
+        if not sent:
+            raise HTTPException(status_code=500, detail="Failed to send reset email")
         
     except Exception as e:
         conn.close()
