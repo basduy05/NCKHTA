@@ -51,6 +51,8 @@ async def register(user: UserRegister):
     except Exception as e:
         if 'conn' in locals() and conn: conn.close()
         raise HTTPException(status_code=500, detail=f"Server error: {str(e)}")
+
+@router.post("/verify-otp")
 async def verify_otp(data: OTPVerify):
     conn = get_db()
     cursor = conn.cursor()
