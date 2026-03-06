@@ -398,10 +398,11 @@ def test_email():
     sender = auth_service._get_setting("SENDER_EMAIL") or auth_service._get_setting("SMTP_USERNAME")
     if not sender:
         raise HTTPException(status_code=400, detail="SENDER_EMAIL / SMTP_USERNAME not configured.")
-    ok = auth_service.send_email(sender, "EAM Test Email", "<h2>Test email from EAM System</h2><p>If you see this, SMTP is working correctly!</p>")
-    if ok:
+    result = auth_service.send_email(sender, "EAM Test Email", "<h2>Test email from EAM System</h2><p>If you see this, SMTP is working correctly!</p>")
+    if result is True:
         return {"message": f"Test email sent to {sender}"}
-    raise HTTPException(status_code=500, detail="Failed to send test email. Check SMTP settings and Render logs.")
+    detail = result if isinstance(result, str) else "Failed to send test email. Check SMTP settings."
+    raise HTTPException(status_code=500, detail=detail)
 
 @router.post("/settings/test-neo4j")
 def test_neo4j():

@@ -117,8 +117,8 @@ def send_email(to_email: str, subject: str, html_content: str):
         print(f"Email sent successfully to {to_email}")
         return True
     except Exception as e:
-        print(f"Failed to send email to {to_email}: {e}")
-        return False
+        print(f"Failed to send email to {to_email}: {type(e).__name__}: {e}")
+        return str(e)
 
 # --- EMAIL TEMPLATES ---
 
