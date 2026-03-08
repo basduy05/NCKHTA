@@ -3,7 +3,7 @@ import React, { Suspense } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import Image from "next/image";
-import { BookOpen, Users, LayoutDashboard, Component, Database, GraduationCap, BookText, FileSearch, LogOut, Settings, ClipboardList, Sparkles, Search, BookMarked } from "lucide-react";
+import { BookOpen, Users, LayoutDashboard, Component, Database, GraduationCap, BookText, FileSearch, LogOut, Settings, ClipboardList, Sparkles, Search, BookMarked, Mic, Award } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 
 function DashboardSidebar({ user, logout }: { user: any, logout: any }) {
@@ -43,6 +43,8 @@ function DashboardSidebar({ user, logout }: { user: any, logout: any }) {
       { name: "Bài tập & Kiểm tra", href: "/dashboard/student?tab=assignments", icon: ClipboardList, id: "assignments" },
       { name: "Tra từ điển", href: "/dashboard/student?tab=dictionary", icon: Search, id: "dictionary" },
       { name: "Từ vựng đã lưu", href: "/dashboard/student?tab=vocabulary", icon: BookMarked, id: "vocabulary" },
+      { name: "Luyện phát âm IPA", href: "/dashboard/student?tab=ipa", icon: Mic, id: "ipa" },
+      { name: "Luyện thi & Kỹ năng", href: "/dashboard/student?tab=practice", icon: Award, id: "practice" },
       { name: "Học với AI", href: "/dashboard/student?tab=ai-tools", icon: Sparkles, id: "ai-tools" },
       { name: "Kết quả học tập", href: "/dashboard/student?tab=scores", icon: Component, id: "scores" },
     ];
@@ -70,19 +72,19 @@ function DashboardSidebar({ user, logout }: { user: any, logout: any }) {
         })}
       </nav>
       <div className="pt-6 border-t border-gray-100 flex items-center justify-between">
-         <div className="flex items-center">
-           <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center text-blue-700 font-bold mr-3">
-             {user ? user.name.charAt(0).toUpperCase() : (isAdmin ? "A" : isTeacher ? "T" : "S")}
-           </div>
-           <div>
-             <p className="text-sm font-semibold text-gray-900">{user ? user.name : (isAdmin ? "Admin" : isTeacher ? "Teacher" : "Student")}</p>
-             <p className="text-xs text-gray-500 capitalize">{user ? user.role : "Guest"}</p>
-           </div>
-         </div>
-         
-         <button onClick={handleLogout} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition" title="Đăng xuất" type="button">
-           <LogOut size={20} />
-         </button>
+        <div className="flex items-center">
+          <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center text-blue-700 font-bold mr-3">
+            {user ? user.name.charAt(0).toUpperCase() : (isAdmin ? "A" : isTeacher ? "T" : "S")}
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-gray-900">{user ? user.name : (isAdmin ? "Admin" : isTeacher ? "Teacher" : "Student")}</p>
+            <p className="text-xs text-gray-500 capitalize">{user ? user.role : "Guest"}</p>
+          </div>
+        </div>
+
+        <button onClick={handleLogout} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition" title="Đăng xuất" type="button">
+          <LogOut size={20} />
+        </button>
       </div>
     </aside>
   );
@@ -112,11 +114,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </div>
     );
   }
-  
+
   return (
     <div className="flex h-screen bg-gray-50">
       <Suspense fallback={<div className="w-64 bg-white border-r border-gray-200 p-6">Loading sidebar...</div>}>
-         <DashboardSidebar user={user} logout={logout} />
+        <DashboardSidebar user={user} logout={logout} />
       </Suspense>
       <main className="flex-1 p-8 overflow-auto">
         {children}
