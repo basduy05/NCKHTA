@@ -5,6 +5,7 @@ from pydantic import BaseModel
 from typing import List, Optional
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "app.db")
+MIN_MEANINGS_COUNT = 3  # Minimum meanings required before skipping AI lookup
 
 def init_db():
     print(f"[DB] Initializing database at {DB_PATH}")
@@ -140,6 +141,8 @@ def init_db():
     """)
 
     # --- SAVED VOCABULARY TABLE ---
+    # NOTE: UNIQUE(user_id, word, pos) allows saving multiple meanings per word
+    # e.g., "run" as verb and "run" as noun are separate entries
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS saved_vocabulary (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -154,15 +157,17 @@ def init_db():
             source TEXT DEFAULT 'manual',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (user_id) REFERENCES users(id),
-            UNIQUE(user_id, word)
+            UNIQUE(user_id, word, pos)
         )
     """)
 
     # --- DICTIONARY CACHE TABLE (full AI lookup results) ---
+    # word_original preserves the original casing (e.g. "IT" vs "it")
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS dictionary_cache (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             word TEXT UNIQUE NOT NULL,
+            word_original TEXT,
             data_json TEXT NOT NULL,
             meanings_count INTEGER DEFAULT 0,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -182,6 +187,50 @@ def init_db():
     try:
         cursor.execute("ALTER TABLE classes ADD COLUMN teacher_id INTEGER REFERENCES users(id)")
     except sqlite3.OperationalError: pass
+
+    # --- MIGRATION: Add word_original to dictionary_cache ---
+    try:
+        cursor.execute("ALTER TABLE dictionary_cache ADD COLUMN word_original TEXT")
+    except sqlite3.OperationalError: pass
+
+    # --- MIGRATION: Recreate saved_vocabulary with UNIQUE(user_id, word, pos) ---
+    # SQLite can't alter constraints, so we recreate the table if needed
+    try:
+        # Check if old constraint exists by testing the schema
+        schema_row = cursor.execute(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='saved_vocabulary'"
+        ).fetchone()
+        if schema_row and "UNIQUE(user_id, word)" in schema_row[0] and "UNIQUE(user_id, word, pos)" not in schema_row[0]:
+            print("[DB MIGRATION] Recreating saved_vocabulary with UNIQUE(user_id, word, pos)")
+            cursor.execute("ALTER TABLE saved_vocabulary RENAME TO saved_vocabulary_old")
+            cursor.execute("""
+                CREATE TABLE saved_vocabulary (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    word TEXT NOT NULL,
+                    phonetic TEXT,
+                    pos TEXT,
+                    meaning_en TEXT,
+                    meaning_vn TEXT,
+                    example TEXT,
+                    level TEXT DEFAULT 'B1',
+                    source TEXT DEFAULT 'manual',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users(id),
+                    UNIQUE(user_id, word, pos)
+                )
+            """)
+            cursor.execute("""
+                INSERT OR IGNORE INTO saved_vocabulary 
+                    (id, user_id, word, phonetic, pos, meaning_en, meaning_vn, example, level, source, created_at)
+                SELECT id, user_id, word, phonetic, pos, meaning_en, meaning_vn, example, level, source, created_at
+                FROM saved_vocabulary_old
+            """)
+            cursor.execute("DROP TABLE saved_vocabulary_old")
+            conn.commit()
+            print("[DB MIGRATION] saved_vocabulary migrated OK")
+    except Exception as e:
+        print(f"[DB MIGRATION] saved_vocabulary migration error: {e}")
 
     # Seed settings from environment variables
     # Use INSERT OR REPLACE so env vars always persist across redeployments

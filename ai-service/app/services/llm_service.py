@@ -201,17 +201,139 @@ def generate_example_sentence(word: str, meaning: str = "", level: str = "B1"):
         return f"This is an example sentence for {word}."
 
 
-def lookup_dictionary(word: str):
-    """
-    AI-powered dictionary lookup combining Cambridge/Oxford style data.
-    Returns comprehensive word data. Uses in-memory cache.
-    """
-    # Check cache first
-    cached = _cache_get(word)
-    if cached:
-        cached["_from_cache"] = True
-        return cached
+# ─── FREE DICTIONARY API INTEGRATION ─────────────────────────────────────────
+import requests
 
+def lookup_free_dictionary(word: str):
+    """
+    Look up a word using the Free Dictionary API (dictionaryapi.dev).
+    Returns structured data with all meanings, phonetics, examples.
+    This is FREE and has no rate limits.
+    """
+    try:
+        url = f"https://api.dictionaryapi.dev/api/v2/entries/en/{word}"
+        resp = requests.get(url, timeout=10)
+        if resp.status_code != 200:
+            return None
+        
+        entries = resp.json()
+        if not isinstance(entries, list) or len(entries) == 0:
+            return None
+        
+        entry = entries[0]  # Primary entry
+        
+        # Extract phonetics
+        phonetic_uk = ""
+        phonetic_us = ""
+        for p in entry.get("phonetics", []):
+            text = p.get("text", "")
+            audio = p.get("audio", "")
+            if not text:
+                continue
+            if "uk" in audio.lower() or (not phonetic_uk and not audio):
+                phonetic_uk = text
+            if "us" in audio.lower() or (not phonetic_us and "uk" not in audio.lower()):
+                phonetic_us = text
+        if not phonetic_uk:
+            phonetic_uk = entry.get("phonetic", "")
+        if not phonetic_us:
+            phonetic_us = phonetic_uk
+        
+        # Extract ALL meanings across all entries
+        meanings = []
+        primary_pos = ""
+        for e in entries:
+            for m in e.get("meanings", []):
+                pos = m.get("partOfSpeech", "")
+                if not primary_pos:
+                    primary_pos = pos
+                
+                for defn in m.get("definitions", []):
+                    meaning_obj = {
+                        "pos": pos,
+                        "definition_en": defn.get("definition", ""),
+                        "definition_vn": "",  # Will be filled by AI
+                        "examples": [],
+                        "synonyms": defn.get("synonyms", [])[:3] or m.get("synonyms", [])[:3],
+                        "antonyms": defn.get("antonyms", [])[:2] or m.get("antonyms", [])[:2],
+                        "register": None,
+                    }
+                    if defn.get("example"):
+                        meaning_obj["examples"].append(defn["example"])
+                    meanings.append(meaning_obj)
+        
+        if not meanings:
+            return None
+        
+        return {
+            "word": word,
+            "phonetic_uk": phonetic_uk,
+            "phonetic_us": phonetic_us,
+            "pos": primary_pos,
+            "meanings": meanings,
+            "level": "",  # Will be estimated by AI
+            "word_family": [],
+            "collocations": [],
+            "sources": ["Free Dictionary API (Wiktionary)"],
+            "_needs_translation": True,  # Flag: needs Vietnamese translation
+        }
+    except Exception as e:
+        print(f"[Free Dictionary API] Error: {e}")
+        return None
+
+
+def translate_meanings_with_ai(word: str, meanings: list, estimate_level: bool = True):
+    """
+    Use AI ONLY to translate English definitions to Vietnamese.
+    Much cheaper than generating all dictionary data from scratch.
+    """
+    llm = get_llm()
+    if not llm:
+        return meanings, "B1"
+    
+    # Build compact translation request
+    definitions_text = "\n".join(
+        f"{i+1}. [{m.get('pos', '')}] {m.get('definition_en', '')}"
+        for i, m in enumerate(meanings[:15])  # Limit to 15 meanings
+    )
+    
+    prompt = PromptTemplate.from_template(
+        "Translate these English definitions of the word '{word}' to Vietnamese.\n"
+        "Also estimate the CEFR level (A1/A2/B1/B2/C1/C2) of this word.\n\n"
+        "Definitions:\n{definitions}\n\n"
+        "Return ONLY a JSON object with:\n"
+        '- "translations": array of Vietnamese translations (same order as input)\n'
+        '- "level": CEFR level estimate\n'
+        '- "word_family": array of 3-5 related word forms\n'
+        '- "collocations": array of 4-6 common collocations\n\n'
+        "Return ONLY valid JSON. No markdown."
+    )
+    
+    chain = prompt | llm
+    try:
+        response = _safe_invoke(chain, {"word": word, "definitions": definitions_text})
+        result = parse_json_response(response.content)
+        
+        if isinstance(result, dict):
+            translations = result.get("translations", [])
+            for i, meaning in enumerate(meanings[:15]):
+                if i < len(translations):
+                    meaning["definition_vn"] = translations[i]
+            level = result.get("level", "B1")
+            word_family = result.get("word_family", [])
+            collocations = result.get("collocations", [])
+            return meanings, level, word_family, collocations
+    except Exception as e:
+        print(f"[AI Translation] Error: {e}")
+    
+    return meanings, "B1", [], []
+
+
+def lookup_dictionary_full_ai(word: str):
+    """
+    Full AI-powered dictionary lookup (fallback when Free API has no results).
+    Used for abbreviations, slang, proper nouns, etc.
+    """
     llm = get_llm()
     if not llm:
         return {"word": word, "error": "LLM not configured"}
@@ -219,27 +341,30 @@ def lookup_dictionary(word: str):
     prompt = PromptTemplate.from_template(
         "You are an advanced English dictionary combining data from Cambridge Dictionary, "
         "Oxford Advanced Learner's Dictionary, and Longman Dictionary of Contemporary English.\n"
-        "Look up the English word: '{word}'\n\n"
-        "IMPORTANT: Provide ALL distinct meanings/senses of the word (at least 3-5 if the word has "
-        "multiple senses). Cover different parts of speech (noun, verb, adjective, etc.) and "
-        "different usage contexts. Each meaning should be a separate entry.\n\n"
+        "Look up the English word/term: '{word}'\n\n"
+        "IMPORTANT RULES:\n"
+        "1. Provide ALL distinct meanings/senses (at least 3-5 if the word has multiple senses)\n"
+        "2. Cover ALL different parts of speech (noun, verb, adjective, etc.)\n"
+        "3. If the word is an ABBREVIATION (like IT, AI, USA), include its full form as the FIRST meaning\n"
+        "4. If the word has BOTH a common meaning AND an abbreviation meaning, include BOTH\n"
+        "5. Each meaning must be a separate entry in the meanings array\n\n"
         "Return a JSON object with these EXACT keys:\n"
-        '- "word": the word\n'
-        '- "phonetic_uk": UK IPA pronunciation (e.g. /ˈwɜː.tər/)\n'
-        '- "phonetic_us": US IPA pronunciation (e.g. /ˈwɝː.t̬ɚ/)\n'
-        '- "pos": primary part of speech\n'
-        '- "meanings": array of 3-5+ objects (one per distinct sense), each with:\n'
-        '    - "pos": part of speech for this meaning (noun, verb, adj, adv, etc.)\n'
-        '    - "definition_en": clear English definition from that sense\n'
-        '    - "definition_vn": accurate Vietnamese translation\n'
-        '    - "examples": array of 2-3 natural example sentences showing this specific sense\n'
-        '    - "synonyms": array of 2-3 synonyms specific to this sense\n'
-        '    - "antonyms": array of 1-2 antonyms (if applicable, else empty array)\n'
-        '    - "register": usage register if notable (formal/informal/slang/literary, else null)\n'
-        '- "level": CEFR level (A1/A2/B1/B2/C1/C2)\n'
-        '- "word_family": array of related word forms (e.g. ["beauty", "beautiful", "beautifully", "beautify"])\n'
-        '- "collocations": array of 4-6 common collocations\n'
-        '- "sources": ["Cambridge Dictionary", "Oxford Advanced Learner\'s Dictionary", "Longman Dictionary"]\n\n'
+        '"word": the word (preserve original casing)\n'
+        '"phonetic_uk": UK IPA pronunciation\n'
+        '"phonetic_us": US IPA pronunciation\n'
+        '"pos": primary part of speech\n'
+        '"meanings": array of objects, each with:\n'
+        '  "pos": part of speech\n'
+        '  "definition_en": English definition\n'
+        '  "definition_vn": Vietnamese translation\n'
+        '  "examples": array of 2-3 example sentences\n'
+        '  "synonyms": array of 2-3 synonyms\n'
+        '  "antonyms": array (empty if none)\n'
+        '  "register": formal/informal/slang/technical or null\n'
+        '"level": CEFR level (A1-C2)\n'
+        '"word_family": array of related word forms\n'
+        '"collocations": array of 4-6 common collocations\n'
+        '"sources": ["Cambridge Dictionary", "Oxford Advanced Learner\'s Dictionary", "Longman Dictionary"]\n\n'
         "Return ONLY valid JSON. No markdown, no extra text."
     )
 
@@ -248,10 +373,50 @@ def lookup_dictionary(word: str):
         response = _safe_invoke(chain, {"word": word})
         result = parse_json_response(response.content)
         if isinstance(result, dict) and "word" in result:
-            _cache_set(word, result)  # Cache successful result
+            _cache_set(word, result)
             return result
         return {"word": word, "error": "Could not parse dictionary data"}
     except Exception as e:
-        print(f"lookup_dictionary error: {e}")
+        print(f"lookup_dictionary_full_ai error: {e}")
         return {"word": word, "error": str(e)}
+
+
+def lookup_dictionary(word: str):
+    """
+    Hybrid dictionary lookup:
+    1. Try Free Dictionary API first (free, accurate English data)
+    2. Use AI only for Vietnamese translation (saves 70-80% AI cost)
+    3. Fallback to full AI if Free API doesn't have the word
+    
+    Uses in-memory cache for fast repeated lookups.
+    """
+    # Check cache first
+    cached = _cache_get(word)
+    if cached:
+        cached["_from_cache"] = True
+        return cached
+
+    # Step 1: Try Free Dictionary API (free, comprehensive English data)
+    free_data = lookup_free_dictionary(word)
+    
+    if free_data and len(free_data.get("meanings", [])) > 0:
+        # Step 2: Use AI only for translation (much cheaper)
+        meanings, level, word_family, collocations = translate_meanings_with_ai(
+            word, free_data["meanings"]
+        )
+        free_data["meanings"] = meanings
+        free_data["level"] = level
+        free_data["word_family"] = word_family
+        free_data["collocations"] = collocations
+        free_data["sources"] = ["Free Dictionary API (Wiktionary)", "AI Translation"]
+        free_data.pop("_needs_translation", None)
+        
+        _cache_set(word, free_data)
+        return free_data
+    
+    # Step 3: Fallback to full AI (for abbreviations, slang, proper nouns)
+    result = lookup_dictionary_full_ai(word)
+    if not result.get("error"):
+        _cache_set(word, result)
+    return result
 

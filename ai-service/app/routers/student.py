@@ -289,81 +289,126 @@ class DictionaryRequest(BaseModel):
 
 @router.post("/dictionary/lookup")
 def dictionary_lookup(req: DictionaryRequest, authorization: str = Header(...)):
-    """Dictionary lookup: DB cache → Neo4j → AI → save to DB + Neo4j."""
+    """
+    Hybrid dictionary lookup with quality check:
+    1. DB cache (check meanings_count >= MIN_MEANINGS_COUNT)
+    2. AI lookup if missing or insufficient
+    3. Save to DB + Neo4j (all meanings, not just first)
+    
+    Case-sensitive: "IT" and "it" are treated as different words.
+    """
+    from ..database import MIN_MEANINGS_COUNT
     _get_current_student(authorization)
-    word = req.word.strip().lower()
-    if not word or len(word) > 100:
+    
+    word_original = req.word.strip()
+    word_lower = word_original.lower()
+    
+    if not word_original or len(word_original) > 100:
         raise HTTPException(status_code=400, detail="Invalid word")
 
-    # 1) Check SQLite dictionary_cache first (persistent, full data)
+    # Determine lookup key: use original casing if it's all-uppercase (abbreviation)
+    is_abbreviation = word_original.isupper() and len(word_original) >= 2
+    lookup_key = word_original if is_abbreviation else word_lower
+
+    # 1) Check SQLite dictionary_cache first
     conn = get_db()
     try:
-        row = conn.execute("SELECT data_json FROM dictionary_cache WHERE word = ?", (word,)).fetchone()
+        row = conn.execute(
+            "SELECT data_json, meanings_count, word_original FROM dictionary_cache WHERE word = ?",
+            (lookup_key,)
+        ).fetchone()
     finally:
         conn.close()
+    
     if row:
-        import json
         cached = json.loads(row["data_json"])
-        cached["_source"] = "database"
-        connections = graph_service.get_word_connections(word)
-        cached["graph_connections"] = connections.get("connections", [])
-        return cached
+        meanings_count = row["meanings_count"] or 0
+        
+        # Quality check: if meanings count is sufficient, return from cache
+        if meanings_count >= MIN_MEANINGS_COUNT:
+            cached["_source"] = "database"
+            cached["_meanings_count"] = meanings_count
+            # Enrich with graph connections
+            connections = graph_service.get_word_connections(word_lower)
+            cached["graph_connections"] = connections.get("connections", [])
+            return cached
+        # Else: fall through to AI lookup for more complete data
 
-    # 2) Check Neo4j graph (fast, no AI cost)
-    graph_data = graph_service.find_word_in_graph(word)
-    if graph_data:
-        connections = graph_service.get_word_connections(word)
-        graph_data["graph_connections"] = connections.get("connections", [])
-        graph_data["_source"] = "graph"
-        return graph_data
-
-    # 3) Not cached anywhere → ask AI
+    # 2) Not cached or insufficient meanings → ask AI (Hybrid: Free API + AI)
     llm = llm_service.get_llm()
     if not llm:
+        # If no LLM but we have some cached data, return it anyway
+        if row:
+            cached = json.loads(row["data_json"])
+            cached["_source"] = "database_partial"
+            return cached
         raise HTTPException(status_code=503, detail="LLM service unavailable")
-    result = llm_service.lookup_dictionary(word)
+    
+    result = llm_service.lookup_dictionary(lookup_key)
     if result.get("error"):
+        # If AI failed but we have cached data, return cached
+        if row:
+            cached = json.loads(row["data_json"])
+            cached["_source"] = "database_fallback"
+            return cached
         raise HTTPException(status_code=500, detail=result["error"])
 
-    # 4) Save full AI result to SQLite for permanent cache
+    # 3) Save full result to SQLite dictionary_cache
     try:
-        import json
         meanings_count = len(result.get("meanings", []))
         conn = get_db()
         try:
             conn.execute(
-                """INSERT INTO dictionary_cache (word, data_json, meanings_count)
-                   VALUES (?, ?, ?)
-                   ON CONFLICT(word) DO UPDATE SET data_json=excluded.data_json,
-                   meanings_count=excluded.meanings_count, updated_at=CURRENT_TIMESTAMP""",
-                (word, json.dumps(result, ensure_ascii=False), meanings_count)
+                """INSERT INTO dictionary_cache (word, word_original, data_json, meanings_count)
+                   VALUES (?, ?, ?, ?)
+                   ON CONFLICT(word) DO UPDATE SET
+                   data_json=excluded.data_json,
+                   word_original=excluded.word_original,
+                   meanings_count=excluded.meanings_count,
+                   updated_at=CURRENT_TIMESTAMP""",
+                (lookup_key, word_original, json.dumps(result, ensure_ascii=False), meanings_count)
             )
             conn.commit()
         finally:
             conn.close()
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[DB SAVE] dictionary_cache error: {e}")
 
-    # 5) Also save key data to Neo4j for graph relationships
+    # 4) Save ALL meanings to Neo4j (not just first one)
     try:
-        first_meaning = result.get("meanings", [{}])[0] if result.get("meanings") else {}
+        all_synonyms = []
+        all_antonyms = []
+        primary_meaning_en = ""
+        primary_meaning_vn = ""
+        primary_pos = result.get("pos", "")
+        
+        for i, meaning in enumerate(result.get("meanings", [])):
+            if i == 0:
+                primary_meaning_en = meaning.get("definition_en", "")
+                primary_meaning_vn = meaning.get("definition_vn", "")
+                primary_pos = meaning.get("pos", primary_pos)
+            all_synonyms.extend(meaning.get("synonyms", []))
+            all_antonyms.extend(meaning.get("antonyms", []))
+        
         graph_service.save_word_to_graph({
-            "word": word,
+            "word": word_lower,
             "phonetic": result.get("phonetic_uk", ""),
-            "pos": result.get("pos", ""),
-            "meaning_en": first_meaning.get("definition_en", ""),
-            "meaning_vn": first_meaning.get("definition_vn", ""),
-            "example": (first_meaning.get("examples") or [""])[0],
+            "pos": primary_pos,
+            "meaning_en": primary_meaning_en,
+            "meaning_vn": primary_meaning_vn,
+            "example": (result.get("meanings", [{}])[0].get("examples") or [""])[0] if result.get("meanings") else "",
             "level": result.get("level", "B1"),
-            "synonyms": first_meaning.get("synonyms", []),
-            "antonyms": first_meaning.get("antonyms", []),
+            "synonyms": list(set(all_synonyms))[:5],
+            "antonyms": list(set(all_antonyms))[:3],
         })
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[Neo4j SAVE] error: {e}")
 
-    connections = graph_service.get_word_connections(word)
+    # 5) Add graph connections and return
+    connections = graph_service.get_word_connections(word_lower)
     result["graph_connections"] = connections.get("connections", [])
     result["_source"] = "ai"
+    result["_meanings_count"] = len(result.get("meanings", []))
     return result
 
 
@@ -393,8 +438,8 @@ def save_vocabulary(req: SaveVocabRequest, authorization: str = Header(...)):
         conn.execute(
             """INSERT INTO saved_vocabulary (user_id, word, phonetic, pos, meaning_en, meaning_vn, example, level, source)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-               ON CONFLICT(user_id, word) DO UPDATE SET
-                   phonetic=excluded.phonetic, pos=excluded.pos,
+               ON CONFLICT(user_id, word, pos) DO UPDATE SET
+                   phonetic=excluded.phonetic,
                    meaning_en=excluded.meaning_en, meaning_vn=excluded.meaning_vn,
                    example=excluded.example, level=excluded.level, source=excluded.source""",
             (student["id"], word, req.phonetic, req.pos, req.meaning_en, req.meaning_vn, req.example, req.level, req.source)
