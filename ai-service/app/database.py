@@ -180,6 +180,11 @@ def init_db():
 
     # --- MIGRATION: Add file columns to lessons ---
     try:
+        cursor.execute("ALTER TABLE saved_vocabulary ADD COLUMN audio_url TEXT")
+    except sqlite3.OperationalError: pass
+
+    # --- MIGRATION: Add file columns to lessons ---
+    try:
         cursor.execute("ALTER TABLE lessons ADD COLUMN file_name TEXT")
     except sqlite3.OperationalError: pass
     try:

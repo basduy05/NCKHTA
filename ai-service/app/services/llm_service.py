@@ -225,15 +225,20 @@ def lookup_free_dictionary(word: str):
         # Extract phonetics
         phonetic_uk = ""
         phonetic_us = ""
+        audio_url = ""
         for p in entry.get("phonetics", []):
             text = p.get("text", "")
             audio = p.get("audio", "")
+            if audio and not audio_url:
+                audio_url = audio  # Take the first available audio
             if not text:
                 continue
             if "uk" in audio.lower() or (not phonetic_uk and not audio):
                 phonetic_uk = text
             if "us" in audio.lower() or (not phonetic_us and "uk" not in audio.lower()):
                 phonetic_us = text
+                if audio:
+                     audio_url = audio # Prefer US audio if available
         if not phonetic_uk:
             phonetic_uk = entry.get("phonetic", "")
         if not phonetic_us:
@@ -269,6 +274,7 @@ def lookup_free_dictionary(word: str):
             "word": word,
             "phonetic_uk": phonetic_uk,
             "phonetic_us": phonetic_us,
+            "audio_url": audio_url,
             "pos": primary_pos,
             "meanings": meanings,
             "level": "",  # Will be estimated by AI

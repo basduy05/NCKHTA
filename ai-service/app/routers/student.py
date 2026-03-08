@@ -416,11 +416,15 @@ def dictionary_lookup(req: DictionaryRequest, authorization: str = Header(...)):
         graph_service.save_word_to_graph({
             "word": word_lower,
             "phonetic": result.get("phonetic_uk", ""),
+            "audio_url": result.get("audio_url", ""),
             "pos": primary_pos,
             "meaning_en": primary_meaning_en,
             "meaning_vn": primary_meaning_vn,
             "example": (result.get("meanings", [{}])[0].get("examples") or [""])[0] if result.get("meanings") else "",
             "level": result.get("level", "B1"),
+            "word_family": result.get("word_family", []),
+            "collocations": result.get("collocations", []),
+            "idioms": result.get("idioms", []),
             "synonyms": list(set(all_synonyms))[:5],
             "antonyms": list(set(all_antonyms))[:3],
         })
@@ -443,6 +447,7 @@ def dictionary_lookup(req: DictionaryRequest, authorization: str = Header(...)):
 class SaveVocabRequest(BaseModel):
     word: str
     phonetic: str = ""
+    audio_url: str = ""
     pos: str = ""
     meaning_en: str = ""
     meaning_vn: str = ""
@@ -462,13 +467,14 @@ def save_vocabulary(req: SaveVocabRequest, authorization: str = Header(...)):
     conn = get_db()
     try:
         conn.execute(
-            """INSERT INTO saved_vocabulary (user_id, word, phonetic, pos, meaning_en, meaning_vn, example, level, source)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """INSERT INTO saved_vocabulary (user_id, word, phonetic, audio_url, pos, meaning_en, meaning_vn, example, level, source)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                ON CONFLICT(user_id, word, pos) DO UPDATE SET
                    phonetic=excluded.phonetic,
+                   audio_url=excluded.audio_url,
                    meaning_en=excluded.meaning_en, meaning_vn=excluded.meaning_vn,
                    example=excluded.example, level=excluded.level, source=excluded.source""",
-            (student["id"], word, req.phonetic, req.pos, req.meaning_en, req.meaning_vn, req.example, req.level, req.source)
+            (student["id"], word, req.phonetic, req.audio_url, req.pos, req.meaning_en, req.meaning_vn, req.example, req.level, req.source)
         )
         conn.commit()
     finally:
@@ -476,7 +482,7 @@ def save_vocabulary(req: SaveVocabRequest, authorization: str = Header(...)):
 
     # Also save to Neo4j knowledge graph
     graph_service.save_word_to_graph({
-        "word": word, "phonetic": req.phonetic, "pos": req.pos,
+        "word": word, "phonetic": req.phonetic, "audio_url": req.audio_url, "pos": req.pos,
         "meaning_en": req.meaning_en, "meaning_vn": req.meaning_vn,
         "example": req.example, "level": req.level,
     })

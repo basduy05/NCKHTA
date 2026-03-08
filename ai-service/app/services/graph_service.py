@@ -214,11 +214,15 @@ def save_word_to_graph(word_data: Dict) -> Dict:
     query = """
     MERGE (w:Word {text: $word})
     SET w.phonetic = $phonetic,
+        w.audio_url = $audio_url,
         w.pos = $pos,
         w.meaning_vn = $meaning_vn,
         w.meaning_en = $meaning_en,
         w.example = $example,
         w.level = $level,
+        w.word_family = $word_family,
+        w.collocations = $collocations,
+        w.idioms = $idioms,
         w.updated_at = datetime()
 
     WITH w
@@ -247,14 +251,30 @@ def save_word_to_graph(word_data: Dict) -> Dict:
         if isinstance(antonyms, list) and len(antonyms) > 0 and isinstance(antonyms[0], list):
             antonyms = [a for sub in antonyms for a in sub]
 
+        word_family = word_data.get("word_family", [])
+        collocations = word_data.get("collocations", [])
+        idioms_raw = word_data.get("idioms", [])
+        
+        # Format idioms array into a list of strings if they are objects
+        idioms_list = []
+        for i in idioms_raw:
+            if isinstance(i, dict):
+                idioms_list.append(f"{i.get('idiom', '')}: {i.get('meaning_vn', '')}")
+            else:
+                idioms_list.append(str(i))
+
         _safe_query(query, {
             "word": word,
             "phonetic": word_data.get("phonetic", word_data.get("phonetic_uk", "")),
+            "audio_url": word_data.get("audio_url", ""),
             "pos": word_data.get("pos", ""),
             "meaning_vn": word_data.get("meaning_vn", word_data.get("definition_vn", "")),
             "meaning_en": word_data.get("meaning_en", word_data.get("definition_en", "")),
             "example": word_data.get("example", ""),
             "level": word_data.get("level", "B1"),
+            "word_family": word_family if isinstance(word_family, list) else [],
+            "collocations": collocations if isinstance(collocations, list) else [],
+            "idioms": idioms_list,
             "synonyms": [s.lower().strip() for s in synonyms[:5] if isinstance(s, str)],
             "antonyms": [a.lower().strip() for a in antonyms[:3] if isinstance(a, str)],
         })

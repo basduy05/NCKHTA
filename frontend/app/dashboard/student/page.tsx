@@ -771,7 +771,15 @@ function DictionaryTab({ token }: { token: string | null }) {
   };
 
   const speak = (text: string, lang: string = "en-GB") => {
+    // If we have an authentic audio URL from the API/Database, play it instead of Robot voice
+    if (result && result.audio_url && result.word.toLowerCase() === text.toLowerCase()) {
+      const audio = new Audio(result.audio_url);
+      audio.play().catch(e => console.error("Audio playback error:", e));
+      return;
+    }
+
     if (typeof window !== "undefined" && window.speechSynthesis) {
+      window.speechSynthesis.cancel();
       const u = new SpeechSynthesisUtterance(text);
       u.lang = lang;
       u.rate = 0.85;
@@ -943,12 +951,17 @@ function DictionaryTab({ token }: { token: string | null }) {
                 <div className="bg-green-50 rounded-xl p-4">
                   <h4 className="text-sm font-bold text-green-700 mb-2">Thành ngữ (Idioms)</h4>
                   <div className="space-y-3">
-                    {result.idioms.map((idm: any, i: number) => (
-                      <div key={i} className="bg-white p-3 rounded-lg border border-green-200">
-                        <p className="font-bold text-green-800 text-sm">{idm.idiom}</p>
-                        <p className="text-green-600 text-xs mt-1">{idm.meaning_vn}</p>
-                      </div>
-                    ))}
+                    {result.idioms.map((idm: any, i: number) => {
+                      const isString = typeof idm === "string";
+                      const idiomText = isString ? idm.split(":")[0]?.trim() : idm.idiom;
+                      const idiomMeaning = isString ? idm.split(":")[1]?.trim() : idm.meaning_vn;
+                      return (
+                        <div key={i} className="bg-white p-3 rounded-lg border border-green-200">
+                          <p className="font-bold text-green-800 text-sm">{idiomText}</p>
+                          <p className="text-green-600 text-xs mt-1">{idiomMeaning}</p>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -1017,8 +1030,14 @@ function VocabularyTab({ token }: { token: string | null }) {
     finally { setDeleting(null); }
   };
 
-  const speak = (text: string) => {
+  const speak = (text: string, audio_url?: string) => {
+    if (audio_url) {
+      const audio = new Audio(audio_url);
+      audio.play().catch(e => console.error("Audio playback error:", e));
+      return;
+    }
     if (typeof window !== "undefined" && window.speechSynthesis) {
+      window.speechSynthesis.cancel();
       const u = new SpeechSynthesisUtterance(text);
       u.lang = "en-US";
       u.rate = 0.85;
@@ -1089,7 +1108,7 @@ function VocabularyTab({ token }: { token: string | null }) {
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
                       <h3 className="text-lg font-extrabold text-blue-700">{w.word}</h3>
-                      <button onClick={() => speak(w.word)} className="text-gray-400 hover:text-blue-600 transition"><Volume2 size={16} /></button>
+                      <button onClick={() => speak(w.word, w.audio_url)} className="text-gray-400 hover:text-blue-600 transition"><Volume2 size={16} /></button>
                       {w.pos && <span className="text-xs text-purple-600 bg-purple-50 px-2 py-0.5 rounded">{w.pos}</span>}
                       <span className={`text-xs px-2 py-0.5 rounded font-bold ${levelColors[w.level] || "bg-gray-100 text-gray-600"}`}>{w.level}</span>
                     </div>
@@ -1204,6 +1223,37 @@ function ScoresTab({ token }: { token: string | null }) {
 }
 
 // ==================== NEW: IPA TAB ====================
+const IPA_DATA = {
+  vowels: [
+    { ipa: "iː", example: "see", transcription: "siː", desc: "Long E" }, { ipa: "ɪ", example: "sit", transcription: "sɪt", desc: "Short I" },
+    { ipa: "ʊ", example: "put", transcription: "pʊt", desc: "Short U" }, { ipa: "uː", example: "two", transcription: "tuː", desc: "Long U" },
+    { ipa: "e", example: "ten", transcription: "ten", desc: "Short E" }, { ipa: "ə", example: "about", transcription: "əˈbaʊt", desc: "Schwa" },
+    { ipa: "ɜː", example: "bird", transcription: "bɜːd", desc: "Long R-colored" }, { ipa: "ɔː", example: "saw", transcription: "sɔː", desc: "Long O" },
+    { ipa: "æ", example: "cat", transcription: "kæt", desc: "Short A" }, { ipa: "ʌ", example: "cup", transcription: "kʌp", desc: "Short U" },
+    { ipa: "ɑː", example: "arm", transcription: "ɑːm", desc: "Long A" }, { ipa: "ɒ", example: "hot", transcription: "hɒt", desc: "Short O" }
+  ],
+  diphthongs: [
+    { ipa: "ɪə", example: "near", transcription: "nɪə", desc: "Ear" }, { ipa: "eɪ", example: "day", transcription: "deɪ", desc: "A" },
+    { ipa: "ʊə", example: "tour", transcription: "tʊə", desc: "Ure" }, { ipa: "ɔɪ", example: "boy", transcription: "bɔɪ", desc: "Oy" },
+    { ipa: "əʊ", example: "go", transcription: "gəʊ", desc: "Oh" }, { ipa: "eə", example: "hair", transcription: "heə", desc: "Air" },
+    { ipa: "aɪ", example: "my", transcription: "maɪ", desc: "Eye" }, { ipa: "aʊ", example: "how", transcription: "haʊ", desc: "Ow" }
+  ],
+  consonants: [
+    { ipa: "p", example: "pen", transcription: "pen", desc: "Voiceless bilabial" }, { ipa: "b", example: "bad", transcription: "bæd", desc: "Voiced bilabial" },
+    { ipa: "t", example: "tea", transcription: "tiː", desc: "Voiceless alveolar" }, { ipa: "d", example: "did", transcription: "dɪd", desc: "Voiced alveolar" },
+    { ipa: "tʃ", example: "chain", transcription: "tʃeɪn", desc: "Voiceless affricate" }, { ipa: "dʒ", example: "jam", transcription: "dʒæm", desc: "Voiced affricate" },
+    { ipa: "k", example: "cat", transcription: "kæt", desc: "Voiceless velar" }, { ipa: "g", example: "get", transcription: "get", desc: "Voiced velar" },
+    { ipa: "f", example: "fall", transcription: "fɔːl", desc: "Voiceless labiodental" }, { ipa: "v", example: "van", transcription: "væn", desc: "Voiced labiodental" },
+    { ipa: "θ", example: "thin", transcription: "θɪn", desc: "Voiceless dental" }, { ipa: "ð", example: "this", transcription: "ðɪs", desc: "Voiced dental" },
+    { ipa: "s", example: "see", transcription: "siː", desc: "Voiceless alveolar" }, { ipa: "z", example: "zoo", transcription: "zuː", desc: "Voiced alveolar" },
+    { ipa: "ʃ", example: "shoe", transcription: "ʃuː", desc: "Voiceless palatal" }, { ipa: "ʒ", example: "vision", transcription: "ˈvɪʒ.ən", desc: "Voiced palatal" },
+    { ipa: "m", example: "man", transcription: "mæn", desc: "Bilabial nasal" }, { ipa: "n", example: "now", transcription: "naʊ", desc: "Alveolar nasal" },
+    { ipa: "ŋ", example: "sing", transcription: "sɪŋ", desc: "Velar nasal" }, { ipa: "h", example: "hat", transcription: "hæt", desc: "Glottal fricative" },
+    { ipa: "l", example: "leg", transcription: "leg", desc: "Lateral approximant" }, { ipa: "r", example: "red", transcription: "red", desc: "Alveolar approximant" },
+    { ipa: "w", example: "wet", transcription: "wet", desc: "Labio-velar" }, { ipa: "j", example: "yes", transcription: "jes", desc: "Palatal approximant" }
+  ]
+};
+
 function IpaTab({ token }: { token: string | null }) {
   const [focus, setFocus] = useState("vowels");
   const [loading, setLoading] = useState(false);
@@ -1236,61 +1286,141 @@ function IpaTab({ token }: { token: string | null }) {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm text-center">
-        <h2 className="text-xl font-bold text-gray-900 mb-2 flex items-center justify-center gap-2">
-          <Mic className="text-blue-500" /> Luyện Phát âm IPA với AI
+    <div className="space-y-8">
+      {/* SECTION 1: STATIC IPA FLASHCARDS */}
+      <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
+        <h2 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
+          <BookOpen className="text-blue-500" /> Bảng phiên âm quốc tế (44 âm IPA)
         </h2>
-        <p className="text-gray-500 mb-6 mt-1">Chọn nhóm âm bạn muốn luyện tập, AI sẽ tạo các thẻ học tập dành riêng cho bạn.</p>
 
-        <div className="flex justify-center gap-4 mb-6">
-          <select value={focus} onChange={e => setFocus(e.target.value)} className="border border-gray-200 rounded-lg px-4 py-2 outline-none focus:border-blue-500 font-medium text-gray-700 bg-gray-50">
-            <option value="vowels">Nguyên âm (Vowels)</option>
-            <option value="consonants">Phụ âm (Consonants)</option>
-            <option value="diphthongs">Nguyên âm đôi (Diphthongs)</option>
-            <option value="difficult">Các âm khó (th, r, l...)</option>
+        {/* Vowels */}
+        <h3 className="text-lg font-bold text-gray-700 mb-4 border-l-4 border-blue-500 pl-3">Nguyên âm (Vowels)</h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-8">
+          {IPA_DATA.vowels.map((s, i) => (
+            <div key={i} className="bg-gray-50 rounded-xl p-4 border border-gray-100 shadow-sm hover:border-blue-300 hover:bg-blue-50 transition text-center cursor-pointer group" onClick={() => speak(s.example)}>
+              <div className="text-3xl font-mono text-blue-600 font-bold mb-2">/{s.ipa}/</div>
+              <div className="font-bold text-gray-800">{s.example} <span className="text-xs text-gray-500 font-normal">/{s.transcription}/</span></div>
+              <button className="mt-2 opacity-0 group-hover:opacity-100 transition"><Volume2 size={16} className="text-blue-500 mx-auto" /></button>
+            </div>
+          ))}
+        </div>
+
+        {/* Diphthongs */}
+        <h3 className="text-lg font-bold text-gray-700 mb-4 border-l-4 border-purple-500 pl-3">Nguyên âm đôi (Diphthongs)</h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-8">
+          {IPA_DATA.diphthongs.map((s, i) => (
+            <div key={i} className="bg-gray-50 rounded-xl p-4 border border-gray-100 shadow-sm hover:border-purple-300 hover:bg-purple-50 transition text-center cursor-pointer group" onClick={() => speak(s.example)}>
+              <div className="text-3xl font-mono text-purple-600 font-bold mb-2">/{s.ipa}/</div>
+              <div className="font-bold text-gray-800">{s.example} <span className="text-xs text-gray-500 font-normal">/{s.transcription}/</span></div>
+              <button className="mt-2 opacity-0 group-hover:opacity-100 transition"><Volume2 size={16} className="text-purple-500 mx-auto" /></button>
+            </div>
+          ))}
+        </div>
+
+        {/* Consonants */}
+        <h3 className="text-lg font-bold text-gray-700 mb-4 border-l-4 border-green-500 pl-3">Phụ âm (Consonants)</h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+          {IPA_DATA.consonants.map((s, i) => (
+            <div key={i} className="bg-gray-50 rounded-xl p-4 border border-gray-100 shadow-sm hover:border-green-300 hover:bg-green-50 transition text-center cursor-pointer group" onClick={() => speak(s.example)}>
+              <div className="text-3xl font-mono text-green-600 font-bold mb-2">/{s.ipa}/</div>
+              <div className="font-bold text-gray-800">{s.example} <span className="text-xs text-gray-500 font-normal">/{s.transcription}/</span></div>
+              <button className="mt-2 opacity-0 group-hover:opacity-100 transition"><Volume2 size={16} className="text-green-500 mx-auto" /></button>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* SECTION 2: AI EXERCISE GENERATION */}
+      <div className="bg-gradient-to-br from-indigo-50 to-blue-50 p-6 rounded-xl border border-indigo-100 shadow-sm text-center">
+        <h2 className="text-xl font-bold text-indigo-900 mb-2 flex items-center justify-center gap-2">
+          <Brain className="text-indigo-500" /> Trợ lý AI tạo bài tập Luyện Âm
+        </h2>
+        <p className="text-indigo-700 mb-6 mt-1">Chọn nhóm âm, AI sẽ cá nhân hoá các cặp từ dễ nhầm lẫn và trắc nghiệm thực hành cho riêng bạn.</p>
+
+        <div className="flex justify-center gap-4">
+          <select value={focus} onChange={e => setFocus(e.target.value)} className="border border-indigo-200 rounded-lg px-4 py-2 outline-none focus:ring-2 focus:ring-indigo-400 font-medium text-gray-700 bg-white">
+            <option value="vowels">Luyện Nguyên âm</option>
+            <option value="consonants">Luyện Phụ âm</option>
+            <option value="diphthongs">Luyện Nguyên âm đôi</option>
+            <option value="difficult">Luyện các âm khó (th, r, l...)</option>
           </select>
-          <button onClick={generateLesson} disabled={loading} className="btn-primary px-6 py-2 rounded-lg flex items-center gap-2 disabled:opacity-50 transition shadow-md">
-            {loading ? "Đang tạo thẻ..." : <><Sparkles size={18} /> Tạo thẻ học IPA</>}
+          <button onClick={generateLesson} disabled={loading} className="px-6 py-2 bg-indigo-600 text-white font-bold rounded-lg flex items-center gap-2 hover:bg-indigo-700 disabled:opacity-50 transition shadow-md">
+            {loading ? "Đang soạn bài..." : <><Sparkles size={18} /> Sinh bài tập AI</>}
           </button>
         </div>
       </div>
 
+      {/* AI EXERCISE RESULTS */}
       {lesson && (
-        <div className="space-y-6">
-          <div className="bg-gradient-to-br from-indigo-50 to-blue-50 border border-indigo-100 rounded-xl p-8 shadow-sm text-center">
-            <h3 className="text-2xl font-bold text-indigo-900 mb-3">{lesson.title}</h3>
-            <p className="text-indigo-700 mb-8 max-w-2xl mx-auto">{lesson.introduction}</p>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 text-left">
-              {lesson.sounds?.map((s: any, i: number) => (
-                <div key={i} className="bg-white rounded-2xl p-6 shadow-md hover:shadow-lg transition flex flex-col items-center border border-indigo-50 relative overflow-hidden group">
-                  <div className="absolute top-0 w-full h-2 bg-indigo-500 transform origin-left scale-x-0 group-hover:scale-x-100 transition-transform duration-300"></div>
-
-                  {/* The IPA Card Visual */}
-                  <div className="w-24 h-24 bg-indigo-50 rounded-2xl flex items-center justify-center mb-4 shadow-inner border border-indigo-100">
-                    <span className="text-5xl font-mono text-indigo-600 font-bold">/{s.ipa}/</span>
-                  </div>
-
-                  <p className="text-gray-600 mb-6 text-sm text-center font-medium h-10">{s.description}</p>
-
-                  <div className="w-full space-y-3">
-                    {s.examples?.map((ex: any, j: number) => (
-                      <div key={j} className="flex items-center justify-between bg-gray-50 hover:bg-indigo-50/50 p-3 rounded-xl border border-gray-100 transition group/item cursor-pointer" onClick={() => speak(ex.word)}>
-                        <div>
-                          <span className="font-bold text-gray-900 text-lg">{ex.word}</span>
-                          <span className="block text-gray-500 font-mono text-xs tracking-wider">/{ex.transcription}/</span>
-                        </div>
-                        <button className="p-2.5 bg-indigo-100 text-indigo-600 rounded-full group-hover/item:bg-indigo-500 group-hover/item:text-white transition-colors shadow-sm">
-                          <Volume2 size={18} />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8 space-y-8 animate-in fade-in zoom-in-95 duration-300">
+          <div className="text-center mb-8">
+            <h3 className="text-2xl font-bold text-gray-900">{lesson.lesson_title || "Bài luyện tập phát âm"}</h3>
+            <p className="text-gray-500 max-w-2xl mx-auto mt-2">{lesson.introduction}</p>
           </div>
+
+          {/* Minimal Pairs */}
+          {lesson.minimal_pairs && lesson.minimal_pairs.length > 0 && (
+            <div>
+              <h4 className="text-lg font-bold text-gray-800 mb-4 flex items-center"><Headphones className="mr-2 text-blue-500" size={20} /> Phân biệt cặp từ dễ nhầm lẫn (Minimal Pairs)</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {lesson.minimal_pairs.map((mp: any, idx: number) => (
+                  <div key={idx} className="flex justify-between items-center p-4 bg-gray-50 rounded-xl border border-gray-200">
+                    <div className="text-center flex-1 cursor-pointer group" onClick={() => speak(mp.word1)}>
+                      <div className="font-bold text-lg text-gray-900 group-hover:text-blue-600">{mp.word1}</div>
+                      <div className="font-mono text-sm text-gray-500 mb-1">/{mp.ipa1}/</div>
+                      <Volume2 size={14} className="mx-auto text-blue-400 opacity-0 group-hover:opacity-100 transition" />
+                    </div>
+                    <div className="font-extrabold text-blue-400 px-4">VS</div>
+                    <div className="text-center flex-1 cursor-pointer group" onClick={() => speak(mp.word2)}>
+                      <div className="font-bold text-lg text-gray-900 group-hover:text-red-600">{mp.word2}</div>
+                      <div className="font-mono text-sm text-gray-500 mb-1">/{mp.ipa2}/</div>
+                      <Volume2 size={14} className="mx-auto text-red-400 opacity-0 group-hover:opacity-100 transition" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Practice Sentences */}
+          {lesson.practice_sentences && lesson.practice_sentences.length > 0 && (
+            <div>
+              <h4 className="text-lg font-bold text-gray-800 mb-4 flex items-center"><Mic className="mr-2 text-green-500" size={20} /> Luyện đọc câu (Speaking Practice)</h4>
+              <div className="space-y-3">
+                {lesson.practice_sentences.map((sent: any, idx: number) => (
+                  <div key={idx} className="p-4 bg-gray-50 rounded-xl border border-gray-200 hover:bg-green-50/50 transition cursor-pointer flex items-center justify-between" onClick={() => speak(sent.sentence)}>
+                    <div>
+                      <p className="font-bold text-gray-900 mb-1 text-lg">{sent.sentence}</p>
+                      <p className="font-mono text-sm text-gray-500">/{sent.ipa}/</p>
+                    </div>
+                    <Volume2 size={24} className="text-green-500 min-w-[24px]" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Quiz */}
+          {lesson.quiz && lesson.quiz.length > 0 && (
+            <div>
+              <h4 className="text-lg font-bold text-gray-800 mb-4 flex items-center"><Edit3 className="mr-2 text-purple-500" size={20} /> Trắc nghiệm kiểm tra</h4>
+              <div className="space-y-4">
+                {lesson.quiz.map((q: any, idx: number) => (
+                  <div key={idx} className="p-5 bg-gray-50 rounded-xl border border-gray-200">
+                    <p className="font-bold text-gray-900 mb-3">{idx + 1}. {q.question}</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {q.options.map((opt: string, oIdx: number) => (
+                        <div key={oIdx} className="flex items-center gap-2 bg-white p-3 rounded-lg border border-gray-200">
+                          <input type="radio" name={`quiz-${idx}`} id={`q-${idx}-${oIdx}`} className="w-4 h-4 text-purple-600" />
+                          <label htmlFor={`q-${idx}-${oIdx}`} className="text-sm font-medium">{opt}</label>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

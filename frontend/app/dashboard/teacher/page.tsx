@@ -977,81 +977,167 @@ function AIToolsTab({ token }: { token: string | null }) {
           </div>
 
           {dictResult && (
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden animate-in fade-in zoom-in-95 duration-300">
+              {/* Word header */}
               <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-6 text-white">
                 <div className="flex items-start justify-between">
                   <div>
-                    <h2 className="text-3xl font-extrabold">{dictResult.word}</h2>
+                    <h2 className="text-3xl font-extrabold mb-1">{dictResult.word}</h2>
                     <div className="flex items-center gap-4 mt-2">
                       {dictResult.phonetic_uk && (
-                        <button onClick={() => speak(dictResult.word, "en-GB")} className="flex items-center gap-1.5 bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-lg transition">
-                          <Volume2 size={16} /> UK {dictResult.phonetic_uk}
+                        <button onClick={() => {
+                          if (dictResult.audio_url) {
+                            new Audio(dictResult.audio_url).play().catch(() => { });
+                          } else if (typeof window !== "undefined" && window.speechSynthesis) {
+                            const u = new SpeechSynthesisUtterance(dictResult.word); u.lang = "en-GB"; window.speechSynthesis.speak(u);
+                          }
+                        }} className="flex items-center gap-1.5 bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-lg transition">
+                          <Volume2 size={16} /> <span className="text-sm">UK</span> <span className="font-mono text-sm">{dictResult.phonetic_uk}</span>
                         </button>
                       )}
                       {dictResult.phonetic_us && (
-                        <button onClick={() => speak(dictResult.word, "en-US")} className="flex items-center gap-1.5 bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-lg transition">
-                          <Volume2 size={16} /> US {dictResult.phonetic_us}
+                        <button onClick={() => {
+                          if (dictResult.audio_url) {
+                            new Audio(dictResult.audio_url).play().catch(() => { });
+                          } else if (typeof window !== "undefined" && window.speechSynthesis) {
+                            const u = new SpeechSynthesisUtterance(dictResult.word); u.lang = "en-US"; window.speechSynthesis.speak(u);
+                          }
+                        }} className="flex items-center gap-1.5 bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-lg transition">
+                          <Volume2 size={16} /> <span className="text-sm">US</span> <span className="font-mono text-sm">{dictResult.phonetic_us}</span>
                         </button>
                       )}
-                      {dictResult.level && <span className="bg-white/20 px-3 py-1 rounded-lg text-sm font-bold">{dictResult.level}</span>}
                     </div>
                   </div>
-                  {dictResult._source && (
-                    <span className={`px-3 py-1 rounded-lg text-xs font-bold ${dictResult._source === "database" ? "bg-green-400/30 text-green-100" :
-                      dictResult._source === "graph" ? "bg-cyan-400/30 text-cyan-100" : "bg-amber-400/30 text-amber-100"
-                      }`}>
-                      {dictResult._source === "database" ? "💾 Từ Database" :
-                        dictResult._source === "graph" ? "⚡ Từ Knowledge Graph" : "🤖 AI tra cứu"}
-                    </span>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {dictResult.level && (
+                      <span className="bg-white/20 px-3 py-1 rounded-lg text-sm font-bold">{dictResult.level}</span>
+                    )}
+                    {dictResult._source && (
+                      <span className={`px-3 py-1 rounded-lg text-xs font-bold ${dictResult._source === "database" ? "bg-green-400/30 text-green-100" :
+                        dictResult._source === "graph" ? "bg-cyan-400/30 text-cyan-100" : "bg-amber-400/30 text-amber-100"
+                        }`}>
+                        {dictResult._source === "database" ? "💾 Từ Database (không tốn AI)" :
+                          dictResult._source === "graph" ? "⚡ Từ Knowledge Graph" : "🤖 AI tra cứu"}
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
-              <div className="p-6 space-y-4">
+
+              {/* Meanings */}
+              <div className="p-6 space-y-6">
                 {dictResult.meanings?.length > 0 && (
-                  <p className="text-sm font-bold text-gray-500 mb-2">{dictResult.meanings.length} nghĩa được tìm thấy</p>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-sm font-bold text-gray-500">{dictResult.meanings.length} nghĩa được tìm thấy</span>
+                  </div>
                 )}
                 {dictResult.meanings?.map((m: any, i: number) => (
                   <div key={i} className="border-l-4 border-blue-400 pl-4">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-lg text-sm font-bold">{m.pos || dictResult.pos}</span>
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="bg-blue-100 text-blue-700 px-2.5 py-0.5 rounded-lg text-sm font-bold">{m.pos || dictResult.pos}</span>
                       <span className="text-xs text-gray-400">Nghĩa {i + 1}</span>
                       {m.register && (
                         <span className="bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-lg text-xs font-medium italic">{m.register}</span>
                       )}
                     </div>
-                    <p className="text-gray-900 font-medium mt-1">{m.definition_en}</p>
-                    <p className="text-blue-700 font-medium">{m.definition_vn}</p>
-                    {m.examples?.map((ex: string, j: number) => (
-                      <p key={j} className="text-gray-500 text-sm italic mt-1"><ArrowRight size={12} className="inline mr-1" />{ex}</p>
-                    ))}
-                    <div className="flex gap-4 mt-2 text-sm">
-                      {m.synonyms?.length > 0 && <span className="text-green-600">Đồng nghĩa: {m.synonyms.join(", ")}</span>}
-                      {m.antonyms?.length > 0 && <span className="text-red-500">Trái nghĩa: {m.antonyms.join(", ")}</span>}
+                    <p className="text-gray-900 font-medium text-lg">{m.definition_en}</p>
+                    <p className="text-blue-700 font-medium mt-1">{m.definition_vn}</p>
+
+                    {m.examples?.length > 0 && (
+                      <div className="mt-3 space-y-1.5">
+                        {m.examples.map((ex: string, j: number) => (
+                          <div key={j} className="flex items-start gap-2">
+                            <ArrowRight size={14} className="text-gray-400 mt-1 shrink-0" />
+                            <p className="text-gray-600 italic">{ex}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="flex gap-6 mt-3 text-sm">
+                      {m.synonyms?.length > 0 && (
+                        <div>
+                          <span className="text-gray-400 text-xs uppercase font-semibold">Đồng nghĩa: </span>
+                          {m.synonyms.map((s: string, k: number) => (
+                            <button key={k} onClick={() => setDictWord(s)} className="text-green-600 hover:underline mr-2">{s}</button>
+                          ))}
+                        </div>
+                      )}
+                      {m.antonyms?.length > 0 && (
+                        <div>
+                          <span className="text-gray-400 text-xs uppercase font-semibold">Trái nghĩa: </span>
+                          {m.antonyms.map((a: string, k: number) => (
+                            <button key={k} onClick={() => setDictWord(a)} className="text-red-500 hover:underline mr-2">{a}</button>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
-                <div className="flex gap-4 pt-4 border-t border-gray-100 flex-wrap">
+
+                {/* Word family, collocations, idioms, graph connections */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 pt-4 border-t border-gray-100">
                   {dictResult.word_family?.length > 0 && (
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-xs text-gray-400 font-bold uppercase">Họ từ:</span>
-                      {dictResult.word_family.map((w: string, i: number) => (
-                        <button key={i} onClick={() => setDictWord(w)} className="text-sm px-2 py-0.5 bg-purple-50 text-purple-700 rounded hover:bg-purple-100">{w}</button>
-                      ))}
+                    <div className="bg-purple-50 rounded-xl p-4">
+                      <h4 className="text-sm font-bold text-purple-700 mb-2">Họ từ (Word Family)</h4>
+                      <div className="flex flex-wrap gap-2">
+                        {dictResult.word_family.map((w: string, i: number) => (
+                          <button key={i} onClick={() => setDictWord(w)} className="bg-white text-purple-700 text-sm px-2.5 py-1 rounded-lg border border-purple-200 hover:bg-purple-100 transition">{w}</button>
+                        ))}
+                      </div>
                     </div>
                   )}
                   {dictResult.collocations?.length > 0 && (
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-xs text-gray-400 font-bold uppercase">Collocations:</span>
-                      {dictResult.collocations.map((c: string, i: number) => (
-                        <span key={i} className="text-sm px-2 py-0.5 bg-orange-50 text-orange-700 rounded">{c}</span>
-                      ))}
+                    <div className="bg-orange-50 rounded-xl p-4">
+                      <h4 className="text-sm font-bold text-orange-700 mb-2">Kết hợp từ (Collocations)</h4>
+                      <div className="flex flex-wrap gap-2">
+                        {dictResult.collocations.map((c: string, i: number) => (
+                          <span key={i} className="bg-white text-orange-700 text-sm px-2.5 py-1 rounded-lg border border-orange-200">{c}</span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {dictResult.idioms?.length > 0 && (
+                    <div className="bg-green-50 rounded-xl p-4">
+                      <h4 className="text-sm font-bold text-green-700 mb-2">Thành ngữ (Idioms)</h4>
+                      <div className="space-y-3">
+                        {dictResult.idioms.map((idm: any, i: number) => {
+                          const isString = typeof idm === "string";
+                          const idiomText = isString ? idm.split(":")[0]?.trim() : idm.idiom;
+                          const idiomMeaning = isString ? idm.split(":")[1]?.trim() : idm.meaning_vn;
+                          return (
+                            <div key={i} className="bg-white p-3 rounded-lg border border-green-200">
+                              <p className="font-bold text-green-800 text-sm">{idiomText}</p>
+                              <p className="text-green-600 text-xs mt-1">{idiomMeaning}</p>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                  {dictResult.graph_connections?.length > 0 && (
+                    <div className="bg-cyan-50 rounded-xl p-4">
+                      <h4 className="text-sm font-bold text-cyan-700 mb-2 flex items-center gap-1"><Network size={14} /> Đồ thị tri thức</h4>
+                      <div className="space-y-1">
+                        {dictResult.graph_connections.map((c: any, i: number) => (
+                          <div key={i} className="flex items-center gap-2 text-sm bg-white p-2 rounded-lg border border-cyan-100">
+                            <span className="text-cyan-600 font-mono text-xs bg-cyan-100 px-1.5 rounded min-w-[50px] text-center">{c.relation}</span>
+                            <button onClick={() => setDictWord(c.word)} className="text-cyan-800 hover:underline font-medium">{c.word}</button>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>
+
                 {/* Sources */}
                 {dictResult.sources?.length > 0 && (
-                  <div className="pt-3 border-t border-gray-100">
-                    <p className="text-xs text-gray-400">📚 Nguồn tham chiếu: {dictResult.sources.join(" • ")}</p>
+                  <div className="pt-4 border-t border-gray-100">
+                    <p className="text-xs text-gray-400 flex items-center gap-1.5">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" /></svg>
+                      Nguồn tham chiếu: {dictResult.sources.join(" • ")}
+                      {dictResult._from_cache && " (cached)"}
+                    </p>
                   </div>
                 )}
               </div>
