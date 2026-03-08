@@ -690,6 +690,8 @@ function AssignmentsTab({ token }: { token: string | null }) {
 // ==================== AI TOOLS TAB ====================
 function AIToolsTab({ token }: { token: string | null }) {
   const [text, setText] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const [inputMode, setInputMode] = useState<"text" | "file">("text");
   const [loading, setLoading] = useState(false);
   const [vocabResult, setVocabResult] = useState<any[]>([]);
   const [quizResult, setQuizResult] = useState<any[]>([]);
@@ -737,6 +739,31 @@ function AIToolsTab({ token }: { token: string | null }) {
         setQuizResult(Array.isArray(data) ? data : []);
       }
     } catch (e) { console.error(e); alert("Lỗi khi tạo quiz"); }
+    finally { setLoading(false); }
+  };
+
+  const handleFileProcess = async () => {
+    if (!file) return;
+    setLoading(true); setVocabResult([]); setQuizResult([]);
+    try {
+      const formData = new FormData();
+      // @ts-ignore
+      formData.append("file", file);
+      formData.append("num_questions", "5");
+      formData.append("exercise_type", "mixed");
+
+      const res = await fetch(`${API_URL}/teacher/file/generate-assignment`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` }, // Form data, drop content type
+        body: formData
+      });
+      if (res.ok) {
+        const json = await res.json();
+        const data = json.result || json;
+        if (data.vocabulary) setVocabResult(data.vocabulary);
+        if (data.quiz) setQuizResult(data.quiz);
+      }
+    } catch (e) { console.error(e); alert("Lỗi khi phân tích tệp"); }
     finally { setLoading(false); }
   };
 
@@ -809,19 +836,50 @@ function AIToolsTab({ token }: { token: string | null }) {
       {(activeAI === "vocab" || activeAI === "quiz") && (
         <>
           <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
-            <textarea value={text} onChange={e => setText(e.target.value)} rows={6}
-              placeholder="Dán đoạn văn, bài báo, hoặc nội dung bài học tiếng Anh vào đây..."
-              className="w-full border rounded-xl p-4 focus:ring-2 focus:ring-indigo-500 outline-none resize-none text-gray-700" />
-            <div className="flex gap-3 mt-4">
-              <button onClick={() => { setActiveAI("vocab"); handleExtractVocab(); }} disabled={loading || !text.trim()}
-                className="flex items-center gap-2 px-5 py-2.5 bg-purple-600 text-white rounded-xl hover:bg-purple-700 disabled:opacity-50">
-                <BookOpen size={18} /> {loading && activeAI === "vocab" ? "Đang xử lý..." : "Trích xuất Từ vựng"}
+            {/* Input Type Tabs */}
+            <div className="flex gap-2 mb-4">
+              <button onClick={() => setInputMode("text")} className={`px-4 py-2 rounded-lg text-sm font-bold transition ${inputMode === "text" ? "bg-indigo-100 text-indigo-700" : "bg-gray-50 text-gray-500 hover:bg-gray-100"}`}>
+                Nhập văn bản
               </button>
-              <button onClick={() => { setActiveAI("quiz"); handleGenerateQuiz(); }} disabled={loading || !text.trim()}
-                className="flex items-center gap-2 px-5 py-2.5 bg-green-600 text-white rounded-xl hover:bg-green-700 disabled:opacity-50">
-                <Brain size={18} /> {loading && activeAI === "quiz" ? "Đang tạo..." : "Tạo Quiz"}
+              <button onClick={() => setInputMode("file")} className={`px-4 py-2 rounded-lg text-sm font-bold transition ${inputMode === "file" ? "bg-indigo-100 text-indigo-700" : "bg-gray-50 text-gray-500 hover:bg-gray-100"}`}>
+                Tải tệp lên
               </button>
             </div>
+
+            {inputMode === "text" ? (
+              <div>
+                <textarea value={text} onChange={e => setText(e.target.value)} rows={6}
+                  placeholder="Dán đoạn văn, bài báo, hoặc nội dung bài học tiếng Anh vào đây..."
+                  className="w-full border rounded-xl p-4 focus:ring-2 focus:ring-indigo-500 outline-none resize-none text-gray-700" />
+                <div className="flex gap-3 mt-4">
+                  <button onClick={() => { setActiveAI("vocab"); handleExtractVocab(); }} disabled={loading || !text.trim()}
+                    className="flex items-center gap-2 px-5 py-2.5 bg-purple-600 text-white rounded-xl hover:bg-purple-700 disabled:opacity-50">
+                    <BookOpen size={18} /> {loading && activeAI === "vocab" ? "Đang xử lý..." : "Trích xuất Từ vựng"}
+                  </button>
+                  <button onClick={() => { setActiveAI("quiz"); handleGenerateQuiz(); }} disabled={loading || !text.trim()}
+                    className="flex items-center gap-2 px-5 py-2.5 bg-green-600 text-white rounded-xl hover:bg-green-700 disabled:opacity-50">
+                    <Brain size={18} /> {loading && activeAI === "quiz" ? "Đang tạo..." : "Tạo Quiz"}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div>
+                <div className="border-2 border-dashed border-indigo-200 bg-indigo-50/50 rounded-xl p-8 flex flex-col items-center justify-center relative cursor-pointer hover:bg-indigo-50 transition min-h-[160px]">
+                  <input type="file" className="absolute inset-0 opacity-0 cursor-pointer w-full h-full" onChange={(e) => {
+                    if (e.target.files && e.target.files.length > 0) setFile(e.target.files[0]);
+                  }} accept=".txt,.pdf,.docx" />
+                  <Upload size={32} className="text-indigo-400 mb-2" />
+                  <p className="font-bold text-gray-700">{file ? file.name : "Kéo thả hoặc nhấn để chọn tệp"}</p>
+                  <p className="text-sm text-gray-500 mt-1">Hỗ trợ .txt, .pdf, .docx</p>
+                </div>
+                <div className="flex justify-end gap-3 mt-4">
+                  <button onClick={() => { setActiveAI("vocab"); handleFileProcess(); }} disabled={loading || !file}
+                    className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 shadow-md disabled:opacity-50 transition">
+                    <Sparkles size={18} /> {loading ? "Đang xử lý..." : "Phân tích Tệp (Tạo cả Từ vựng & Quiz)"}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Vocabulary results */}
@@ -939,12 +997,11 @@ function AIToolsTab({ token }: { token: string | null }) {
                     </div>
                   </div>
                   {dictResult._source && (
-                    <span className={`px-3 py-1 rounded-lg text-xs font-bold ${
-                      dictResult._source === "database" ? "bg-green-400/30 text-green-100" :
+                    <span className={`px-3 py-1 rounded-lg text-xs font-bold ${dictResult._source === "database" ? "bg-green-400/30 text-green-100" :
                       dictResult._source === "graph" ? "bg-cyan-400/30 text-cyan-100" : "bg-amber-400/30 text-amber-100"
-                    }`}>
+                      }`}>
                       {dictResult._source === "database" ? "💾 Từ Database" :
-                       dictResult._source === "graph" ? "⚡ Từ Knowledge Graph" : "🤖 AI tra cứu"}
+                        dictResult._source === "graph" ? "⚡ Từ Knowledge Graph" : "🤖 AI tra cứu"}
                     </span>
                   )}
                 </div>

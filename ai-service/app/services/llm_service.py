@@ -308,9 +308,9 @@ def translate_meanings_with_ai(word: str, meanings: list, estimate_level: bool =
         "2. 'definition_en' (a clean English definition)\n"
         "3. 'definition_vn' (a natural Vietnamese translation)\n"
         "4. 'examples' (provide 2 to 3 good English examples for this meaning. Use the provided ones or generate new highly relevant ones. NEVER leave this empty. MUST have at least 2 examples).\n"
-        "5. 'synonyms' (2-3 synonyms based on context)\n"
-        "6. 'antonyms' (1-2 antonyms if applicable)\n\n"
-        "Also estimate the overall CEFR level of the word (A1-C2).\n\n"
+        "5. 'synonyms' (3-5 synonyms based on context)\n"
+        "6. 'antonyms' (2-3 antonyms if applicable)\n\n"
+        "Also provide the overall CEFR level of the word (A1-C2), 5-8 common collocations, and 2-4 common IDIOMS related to this word (with brief Vietnamese translations).\n\n"
         "Return EXACTLY a JSON object with this shape:\n"
         '{{\n'
         '  "meanings": [\n'
@@ -325,7 +325,8 @@ def translate_meanings_with_ai(word: str, meanings: list, estimate_level: bool =
         '  ],\n'
         '  "level": "B1",\n'
         '  "word_family": ["related1", "related2"],\n'
-        '  "collocations": ["colloc1", "colloc2"]\n'
+        '  "collocations": ["colloc1", "colloc2"],\n'
+        '  "idioms": [{{"idiom": "...", "meaning_vn": "..."}}]\n'
         '}}\n\n'
         "Return ONLY valid JSON. No markdown."
     )
@@ -336,11 +337,11 @@ def translate_meanings_with_ai(word: str, meanings: list, estimate_level: bool =
         result = parse_json_response(response.content)
         
         if isinstance(result, dict) and "meanings" in result:
-            return result["meanings"], result.get("level", "B1"), result.get("word_family", []), result.get("collocations", [])
+            return result["meanings"], result.get("level", "B1"), result.get("word_family", []), result.get("collocations", []), result.get("idioms", [])
     except Exception as e:
         print(f"[AI Translation & Consolidation] Error: {e}")
     
-    return meanings, "B1", [], []
+    return meanings, "B1", [], [], []
 
 
 def lookup_dictionary_full_ai(word: str):
@@ -362,7 +363,8 @@ def lookup_dictionary_full_ai(word: str):
         "3. If the word is an ABBREVIATION (like IT, AI, USA), include its full form as the FIRST meaning.\n"
         "4. If the word has BOTH a common meaning AND an abbreviation meaning, include BOTH.\n"
         "5. Provide at least 2-3 clearly natural example sentences for EVERY single meaning. DO NOT LEAVE EMPTY.\n"
-        "6. Provide accurate phonetic transcription (IPA) for both UK and US.\n\n"
+        "6. Provide 3-5 synonyms and 2-3 antonyms for EVERY meaning.\n"
+        "7. Provide accurate phonetic transcription (IPA) for both UK and US.\n\n"
         "Return a JSON object with these EXACT keys:\n"
         '"word": the word (preserve original casing)\n'
         '"phonetic_uk": UK IPA pronunciation (e.g. /həˈloʊ/)\n'
@@ -373,12 +375,13 @@ def lookup_dictionary_full_ai(word: str):
         '  "definition_en": English definition\n'
         '  "definition_vn": Vietnamese translation\n'
         '  "examples": array of 2-3 example sentences\n'
-        '  "synonyms": array of 2-3 synonyms\n'
+        '  "synonyms": array of 3-5 synonyms\n'
         '  "antonyms": array (empty if none)\n'
         '  "register": formal/informal/slang/technical or null\n'
         '"level": CEFR level (A1-C2)\n'
         '"word_family": array of related word forms\n'
-        '"collocations": array of 4-6 common collocations\n'
+        '"collocations": array of 5-8 common collocations\n'
+        '"idioms": array of 2-4 idioms objects {{"idiom": "...", "meaning_vn": "..."}}\n'
         '"sources": ["Cambridge", "Oxford", "Longman", "Merriam-Webster", "Collins"]\n\n'
         "Return ONLY valid JSON. No markdown, no extra text."
     )
@@ -416,13 +419,14 @@ def lookup_dictionary(word: str):
     
     if free_data and len(free_data.get("meanings", [])) > 0:
         # Step 2: Use AI only for translation (much cheaper)
-        meanings, level, word_family, collocations = translate_meanings_with_ai(
+        meanings, level, word_family, collocations, idioms = translate_meanings_with_ai(
             word, free_data["meanings"]
         )
         free_data["meanings"] = meanings
         free_data["level"] = level
         free_data["word_family"] = word_family
         free_data["collocations"] = collocations
+        free_data["idioms"] = idioms
         free_data["sources"] = ["Free Dictionary API (Wiktionary)", "AI Translation"]
         free_data.pop("_needs_translation", None)
         

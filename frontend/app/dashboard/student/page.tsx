@@ -707,6 +707,15 @@ function DictionaryTab({ token }: { token: string | null }) {
   const [saved, setSaved] = useState(false);
   const [history, setHistory] = useState<string[]>([]);
 
+  useEffect(() => {
+    try {
+      if (typeof window !== "undefined") {
+        const stored = localStorage.getItem("dictionaryHistory");
+        if (stored) setHistory(JSON.parse(stored));
+      }
+    } catch (e) { }
+  }, []);
+
   const lookup = async () => {
     if (!word.trim()) return;
     setLoading(true);
@@ -724,9 +733,11 @@ function DictionaryTab({ token }: { token: string | null }) {
       }
       const data = await res.json();
       setResult(data);
+
       setHistory(prev => {
-        const next = [word.trim().toLowerCase(), ...prev.filter(w => w !== word.trim().toLowerCase())];
-        return next.slice(0, 20);
+        const next = [word.trim().toLowerCase(), ...prev.filter(w => w !== word.trim().toLowerCase())].slice(0, 10);
+        if (typeof window !== "undefined") localStorage.setItem("dictionaryHistory", JSON.stringify(next));
+        return next;
       });
     } catch (e: any) {
       alert(e.message || "Lỗi khi tra từ điển");
@@ -906,8 +917,8 @@ function DictionaryTab({ token }: { token: string | null }) {
               </div>
             ))}
 
-            {/* Word family, collocations, graph connections */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t border-gray-100">
+            {/* Word family, collocations, idioms, graph connections */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 pt-4 border-t border-gray-100">
               {result.word_family?.length > 0 && (
                 <div className="bg-purple-50 rounded-xl p-4">
                   <h4 className="text-sm font-bold text-purple-700 mb-2">Họ từ (Word Family)</h4>
@@ -928,14 +939,27 @@ function DictionaryTab({ token }: { token: string | null }) {
                   </div>
                 </div>
               )}
+              {result.idioms?.length > 0 && (
+                <div className="bg-green-50 rounded-xl p-4">
+                  <h4 className="text-sm font-bold text-green-700 mb-2">Thành ngữ (Idioms)</h4>
+                  <div className="space-y-3">
+                    {result.idioms.map((idm: any, i: number) => (
+                      <div key={i} className="bg-white p-3 rounded-lg border border-green-200">
+                        <p className="font-bold text-green-800 text-sm">{idm.idiom}</p>
+                        <p className="text-green-600 text-xs mt-1">{idm.meaning_vn}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
               {result.graph_connections?.length > 0 && (
                 <div className="bg-cyan-50 rounded-xl p-4">
                   <h4 className="text-sm font-bold text-cyan-700 mb-2 flex items-center gap-1"><Network size={14} /> Đồ thị tri thức</h4>
                   <div className="space-y-1">
                     {result.graph_connections.map((c: any, i: number) => (
-                      <div key={i} className="flex items-center gap-2 text-sm">
-                        <span className="text-cyan-600 font-mono text-xs bg-cyan-100 px-1.5 rounded">{c.relation}</span>
-                        <button onClick={() => setWord(c.word)} className="text-cyan-800 hover:underline">{c.word}</button>
+                      <div key={i} className="flex items-center gap-2 text-sm bg-white p-2 rounded-lg border border-cyan-100">
+                        <span className="text-cyan-600 font-mono text-xs bg-cyan-100 px-1.5 rounded min-w-[50px] text-center">{c.relation}</span>
+                        <button onClick={() => setWord(c.word)} className="text-cyan-800 hover:underline font-medium">{c.word}</button>
                       </div>
                     ))}
                   </div>
@@ -1215,45 +1239,51 @@ function IpaTab({ token }: { token: string | null }) {
     <div className="space-y-6">
       <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm text-center">
         <h2 className="text-xl font-bold text-gray-900 mb-2 flex items-center justify-center gap-2">
-          <Mic className="text-blue-500" /> Tạo bài học IPA với AI
+          <Mic className="text-blue-500" /> Luyện Phát âm IPA với AI
         </h2>
-        <p className="text-gray-500 mb-6 mt-1">Chọn nhóm âm bạn muốn luyện tập, AI sẽ tạo bài học dành riêng cho bạn.</p>
+        <p className="text-gray-500 mb-6 mt-1">Chọn nhóm âm bạn muốn luyện tập, AI sẽ tạo các thẻ học tập dành riêng cho bạn.</p>
 
         <div className="flex justify-center gap-4 mb-6">
-          <select value={focus} onChange={e => setFocus(e.target.value)} className="border border-gray-200 rounded-lg px-4 py-2 outline-none focus:border-blue-500">
+          <select value={focus} onChange={e => setFocus(e.target.value)} className="border border-gray-200 rounded-lg px-4 py-2 outline-none focus:border-blue-500 font-medium text-gray-700 bg-gray-50">
             <option value="vowels">Nguyên âm (Vowels)</option>
             <option value="consonants">Phụ âm (Consonants)</option>
             <option value="diphthongs">Nguyên âm đôi (Diphthongs)</option>
-            <option value="difficult">Âm khó (th, r, l...)</option>
+            <option value="difficult">Các âm khó (th, r, l...)</option>
           </select>
-          <button onClick={generateLesson} disabled={loading} className="btn-primary px-6 py-2 rounded-lg flex items-center gap-2 disabled:opacity-50 transition">
-            {loading ? "Đang tạo..." : <><Sparkles size={18} /> Tạo bài học</>}
+          <button onClick={generateLesson} disabled={loading} className="btn-primary px-6 py-2 rounded-lg flex items-center gap-2 disabled:opacity-50 transition shadow-md">
+            {loading ? "Đang tạo thẻ..." : <><Sparkles size={18} /> Tạo thẻ học IPA</>}
           </button>
         </div>
       </div>
 
       {lesson && (
         <div className="space-y-6">
-          <div className="bg-blue-50 border border-blue-100 rounded-xl p-6">
-            <h3 className="text-xl font-bold text-blue-900 mb-2">{lesson.title}</h3>
-            <p className="text-blue-800 mb-4">{lesson.introduction}</p>
+          <div className="bg-gradient-to-br from-indigo-50 to-blue-50 border border-indigo-100 rounded-xl p-8 shadow-sm text-center">
+            <h3 className="text-2xl font-bold text-indigo-900 mb-3">{lesson.title}</h3>
+            <p className="text-indigo-700 mb-8 max-w-2xl mx-auto">{lesson.introduction}</p>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 text-left">
               {lesson.sounds?.map((s: any, i: number) => (
-                <div key={i} className="bg-white rounded-lg p-5 shadow-sm">
-                  <div className="flex items-center gap-3 mb-3">
-                    <span className="text-3xl font-mono text-purple-600 font-bold bg-purple-50 px-3 py-1 rounded">/{s.ipa}/</span>
-                  </div>
-                  <p className="text-gray-600 mb-4 text-sm">{s.description}</p>
+                <div key={i} className="bg-white rounded-2xl p-6 shadow-md hover:shadow-lg transition flex flex-col items-center border border-indigo-50 relative overflow-hidden group">
+                  <div className="absolute top-0 w-full h-2 bg-indigo-500 transform origin-left scale-x-0 group-hover:scale-x-100 transition-transform duration-300"></div>
 
-                  <div className="space-y-2">
+                  {/* The IPA Card Visual */}
+                  <div className="w-24 h-24 bg-indigo-50 rounded-2xl flex items-center justify-center mb-4 shadow-inner border border-indigo-100">
+                    <span className="text-5xl font-mono text-indigo-600 font-bold">/{s.ipa}/</span>
+                  </div>
+
+                  <p className="text-gray-600 mb-6 text-sm text-center font-medium h-10">{s.description}</p>
+
+                  <div className="w-full space-y-3">
                     {s.examples?.map((ex: any, j: number) => (
-                      <div key={j} className="flex items-center justify-between bg-gray-50 p-2 rounded">
+                      <div key={j} className="flex items-center justify-between bg-gray-50 hover:bg-indigo-50/50 p-3 rounded-xl border border-gray-100 transition group/item cursor-pointer" onClick={() => speak(ex.word)}>
                         <div>
-                          <span className="font-bold text-gray-800">{ex.word}</span>
-                          <span className="text-gray-500 ml-2 font-mono text-sm">/{ex.transcription}/</span>
+                          <span className="font-bold text-gray-900 text-lg">{ex.word}</span>
+                          <span className="block text-gray-500 font-mono text-xs tracking-wider">/{ex.transcription}/</span>
                         </div>
-                        <button onClick={() => speak(ex.word)} className="p-1.5 bg-blue-100 text-blue-600 rounded hover:bg-blue-200"><Volume2 size={16} /></button>
+                        <button className="p-2.5 bg-indigo-100 text-indigo-600 rounded-full group-hover/item:bg-indigo-500 group-hover/item:text-white transition-colors shadow-sm">
+                          <Volume2 size={18} />
+                        </button>
                       </div>
                     ))}
                   </div>
@@ -1313,7 +1343,7 @@ function PracticeTab({ token }: { token: string | null }) {
       <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm flex flex-col md:flex-row gap-4 justify-between items-center">
         <div>
           <h2 className="text-xl font-bold text-gray-900 mb-1 flex items-center gap-2">
-            <Award className="text-purple-500" /> Tự luyện thi & Kỹ năng
+            <Award className="text-purple-500" /> Tự luyện thi
           </h2>
           <p className="text-gray-500 text-sm">chọn chứng chỉ và kỹ năng để hệ thống sinh đề thi mẫu cho bạn</p>
         </div>
