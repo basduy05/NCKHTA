@@ -7,76 +7,135 @@
   "meanings": [
     {
       "pos": "noun",
-      "definition_en": "A collection of legends, in particular of lives of saints.",
-      "definition_vn": "",
-      "examples": [],
-      "synonyms": [],
+      "definition_en": "A collection of legends, especially about saints.",
+      "definition_vn": "Một tập hợp các huyền thoại, đặc biệt là về các vị thánh.",
+      "examples": [
+        "The library has an extensive collection of medieval legendary.",
+        "She spent years researching and compiling the lives of saints into a legendary."
+      ],
+      "synonyms": [
+        "mythology",
+        "folklore",
+        "lore",
+        "sagas"
+      ],
       "antonyms": [],
-      "register": null
+      "register": "formal",
+      "usage_notes": "This meaning is often used in historical or religious contexts."
     },
     {
       "pos": "noun",
-      "definition_en": "One who relates legends.",
-      "definition_vn": "",
-      "examples": [],
-      "synonyms": [],
-      "antonyms": [],
-      "register": null
+      "definition_en": "A person who tells or spreads legends or stories.",
+      "definition_vn": "Người kể hoặc truyền bá huyền thoại hoặc câu chuyện.",
+      "examples": [
+        "The village elder was a legendary, sharing tales of the land's history.",
+        "He became a legendary in his own right, known for his captivating storytelling."
+      ],
+      "synonyms": [
+        "storyteller",
+        "narrator",
+        "chronicler"
+      ],
+      "antonyms": [
+        "listener",
+        "audience"
+      ],
+      "register": "literary",
+      "usage_notes": "This usage is more common in written language and literature."
     },
     {
       "pos": "noun",
-      "definition_en": "(Pokémon) A legendary Pokémon.",
-      "definition_vn": "",
-      "examples": [],
-      "synonyms": [],
+      "definition_en": "A rare and powerful fictional creature, especially in the context of video games or fantasy.",
+      "definition_vn": "Một sinh vật hư cấu hiếm và mạnh mẽ, đặc biệt trong bối cảnh trò chơi điện tử hoặc thể loại kỳ ảo.",
+      "examples": [
+        "The gamers were thrilled to encounter a legendary dragon in the online RPG.",
+        "The legendary Pokémon Mewtwo is highly sought after by collectors."
+      ],
+      "synonyms": [
+        "mythical creature",
+        "fantasy beast"
+      ],
       "antonyms": [],
-      "register": null
+      "register": "informal",
+      "usage_notes": "This sense is primarily used in gaming and fantasy fandoms."
     },
     {
       "pos": "adjective",
-      "definition_en": "Of or pertaining to a legend or to legends.",
-      "definition_vn": "",
-      "examples": [],
-      "synonyms": [],
-      "antonyms": [],
-      "register": null
+      "definition_en": "Relating to or described in legends.",
+      "definition_vn": "Liên quan đến hoặc được mô tả trong huyền thoại.",
+      "examples": [
+        "The legendary hero's sword was said to have magical powers.",
+        "They embarked on a journey to uncover the legendary lost city."
+      ],
+      "synonyms": [
+        "mythical",
+        "fabled",
+        "fabulous"
+      ],
+      "antonyms": [
+        "real",
+        "actual",
+        "factual"
+      ],
+      "register": "neutral",
+      "usage_notes": "This is the most common meaning in everyday language."
     },
     {
       "pos": "adjective",
-      "definition_en": "Appearing (solely) in legends.",
-      "definition_vn": "",
-      "examples": [],
-      "synonyms": [],
-      "antonyms": [],
-      "register": null
-    },
-    {
-      "pos": "adjective",
-      "definition_en": "Having the splendor of a legend; fabled.",
-      "definition_vn": "",
-      "examples": [],
-      "synonyms": [],
-      "antonyms": [],
-      "register": null
-    },
-    {
-      "pos": "adjective",
-      "definition_en": "Having unimaginable greatness; excellent to such an extent to evoke stories",
-      "definition_vn": "",
-      "examples": [],
-      "synonyms": [],
-      "antonyms": [],
-      "register": null
+      "definition_en": "Having the qualities of a legend; famous and admired to an extraordinary degree.",
+      "definition_vn": "Có những phẩm chất của một huyền thoại; nổi tiếng và được ngưỡng mộ đến mức phi thường.",
+      "examples": [
+        "The legendary singer's voice captivated audiences worldwide.",
+        "His legendary strength and bravery made him a local hero."
+      ],
+      "synonyms": [
+        "iconic",
+        "epic",
+        "renowned",
+        "illustrious"
+      ],
+      "antonyms": [
+        "unknown",
+        "obscure",
+        "unremarkable"
+      ],
+      "register": "neutral",
+      "usage_notes": "This meaning often describes people or things that have achieved iconic status."
     }
   ],
-  "level": "B1",
-  "word_family": [],
-  "collocations": [],
+  "level": "B2",
+  "word_family": [
+    "legend",
+    "legendary",
+    "legendarily",
+    "legendize",
+    "legendizes",
+    "legendizing"
+  ],
+  "collocations": [
+    "legendary hero",
+    "legendary creature",
+    "legendary status",
+    "legendary tale",
+    "legendary figure",
+    "legendary performance",
+    "legendary beauty",
+    "legendary weapon"
+  ],
   "sources": [
     "Free Dictionary API (Wiktionary)",
     "Cambridge",
     "Oxford",
     "Merriam-Webster"
   ],
-  "idioms": []
+  "idioms": [
+    {
+      "idiom": "to become a legend in one's own lifetime",
+      "meaning_vn": "Trở thành huyền thoại khi còn sống"
+    },
+    {
+      "idiom": "to be the stuff of legends",
+      "meaning_vn": "Là điều huyền thoại"
+    }
+  ]
 }

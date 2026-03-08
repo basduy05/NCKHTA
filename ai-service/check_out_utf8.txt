@@ -1,0 +1,9 @@
+﻿=== Checking Completeness for Cohere Output ===
+Missing VN at index: []
+Missing EN at index: []
+Missing Examples at index: []
+Has Phonetic: False
+Has Level: True (Level: B2)
+Has New Fields: True (idioms=True, collocations=True, register=True)
+
+Final is_data_complete() result: False
