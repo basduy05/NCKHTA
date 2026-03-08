@@ -420,3 +420,262 @@ def lookup_dictionary(word: str):
         _cache_set(word, result)
     return result
 
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# NEW FEATURES: IPA, File Exercises, TOEIC/IELTS, Reading, Writing, Speaking
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def generate_ipa_lesson(words: list = None, focus: str = "vowels"):
+    """Generate an IPA learning lesson with interactive exercises."""
+    llm = get_llm()
+    if not llm:
+        return {"error": "LLM not configured"}
+
+    words_text = ", ".join(words[:10]) if words else ""
+    prompt = PromptTemplate.from_template(
+        "You are an expert English phonetics teacher.\n"
+        "Create an IPA (International Phonetic Alphabet) lesson focused on: {focus}\n"
+        "{words_context}\n\n"
+        "Return a JSON object with:\n"
+        '"lesson_title": catchy title\n'
+        '"introduction": brief explanation of the IPA sounds covered (2-3 sentences)\n'
+        '"sounds": array of 6-8 IPA sound objects, each with:\n'
+        '  "symbol": IPA symbol (e.g. /iː/)\n'
+        '  "name": sound name (e.g. "long ee")\n'
+        '  "description": how to produce the sound\n'
+        '  "example_words": array of 3 words with this sound\n'
+        '  "example_ipa": array of corresponding IPA transcriptions\n'
+        '"minimal_pairs": array of 4-6 minimal pair exercises, each with:\n'
+        '  "word1": first word\n'
+        '  "word2": second word (differs by one sound)\n'
+        '  "ipa1": IPA of word1\n'
+        '  "ipa2": IPA of word2\n'
+        '  "sound_difference": which sound changes\n'
+        '"practice_sentences": array of 3-4 sentences focused on target sounds, each with:\n'
+        '  "sentence": the sentence text\n'
+        '  "ipa": full IPA transcription\n'
+        '  "focus_words": array of words containing target sounds\n'
+        '"quiz": array of 5 MCQ questions testing IPA knowledge, each with:\n"question": question text\n'
+        '  "options": 4 options\n'
+        '  "correct_answer": the correct option\n\n'
+        "Return ONLY valid JSON. No markdown."
+    )
+    words_context = f"Include these words in examples if possible: {words_text}" if words_text else ""
+    chain = prompt | llm
+    try:
+        response = _safe_invoke(chain, {"focus": focus, "words_context": words_context})
+        result = parse_json_response(response.content)
+        if isinstance(result, dict):
+            return result
+        return {"error": "Could not parse IPA lesson"}
+    except Exception as e:
+        print(f"generate_ipa_lesson error: {e}")
+        return {"error": str(e)}
+
+
+def generate_exercises_from_text(text: str, exercise_type: str = "mixed", num_questions: int = 10):
+    """Generate exercises from extracted file text. Supports: quiz, fill-blanks, matching, mixed."""
+    llm = get_llm()
+    if not llm:
+        return {"error": "LLM not configured"}
+
+    # Truncate long texts
+    text_truncated = text[:3000] if len(text) > 3000 else text
+
+    prompt = PromptTemplate.from_template(
+        "You are an English teacher creating exercises from the following text.\n\n"
+        "TEXT:\n{text}\n\n"
+        "Create {num} exercises of type: {exercise_type}\n\n"
+        "Return a JSON object with:\n"
+        '"title": suggested exercise title\n'
+        '"difficulty": estimated CEFR level (A1-C2)\n'
+        '"vocabulary": array of 5-8 key words from the text, each with:\n'
+        '  "word": the word\n'
+        '  "meaning_vn": Vietnamese meaning\n'
+        '  "pos": part of speech\n'
+        '"exercises": array of exercise objects, each with:\n'
+        '  "type": "mcq" or "fill_blank" or "true_false" or "matching"\n'
+        '  "question": the question/prompt\n'
+        '  "options": array of choices (for mcq, true_false)\n'
+        '  "correct_answer": the correct answer\n'
+        '  "explanation": brief explanation why this is correct\n'
+        '"summary_vn": Vietnamese summary of the text (2-3 sentences)\n\n'
+        "Return ONLY valid JSON. No markdown."
+    )
+    chain = prompt | llm
+    try:
+        response = _safe_invoke(chain, {
+            "text": text_truncated,
+            "exercise_type": exercise_type,
+            "num": num_questions,
+        })
+        result = parse_json_response(response.content)
+        if isinstance(result, dict):
+            return result
+        return {"error": "Could not generate exercises"}
+    except Exception as e:
+        print(f"generate_exercises_from_text error: {e}")
+        return {"error": str(e)}
+
+
+def generate_practice_test(test_type: str = "TOEIC", skill: str = "reading", part: str = ""):
+    """Generate TOEIC/IELTS practice test questions."""
+    llm = get_llm()
+    if not llm:
+        return {"error": "LLM not configured"}
+
+    prompt = PromptTemplate.from_template(
+        "You are an expert {test_type} exam preparation tutor.\n"
+        "Generate a practice section for: {test_type} - {skill} {part}\n\n"
+        "Return a JSON object with:\n"
+        '"test_type": "{test_type}"\n'
+        '"skill": "{skill}"\n'
+        '"part": description of which part\n'
+        '"time_limit": suggested time in minutes\n'
+        '"instructions": brief instructions in Vietnamese\n'
+        '"passage": reading/listening passage text (if applicable, 150-300 words)\n'
+        '"questions": array of 5-8 question objects, each with:\n'
+        '  "number": question number\n'
+        '  "question": question text\n'
+        '  "type": "mcq" or "fill_blank" or "true_false_not_given"\n'
+        '  "options": array of 4 choices (for mcq)\n'
+        '  "correct_answer": correct answer\n'
+        '  "explanation": why this is correct (in Vietnamese)\n'
+        '"tips": array of 2-3 exam tips in Vietnamese\n\n'
+        "Return ONLY valid JSON. No markdown."
+    )
+    chain = prompt | llm
+    try:
+        response = _safe_invoke(chain, {
+            "test_type": test_type,
+            "skill": skill,
+            "part": part or "general",
+        })
+        result = parse_json_response(response.content)
+        if isinstance(result, dict):
+            return result
+        return {"error": "Could not generate practice test"}
+    except Exception as e:
+        print(f"generate_practice_test error: {e}")
+        return {"error": str(e)}
+
+
+def generate_reading_passage(topic: str = "", level: str = "B1"):
+    """Generate a reading passage with comprehension questions."""
+    llm = get_llm()
+    if not llm:
+        return {"error": "LLM not configured"}
+
+    prompt = PromptTemplate.from_template(
+        "Generate an English reading comprehension exercise at CEFR level {level}.\n"
+        "Topic: {topic}\n\n"
+        "Return a JSON object with:\n"
+        '"title": passage title\n'
+        '"passage": the reading passage (200-400 words, CEFR {level})\n'
+        '"word_count": number of words\n'
+        '"key_vocabulary": array of 5-6 important words, each with:\n'
+        '  "word": the word\n'
+        '  "meaning_vn": Vietnamese meaning\n'
+        '  "in_context": the sentence from passage containing this word\n'
+        '"questions": array of 5-6 comprehension questions, each with:\n'
+        '  "type": "mcq" or "true_false" or "short_answer"\n'
+        '  "question": question text\n'
+        '  "options": array of 4 choices (for mcq)\n'
+        '  "correct_answer": correct answer\n'
+        '  "explanation_vn": explanation in Vietnamese\n'
+        '"summary_vn": Vietnamese summary of the passage\n\n'
+        "Return ONLY valid JSON. No markdown."
+    )
+    chain = prompt | llm
+    try:
+        response = _safe_invoke(chain, {
+            "level": level,
+            "topic": topic or "an interesting general topic",
+        })
+        result = parse_json_response(response.content)
+        if isinstance(result, dict):
+            return result
+        return {"error": "Could not generate reading passage"}
+    except Exception as e:
+        print(f"generate_reading_passage error: {e}")
+        return {"error": str(e)}
+
+
+def evaluate_writing(text: str, task_type: str = "essay", target_test: str = "IELTS"):
+    """Evaluate writing using IELTS/TOEIC criteria. Returns band score + detailed feedback."""
+    llm = get_llm()
+    if not llm:
+        return {"error": "LLM not configured"}
+
+    prompt = PromptTemplate.from_template(
+        "You are an expert {target_test} writing examiner.\n"
+        "Evaluate the following {task_type} writing:\n\n"
+        "STUDENT'S WRITING:\n{text}\n\n"
+        "Evaluate based on these criteria and return a JSON object:\n"
+        '"overall_band": overall band score (1-9 for IELTS, or percentage)\n'
+        '"word_count": actual word count\n'
+        '"criteria": object with scores for each criterion:\n'
+        '  "task_achievement": {{"score": number, "feedback_vn": detailed feedback in Vietnamese}}\n'
+        '  "coherence_cohesion": {{"score": number, "feedback_vn": detailed feedback}}\n'
+        '  "lexical_resource": {{"score": number, "feedback_vn": detailed feedback}}\n'
+        '  "grammar_accuracy": {{"score": number, "feedback_vn": detailed feedback}}\n'
+        '"strengths": array of 2-3 strengths in Vietnamese\n'
+        '"improvements": array of 3-4 specific suggestions for improvement in Vietnamese\n'
+        '"corrected_sentences": array of objects showing corrections:\n'
+        '  "original": student\'s sentence\n'
+        '  "corrected": corrected version\n'
+        '  "explanation_vn": explanation of the correction\n'
+        '"model_paragraph": a short model paragraph showing ideal writing for comparison\n\n'
+        "Return ONLY valid JSON. No markdown."
+    )
+    chain = prompt | llm
+    try:
+        response = _safe_invoke(chain, {
+            "text": text[:2000],
+            "task_type": task_type,
+            "target_test": target_test,
+        })
+        result = parse_json_response(response.content)
+        if isinstance(result, dict):
+            return result
+        return {"error": "Could not evaluate writing"}
+    except Exception as e:
+        print(f"evaluate_writing error: {e}")
+        return {"error": str(e)}
+
+
+def generate_speaking_topic(level: str = "B1", topic_type: str = "general"):
+    """Generate speaking practice topics with model answers."""
+    llm = get_llm()
+    if not llm:
+        return {"error": "LLM not configured"}
+
+    prompt = PromptTemplate.from_template(
+        "Generate an English speaking practice exercise at CEFR level {level}.\n"
+        "Topic type: {topic_type}\n\n"
+        "Return a JSON object with:\n"
+        '"topic": the main speaking topic/question\n'
+        '"preparation_time": seconds to prepare (30-60)\n'
+        '"speaking_time": seconds to speak (60-120)\n'
+        '"sub_questions": array of 3-4 follow-up questions to guide the speaker\n'
+        '"useful_vocabulary": array of 6-8 useful words/phrases, each with:\n'
+        '  "phrase": the word/phrase\n'
+        '  "meaning_vn": Vietnamese meaning\n'
+        '  "usage_example": example sentence\n'
+        '"model_answer": a model response (100-150 words)\n'
+        '"tips_vn": array of 3-4 speaking tips in Vietnamese\n'
+        '"evaluation_criteria": array of criteria to self-assess:\n'
+        '  "criterion": name\n'
+        '  "description_vn": description in Vietnamese\n\n'
+        "Return ONLY valid JSON. No markdown."
+    )
+    chain = prompt | llm
+    try:
+        response = _safe_invoke(chain, {"level": level, "topic_type": topic_type})
+        result = parse_json_response(response.content)
+        if isinstance(result, dict):
+            return result
+        return {"error": "Could not generate speaking topic"}
+    except Exception as e:
+        print(f"generate_speaking_topic error: {e}")
+        return {"error": str(e)}

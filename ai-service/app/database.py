@@ -10,6 +10,9 @@ MIN_MEANINGS_COUNT = 3  # Minimum meanings required before skipping AI lookup
 def init_db():
     print(f"[DB] Initializing database at {DB_PATH}")
     conn = sqlite3.connect(DB_PATH)
+    # Enable WAL mode for concurrent reads (prevents lock when multiple users)
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=5000")  # Wait 5s instead of failing immediately
     cursor = conn.cursor()
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS users (
@@ -272,9 +275,15 @@ except Exception as e:
     print(f"[DB ERROR] init_db failed: {e}")
     traceback.print_exc()
 
+import threading
+_thread_local = threading.local()
+
 def get_db():
-    conn = sqlite3.connect(DB_PATH)
+    """Thread-safe database connection with WAL mode."""
+    conn = sqlite3.connect(DB_PATH, timeout=10)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=5000")
     return conn
 
 def get_setting(key, default=None):
