@@ -6,7 +6,7 @@ import {
   BookOpen, Sparkles, BrainCircuit, Trophy, PlayCircle, CheckCircle2, XCircle,
   GraduationCap, ClipboardList, BarChart3, FileText, ChevronRight, Clock,
   Award, TrendingUp, Layers, Search, BookMarked, Volume2, Save, Trash2,
-  ExternalLink, Star, Filter, X, ArrowRight, Bookmark, Network, Mic, Upload
+  ExternalLink, Star, Filter, X, ArrowRight, Bookmark, Network, Mic, Upload, Brain
 } from "lucide-react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://iedu-ksk7.onrender.com";

@@ -36,7 +36,7 @@ function DashboardSidebar({ user, logout }: { user: any, logout: any }) {
       { name: "Bài tập & Kiểm tra", href: "/dashboard/teacher?tab=assignments", icon: ClipboardList, id: "assignments" },
       { name: "Công cụ AI", href: "/dashboard/teacher?tab=ai-tools", icon: Sparkles, id: "ai-tools" },
     ];
-  } else {
+  } else if (isStudent) {
     links = [
       { name: "Tổng quan", href: "/dashboard/student?tab=overview", icon: LayoutDashboard, id: "overview" },
       { name: "Lớp học của tôi", href: "/dashboard/student?tab=classes", icon: GraduationCap, id: "classes" },
@@ -48,6 +48,8 @@ function DashboardSidebar({ user, logout }: { user: any, logout: any }) {
       { name: "Học với AI", href: "/dashboard/student?tab=ai-tools", icon: Sparkles, id: "ai-tools" },
       { name: "Kết quả học tập", href: "/dashboard/student?tab=scores", icon: Component, id: "scores" },
     ];
+  } else {
+    links = [];
   }
 
   const handleLogout = (e: React.MouseEvent) => {
