@@ -45,15 +45,20 @@ def is_data_complete(data: dict) -> bool:
     meanings = data.get("meanings", [])
     if not meanings or len(meanings) == 0:
         return False
-    # Check that at least one meaning has VN translation and examples
-    has_vn = any(m.get("definition_vn") for m in meanings)
-    has_examples = any(m.get("examples") and len(m["examples"]) > 0 for m in meanings)
-    has_en = any(m.get("definition_en") for m in meanings)
-    # Check phonetics
+        
+    # Check that ALL meanings have VN translation, EN definition, and examples
+    missing_vn = any(not m.get("definition_vn") for m in meanings)
+    missing_en = any(not m.get("definition_en") for m in meanings)
+    missing_examples = any(not m.get("examples") or len(m.get("examples", [])) == 0 for m in meanings)
+    
+    # Check phonetics and level
     has_phonetic = bool(data.get("phonetic_uk") or data.get("phonetic_us"))
-    # Check CEFR level
-    has_level = bool(data.get("level") and data["level"] in ("A1", "A2", "B1", "B2", "C1", "C2"))
-    return has_vn and has_examples and has_en and has_phonetic and has_level
+    has_level = bool(data.get("level") and data.get("level") in ("A1", "A2", "B1", "B2", "C1", "C2"))
+    
+    # Check for presence of ALL new Phase 1 fields to force re-fetch of old incomplete cache
+    has_new_fields = "idioms" in data and "collocations" in data and "register" in meanings[0]
+    
+    return (not missing_vn) and (not missing_en) and (not missing_examples) and has_phonetic and has_level and has_new_fields
 
 def _get_setting(key, default=None):
     try:

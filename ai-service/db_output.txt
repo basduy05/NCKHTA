@@ -1,0 +1,4 @@
+--- DB: c:/Users/basdu/Downloads/NCKHTA/ai-service/app/app.db ---
+Tables: 
+--- DB: c:/Users/basdu/Downloads/NCKHTA/ai-service/app.db ---
+Tables: 
