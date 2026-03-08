@@ -6,6 +6,7 @@ langchain-core
 langchain-neo4j
 langchain-openai
 langchain-google-genai
+langchain-cohere
 pydantic
 requests
 python-multipart

@@ -455,7 +455,7 @@ async def update_grammar_rule(
 
 # --- SETTINGS ---
 
-SENSITIVE_KEYS = {"GOOGLE_API_KEY", "OPENAI_API_KEY", "NEO4J_PASSWORD", "SMTP_PASSWORD", "RESEND_API_KEY", "BREVO_API_KEY"}
+SENSITIVE_KEYS = {"GOOGLE_API_KEY", "OPENAI_API_KEY", "COHERE_API_KEY", "NEO4J_PASSWORD", "SMTP_PASSWORD", "RESEND_API_KEY", "BREVO_API_KEY"}
 
 def _mask(value: str) -> str:
     if not value or len(value) < 8:

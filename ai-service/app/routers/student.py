@@ -534,6 +534,37 @@ def delete_vocabulary(vocab_id: int, authorization: str = Header(...)):
     return {"status": "deleted"}
 
 
+class BulkVocabSync(BaseModel):
+    words: List[SaveVocabRequest]
+
+@router.post("/vocabulary/sync")
+def sync_vocabulary(data: BulkVocabSync, authorization: str = Header(...)):
+    """Bulk sync vocabulary from localStorage backup. Upserts all words."""
+    student = _get_current_student(authorization)
+    synced = 0
+    conn = get_db()
+    try:
+        for req in data.words:
+            word = req.word.strip().lower()
+            if not word or len(word) > 100:
+                continue
+            conn.execute(
+                """INSERT INTO saved_vocabulary (user_id, word, phonetic, audio_url, pos, meaning_en, meaning_vn, example, level, source)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                   ON CONFLICT(user_id, word, pos) DO UPDATE SET
+                       phonetic=excluded.phonetic,
+                       audio_url=excluded.audio_url,
+                       meaning_en=excluded.meaning_en, meaning_vn=excluded.meaning_vn,
+                       example=excluded.example, level=excluded.level, source=excluded.source""",
+                (student["id"], word, req.phonetic, req.audio_url, req.pos, req.meaning_en, req.meaning_vn, req.example, req.level, req.source)
+            )
+            synced += 1
+        conn.commit()
+    finally:
+        conn.close()
+    return {"status": "synced", "count": synced}
+
+
 # ─── KNOWLEDGE GRAPH VISUALIZATION ───────────────────────────────────────────
 
 @router.get("/knowledge-graph")

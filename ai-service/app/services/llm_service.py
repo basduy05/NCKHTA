@@ -1,5 +1,6 @@
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_openai import ChatOpenAI
+from langchain_cohere import ChatCohere
 from langchain_core.prompts import PromptTemplate
 import os
 import json
@@ -62,20 +63,29 @@ def parse_json_response(text: str):
         print("JSON parse error:", e)
         return []
 
-def get_llm():
+def get_llm(provider=None):
     """
     Factory to return the configured LLM instance.
     Reads API key from DB settings first, then environment variables.
+    If provider is specified ("google", "openai", "cohere"), only return that provider.
+    Default order: Google Gemini → OpenAI → Cohere.
     """
-    google_key = _get_setting("GOOGLE_API_KEY")
-    if google_key:
-        os.environ["GOOGLE_API_KEY"] = google_key
-        return ChatGoogleGenerativeAI(model="models/gemini-2.5-flash")
+    if provider != "cohere" and provider != "openai":
+        google_key = _get_setting("GOOGLE_API_KEY")
+        if google_key and provider in (None, "google"):
+            os.environ["GOOGLE_API_KEY"] = google_key
+            return ChatGoogleGenerativeAI(model="models/gemini-2.5-flash")
 
-    openai_key = _get_setting("OPENAI_API_KEY")
-    if openai_key:
-        os.environ["OPENAI_API_KEY"] = openai_key
-        return ChatOpenAI(model="gpt-3.5-turbo")
+    if provider != "google" and provider != "cohere":
+        openai_key = _get_setting("OPENAI_API_KEY")
+        if openai_key and provider in (None, "openai"):
+            os.environ["OPENAI_API_KEY"] = openai_key
+            return ChatOpenAI(model="gpt-3.5-turbo")
+
+    cohere_key = _get_setting("COHERE_API_KEY")
+    if cohere_key and provider in (None, "cohere"):
+        os.environ["COHERE_API_KEY"] = cohere_key
+        return ChatCohere(model="command-r-plus")
 
     return None
 
@@ -84,7 +94,8 @@ MAX_RETRIES = 2
 RETRY_DELAY = 1.5  # seconds
 
 def _safe_invoke(chain, params: dict, retries: int = MAX_RETRIES):
-    """Invoke LLM chain with automatic retry on transient failures."""
+    """Invoke LLM chain with automatic retry on transient failures.
+    On quota/rate-limit errors from primary LLM, automatically falls back to Cohere."""
     last_error = None
     for attempt in range(retries + 1):
         try:
@@ -93,8 +104,20 @@ def _safe_invoke(chain, params: dict, retries: int = MAX_RETRIES):
         except Exception as e:
             last_error = e
             error_str = str(e).lower()
-            # Don't retry on auth/quota errors
-            if any(k in error_str for k in ["api_key", "quota", "unauthorized", "forbidden", "invalid"]):
+            # On quota/rate-limit errors → try Cohere fallback
+            if any(k in error_str for k in ["quota", "rate_limit", "resource_exhausted", "429", "too many requests"]):
+                print(f"[LLM QUOTA] Primary LLM quota exceeded. Trying Cohere fallback...")
+                fallback_llm = get_llm(provider="cohere")
+                if fallback_llm:
+                    try:
+                        fallback_chain = chain.first | fallback_llm
+                        return fallback_chain.invoke(params)
+                    except Exception as fe:
+                        print(f"[LLM FALLBACK] Cohere also failed: {fe}")
+                        raise fe
+                raise  # No Cohere key configured
+            # Don't retry on auth errors
+            if any(k in error_str for k in ["api_key", "unauthorized", "forbidden", "invalid"]):
                 raise
             if attempt < retries:
                 print(f"[LLM RETRY] Attempt {attempt + 1} failed: {e}. Retrying in {RETRY_DELAY}s...")

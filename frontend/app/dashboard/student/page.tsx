@@ -6,7 +6,7 @@ import {
   BookOpen, Sparkles, BrainCircuit, Trophy, PlayCircle, CheckCircle2, XCircle,
   GraduationCap, ClipboardList, BarChart3, FileText, ChevronRight, Clock,
   Award, TrendingUp, Layers, Search, BookMarked, Volume2, Save, Trash2,
-  ExternalLink, Star, Filter, X, ArrowRight, Bookmark, Network, Mic, Upload, Brain
+  ExternalLink, Star, Filter, X, ArrowRight, Bookmark, Network, Mic, Upload, Brain, Headphones, Edit3
 } from "lucide-react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://iedu-ksk7.onrender.com";
@@ -998,12 +998,69 @@ function DictionaryTab({ token }: { token: string | null }) {
 }
 
 // ==================== VOCABULARY TAB ====================
+const VOCAB_CACHE_KEY = "iedu_vocab_cache";
+
 function VocabularyTab({ token }: { token: string | null }) {
   const [words, setWords] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [levelFilter, setLevelFilter] = useState("");
   const [deleting, setDeleting] = useState<number | null>(null);
+  const [syncing, setSyncing] = useState(false);
+
+  // Save words to localStorage as backup
+  const cacheToLocal = (data: any[]) => {
+    try {
+      if (typeof window !== "undefined" && data.length > 0) {
+        localStorage.setItem(VOCAB_CACHE_KEY, JSON.stringify(data));
+      }
+    } catch { }
+  };
+
+  // Get cached words from localStorage
+  const getLocalCache = (): any[] => {
+    try {
+      if (typeof window !== "undefined") {
+        const cached = localStorage.getItem(VOCAB_CACHE_KEY);
+        if (cached) return JSON.parse(cached);
+      }
+    } catch { }
+    return [];
+  };
+
+  // Sync localStorage words back to server
+  const syncToServer = async (cachedWords: any[]) => {
+    if (!token || cachedWords.length === 0) return;
+    setSyncing(true);
+    try {
+      const payload = cachedWords.map((w: any) => ({
+        word: w.word,
+        phonetic: w.phonetic || "",
+        audio_url: w.audio_url || "",
+        pos: w.pos || "",
+        meaning_en: w.meaning_en || "",
+        meaning_vn: w.meaning_vn || "",
+        example: w.example || "",
+        level: w.level || "B1",
+        source: w.source || "dictionary",
+      }));
+      const res = await fetch(`${API_URL}/student/vocabulary/sync`, {
+        method: "POST",
+        headers: getAuthHeader(token),
+        body: JSON.stringify({ words: payload }),
+      });
+      if (res.ok) {
+        // Re-fetch to get server IDs
+        const res2 = await fetch(`${API_URL}/student/vocabulary`, { headers: getAuthHeader(token) });
+        if (res2.ok) {
+          const serverWords = await res2.json();
+          setWords(serverWords);
+          cacheToLocal(serverWords);
+        }
+      }
+    } catch (e) { console.error("[SYNC]", e); }
+    finally { setSyncing(false); }
+  };
 
   const fetchWords = async () => {
     try {
@@ -1011,7 +1068,22 @@ function VocabularyTab({ token }: { token: string | null }) {
       if (search) params.set("search", search);
       if (levelFilter) params.set("level", levelFilter);
       const res = await fetch(`${API_URL}/student/vocabulary?${params}`, { headers: getAuthHeader(token) });
-      if (res.ok) setWords(await res.json());
+      if (res.ok) {
+        const serverWords = await res.json();
+        if (serverWords.length > 0) {
+          setWords(serverWords);
+          // Only cache full list (no filters)
+          if (!search && !levelFilter) cacheToLocal(serverWords);
+        } else if (!search && !levelFilter) {
+          // Server is empty — check localStorage backup
+          const cached = getLocalCache();
+          if (cached.length > 0) {
+            setWords(cached);
+            // Auto-sync cached words back to server
+            syncToServer(cached);
+          }
+        }
+      }
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
   };
@@ -1025,7 +1097,11 @@ function VocabularyTab({ token }: { token: string | null }) {
       const res = await fetch(`${API_URL}/student/vocabulary/${id}`, {
         method: "DELETE", headers: getAuthHeader(token)
       });
-      if (res.ok) setWords(prev => prev.filter(w => w.id !== id));
+      if (res.ok) {
+        const updated = words.filter(w => w.id !== id);
+        setWords(updated);
+        cacheToLocal(updated);
+      }
     } catch { }
     finally { setDeleting(null); }
   };

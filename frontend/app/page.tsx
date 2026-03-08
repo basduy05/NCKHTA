@@ -2,7 +2,8 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { Brain, Network, Sparkles, GraduationCap, BarChart3, CheckCircle2, ArrowRight, ChevronRight, ChevronLeft, Globe, Zap, Target, TrendingUp, Play, Users, Mail, Award, Star } from "lucide-react";
+import { Brain, Network, Sparkles, GraduationCap, BarChart3, CheckCircle2, ArrowRight, ChevronRight, ChevronLeft, Globe, Zap, Target, TrendingUp, Play, Users, Mail, Award, Star, LayoutDashboard } from "lucide-react";
+import { useAuth } from "./context/AuthContext";
 
 function useScrollReveal() {
   const ref = useRef<HTMLDivElement>(null);
@@ -66,13 +67,12 @@ function AuthorCard() {
             {AUTHOR_PHOTOS.map((src, i) => (
               <div
                 key={i}
-                className={`absolute inset-0 transition-all duration-700 ease-in-out ${
-                  i === current
+                className={`absolute inset-0 transition-all duration-700 ease-in-out ${i === current
                     ? "opacity-100 scale-100"
                     : i === (current - 1 + AUTHOR_PHOTOS.length) % AUTHOR_PHOTOS.length
-                    ? "opacity-0 scale-105 -translate-x-full"
-                    : "opacity-0 scale-105 translate-x-full"
-                }`}
+                      ? "opacity-0 scale-105 -translate-x-full"
+                      : "opacity-0 scale-105 translate-x-full"
+                  }`}
               >
                 <Image
                   src={src}
@@ -108,11 +108,10 @@ function AuthorCard() {
                 <button
                   key={i}
                   onClick={() => goTo(i)}
-                  className={`rounded-full transition-all duration-500 ${
-                    i === current
+                  className={`rounded-full transition-all duration-500 ${i === current
                       ? "w-8 h-2.5 bg-white shadow-lg"
                       : "w-2.5 h-2.5 bg-white/50 hover:bg-white/80"
-                  }`}
+                    }`}
                 />
               ))}
             </div>
@@ -130,7 +129,7 @@ function AuthorCard() {
             <h3 className="text-3xl font-extrabold text-gray-900 mb-2">Nguyễn Bá Duy</h3>
             <p className="text-blue-600 font-semibold text-lg">Full-stack Developer &amp; AI Enthusiast</p>
           </div>
-          
+
           <div className="space-y-3 text-gray-600">
             <div className="flex items-start gap-3 group">
               <GraduationCap size={20} className="text-blue-500 mt-0.5 flex-shrink-0 group-hover:scale-110 transition-transform" />
@@ -143,8 +142,8 @@ function AuthorCard() {
           </div>
 
           <p className="text-gray-600 leading-relaxed">
-            Một sinh viên trẻ đầy nhiệt huyết với niềm đam mê công nghệ cháy bỏng, luôn tìm tòi và ứng dụng những giải pháp sáng tạo vào thực tiễn. 
-            Với tình yêu đặc biệt dành cho AI, phát triển web và các sản phẩm công nghệ giáo dục, 
+            Một sinh viên trẻ đầy nhiệt huyết với niềm đam mê công nghệ cháy bỏng, luôn tìm tòi và ứng dụng những giải pháp sáng tạo vào thực tiễn.
+            Với tình yêu đặc biệt dành cho AI, phát triển web và các sản phẩm công nghệ giáo dục,
             Duy không ngừng học hỏi, thử nghiệm và xây dựng những sản phẩm có giá trị thực tiễn cho cộng đồng sinh viên.
           </p>
 
@@ -182,6 +181,8 @@ function AuthorCard() {
 
 export default function Home() {
   const revealRef = useScrollReveal();
+  const { user } = useAuth();
+  const dashboardUrl = user ? `/dashboard/${user.role.toLowerCase()}` : "/login";
 
   return (
     <main className="min-h-screen bg-white" ref={revealRef}>
@@ -200,8 +201,16 @@ export default function Home() {
             <Link href="/about" className="hover:text-blue-600 transition">Giới thiệu</Link>
           </div>
           <div className="flex items-center gap-3">
-            <Link href="/login" className="text-sm font-medium text-gray-600 hover:text-blue-600 transition px-4 py-2">Đăng nhập</Link>
-            <Link href="/register" className="text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 px-5 py-2 rounded-lg transition shadow-sm hover:shadow-md">Đăng ký</Link>
+            {user ? (
+              <Link href={dashboardUrl} className="text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 px-5 py-2 rounded-lg transition shadow-sm hover:shadow-md flex items-center gap-2">
+                <LayoutDashboard size={16} /> Vào Dashboard
+              </Link>
+            ) : (
+              <>
+                <Link href="/login" className="text-sm font-medium text-gray-600 hover:text-blue-600 transition px-4 py-2">Đăng nhập</Link>
+                <Link href="/register" className="text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 px-5 py-2 rounded-lg transition shadow-sm hover:shadow-md">Đăng ký</Link>
+              </>
+            )}
           </div>
         </div>
       </nav>
@@ -211,7 +220,7 @@ export default function Home() {
         <div className="absolute inset-0 bg-gradient-to-br from-blue-50 via-white to-cyan-50" />
         <div className="absolute top-20 right-0 w-[500px] h-[500px] bg-blue-100 rounded-full blur-3xl opacity-40 animate-pulse-soft" />
         <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-cyan-100 rounded-full blur-3xl opacity-30 animate-pulse-soft delay-200" />
-        
+
         <div className="relative max-w-7xl mx-auto px-6">
           <div className="flex flex-col lg:flex-row items-center gap-16">
             <div className="flex-1 space-y-8 text-center lg:text-left">
@@ -227,9 +236,15 @@ export default function Home() {
                 Nền tảng kết hợp <strong>Đồ thị Tri thức</strong> và <strong>Trí tuệ Nhân tạo</strong> giúp bạn học từ vựng, ngữ pháp hiệu quả gấp nhiều lần.
               </p>
               <div className="flex flex-wrap gap-4 justify-center lg:justify-start animate-fade-in-up delay-400">
-                <Link href="/register" className="group inline-flex items-center gap-2 px-8 py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold text-lg transition-all shadow-lg shadow-blue-200 hover:shadow-xl hover:scale-105">
-                  Bắt đầu miễn phí <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
-                </Link>
+                {user ? (
+                  <Link href={dashboardUrl} className="group inline-flex items-center gap-2 px-8 py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold text-lg transition-all shadow-lg shadow-blue-200 hover:shadow-xl hover:scale-105">
+                    <LayoutDashboard size={20} /> Vào Dashboard <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
+                  </Link>
+                ) : (
+                  <Link href="/register" className="group inline-flex items-center gap-2 px-8 py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold text-lg transition-all shadow-lg shadow-blue-200 hover:shadow-xl hover:scale-105">
+                    Bắt đầu miễn phí <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
+                  </Link>
+                )}
                 <Link href="/about" className="group inline-flex items-center gap-2 px-8 py-4 bg-white hover:bg-gray-50 text-gray-700 rounded-xl font-semibold text-lg transition-all border border-gray-200 shadow-sm hover:shadow-md">
                   <Play size={20} className="group-hover:scale-110 transition-transform" /> Tìm hiểu thêm
                 </Link>
@@ -240,7 +255,7 @@ export default function Home() {
                 <span className="flex items-center gap-1.5"><CheckCircle2 size={16} className="text-green-500" /> Knowledge Graph</span>
               </div>
             </div>
-            
+
             {/* Hero Visual */}
             <div className="flex-1 relative animate-fade-in-right delay-300">
               <div className="relative bg-gradient-to-br from-blue-600 to-cyan-500 rounded-3xl p-8 shadow-2xl hover:shadow-blue-200/50 transition-shadow duration-500">
@@ -453,12 +468,20 @@ export default function Home() {
             Tham gia iEdu ngay hôm nay và trải nghiệm phương pháp học tiếng Anh hoàn toàn mới với AI
           </p>
           <div className="flex flex-wrap justify-center gap-4">
-            <Link href="/register" className="group inline-flex items-center gap-2 px-10 py-4 bg-white text-blue-600 rounded-xl font-bold text-lg hover:shadow-xl transition-all hover:scale-105">
-              Đăng ký miễn phí <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
-            </Link>
-            <Link href="/login" className="px-10 py-4 bg-white/10 backdrop-blur-sm text-white rounded-xl font-bold text-lg border border-white/30 hover:bg-white/20 transition-all hover:scale-105">
-              Đăng nhập
-            </Link>
+            {user ? (
+              <Link href={dashboardUrl} className="group inline-flex items-center gap-2 px-10 py-4 bg-white text-blue-600 rounded-xl font-bold text-lg hover:shadow-xl transition-all hover:scale-105">
+                <LayoutDashboard size={20} /> Vào Dashboard <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
+              </Link>
+            ) : (
+              <>
+                <Link href="/register" className="group inline-flex items-center gap-2 px-10 py-4 bg-white text-blue-600 rounded-xl font-bold text-lg hover:shadow-xl transition-all hover:scale-105">
+                  Đăng ký miễn phí <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
+                </Link>
+                <Link href="/login" className="px-10 py-4 bg-white/10 backdrop-blur-sm text-white rounded-xl font-bold text-lg border border-white/30 hover:bg-white/20 transition-all hover:scale-105">
+                  Đăng nhập
+                </Link>
+              </>
+            )}
           </div>
         </div>
       </section>
