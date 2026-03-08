@@ -1,7 +1,7 @@
 "use client";
 import { useState, Suspense, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
-import { Users, Database, Plus, UploadCloud, FileSpreadsheet, Save, Edit, Trash2, GraduationCap, X, Check, BookOpen, BookText, Settings, RefreshCw, Mail, Eye, EyeOff } from "lucide-react";
+import { Users, Database, Plus, UploadCloud, FileSpreadsheet, Save, Edit, Trash2, GraduationCap, X, Check, BookOpen, BookText, Settings, RefreshCw, Mail, Eye, EyeOff, Sparkles } from "lucide-react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://iedu-ksk7.onrender.com";
 
@@ -50,7 +50,7 @@ function OverviewTab() {
     const fetchStats = async () => {
       try {
         const res = await fetch(`${API_URL}/admin/stats`, { signal: AbortSignal.timeout(5000) });
-        if(!res.ok) throw new Error("API failed");
+        if (!res.ok) throw new Error("API failed");
         const data = await res.json();
         setStats(data);
       } catch (err) {
@@ -64,7 +64,7 @@ function OverviewTab() {
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-4 gap-6 animate-in fade-in zoom-in-95 duration-300">
-      {[ 
+      {[
         { label: "Tổng người dùng", value: loading ? "..." : stats.users, icon: Users, color: "text-blue-600", bg: "bg-blue-100" },
         { label: "Tổng Lớp học", value: loading ? "..." : stats.classes, icon: GraduationCap, color: "text-purple-600", bg: "bg-purple-100" },
         { label: "Tổng Bài học", value: loading ? "..." : stats.lessons, icon: BookOpen, color: "text-orange-600", bg: "bg-orange-100" },
@@ -100,7 +100,7 @@ function UsersTab() {
   useEffect(() => { fetchUsers(); }, []);
 
   const handleSaveUser = async () => {
-    if(!formUser.name || !formUser.email) return alert("Vui lòng điền đủ thông tin!");
+    if (!formUser.name || !formUser.email) return alert("Vui lòng điền đủ thông tin!");
     try {
       if (isEditing !== null) {
         await fetch(`${API_URL}/admin/users/${isEditing}`, {
@@ -114,9 +114,9 @@ function UsersTab() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(formUser)
         });
-        if(!res.ok) {
-           const errData = await res.json();
-           return alert(errData.detail || "Lỗi tạo người dùng");
+        if (!res.ok) {
+          const errData = await res.json();
+          return alert(errData.detail || "Lỗi tạo người dùng");
         }
       }
       resetForm();
@@ -127,7 +127,7 @@ function UsersTab() {
   }
 
   const handleDeleteUser = async (id) => {
-    if(confirm("Bạn có chắc chắn xoá người dùng này?")) {
+    if (confirm("Bạn có chắc chắn xoá người dùng này?")) {
       await fetch(`${API_URL}/admin/users/${id}`, { method: 'DELETE' });
       fetchUsers();
     }
@@ -169,8 +169,8 @@ function UsersTab() {
                       </span>
                     </td>
                     <td className="py-4 flex gap-2">
-                      <button onClick={() => handleEditClick(u)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded"><Edit size={16}/></button>
-                      <button onClick={() => handleDeleteUser(u.id)} className="p-1.5 text-red-600 hover:bg-red-50 rounded"><Trash2 size={16}/></button>
+                      <button onClick={() => handleEditClick(u)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded"><Edit size={16} /></button>
+                      <button onClick={() => handleDeleteUser(u.id)} className="p-1.5 text-red-600 hover:bg-red-50 rounded"><Trash2 size={16} /></button>
                     </td>
                   </tr>
                 ))}
@@ -183,33 +183,33 @@ function UsersTab() {
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 h-fit">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-lg font-bold text-gray-900 flex"><Users className="mr-2 text-indigo-600" /> {isEditing ? 'Sửa Người Dùng' : 'Thêm Người Dùng'}</h2>
-          {isEditing && <button onClick={resetForm} className="text-gray-400 hover:text-gray-600"><X size={18}/></button>}
+          {isEditing && <button onClick={resetForm} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>}
         </div>
         <form className="space-y-4">
           <div>
             <label className="block text-sm font-medium mb-1">Tên hiển thị</label>
-            <input type="text" value={formUser.name} onChange={e => setFormUser({...formUser, name: e.target.value})} className="w-full border rounded-lg p-2 focus:ring-2 outline-none" placeholder="VD: Nguyễn Văn A" />
+            <input type="text" value={formUser.name} onChange={e => setFormUser({ ...formUser, name: e.target.value })} className="w-full border rounded-lg p-2 focus:ring-2 outline-none" placeholder="VD: Nguyễn Văn A" />
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">Email</label>
-            <input type="email" value={formUser.email} onChange={e => setFormUser({...formUser, email: e.target.value})} className="w-full border rounded-lg p-2 focus:ring-2 outline-none" placeholder="email@domain.com" />
+            <input type="email" value={formUser.email} onChange={e => setFormUser({ ...formUser, email: e.target.value })} className="w-full border rounded-lg p-2 focus:ring-2 outline-none" placeholder="email@domain.com" />
           </div>
           {!isEditing && (
             <div>
               <label className="block text-sm font-medium mb-1">Mật khẩu (Mặc định: 123456)</label>
-              <input type="text" value={formUser.password || ''} onChange={e => setFormUser({...formUser, password: e.target.value})} className="w-full border rounded-lg p-2 focus:ring-2 outline-none" placeholder="123456" />
+              <input type="text" value={formUser.password || ''} onChange={e => setFormUser({ ...formUser, password: e.target.value })} className="w-full border rounded-lg p-2 focus:ring-2 outline-none" placeholder="123456" />
             </div>
           )}
           <div>
             <label className="block text-sm font-medium mb-1">Vai trò</label>
-            <select value={formUser.role} onChange={e => setFormUser({...formUser, role: e.target.value})} className="w-full border rounded-lg p-2 bg-white outline-none">
+            <select value={formUser.role} onChange={e => setFormUser({ ...formUser, role: e.target.value })} className="w-full border rounded-lg p-2 bg-white outline-none">
               <option value="STUDENT">Học sinh</option>
               <option value="TEACHER">Giáo viên</option>
               <option value="ADMIN">Admin</option>
             </select>
           </div>
           <button type="button" onClick={handleSaveUser} className="w-full py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition flex justify-center items-center">
-            {isEditing ? <><Check size={18} className="mr-2"/> Lưu thay đổi</> : 'Tạo tài khoản'}
+            {isEditing ? <><Check size={18} className="mr-2" /> Lưu thay đổi</> : 'Tạo tài khoản'}
           </button>
         </form>
       </div>
@@ -223,13 +223,13 @@ function ClassesTab() {
   const [formClass, setFormClass] = useState({ name: '', teacher_name: '', students_count: 0 });
 
   const fetchClasses = async () => {
-    try { const res = await fetch(`${API_URL}/admin/classes`); setClasses(await res.json()); } catch {}
+    try { const res = await fetch(`${API_URL}/admin/classes`); setClasses(await res.json()); } catch { }
   };
 
   useEffect(() => { fetchClasses(); }, []);
 
   const handleSave = async () => {
-    if(!formClass.name || !formClass.teacher_name) return alert("Điền đủ thông tin!");
+    if (!formClass.name || !formClass.teacher_name) return alert("Điền đủ thông tin!");
     const url = isEditing ? `${API_URL}/admin/classes/${isEditing}` : `${API_URL}/admin/classes`;
     const method = isEditing ? 'PUT' : 'POST';
     await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(formClass) });
@@ -243,7 +243,7 @@ function ClassesTab() {
   };
 
   const handleDelete = async (id: number) => {
-    if(confirm("Xoá lớp này?")) {
+    if (confirm("Xoá lớp này?")) {
       await fetch(`${API_URL}/admin/classes/${id}`, { method: 'DELETE' });
       fetchClasses();
     }
@@ -256,14 +256,14 @@ function ClassesTab() {
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-lg font-bold text-gray-900">{isEditing ? 'Sửa Lớp Học' : 'Tạo Lớp Học Mới'}</h2>
-          {isEditing && <button onClick={resetForm} className="text-gray-400 hover:text-gray-600"><X size={18}/></button>}
+          {isEditing && <button onClick={resetForm} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>}
         </div>
         <div className="space-y-3">
-          <input type="text" value={formClass.name} onChange={e=>setFormClass({...formClass, name: e.target.value})} placeholder="Tên Lớp (VD: IELTS Căn bản)" className="w-full border rounded-lg p-2 focus:ring-2 outline-none" />
-          <input type="text" value={formClass.teacher_name} onChange={e=>setFormClass({...formClass, teacher_name: e.target.value})} placeholder="Tên Giáo viên phụ trách" className="w-full border rounded-lg p-2 focus:ring-2 outline-none" />
-          <input type="number" value={formClass.students_count} onChange={e=>setFormClass({...formClass, students_count: parseInt(e.target.value)||0})} placeholder="Sĩ số" className="w-full border rounded-lg p-2 focus:ring-2 outline-none" />
+          <input type="text" value={formClass.name} onChange={e => setFormClass({ ...formClass, name: e.target.value })} placeholder="Tên Lớp (VD: IELTS Căn bản)" className="w-full border rounded-lg p-2 focus:ring-2 outline-none" />
+          <input type="text" value={formClass.teacher_name} onChange={e => setFormClass({ ...formClass, teacher_name: e.target.value })} placeholder="Tên Giáo viên phụ trách" className="w-full border rounded-lg p-2 focus:ring-2 outline-none" />
+          <input type="number" value={formClass.students_count} onChange={e => setFormClass({ ...formClass, students_count: parseInt(e.target.value) || 0 })} placeholder="Sĩ số" className="w-full border rounded-lg p-2 focus:ring-2 outline-none" />
           <button onClick={handleSave} className="w-full py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition">
-            {isEditing ? <><Check size={18} className="inline mr-1"/> Lưu thay đổi</> : '+ Thêm Lớp Này'}
+            {isEditing ? <><Check size={18} className="inline mr-1" /> Lưu thay đổi</> : '+ Thêm Lớp Này'}
           </button>
         </div>
       </div>
@@ -279,8 +279,8 @@ function ClassesTab() {
                 <p className="text-xs text-gray-500">GV: {c.teacher_name} | Sĩ số: {c.students_count || 0}</p>
               </div>
               <div className="flex gap-1">
-                <button onClick={() => handleEdit(c)} className="text-blue-500 bg-blue-50 p-1.5 rounded hover:bg-blue-100"><Edit size={16}/></button>
-                <button onClick={() => handleDelete(c.id)} className="text-red-500 bg-red-50 p-1.5 rounded hover:bg-red-100"><Trash2 size={16}/></button>
+                <button onClick={() => handleEdit(c)} className="text-blue-500 bg-blue-50 p-1.5 rounded hover:bg-blue-100"><Edit size={16} /></button>
+                <button onClick={() => handleDelete(c.id)} className="text-red-500 bg-red-50 p-1.5 rounded hover:bg-red-100"><Trash2 size={16} /></button>
               </div>
             </li>
           ))}
@@ -298,17 +298,61 @@ function LessonsTab() {
   const [uploading, setUploading] = useState(false);
   const [isEditing, setIsEditing] = useState<number | null>(null);
 
+  const [exerciseType, setExerciseType] = useState('mixed');
+  const [generatingAI, setGeneratingAI] = useState(false);
+
+  const handleGenerateExercise = async () => {
+    if (!file) return alert("Vui lòng đính kèm file trước tiên!");
+    setGeneratingAI(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("exercise_type", exerciseType);
+      fd.append("num_questions", "5");
+
+      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : '';
+      const res = await fetch(`${API_URL}/teacher/file/generate-assignment`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: fd
+      });
+      if (res.ok) {
+        const json = await res.json();
+        const data = json.result || json;
+        let newContent = formLesson.content + (formLesson.content ? "\n\n" : "") + "--- BÀI TẬP AI TẠO ---\n";
+        if (data.vocabulary && data.vocabulary.length > 0) {
+          newContent += "* Từ vựng trọng tâm:\n";
+          data.vocabulary.forEach((v: any) => { newContent += `- ${v.word} (${v.pos}): ${v.meaning_vn}\n`; });
+        }
+        if (data.quiz && data.quiz.length > 0) {
+          newContent += "\n* Trắc nghiệm:\n";
+          data.quiz.forEach((q: any, i: number) => {
+            newContent += `Câu ${i + 1}: ${q.question || q.q}\n`;
+            (q.options || []).forEach((opt: string, j: number) => {
+              newContent += `  ${String.fromCharCode(65 + j)}. ${opt}\n`;
+            });
+            const correctIdx = q.correct_answer ?? q.ans;
+            if (correctIdx !== undefined) newContent += `=> Đáp án: ${String.fromCharCode(65 + correctIdx)}\n\n`;
+          });
+        }
+        setFormLesson({ ...formLesson, content: newContent });
+        alert("Tạo bài tập thành công! Kéo xuống để xem nội dung đã được tự động thêm vào.");
+      } else alert("Lỗi tạo bài tập AI");
+    } catch (e) { alert("Lỗi kết nối"); }
+    finally { setGeneratingAI(false); }
+  };
+
   const fetchLessons = async () => {
-    try { const res = await fetch(`${API_URL}/admin/lessons`); setLessons(await res.json()); } catch {}
+    try { const res = await fetch(`${API_URL}/admin/lessons`); setLessons(await res.json()); } catch { }
   };
   const fetchClasses = async () => {
-    try { const res = await fetch(`${API_URL}/admin/classes`); setClasses(await res.json()); } catch {}
+    try { const res = await fetch(`${API_URL}/admin/classes`); setClasses(await res.json()); } catch { }
   };
 
   useEffect(() => { fetchLessons(); fetchClasses(); }, []);
 
   const handleSave = async () => {
-    if(!formLesson.class_id || !formLesson.title) return alert("Hãy chọn lớp và nhập tên bài học");
+    if (!formLesson.class_id || !formLesson.title) return alert("Hãy chọn lớp và nhập tên bài học");
     setUploading(true);
     try {
       const fd = new FormData();
@@ -333,7 +377,7 @@ function LessonsTab() {
   };
 
   const handleDelete = async (id: number) => {
-    if(confirm("Xóa bài học này?")) {
+    if (confirm("Xóa bài học này?")) {
       await fetch(`${API_URL}/admin/lessons/${id}`, { method: 'DELETE' });
       fetchLessons();
     }
@@ -347,32 +391,44 @@ function LessonsTab() {
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-in fade-in duration-300">
-       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
         <div className="flex justify-between items-center mb-4">
-          <h2 className="text-lg font-bold text-gray-900 flex items-center"><BookOpen className="mr-2 text-orange-600" size={20}/> {isEditing ? 'Sửa Bài Học' : 'Thêm Bài Học Mới'}</h2>
-          {isEditing && <button onClick={resetForm} className="text-gray-400 hover:text-gray-600"><X size={18}/></button>}
+          <h2 className="text-lg font-bold text-gray-900 flex items-center"><BookOpen className="mr-2 text-orange-600" size={20} /> {isEditing ? 'Sửa Bài Học' : 'Thêm Bài Học Mới'}</h2>
+          {isEditing && <button onClick={resetForm} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>}
         </div>
         <div className="space-y-3">
-          <select value={formLesson.class_id} onChange={e=>setFormLesson({...formLesson, class_id: e.target.value})} className="w-full border rounded-lg p-2 bg-white outline-none focus:ring-2">
+          <select value={formLesson.class_id} onChange={e => setFormLesson({ ...formLesson, class_id: e.target.value })} className="w-full border rounded-lg p-2 bg-white outline-none focus:ring-2">
             <option value="">-- Chọn Lớp --</option>
             {classes.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
-          <input type="text" value={formLesson.title} onChange={e=>setFormLesson({...formLesson, title: e.target.value})} placeholder="Tiêu đề bài học" className="w-full border rounded-lg p-2 outline-none focus:ring-2" />
-          <textarea value={formLesson.content} onChange={e=>setFormLesson({...formLesson, content: e.target.value})} placeholder="Nội dung tóm tắt..." className="w-full border rounded-lg p-2 outline-none focus:ring-2 h-24" />
+          <input type="text" value={formLesson.title} onChange={e => setFormLesson({ ...formLesson, title: e.target.value })} placeholder="Tiêu đề bài học" className="w-full border rounded-lg p-2 outline-none focus:ring-2" />
+          <textarea value={formLesson.content} onChange={e => setFormLesson({ ...formLesson, content: e.target.value })} placeholder="Nội dung tóm tắt..." className="w-full border rounded-lg p-2 outline-none focus:ring-2 h-24" />
           <div className="border-2 border-dashed rounded-xl p-4 text-center hover:border-orange-400 hover:bg-orange-50 transition">
-            <input type="file" className="hidden" id="lesson-file" onChange={e => { if(e.target.files) setFile(e.target.files[0]); }} />
+            <input type="file" className="hidden" id="lesson-file" onChange={e => { if (e.target.files) setFile(e.target.files[0]); }} />
             <label htmlFor="lesson-file" className="cursor-pointer text-gray-500 flex flex-col items-center text-sm">
               <UploadCloud size={28} className={file ? "text-orange-600" : ""} />
               <span className="mt-1 font-medium">{file ? file.name : "Đính kèm file (tuỳ chọn)"}</span>
             </label>
           </div>
-          <button onClick={handleSave} disabled={uploading} className="w-full py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-50 transition">
-            {uploading ? "Đang lưu..." : isEditing ? <><Check size={18} className="inline mr-1"/> Lưu thay đổi</> : "+ Thêm Bài Học"}
+
+          <div className="flex flex-col sm:flex-row gap-2">
+            <select value={exerciseType} onChange={e => setExerciseType(e.target.value)} className="border rounded-lg p-2 bg-gray-50 outline-none focus:ring-2 flex-grow">
+              <option value="mixed">Bài tập hỗn hợp cơ bản</option>
+              <option value="toeic reading part 5, part 6 format">Bài tập định dạng TOEIC</option>
+              <option value="ielts reading short answer format">Bài tập định dạng IELTS</option>
+            </select>
+            <button onClick={handleGenerateExercise} disabled={generatingAI || !file} className="bg-purple-600 text-white rounded-lg px-4 py-2 hover:bg-purple-700 disabled:opacity-50 transition flex items-center justify-center whitespace-nowrap">
+              <Sparkles size={16} className="mr-1" /> {generatingAI ? "Đang tạo..." : "AI Tạo Bài Tập"}
+            </button>
+          </div>
+
+          <button onClick={handleSave} disabled={uploading} className="w-full py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-50 transition mt-2">
+            {uploading ? "Đang lưu..." : isEditing ? <><Check size={18} className="inline mr-1" /> Lưu thay đổi</> : "+ Thêm Bài Học"}
           </button>
         </div>
       </div>
 
-       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 flex-grow">
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 flex-grow">
         <h2 className="text-lg font-bold text-gray-900 mb-4">Danh sách Bài học</h2>
         <ul className="space-y-3 max-h-[500px] overflow-y-auto">
           {lessons.length === 0 && <p className="text-gray-400 text-sm">Chưa có bài học nào.</p>}
@@ -385,14 +441,14 @@ function LessonsTab() {
                   {l.content && <p className="text-xs text-gray-600 mt-1 line-clamp-2">{l.content}</p>}
                   {l.file_name && (
                     <a href={`${API_URL}/admin/lessons/${l.id}/file`} target="_blank" rel="noopener noreferrer"
-                       className="inline-flex items-center mt-2 text-xs text-indigo-600 hover:underline">
-                      <FileSpreadsheet size={14} className="mr-1"/> {l.file_name}
+                      className="inline-flex items-center mt-2 text-xs text-indigo-600 hover:underline">
+                      <FileSpreadsheet size={14} className="mr-1" /> {l.file_name}
                     </a>
                   )}
                 </div>
                 <div className="flex gap-1 ml-2">
-                  <button onClick={() => handleEdit(l)} className="text-blue-500 bg-blue-50 p-1.5 rounded hover:bg-blue-100"><Edit size={16}/></button>
-                  <button onClick={() => handleDelete(l.id)} className="text-red-500 bg-red-50 p-1.5 rounded hover:bg-red-100"><Trash2 size={16}/></button>
+                  <button onClick={() => handleEdit(l)} className="text-blue-500 bg-blue-50 p-1.5 rounded hover:bg-blue-100"><Edit size={16} /></button>
+                  <button onClick={() => handleDelete(l.id)} className="text-red-500 bg-red-50 p-1.5 rounded hover:bg-red-100"><Trash2 size={16} /></button>
                 </div>
               </div>
             </li>
@@ -512,9 +568,9 @@ function VocabTab() {
           <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center"><FileSpreadsheet className="mr-2 text-indigo-600" /> Nhập Nhanh (CSV)</h2>
           <p className="text-sm text-gray-500 mb-4">Upload file thêm hàng loạt từ vựng vào Neo4j Graph Database.</p>
           <div className="border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer hover:border-indigo-400 hover:bg-gray-50 transition">
-            <input type="file" accept=".csv" className="hidden" id="file-upload" onChange={(e) => e.target.files && setFile(e.target.files[0]) }/>
+            <input type="file" accept=".csv" className="hidden" id="file-upload" onChange={(e) => e.target.files && setFile(e.target.files[0])} />
             <label htmlFor="file-upload" className="cursor-pointer text-gray-500 flex flex-col items-center">
-              {file ? <FileSpreadsheet size={40} className="text-indigo-600 mb-2"/> : <UploadCloud size={40} className="mb-2"/>}
+              {file ? <FileSpreadsheet size={40} className="text-indigo-600 mb-2" /> : <UploadCloud size={40} className="mb-2" />}
               <span className="font-medium text-gray-700">{file ? file.name : "Click chọn file .csv"}</span>
             </label>
           </div>
@@ -536,7 +592,7 @@ function VocabTab() {
             ))}
           </div>
           <button onClick={handleNewWord} className="w-full py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition flex items-center justify-center">
-            <Plus size={18} className="mr-1"/> Thêm từ vựng mới
+            <Plus size={18} className="mr-1" /> Thêm từ vựng mới
           </button>
         </div>
       </div>
@@ -546,22 +602,22 @@ function VocabTab() {
         <div className="bg-white rounded-2xl border border-indigo-200 shadow-sm p-6">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-lg font-bold text-gray-900">{editingWord === '' ? 'Thêm Từ Vựng Mới' : `Sửa: ${editingWord}`}</h2>
-            <button onClick={() => setEditingWord(null)} className="text-gray-400 hover:text-gray-600"><X size={18}/></button>
+            <button onClick={() => setEditingWord(null)} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <input value={formWord.word} onChange={e => setFormWord({...formWord, word: e.target.value})} placeholder="Từ vựng *" className="border rounded-lg p-2 focus:ring-2 outline-none" />
-            <input value={formWord.pronunciation} onChange={e => setFormWord({...formWord, pronunciation: e.target.value})} placeholder="Phát âm" className="border rounded-lg p-2 focus:ring-2 outline-none" />
-            <input value={formWord.meaning} onChange={e => setFormWord({...formWord, meaning: e.target.value})} placeholder="Nghĩa tiếng Việt" className="border rounded-lg p-2 focus:ring-2 outline-none" />
-            <select value={formWord.level} onChange={e => setFormWord({...formWord, level: e.target.value})} className="border rounded-lg p-2 bg-white outline-none">
-              {['A1','A2','B1','B2','C1','C2'].map(l => <option key={l} value={l}>{l}</option>)}
+            <input value={formWord.word} onChange={e => setFormWord({ ...formWord, word: e.target.value })} placeholder="Từ vựng *" className="border rounded-lg p-2 focus:ring-2 outline-none" />
+            <input value={formWord.pronunciation} onChange={e => setFormWord({ ...formWord, pronunciation: e.target.value })} placeholder="Phát âm" className="border rounded-lg p-2 focus:ring-2 outline-none" />
+            <input value={formWord.meaning} onChange={e => setFormWord({ ...formWord, meaning: e.target.value })} placeholder="Nghĩa tiếng Việt" className="border rounded-lg p-2 focus:ring-2 outline-none" />
+            <select value={formWord.level} onChange={e => setFormWord({ ...formWord, level: e.target.value })} className="border rounded-lg p-2 bg-white outline-none">
+              {['A1', 'A2', 'B1', 'B2', 'C1', 'C2'].map(l => <option key={l} value={l}>{l}</option>)}
             </select>
-            <select value={formWord.type} onChange={e => setFormWord({...formWord, type: e.target.value})} className="border rounded-lg p-2 bg-white outline-none">
-              {['noun','verb','adjective','adverb','preposition','conjunction','pronoun','interjection','phrase'].map(t => <option key={t} value={t}>{t}</option>)}
+            <select value={formWord.type} onChange={e => setFormWord({ ...formWord, type: e.target.value })} className="border rounded-lg p-2 bg-white outline-none">
+              {['noun', 'verb', 'adjective', 'adverb', 'preposition', 'conjunction', 'pronoun', 'interjection', 'phrase'].map(t => <option key={t} value={t}>{t}</option>)}
             </select>
-            <input value={formWord.example} onChange={e => setFormWord({...formWord, example: e.target.value})} placeholder="Ví dụ" className="border rounded-lg p-2 focus:ring-2 outline-none" />
+            <input value={formWord.example} onChange={e => setFormWord({ ...formWord, example: e.target.value })} placeholder="Ví dụ" className="border rounded-lg p-2 focus:ring-2 outline-none" />
           </div>
           <button onClick={handleSaveWord} disabled={savingWord} className="mt-4 px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition">
-            {savingWord ? 'Đang lưu...' : <><Check size={18} className="inline mr-1"/> Lưu</>}
+            {savingWord ? 'Đang lưu...' : <><Check size={18} className="inline mr-1" /> Lưu</>}
           </button>
         </div>
       )}
@@ -569,11 +625,11 @@ function VocabTab() {
       {/* Word List with search + pagination */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-3">
-          <h2 className="text-lg font-bold text-gray-900 flex items-center"><Database className="mr-2 text-indigo-600" size={20}/> Danh sách Từ Vựng</h2>
+          <h2 className="text-lg font-bold text-gray-900 flex items-center"><Database className="mr-2 text-indigo-600" size={20} /> Danh sách Từ Vựng</h2>
           <div className="flex gap-2">
             <input value={search} onChange={e => setSearch(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSearch()} placeholder="Tìm từ..." className="border rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-2 w-48" />
             <button onClick={handleSearch} className="px-3 py-1.5 bg-indigo-100 text-indigo-700 rounded-lg text-sm hover:bg-indigo-200">Tìm</button>
-            <button onClick={() => fetchWords()} className="text-indigo-600 hover:text-indigo-800 text-sm flex items-center"><RefreshCw size={14} className="mr-1"/> Làm mới</button>
+            <button onClick={() => fetchWords()} className="text-indigo-600 hover:text-indigo-800 text-sm flex items-center"><RefreshCw size={14} className="mr-1" /> Làm mới</button>
           </div>
         </div>
         {loadingWords ? <p className="text-gray-400 text-sm py-4">Đang tải từ Neo4j...</p> : words.length === 0 ? <p className="text-gray-400 text-sm py-4">Không có từ vựng nào.</p> : (
@@ -601,8 +657,8 @@ function VocabTab() {
                       <td className="py-3 text-gray-500">{w.type || '-'}</td>
                       <td className="py-3 text-gray-500 max-w-[200px] truncate">{w.example || '-'}</td>
                       <td className="py-3 flex gap-1">
-                        <button onClick={() => handleEditWord(w)} className="text-blue-400 hover:text-blue-600"><Edit size={15}/></button>
-                        <button onClick={() => handleDeleteWord(w.word)} className="text-red-400 hover:text-red-600"><Trash2 size={15}/></button>
+                        <button onClick={() => handleEditWord(w)} className="text-blue-400 hover:text-blue-600"><Edit size={15} /></button>
+                        <button onClick={() => handleDeleteWord(w.word)} className="text-red-400 hover:text-red-600"><Trash2 size={15} /></button>
                       </td>
                     </tr>
                   ))}
@@ -635,7 +691,7 @@ function GrammarTab() {
 
   const fetchRules = async () => {
     setLoading(true);
-    try { const res = await fetch(`${API_URL}/admin/grammar`); setRules(await res.json()); } catch {}
+    try { const res = await fetch(`${API_URL}/admin/grammar`); setRules(await res.json()); } catch { }
     finally { setLoading(false); }
   };
 
@@ -681,61 +737,61 @@ function GrammarTab() {
 
   return (
     <div className="animate-in fade-in duration-300">
-       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 mb-6">
-          <h2 className="text-lg font-bold text-gray-900 mb-2 flex items-center"><BookText className="mr-2 text-teal-600"/> Kho Ngữ Pháp (Grammar Rules)</h2>
-          <p className="text-gray-500 text-sm">Quản lý các cấu trúc ngữ pháp để AI sử dụng khi tạo bài tập. Có thể đính kèm file tài liệu.</p>
-       </div>
-       
-       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
-             <div className="flex justify-between items-center mb-4">
-               <h3 className="font-bold flex items-center"><Plus className="mr-2 text-teal-600" size={18}/> {isEditing ? 'Sửa Cấu Trúc' : 'Thêm Cấu Trúc Mới'}</h3>
-               {isEditing && <button onClick={resetForm} className="text-gray-400 hover:text-gray-600"><X size={18}/></button>}
-             </div>
-             <div className="space-y-4">
-                <input value={name} onChange={e => setName(e.target.value)} className="w-full border p-2 rounded-lg focus:ring-2 outline-none" placeholder="Tên cấu trúc (VD: Present Perfect)" />
-                <textarea value={description} onChange={e => setDescription(e.target.value)} className="w-full border p-2 rounded-lg h-24 focus:ring-2 outline-none" placeholder="Mô tả / Công thức..." />
-                <div className="border-2 border-dashed rounded-xl p-4 text-center hover:border-teal-400 hover:bg-teal-50 transition">
-                  <input type="file" className="hidden" id="grammar-file" onChange={e => { if(e.target.files) setFile(e.target.files[0]); }} />
-                  <label htmlFor="grammar-file" className="cursor-pointer text-gray-500 flex flex-col items-center text-sm">
-                    <UploadCloud size={28} className={file ? "text-teal-600" : ""} />
-                    <span className="mt-1 font-medium">{file ? file.name : "Đính kèm file (tuỳ chọn)"}</span>
-                  </label>
-                </div>
-                <button onClick={handleSave} disabled={saving} className="w-full bg-teal-600 text-white py-2 rounded-lg hover:bg-teal-700 disabled:opacity-50 transition">
-                  {saving ? "Đang lưu..." : isEditing ? <><Check size={18} className="inline mr-1"/> Lưu thay đổi</> : "Lưu Cấu Trúc"}
-                </button>
-             </div>
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 mb-6">
+        <h2 className="text-lg font-bold text-gray-900 mb-2 flex items-center"><BookText className="mr-2 text-teal-600" /> Kho Ngữ Pháp (Grammar Rules)</h2>
+        <p className="text-gray-500 text-sm">Quản lý các cấu trúc ngữ pháp để AI sử dụng khi tạo bài tập. Có thể đính kèm file tài liệu.</p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="font-bold flex items-center"><Plus className="mr-2 text-teal-600" size={18} /> {isEditing ? 'Sửa Cấu Trúc' : 'Thêm Cấu Trúc Mới'}</h3>
+            {isEditing && <button onClick={resetForm} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>}
           </div>
-          
-          <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
-             <h3 className="font-bold mb-4">Danh sách hiện có</h3>
-             {loading ? <p className="text-gray-400 text-sm">Đang tải...</p> : rules.length === 0 ? <p className="text-gray-400 text-sm">Chưa có cấu trúc ngữ pháp nào.</p> : (
-               <ul className="space-y-2 max-h-[500px] overflow-y-auto">
-                  {rules.map((r: any) => (
-                    <li key={r.id} className="p-3 bg-gray-50 rounded-lg border border-gray-200">
-                       <div className="flex justify-between items-start">
-                         <div className="flex-1">
-                           <p className="font-semibold text-teal-700">{r.name}</p>
-                           {r.description && <p className="text-xs text-gray-500 mt-1 line-clamp-2">{r.description}</p>}
-                           {r.file_name && (
-                             <a href={`${API_URL}/admin/grammar/${r.id}/file`} target="_blank" rel="noopener noreferrer"
-                                className="inline-flex items-center mt-2 text-xs text-indigo-600 hover:underline">
-                               <FileSpreadsheet size={14} className="mr-1"/> {r.file_name}
-                             </a>
-                           )}
-                         </div>
-                         <div className="flex gap-1 ml-2">
-                           <button onClick={() => handleEdit(r)} className="text-blue-500 bg-blue-50 p-1.5 rounded hover:bg-blue-100"><Edit size={16}/></button>
-                           <button onClick={() => handleDelete(r.id)} className="text-red-500 bg-red-50 p-1.5 rounded hover:bg-red-100"><Trash2 size={16}/></button>
-                         </div>
-                       </div>
-                    </li>
-                  ))}
-               </ul>
-             )}
+          <div className="space-y-4">
+            <input value={name} onChange={e => setName(e.target.value)} className="w-full border p-2 rounded-lg focus:ring-2 outline-none" placeholder="Tên cấu trúc (VD: Present Perfect)" />
+            <textarea value={description} onChange={e => setDescription(e.target.value)} className="w-full border p-2 rounded-lg h-24 focus:ring-2 outline-none" placeholder="Mô tả / Công thức..." />
+            <div className="border-2 border-dashed rounded-xl p-4 text-center hover:border-teal-400 hover:bg-teal-50 transition">
+              <input type="file" className="hidden" id="grammar-file" onChange={e => { if (e.target.files) setFile(e.target.files[0]); }} />
+              <label htmlFor="grammar-file" className="cursor-pointer text-gray-500 flex flex-col items-center text-sm">
+                <UploadCloud size={28} className={file ? "text-teal-600" : ""} />
+                <span className="mt-1 font-medium">{file ? file.name : "Đính kèm file (tuỳ chọn)"}</span>
+              </label>
+            </div>
+            <button onClick={handleSave} disabled={saving} className="w-full bg-teal-600 text-white py-2 rounded-lg hover:bg-teal-700 disabled:opacity-50 transition">
+              {saving ? "Đang lưu..." : isEditing ? <><Check size={18} className="inline mr-1" /> Lưu thay đổi</> : "Lưu Cấu Trúc"}
+            </button>
           </div>
-       </div>
+        </div>
+
+        <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
+          <h3 className="font-bold mb-4">Danh sách hiện có</h3>
+          {loading ? <p className="text-gray-400 text-sm">Đang tải...</p> : rules.length === 0 ? <p className="text-gray-400 text-sm">Chưa có cấu trúc ngữ pháp nào.</p> : (
+            <ul className="space-y-2 max-h-[500px] overflow-y-auto">
+              {rules.map((r: any) => (
+                <li key={r.id} className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                  <div className="flex justify-between items-start">
+                    <div className="flex-1">
+                      <p className="font-semibold text-teal-700">{r.name}</p>
+                      {r.description && <p className="text-xs text-gray-500 mt-1 line-clamp-2">{r.description}</p>}
+                      {r.file_name && (
+                        <a href={`${API_URL}/admin/grammar/${r.id}/file`} target="_blank" rel="noopener noreferrer"
+                          className="inline-flex items-center mt-2 text-xs text-indigo-600 hover:underline">
+                          <FileSpreadsheet size={14} className="mr-1" /> {r.file_name}
+                        </a>
+                      )}
+                    </div>
+                    <div className="flex gap-1 ml-2">
+                      <button onClick={() => handleEdit(r)} className="text-blue-500 bg-blue-50 p-1.5 rounded hover:bg-blue-100"><Edit size={16} /></button>
+                      <button onClick={() => handleDelete(r.id)} className="text-red-500 bg-red-50 p-1.5 rounded hover:bg-red-100"><Trash2 size={16} /></button>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
     </div>
   )
 }
@@ -802,7 +858,7 @@ function SettingsTab() {
     finally { setTestingNeo4j(false); }
   };
 
-  const toggleShow = (key: string) => setShowPasswords(p => ({...p, [key]: !p[key]}));
+  const toggleShow = (key: string) => setShowPasswords(p => ({ ...p, [key]: !p[key] }));
 
   const sensitiveKeys = ['GOOGLE_API_KEY', 'OPENAI_API_KEY', 'COHERE_API_KEY', 'NEO4J_PASSWORD', 'SMTP_PASSWORD', 'RESEND_API_KEY', 'BREVO_API_KEY'];
 
@@ -815,13 +871,13 @@ function SettingsTab() {
           <input
             type={isSensitive && !showPasswords[key] ? "password" : "text"}
             value={settings[key] || ''}
-            onChange={e => setSettings({...settings, [key]: e.target.value})}
+            onChange={e => setSettings({ ...settings, [key]: e.target.value })}
             className="w-full border border-gray-200 rounded-lg p-2.5 pr-10 focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
             placeholder={placeholder}
           />
           {isSensitive && (
             <button type="button" onClick={() => toggleShow(key)} className="absolute right-2 top-2.5 text-gray-400 hover:text-gray-600">
-              {showPasswords[key] ? <EyeOff size={18}/> : <Eye size={18}/>}
+              {showPasswords[key] ? <EyeOff size={18} /> : <Eye size={18} />}
             </button>
           )}
         </div>
@@ -836,7 +892,7 @@ function SettingsTab() {
       {/* AI API Keys */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
         <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center">
-          <Settings className="mr-2 text-indigo-600" size={20}/> API Keys (AI)
+          <Settings className="mr-2 text-indigo-600" size={20} /> API Keys (AI)
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {renderField('GOOGLE_API_KEY', 'Google Gemini API Key', 'AIzaSy...')}
@@ -849,10 +905,10 @@ function SettingsTab() {
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-lg font-bold text-gray-900 flex items-center">
-            <Database className="mr-2 text-indigo-600" size={20}/> Neo4j Graph Database
+            <Database className="mr-2 text-indigo-600" size={20} /> Neo4j Graph Database
           </h2>
           <button onClick={handleTestNeo4j} disabled={testingNeo4j} className="px-4 py-1.5 bg-indigo-100 text-indigo-700 rounded-lg text-sm font-medium hover:bg-indigo-200 disabled:opacity-50 flex items-center">
-            <RefreshCw size={14} className={`mr-1.5 ${testingNeo4j ? 'animate-spin' : ''}`}/> {testingNeo4j ? 'Testing...' : 'Test connection'}
+            <RefreshCw size={14} className={`mr-1.5 ${testingNeo4j ? 'animate-spin' : ''}`} /> {testingNeo4j ? 'Testing...' : 'Test connection'}
           </button>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -867,10 +923,10 @@ function SettingsTab() {
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-lg font-bold text-gray-900 flex items-center">
-            <Mail className="mr-2 text-indigo-600" size={20}/> Email Configuration
+            <Mail className="mr-2 text-indigo-600" size={20} /> Email Configuration
           </h2>
           <button onClick={handleTestEmail} disabled={testingEmail} className="px-4 py-1.5 bg-green-100 text-green-700 rounded-lg text-sm font-medium hover:bg-green-200 disabled:opacity-50 flex items-center">
-            <Mail size={14} className="mr-1.5"/> {testingEmail ? 'Sending...' : 'Send test email'}
+            <Mail size={14} className="mr-1.5" /> {testingEmail ? 'Sending...' : 'Send test email'}
           </button>
         </div>
         <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4 text-sm text-amber-800">
@@ -882,7 +938,7 @@ function SettingsTab() {
             <label className="block text-sm font-medium text-gray-700 mb-1">Email Provider</label>
             <select
               value={settings['EMAIL_PROVIDER'] || 'auto'}
-              onChange={e => setSettings({...settings, EMAIL_PROVIDER: e.target.value})}
+              onChange={e => setSettings({ ...settings, EMAIL_PROVIDER: e.target.value })}
               className="w-full border border-gray-200 rounded-lg p-2.5 focus:ring-2 focus:ring-indigo-500 outline-none text-sm bg-white"
             >
               <option value="auto">Auto (Brevo → Resend → SMTP)</option>
@@ -894,7 +950,7 @@ function SettingsTab() {
           {renderField('BREVO_API_KEY', 'Brevo API Key', 'xkeysib-xxxxxxxx')}
           {renderField('RESEND_API_KEY', 'Resend API Key (backup)', 're_xxxxxxxx')}
           {renderField('SENDER_EMAIL', 'Sender Email', 'your@gmail.com')}
-          <div className="md:col-span-2"><hr className="border-gray-200"/></div>
+          <div className="md:col-span-2"><hr className="border-gray-200" /></div>
           {renderField('SMTP_SERVER', 'SMTP Server', 'smtp.gmail.com')}
           {renderField('SMTP_PORT', 'SMTP Port', '587')}
           {renderField('SMTP_USERNAME', 'SMTP Username', 'your@gmail.com')}
@@ -905,7 +961,7 @@ function SettingsTab() {
       {/* Frontend URL */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
         <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center">
-          <Settings className="mr-2 text-indigo-600" size={20}/> Frontend URL
+          <Settings className="mr-2 text-indigo-600" size={20} /> Frontend URL
         </h2>
         <div className="grid grid-cols-1 gap-4">
           {renderField('FRONTEND_URL', 'Frontend URL (for password reset links)', 'https://your-app.vercel.app')}
@@ -915,7 +971,7 @@ function SettingsTab() {
       {/* Save Button */}
       <div className="flex justify-end">
         <button onClick={handleSave} disabled={saving} className="px-8 py-3 bg-indigo-600 text-white rounded-xl font-medium hover:bg-indigo-700 disabled:opacity-50 transition shadow-lg flex items-center">
-          <Save size={18} className="mr-2"/> {saving ? 'Saving...' : 'Save all settings'}
+          <Save size={18} className="mr-2" /> {saving ? 'Saving...' : 'Save all settings'}
         </button>
       </div>
     </div>
