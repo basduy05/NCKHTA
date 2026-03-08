@@ -74,17 +74,21 @@ def _get_setting(key, default=None):
         pass
     return os.getenv(key, default)
 
+import re
+
 def parse_json_response(text: str):
     try:
-        if text.startswith("```json"):
-            text = text[7:]
-        if text.startswith("```"):
-            text = text[3:]
-        if text.endswith("```"):
-            text = text[:-3]
+        if not text:
+            return []
+        # Try to find JSON block using regex if there's surrounding text
+        match = re.search(r'\{.*\}|\[.*\]', text.strip(), re.DOTALL)
+        if match:
+            text = match.group(0)
+            
         return json.loads(text.strip())
     except Exception as e:
         print("JSON parse error:", e)
+        # print("Raw text was:", text[:200] + "...")
         return []
 
 def get_llm(provider=None):
@@ -118,8 +122,7 @@ MAX_RETRIES = 2
 RETRY_DELAY = 1.5  # seconds
 
 def _safe_invoke(chain, params: dict, retries: int = MAX_RETRIES):
-    """Invoke LLM chain with automatic retry on transient failures.
-    On quota/rate-limit errors from primary LLM, automatically falls back to Cohere."""
+    """Invoke LLM chain with automatic retry on transient failures."""
     last_error = None
     for attempt in range(retries + 1):
         try:
@@ -128,18 +131,9 @@ def _safe_invoke(chain, params: dict, retries: int = MAX_RETRIES):
         except Exception as e:
             last_error = e
             error_str = str(e).lower()
-            # On quota/rate-limit errors → try Cohere fallback
+            # If it's a quota error, we raise it immediately so the caller can handle fallback
             if any(k in error_str for k in ["quota", "rate_limit", "resource_exhausted", "429", "too many requests"]):
-                print(f"[LLM QUOTA] Primary LLM quota exceeded. Trying Cohere fallback...")
-                fallback_llm = get_llm(provider="cohere")
-                if fallback_llm:
-                    try:
-                        fallback_chain = chain.first | fallback_llm
-                        return fallback_chain.invoke(params)
-                    except Exception as fe:
-                        print(f"[LLM FALLBACK] Cohere also failed: {fe}")
-                        raise fe
-                raise  # No Cohere key configured
+                raise
             # Don't retry on auth errors
             if any(k in error_str for k in ["api_key", "unauthorized", "forbidden", "invalid"]):
                 raise
@@ -390,7 +384,21 @@ def translate_meanings_with_ai(word: str, meanings: list, estimate_level: bool =
     
     chain = prompt | llm
     try:
-        response = _safe_invoke(chain, {"word": word, "definitions": definitions_text})
+        try:
+            response = _safe_invoke(chain, {"word": word, "definitions": definitions_text})
+        except Exception as e:
+            error_str = str(e).lower()
+            if any(k in error_str for k in ["quota", "rate_limit", "resource_exhausted", "429", "too many requests"]):
+                print(f"[LLM QUOTA] Primary LLM quota exceeded. Retrying with Cohere in translate_meanings...")
+                fallback_llm = get_llm(provider="cohere")
+                if fallback_llm:
+                    chain = prompt | fallback_llm
+                    response = _safe_invoke(chain, {"word": word, "definitions": definitions_text})
+                else:
+                    raise e
+            else:
+                raise e
+
         result = parse_json_response(response.content)
         
         if isinstance(result, dict) and "meanings" in result:
@@ -451,7 +459,22 @@ def lookup_dictionary_full_ai(word: str):
 
     chain = prompt | llm
     try:
-        response = _safe_invoke(chain, {"word": word})
+        try:
+            response = _safe_invoke(chain, {"word": word})
+        except Exception as e:
+            error_str = str(e).lower()
+            if any(k in error_str for k in ["quota", "rate_limit", "resource_exhausted", "429", "too many requests"]):
+                print(f"[LLM QUOTA] Primary LLM quota exceeded. Retrying with Cohere in lookup_full...")
+                fallback_llm = get_llm(provider="cohere")
+                if fallback_llm:
+                    chain = prompt | fallback_llm
+                    response = _safe_invoke(chain, {"word": word})
+                else:
+                    raise e
+            else:
+                raise e
+
+        # Ensure we return a default on unparseable JSON without crashing
         result = parse_json_response(response.content)
         if isinstance(result, dict) and "word" in result:
             if is_data_complete(result):

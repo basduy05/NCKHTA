@@ -1,0 +1,82 @@
+{
+  "word": "legendary",
+  "phonetic_uk": "",
+  "phonetic_us": "",
+  "audio_url": "https://api.dictionaryapi.dev/media/pronunciations/en/legendary-us.mp3",
+  "pos": "noun",
+  "meanings": [
+    {
+      "pos": "noun",
+      "definition_en": "A collection of legends, in particular of lives of saints.",
+      "definition_vn": "",
+      "examples": [],
+      "synonyms": [],
+      "antonyms": [],
+      "register": null
+    },
+    {
+      "pos": "noun",
+      "definition_en": "One who relates legends.",
+      "definition_vn": "",
+      "examples": [],
+      "synonyms": [],
+      "antonyms": [],
+      "register": null
+    },
+    {
+      "pos": "noun",
+      "definition_en": "(Pokémon) A legendary Pokémon.",
+      "definition_vn": "",
+      "examples": [],
+      "synonyms": [],
+      "antonyms": [],
+      "register": null
+    },
+    {
+      "pos": "adjective",
+      "definition_en": "Of or pertaining to a legend or to legends.",
+      "definition_vn": "",
+      "examples": [],
+      "synonyms": [],
+      "antonyms": [],
+      "register": null
+    },
+    {
+      "pos": "adjective",
+      "definition_en": "Appearing (solely) in legends.",
+      "definition_vn": "",
+      "examples": [],
+      "synonyms": [],
+      "antonyms": [],
+      "register": null
+    },
+    {
+      "pos": "adjective",
+      "definition_en": "Having the splendor of a legend; fabled.",
+      "definition_vn": "",
+      "examples": [],
+      "synonyms": [],
+      "antonyms": [],
+      "register": null
+    },
+    {
+      "pos": "adjective",
+      "definition_en": "Having unimaginable greatness; excellent to such an extent to evoke stories",
+      "definition_vn": "",
+      "examples": [],
+      "synonyms": [],
+      "antonyms": [],
+      "register": null
+    }
+  ],
+  "level": "B1",
+  "word_family": [],
+  "collocations": [],
+  "sources": [
+    "Free Dictionary API (Wiktionary)",
+    "Cambridge",
+    "Oxford",
+    "Merriam-Webster"
+  ],
+  "idioms": []
+}
