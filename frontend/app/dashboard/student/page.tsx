@@ -6,7 +6,7 @@ import {
   BookOpen, Sparkles, BrainCircuit, Trophy, PlayCircle, CheckCircle2, XCircle,
   GraduationCap, ClipboardList, BarChart3, FileText, ChevronRight, Clock,
   Award, TrendingUp, Layers, Search, BookMarked, Volume2, Save, Trash2,
-  ExternalLink, Star, Filter, X, ArrowRight, Bookmark, Network
+  ExternalLink, Star, Filter, X, ArrowRight, Bookmark, Network, Mic, Upload
 } from "lucide-react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://iedu-ksk7.onrender.com";
@@ -31,6 +31,8 @@ function StudentDashboardContent() {
           {activeTab === "vocabulary" && "Từ vựng đã lưu"}
           {activeTab === "ai-tools" && "Học với AI"}
           {activeTab === "scores" && "Kết quả học tập"}
+          {activeTab === "ipa" && "Luyện phát âm IPA"}
+          {activeTab === "practice" && "Luyện thi & Kỹ năng"}
         </h1>
         <p className="text-sm text-gray-500">Xin chào, <span className="font-semibold text-blue-600">{user?.name}</span></p>
       </div>
@@ -42,6 +44,8 @@ function StudentDashboardContent() {
       {activeTab === "vocabulary" && <VocabularyTab token={token} />}
       {activeTab === "ai-tools" && <AIToolsTab token={token} />}
       {activeTab === "scores" && <ScoresTab token={token} />}
+      {activeTab === "ipa" && <IpaTab token={token} />}
+      {activeTab === "practice" && <PracticeTab token={token} />}
     </div>
   );
 }
@@ -443,6 +447,8 @@ function AssignmentsTab({ token }: { token: string | null }) {
 // ==================== AI TOOLS TAB ====================
 function AIToolsTab({ token }: { token: string | null }) {
   const [text, setText] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const [inputMode, setInputMode] = useState<"text" | "file">("text");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [flippedWord, setFlippedWord] = useState<number | null>(null);
@@ -450,21 +456,41 @@ function AIToolsTab({ token }: { token: string | null }) {
   const [submitted, setSubmitted] = useState(false);
   const [score, setScore] = useState(0);
 
-  const analyzeText = async () => {
-    if (!text) return;
+  const analyze = async (type: "text" | "file") => {
+    if (type === "text" && !text) return;
+    if (type === "file" && !file) return;
+
     setLoading(true);
     setResult(null);
     setAnswers({});
     setSubmitted(false);
 
     try {
-      const res = await fetch(`${API_URL}/student/analyze-text`, {
-        method: "POST",
-        headers: getAuthHeader(token),
-        body: JSON.stringify({ text, num_questions: 5 }),
-      });
-      if (!res.ok) throw new Error("API error");
-      const data = await res.json();
+      let data;
+      if (type === "text") {
+        const res = await fetch(`${API_URL}/student/analyze-text`, {
+          method: "POST",
+          headers: getAuthHeader(token),
+          body: JSON.stringify({ text, num_questions: 5 }),
+        });
+        if (!res.ok) throw new Error("API error");
+        data = await res.json();
+      } else {
+        const formData = new FormData();
+        // @ts-ignore
+        formData.append("file", file);
+        formData.append("num_questions", "5");
+        formData.append("exercise_type", "mixed");
+
+        const res = await fetch(`${API_URL}/student/file/upload-analyze`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` }, // FormData does not need Content-Type header
+          body: formData,
+        });
+        if (!res.ok) throw new Error("API error");
+        const json = await res.json();
+        data = json.result || json;
+      }
 
       const words = Array.isArray(data.vocabulary) ? data.vocabulary.map((w: any) => ({
         word: w.word || "Unknown",
@@ -489,7 +515,7 @@ function AIToolsTab({ token }: { token: string | null }) {
       setResult({ words, quiz });
     } catch (e) {
       console.error(e);
-      alert("Lỗi khi phân tích văn bản. Vui lòng thử lại.");
+      alert("Lỗi khi phân tích nội dung. Vui lòng thử lại.");
     } finally {
       setLoading(false);
     }
@@ -509,22 +535,56 @@ function AIToolsTab({ token }: { token: string | null }) {
         <h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
           <Sparkles size={20} className="text-blue-600" /> Phân tích văn bản với AI
         </h2>
-        <textarea
-          rows={5}
-          className="w-full bg-gray-50 border border-gray-200 rounded-xl p-4 text-gray-700 focus:bg-white focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 outline-none resize-none transition text-base"
-          placeholder="Dán một đoạn văn bản tiếng Anh vào đây để AI trích xuất từ vựng và tạo câu hỏi trắc nghiệm..."
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-        />
-        <div className="flex justify-end mt-3">
-          <button
-            onClick={analyzeText}
-            disabled={loading || !text.trim()}
-            className="btn-primary py-2.5 px-6 rounded-xl flex items-center gap-2 shadow-md disabled:opacity-50 transition"
-          >
-            {loading ? "AI đang xử lý..." : <><Sparkles size={18} /> Phân tích</>}
+        {/* Tabs for Input Type */}
+        <div className="flex gap-2 mb-4">
+          <button onClick={() => setInputMode("text")} className={`px-4 py-2 rounded-lg text-sm font-bold transition ${inputMode === "text" ? "bg-blue-100 text-blue-700" : "bg-gray-50 text-gray-500 hover:bg-gray-100"}`}>
+            Nhập văn bản
+          </button>
+          <button onClick={() => setInputMode("file")} className={`px-4 py-2 rounded-lg text-sm font-bold transition ${inputMode === "file" ? "bg-blue-100 text-blue-700" : "bg-gray-50 text-gray-500 hover:bg-gray-100"}`}>
+            Tải tệp lên
           </button>
         </div>
+
+        {inputMode === "text" ? (
+          <div className="space-y-3">
+            <textarea
+              rows={5}
+              className="w-full bg-gray-50 border border-gray-200 rounded-xl p-4 text-gray-700 focus:bg-white focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 outline-none resize-none transition text-base"
+              placeholder="Dán một đoạn văn bản tiếng Anh vào đây để AI trích xuất từ vựng và tạo câu hỏi trắc nghiệm..."
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+            />
+            <div className="flex justify-end mt-3">
+              <button
+                onClick={() => analyze("text")}
+                disabled={loading || !text.trim()}
+                className="btn-primary py-2.5 px-6 rounded-xl flex items-center gap-2 shadow-md disabled:opacity-50 transition"
+              >
+                {loading ? "AI đang xử lý..." : <><Sparkles size={18} /> Phân tích</>}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="border-2 border-dashed border-blue-200 bg-blue-50/50 rounded-xl p-8 flex flex-col items-center justify-center relative cursor-pointer hover:bg-blue-50 transition min-h-[160px]">
+              <input type="file" className="absolute inset-0 opacity-0 cursor-pointer w-full h-full" onChange={(e) => {
+                if (e.target.files && e.target.files.length > 0) setFile(e.target.files[0]);
+              }} accept=".txt,.pdf,.docx" />
+              <Upload size={32} className="text-blue-400 mb-2" />
+              <p className="font-bold text-gray-700">{file ? file.name : "Kéo thả hoặc nhấn để chọn tệp"}</p>
+              <p className="text-sm text-gray-500 mt-1">Hỗ trợ .txt, .pdf, .docx</p>
+            </div>
+            <div className="flex justify-end mt-3">
+              <button
+                onClick={() => analyze("file")}
+                disabled={loading || !file}
+                className="btn-primary py-2.5 px-6 rounded-xl flex items-center gap-2 shadow-md disabled:opacity-50 transition"
+              >
+                {loading ? "AI đang xử lý..." : <><Sparkles size={18} /> Phân tích Tệp</>}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {result && (
@@ -563,7 +623,7 @@ function AIToolsTab({ token }: { token: string | null }) {
                             body: JSON.stringify({ word: w.word, phonetic: w.phon, pos: w.pos || "", meaning_en: w.meaning_en || "", meaning_vn: w.meaning, example: w.example, level: w.level, source: "ai-analysis" })
                           });
                           if (res.ok) alert(`Đã lưu "${w.word}" vào kho từ vựng!`);
-                        } catch {}
+                        } catch { }
                       }}
                       className="absolute bottom-2 right-2 z-10 p-1.5 bg-white/90 hover:bg-green-50 border border-gray-200 rounded-lg transition shadow-sm" title="Lưu từ"
                     >
@@ -695,7 +755,7 @@ function DictionaryTab({ token }: { token: string | null }) {
         }),
       });
       if (res.ok) setSaved(true);
-    } catch {}
+    } catch { }
     finally { setSaving(false); }
   };
 
@@ -777,12 +837,11 @@ function DictionaryTab({ token }: { token: string | null }) {
                 )}
                 {/* Source badge */}
                 {result._source && (
-                  <span className={`px-3 py-1 rounded-lg text-xs font-bold ${
-                    result._source === "database" ? "bg-green-400/30 text-green-100" :
+                  <span className={`px-3 py-1 rounded-lg text-xs font-bold ${result._source === "database" ? "bg-green-400/30 text-green-100" :
                     result._source === "graph" ? "bg-cyan-400/30 text-cyan-100" : "bg-amber-400/30 text-amber-100"
-                  }`}>
+                    }`}>
                     {result._source === "database" ? "💾 Từ Database (không tốn AI)" :
-                     result._source === "graph" ? "⚡ Từ Knowledge Graph" : "🤖 AI tra cứu"}
+                      result._source === "graph" ? "⚡ Từ Knowledge Graph" : "🤖 AI tra cứu"}
                   </span>
                 )}
                 <button
@@ -888,7 +947,7 @@ function DictionaryTab({ token }: { token: string | null }) {
             {result.sources?.length > 0 && (
               <div className="pt-4 border-t border-gray-100">
                 <p className="text-xs text-gray-400 flex items-center gap-1.5">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" /></svg>
                   Nguồn tham chiếu: {result.sources.join(" • ")}
                   {result._from_cache && " (cached)"}
                 </p>
@@ -930,7 +989,7 @@ function VocabularyTab({ token }: { token: string | null }) {
         method: "DELETE", headers: getAuthHeader(token)
       });
       if (res.ok) setWords(prev => prev.filter(w => w.id !== id));
-    } catch {}
+    } catch { }
     finally { setDeleting(null); }
   };
 
@@ -1116,6 +1175,218 @@ function ScoresTab({ token }: { token: string | null }) {
           </tbody>
         </table>
       </div>
+    </div>
+  );
+}
+
+// ==================== NEW: IPA TAB ====================
+function IpaTab({ token }: { token: string | null }) {
+  const [focus, setFocus] = useState("vowels");
+  const [loading, setLoading] = useState(false);
+  const [lesson, setLesson] = useState<any>(null);
+
+  const generateLesson = async () => {
+    setLoading(true);
+    setLesson(null);
+    try {
+      const res = await fetch(`${API_URL}/student/ipa/generate`, {
+        method: "POST",
+        headers: getAuthHeader(token),
+        body: JSON.stringify({ focus })
+      });
+      if (!res.ok) throw new Error("API Error");
+      setLesson(await res.json());
+    } catch (e) {
+      alert("Lỗi khi tạo bài học IPA");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const speak = (word: string) => {
+    if (typeof window !== "undefined" && window.speechSynthesis) {
+      const u = new SpeechSynthesisUtterance(word);
+      u.lang = "en-US";
+      window.speechSynthesis.speak(u);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm text-center">
+        <h2 className="text-xl font-bold text-gray-900 mb-2 flex items-center justify-center gap-2">
+          <Mic className="text-blue-500" /> Tạo bài học IPA với AI
+        </h2>
+        <p className="text-gray-500 mb-6 mt-1">Chọn nhóm âm bạn muốn luyện tập, AI sẽ tạo bài học dành riêng cho bạn.</p>
+
+        <div className="flex justify-center gap-4 mb-6">
+          <select value={focus} onChange={e => setFocus(e.target.value)} className="border border-gray-200 rounded-lg px-4 py-2 outline-none focus:border-blue-500">
+            <option value="vowels">Nguyên âm (Vowels)</option>
+            <option value="consonants">Phụ âm (Consonants)</option>
+            <option value="diphthongs">Nguyên âm đôi (Diphthongs)</option>
+            <option value="difficult">Âm khó (th, r, l...)</option>
+          </select>
+          <button onClick={generateLesson} disabled={loading} className="btn-primary px-6 py-2 rounded-lg flex items-center gap-2 disabled:opacity-50 transition">
+            {loading ? "Đang tạo..." : <><Sparkles size={18} /> Tạo bài học</>}
+          </button>
+        </div>
+      </div>
+
+      {lesson && (
+        <div className="space-y-6">
+          <div className="bg-blue-50 border border-blue-100 rounded-xl p-6">
+            <h3 className="text-xl font-bold text-blue-900 mb-2">{lesson.title}</h3>
+            <p className="text-blue-800 mb-4">{lesson.introduction}</p>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {lesson.sounds?.map((s: any, i: number) => (
+                <div key={i} className="bg-white rounded-lg p-5 shadow-sm">
+                  <div className="flex items-center gap-3 mb-3">
+                    <span className="text-3xl font-mono text-purple-600 font-bold bg-purple-50 px-3 py-1 rounded">/{s.ipa}/</span>
+                  </div>
+                  <p className="text-gray-600 mb-4 text-sm">{s.description}</p>
+
+                  <div className="space-y-2">
+                    {s.examples?.map((ex: any, j: number) => (
+                      <div key={j} className="flex items-center justify-between bg-gray-50 p-2 rounded">
+                        <div>
+                          <span className="font-bold text-gray-800">{ex.word}</span>
+                          <span className="text-gray-500 ml-2 font-mono text-sm">/{ex.transcription}/</span>
+                        </div>
+                        <button onClick={() => speak(ex.word)} className="p-1.5 bg-blue-100 text-blue-600 rounded hover:bg-blue-200"><Volume2 size={16} /></button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ==================== NEW: PRACTICE TAB ====================
+function PracticeTab({ token }: { token: string | null }) {
+  const [testType, setTestType] = useState("TOEIC");
+  const [skill, setSkill] = useState("reading");
+  const [loading, setLoading] = useState(false);
+  const [practice, setPractice] = useState<any>(null);
+
+  const generatePractice = async () => {
+    setLoading(true);
+    setPractice(null);
+    try {
+      const endpoint =
+        skill === "reading" ? "/student/reading/generate" :
+          skill === "writing" ? "/student/writing/evaluate" :
+            skill === "speaking" ? "/student/speaking/topic" :
+              "/student/practice/generate";
+
+      const body = skill === "reading" ? { level: "B1" } :
+        skill === "speaking" ? { level: "B1", topic_type: "general" } :
+          { test_type: testType, skill };
+
+      if (skill === "writing") {
+        alert("Vui lòng sử dụng tính năng nộp bài viết (chưa implement trong demo này)");
+        setLoading(false);
+        return;
+      }
+
+      const res = await fetch(`${API_URL}${endpoint}`, {
+        method: "POST",
+        headers: getAuthHeader(token),
+        body: JSON.stringify(body)
+      });
+      if (!res.ok) throw new Error("API Error");
+      setPractice(await res.json());
+    } catch (e) {
+      alert("Lỗi khi tạo bài luyện tập");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm flex flex-col md:flex-row gap-4 justify-between items-center">
+        <div>
+          <h2 className="text-xl font-bold text-gray-900 mb-1 flex items-center gap-2">
+            <Award className="text-purple-500" /> Tự luyện thi & Kỹ năng
+          </h2>
+          <p className="text-gray-500 text-sm">chọn chứng chỉ và kỹ năng để hệ thống sinh đề thi mẫu cho bạn</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <select value={testType} onChange={e => setTestType(e.target.value)} className="border border-gray-200 rounded-lg px-3 py-2 outline-none bg-gray-50">
+            <option value="TOEIC">TOEIC</option>
+            <option value="IELTS">IELTS</option>
+            <option value="GENERAL">Tiếng Anh Giao tiếp</option>
+          </select>
+          <select value={skill} onChange={e => setSkill(e.target.value)} className="border border-gray-200 rounded-lg px-3 py-2 outline-none bg-gray-50">
+            <option value="reading">Reading</option>
+            <option value="listening">Listening</option>
+            <option value="writing">Writing</option>
+            <option value="speaking">Speaking</option>
+          </select>
+          <button onClick={generatePractice} disabled={loading} className="btn-primary px-5 py-2 rounded-lg disabled:opacity-50">
+            {loading ? "Đang tạo..." : "Tạo bài"}
+          </button>
+        </div>
+      </div>
+
+      {practice && skill === "reading" && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+          <h3 className="text-xl font-bold mb-4">{practice.title || "Bài đọc hiểu"}</h3>
+          <div className="bg-gray-50 p-4 rounded-lg mb-6 whitespace-pre-wrap leading-relaxed">
+            {practice.passage}
+          </div>
+
+          <h4 className="font-bold text-lg mb-4">Câu hỏi:</h4>
+          <div className="space-y-6">
+            {practice.questions?.map((q: any, idx: number) => (
+              <div key={idx} className="border border-gray-100 rounded-lg p-4">
+                <p className="font-bold mb-3">{idx + 1}. {q.question || q.q}</p>
+                <div className="space-y-2 pl-4">
+                  {q.options?.map((opt: string, oIdx: number) => (
+                    <div key={oIdx} className="flex items-center gap-2">
+                      <input type="radio" name={`q-${idx}`} id={`q-${idx}-${oIdx}`} className="w-4 h-4 text-blue-600" />
+                      <label htmlFor={`q-${idx}-${oIdx}`}>{opt}</label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {practice && skill === "speaking" && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 text-center">
+          <div className="inline-block p-4 bg-purple-100 text-purple-700 rounded-full mb-4">
+            <Mic size={48} />
+          </div>
+          <h3 className="font-bold text-2xl mb-2">{practice.topic || practice.title || "Chủ đề Speaking"}</h3>
+          <p className="text-gray-600 mb-6 max-w-2xl mx-auto">{practice.description || practice.instructions || "Hãy nói về chủ đề này trong vòng 2 phút."}</p>
+
+          <div className="bg-gray-50 p-4 rounded-xl max-w-2xl mx-auto text-left mb-6">
+            <h4 className="font-bold text-gray-800 mb-2">Gợi ý trả lời:</h4>
+            <ul className="list-disc pl-5 space-y-2 text-gray-600">
+              {practice.prompts?.map((p: string, i: number) => <li key={i}>{p}</li>)}
+            </ul>
+          </div>
+
+          <button className="bg-red-50 text-red-600 border border-red-200 px-6 py-3 rounded-full font-bold flex items-center justify-center gap-2 mx-auto hover:bg-red-100 transition">
+            <Mic size={20} /> Bắt đầu ghi âm (Giả lập)
+          </button>
+        </div>
+      )}
+
+      {practice && (skill === "listening" || skill === "writing" || !["reading", "speaking"].includes(skill)) && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 text-center text-gray-500">
+          Yêu cầu tính năng {skill} đã được mô phỏng. Dữ liệu mock: {JSON.stringify(practice).substring(0, 100)}...
+        </div>
+      )}
     </div>
   );
 }

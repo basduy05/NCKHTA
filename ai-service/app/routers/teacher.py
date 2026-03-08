@@ -1,7 +1,8 @@
 from fastapi import APIRouter, HTTPException, Header, UploadFile, File, Form, Query
 from fastapi.responses import Response
 from ..database import get_db, AssignmentCreate
-from ..services import auth_service, llm_service, graph_service
+from ..services import auth_service, llm_service, graph_service, file_service
+
 from pydantic import BaseModel
 from typing import Optional
 import json
@@ -527,3 +528,29 @@ def teacher_knowledge_graph(authorization: str = Header(...), topic: str = "all"
     """Get vocabulary knowledge graph for visualization."""
     _get_current_teacher(authorization)
     return graph_service.get_knowledge_subgraph(topic)
+
+
+@router.post("/file/generate-assignment")
+async def teacher_generate_assignment_from_file(
+    file: UploadFile = File(...),
+    exercise_type: str = Form("mixed"),
+    num_questions: int = Form(10),
+    authorization: str = Header(...)
+):
+    """
+    Upload a document (PDF, DOCX, TXT), extract text, and automatically generate an assignment/quiz.
+    """
+    _get_current_teacher(authorization)
+    
+    try:
+        content = await file.read()
+        text = file_service.extract_text_from_file(content, file.filename)
+        
+        if not text or len(text.strip()) == 0 or text.startswith("("):
+            raise HTTPException(status_code=400, detail=f"Could not extract valid text from {file.filename}")
+            
+        result = llm_service.generate_exercises_from_text(text, exercise_type, num_questions)
+        return {"filename": file.filename, "extracted_text_snippet": text[:200], "result": result}
+    except Exception as e:
+        print(f"Teacher file upload error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

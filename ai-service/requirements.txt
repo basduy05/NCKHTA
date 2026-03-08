@@ -12,3 +12,5 @@ python-multipart
 bcrypt
 python-jose[cryptography]
 email-validator
+python-docx
+PyPDF2

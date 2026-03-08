@@ -1,6 +1,6 @@
-from fastapi import APIRouter, HTTPException, Header, Query
+from fastapi import APIRouter, HTTPException, Header, Query, UploadFile, File, Form
 from ..database import get_db
-from ..services import auth_service, llm_service, graph_service
+from ..services import auth_service, llm_service, graph_service, file_service
 from pydantic import BaseModel
 from typing import Optional, List
 import json
@@ -538,3 +538,80 @@ def student_knowledge_graph(
     """Get the student's vocabulary knowledge graph for visualization."""
     _get_current_student(authorization)
     return graph_service.get_knowledge_subgraph(topic)
+
+
+# ─── PHASE 2 FEATURES: IPA, TOEIC/IELTS, 4 SKILLS ─────────────────────────────
+
+class IpaRequest(BaseModel):
+    words: Optional[List[str]] = None
+    focus: str = "vowels"
+
+@router.post("/ipa/generate")
+def generate_ipa(req: IpaRequest, authorization: str = Header(...)):
+    _get_current_student(authorization)
+    return llm_service.generate_ipa_lesson(req.words, req.focus)
+
+class PracticeRequest(BaseModel):
+    test_type: str = "TOEIC"
+    skill: str = "reading"
+    part: str = ""
+
+@router.post("/practice/generate")
+def generate_practice(req: PracticeRequest, authorization: str = Header(...)):
+    _get_current_student(authorization)
+    return llm_service.generate_practice_test(req.test_type, req.skill, req.part)
+
+class ReadingRequest(BaseModel):
+    topic: str = ""
+    level: str = "B1"
+
+@router.post("/reading/generate")
+def generate_reading(req: ReadingRequest, authorization: str = Header(...)):
+    _get_current_student(authorization)
+    return llm_service.generate_reading_passage(req.topic, req.level)
+
+class WritingRequest(BaseModel):
+    text: str
+    task_type: str = "essay"
+    target_test: str = "IELTS"
+
+@router.post("/writing/evaluate")
+def evaluate_writing(req: WritingRequest, authorization: str = Header(...)):
+    _get_current_student(authorization)
+    return llm_service.evaluate_writing(req.text, req.task_type, req.target_test)
+
+class SpeakingRequest(BaseModel):
+    level: str = "B1"
+    topic_type: str = "general"
+
+@router.post("/speaking/topic")
+def generate_speaking(req: SpeakingRequest, authorization: str = Header(...)):
+    _get_current_student(authorization)
+    return llm_service.generate_speaking_topic(req.level, req.topic_type)
+
+
+@router.post("/file/upload-analyze")
+async def student_upload_analyze(
+    file: UploadFile = File(...),
+    exercise_type: str = Form("mixed"),
+    num_questions: int = Form(5),
+    authorization: str = Header(...)
+):
+    """
+    Extracts text from an uploaded file and generates exercises automatically.
+    Supported types: TXT, PDF, DOCX
+    """
+    _get_current_student(authorization)
+    
+    try:
+        content = await file.read()
+        text = file_service.extract_text_from_file(content, file.filename)
+        
+        if not text or len(text.strip()) == 0 or text.startswith("("):
+            raise HTTPException(status_code=400, detail=f"Could not extract valid text from {file.filename}")
+            
+        result = llm_service.generate_exercises_from_text(text, exercise_type, num_questions)
+        return {"filename": file.filename, "extracted_text_snippet": text[:200], "result": result}
+    except Exception as e:
+        print(f"File upload error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
