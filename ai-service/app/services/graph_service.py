@@ -170,6 +170,37 @@ def find_word_in_graph(word: str) -> Dict:
         return None
 
 
+def get_dictionary_cache(word: str) -> Dict:
+    """Retrieve full cached dictionary JSON from Neo4j."""
+    g = get_graph()
+    if not g:
+        return None
+    try:
+        results = _safe_query("MATCH (w:Word {text: $word}) RETURN w.data_json as data_json", {"word": word.lower().strip()})
+        if results and results[0].get("data_json"):
+            import json
+            return json.loads(results[0]["data_json"])
+    except Exception as e:
+        print(f"Neo4j get_dictionary_cache error: {e}")
+    return None
+
+
+def set_dictionary_cache(word: str, data: dict):
+    """Save full dictionary JSON string to Neo4j to survive SQLite ephemeral restarts."""
+    g = get_graph()
+    if not g:
+        return
+    try:
+        import json
+        query = "MERGE (w:Word {text: $word}) SET w.data_json = $data_json, w.updated_at = datetime()"
+        _safe_query(query, {
+            "word": word.lower().strip(),
+            "data_json": json.dumps(data, ensure_ascii=False)
+        })
+    except Exception as e:
+        print(f"Neo4j set_dictionary_cache error: {e}")
+
+
 def save_word_to_graph(word_data: Dict) -> Dict:
     """Save a word and its relationships to Neo4j knowledge graph."""
     g = get_graph()

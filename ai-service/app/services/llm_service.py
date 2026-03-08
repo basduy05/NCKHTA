@@ -284,28 +284,49 @@ def lookup_free_dictionary(word: str):
 
 def translate_meanings_with_ai(word: str, meanings: list, estimate_level: bool = True):
     """
-    Use AI ONLY to translate English definitions to Vietnamese.
-    Much cheaper than generating all dictionary data from scratch.
+    Use AI to translate definitions, group similar meanings together, 
+    and provide sufficient example sentences (at least 2-3 per meaning).
+    This handles raw Free Dictionary data and makes it much cleaner.
     """
     llm = get_llm()
     if not llm:
-        return meanings, "B1"
+        return meanings, "B1", [], []
     
-    # Build compact translation request
+    # Build compact representation of all meanings from Free API
     definitions_text = "\n".join(
-        f"{i+1}. [{m.get('pos', '')}] {m.get('definition_en', '')}"
-        for i, m in enumerate(meanings[:15])  # Limit to 15 meanings
+        f"{i+1}. [{m.get('pos', '')}] {m.get('definition_en', '')} (Examples from source: {m.get('examples', [])})"
+        for i, m in enumerate(meanings[:20])  # Limit to 20 meanings
     )
     
     prompt = PromptTemplate.from_template(
-        "Translate these English definitions of the word '{word}' to Vietnamese.\n"
-        "Also estimate the CEFR level (A1/A2/B1/B2/C1/C2) of this word.\n\n"
-        "Definitions:\n{definitions}\n\n"
-        "Return ONLY a JSON object with:\n"
-        '- "translations": array of Vietnamese translations (same order as input)\n'
-        '- "level": CEFR level estimate\n'
-        '- "word_family": array of 3-5 related word forms\n'
-        '- "collocations": array of 4-6 common collocations\n\n'
+        "You are an expert bilingual linguist and lexicographer.\n"
+        "I have raw dictionary meanings for the English word '{word}'.\n"
+        "Your task is to consolidate these highly similar meanings into a maximum of 4-6 distinct, grouped meanings.\n\n"
+        "Raw Definitions:\n{definitions}\n\n"
+        "For EACH distinct grouped meaning, provide:\n"
+        "1. 'pos' (part of speech)\n"
+        "2. 'definition_en' (a clean English definition)\n"
+        "3. 'definition_vn' (a natural Vietnamese translation)\n"
+        "4. 'examples' (provide 2 to 3 good English examples for this meaning. Use the provided ones or generate new highly relevant ones. NEVER leave this empty. MUST have at least 2 examples).\n"
+        "5. 'synonyms' (2-3 synonyms based on context)\n"
+        "6. 'antonyms' (1-2 antonyms if applicable)\n\n"
+        "Also estimate the overall CEFR level of the word (A1-C2).\n\n"
+        "Return EXACTLY a JSON object with this shape:\n"
+        '{{\n'
+        '  "meanings": [\n'
+        '    {{\n'
+        '      "pos": "verb",\n'
+        '      "definition_en": "...",\n'
+        '      "definition_vn": "...",\n'
+        '      "examples": ["..."],\n'
+        '      "synonyms": ["..."],\n'
+        '      "antonyms": ["..."]\n'
+        '    }}\n'
+        '  ],\n'
+        '  "level": "B1",\n'
+        '  "word_family": ["related1", "related2"],\n'
+        '  "collocations": ["colloc1", "colloc2"]\n'
+        '}}\n\n'
         "Return ONLY valid JSON. No markdown."
     )
     
@@ -314,17 +335,10 @@ def translate_meanings_with_ai(word: str, meanings: list, estimate_level: bool =
         response = _safe_invoke(chain, {"word": word, "definitions": definitions_text})
         result = parse_json_response(response.content)
         
-        if isinstance(result, dict):
-            translations = result.get("translations", [])
-            for i, meaning in enumerate(meanings[:15]):
-                if i < len(translations):
-                    meaning["definition_vn"] = translations[i]
-            level = result.get("level", "B1")
-            word_family = result.get("word_family", [])
-            collocations = result.get("collocations", [])
-            return meanings, level, word_family, collocations
+        if isinstance(result, dict) and "meanings" in result:
+            return result["meanings"], result.get("level", "B1"), result.get("word_family", []), result.get("collocations", [])
     except Exception as e:
-        print(f"[AI Translation] Error: {e}")
+        print(f"[AI Translation & Consolidation] Error: {e}")
     
     return meanings, "B1", [], []
 
@@ -340,17 +354,18 @@ def lookup_dictionary_full_ai(word: str):
 
     prompt = PromptTemplate.from_template(
         "You are an advanced English dictionary combining data from Cambridge Dictionary, "
-        "Oxford Advanced Learner's Dictionary, and Longman Dictionary of Contemporary English.\n"
+        "Oxford Advanced Learner's Dictionary, Longman Dictionary, Collins, Macmillan, and Merriam-Webster.\n"
         "Look up the English word/term: '{word}'\n\n"
         "IMPORTANT RULES:\n"
-        "1. Provide ALL distinct meanings/senses (at least 3-5 if the word has multiple senses)\n"
-        "2. Cover ALL different parts of speech (noun, verb, adjective, etc.)\n"
-        "3. If the word is an ABBREVIATION (like IT, AI, USA), include its full form as the FIRST meaning\n"
-        "4. If the word has BOTH a common meaning AND an abbreviation meaning, include BOTH\n"
-        "5. Each meaning must be a separate entry in the meanings array\n\n"
+        "1. Group meanings logically. Provide 3-6 distinct meanings if the word has multiple senses.\n"
+        "2. Cover ALL different parts of speech (noun, verb, adjective, etc.).\n"
+        "3. If the word is an ABBREVIATION (like IT, AI, USA), include its full form as the FIRST meaning.\n"
+        "4. If the word has BOTH a common meaning AND an abbreviation meaning, include BOTH.\n"
+        "5. Provide at least 2-3 clearly natural example sentences for EVERY single meaning. DO NOT LEAVE EMPTY.\n"
+        "6. Provide accurate phonetic transcription (IPA) for both UK and US.\n\n"
         "Return a JSON object with these EXACT keys:\n"
         '"word": the word (preserve original casing)\n'
-        '"phonetic_uk": UK IPA pronunciation\n'
+        '"phonetic_uk": UK IPA pronunciation (e.g. /həˈloʊ/)\n'
         '"phonetic_us": US IPA pronunciation\n'
         '"pos": primary part of speech\n'
         '"meanings": array of objects, each with:\n'
@@ -364,7 +379,7 @@ def lookup_dictionary_full_ai(word: str):
         '"level": CEFR level (A1-C2)\n'
         '"word_family": array of related word forms\n'
         '"collocations": array of 4-6 common collocations\n'
-        '"sources": ["Cambridge Dictionary", "Oxford Advanced Learner\'s Dictionary", "Longman Dictionary"]\n\n'
+        '"sources": ["Cambridge", "Oxford", "Longman", "Merriam-Webster", "Collins"]\n\n'
         "Return ONLY valid JSON. No markdown, no extra text."
     )
 

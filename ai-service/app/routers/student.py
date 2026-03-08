@@ -334,6 +334,29 @@ def dictionary_lookup(req: DictionaryRequest, authorization: str = Header(...)):
             return cached
         # Else: fall through to AI lookup for more complete data
 
+    # 1.5) Check Neo4j cache because SQLite might have been wiped on Render restarts
+    neo4j_cached = graph_service.get_dictionary_cache(lookup_key)
+    if neo4j_cached and len(neo4j_cached.get("meanings", [])) >= MIN_MEANINGS_COUNT:
+        neo4j_cached["_source"] = "database_neo4j_restored"
+        neo4j_cached["_meanings_count"] = len(neo4j_cached.get("meanings", []))
+        
+        # Restore to local SQLite to make future lookups faster
+        try:
+            conn = get_db()
+            conn.execute(
+                """INSERT OR REPLACE INTO dictionary_cache (word, word_original, data_json, meanings_count)
+                   VALUES (?, ?, ?, ?)""",
+                (lookup_key, word_original, json.dumps(neo4j_cached, ensure_ascii=False), neo4j_cached["_meanings_count"])
+            )
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            print(f"[DB RESTORE] error: {e}")
+
+        connections = graph_service.get_word_connections(word_lower)
+        neo4j_cached["graph_connections"] = connections.get("connections", [])
+        return neo4j_cached
+
     # 2) Not cached or insufficient meanings → ask AI (Hybrid: Free API + AI)
     llm = llm_service.get_llm()
     if not llm:
@@ -401,6 +424,9 @@ def dictionary_lookup(req: DictionaryRequest, authorization: str = Header(...)):
             "synonyms": list(set(all_synonyms))[:5],
             "antonyms": list(set(all_antonyms))[:3],
         })
+        
+        # ALSO save the full raw JSON to Neo4j for persistent caching
+        graph_service.set_dictionary_cache(word_lower, result)
     except Exception as e:
         print(f"[Neo4j SAVE] error: {e}")
 
