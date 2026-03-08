@@ -1,6 +1,7 @@
 import sqlite3
 import os
 import traceback
+import time
 from pydantic import BaseModel
 from typing import List, Optional
 
@@ -283,13 +284,22 @@ except Exception as e:
 import threading
 _thread_local = threading.local()
 
-def get_db():
-    """Thread-safe database connection with WAL mode."""
-    conn = sqlite3.connect(DB_PATH, timeout=10)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA busy_timeout=5000")
-    return conn
+def get_db(retries=3):
+    """Thread-safe database connection with WAL mode and retry logic."""
+    for attempt in range(retries):
+        try:
+            conn = sqlite3.connect(DB_PATH, timeout=15)
+            conn.row_factory = sqlite3.Row
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA busy_timeout=10000")  # Wait 10s for locks
+            return conn
+        except sqlite3.OperationalError as e:
+            if attempt < retries - 1:
+                print(f"[DB] Connection attempt {attempt+1} failed: {e}, retrying...")
+                time.sleep(0.5 * (attempt + 1))
+            else:
+                print(f"[DB] All {retries} connection attempts failed")
+                raise
 
 def get_setting(key, default=None):
     """Read a single setting: DB first, then env var."""

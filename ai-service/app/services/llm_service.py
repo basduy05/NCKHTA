@@ -36,6 +36,25 @@ def _cache_set(word: str, data: dict):
             del _dict_cache[oldest_key]
         _dict_cache[key] = {"data": data, "ts": time.time()}
 
+
+def is_data_complete(data: dict) -> bool:
+    """Check if dictionary data has all required fields filled.
+    Returns False if data is missing critical information and should be re-looked up."""
+    if not data or not isinstance(data, dict):
+        return False
+    meanings = data.get("meanings", [])
+    if not meanings or len(meanings) == 0:
+        return False
+    # Check that at least one meaning has VN translation and examples
+    has_vn = any(m.get("definition_vn") for m in meanings)
+    has_examples = any(m.get("examples") and len(m["examples"]) > 0 for m in meanings)
+    has_en = any(m.get("definition_en") for m in meanings)
+    # Check phonetics
+    has_phonetic = bool(data.get("phonetic_uk") or data.get("phonetic_us"))
+    # Check CEFR level
+    has_level = bool(data.get("level") and data["level"] in ("A1", "A2", "B1", "B2", "C1", "C2"))
+    return has_vn and has_examples and has_en and has_phonetic and has_level
+
 def _get_setting(key, default=None):
     try:
         db_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "app.db")
@@ -313,48 +332,52 @@ def lookup_free_dictionary(word: str):
 
 def translate_meanings_with_ai(word: str, meanings: list, estimate_level: bool = True):
     """
-    Use AI to translate definitions, group similar meanings together, 
-    and provide sufficient example sentences (at least 2-3 per meaning).
-    This handles raw Free Dictionary data and makes it much cleaner.
+    Use AI as multi-source lexicographer (Cambridge, Oxford, Merriam-Webster, Longman, Urban Dictionary)
+    to translate, consolidate, and enrich raw Free Dictionary API data.
+    Adds: register (formal/informal/slang), frequency, usage_notes, idioms.
     """
     llm = get_llm()
     if not llm:
-        return meanings, "B1", [], []
+        return meanings, "B1", [], [], []
     
     # Build compact representation of all meanings from Free API
     definitions_text = "\n".join(
-        f"{i+1}. [{m.get('pos', '')}] {m.get('definition_en', '')} (Examples from source: {m.get('examples', [])})"
-        for i, m in enumerate(meanings[:20])  # Limit to 20 meanings
+        f"{i+1}. [{m.get('pos', '')}] {m.get('definition_en', '')} (Examples: {m.get('examples', [])})"
+        for i, m in enumerate(meanings[:20])
     )
     
     prompt = PromptTemplate.from_template(
-        "You are an expert bilingual linguist and lexicographer.\n"
+        "You are an expert bilingual lexicographer combining knowledge from Cambridge Dictionary, "
+        "Oxford Advanced Learner's Dictionary, Merriam-Webster, Longman, Collins, Macmillan, "
+        "and Urban Dictionary (for slang/informal usage).\n"
         "I have raw dictionary meanings for the English word '{word}'.\n"
-        "Your task is to consolidate these highly similar meanings into a maximum of 4-6 distinct, grouped meanings.\n\n"
+        "Your task is to consolidate into 4-6 distinct grouped meanings, BUT also ADD any important "
+        "meanings that are MISSING from the raw data (especially slang, informal, or specialized meanings).\n\n"
         "Raw Definitions:\n{definitions}\n\n"
-        "For EACH distinct grouped meaning, provide:\n"
-        "1. 'pos' (part of speech)\n"
-        "2. 'definition_en' (a clean English definition)\n"
-        "3. 'definition_vn' (a natural Vietnamese translation)\n"
-        "4. 'examples' (provide 2 to 3 good English examples for this meaning. Use the provided ones or generate new highly relevant ones. NEVER leave this empty. MUST have at least 2 examples).\n"
-        "5. 'synonyms' (3-5 synonyms based on context)\n"
-        "6. 'antonyms' (2-3 antonyms if applicable)\n\n"
-        "Also provide the overall CEFR level of the word (A1-C2), 5-8 common collocations, and 2-4 common IDIOMS related to this word (with brief Vietnamese translations).\n\n"
-        "Return EXACTLY a JSON object with this shape:\n"
+        "For EACH distinct meaning, provide ALL of these fields (NEVER leave any empty):\n"
+        "1. 'pos' — part of speech\n"
+        "2. 'definition_en' — clean English definition\n"
+        "3. 'definition_vn' — natural Vietnamese translation\n"
+        "4. 'examples' — 2-3 realistic example sentences. MUST have at least 2.\n"
+        "5. 'synonyms' — 3-5 synonyms\n"
+        "6. 'antonyms' — 2-3 antonyms (empty array if none)\n"
+        "7. 'register' — one of: 'formal', 'informal', 'slang', 'technical', 'literary', 'neutral'\n"
+        "8. 'usage_notes' — brief note on when/how to use this meaning (e.g. 'common in spoken English')\n\n"
+        "Also provide:\n"
+        "- 'level': CEFR level (A1-C2)\n"
+        "- 'frequency': 'very common', 'common', 'uncommon', or 'rare'\n"
+        "- 'word_family': 5-8 related word forms (e.g. run → runner, running, ran)\n"
+        "- 'collocations': 5-8 common collocations\n"
+        "- 'idioms': 2-4 idioms with Vietnamese translations\n\n"
+        "Return EXACTLY a JSON object:\n"
         '{{\n'
-        '  "meanings": [\n'
-        '    {{\n'
-        '      "pos": "verb",\n'
-        '      "definition_en": "...",\n'
-        '      "definition_vn": "...",\n'
-        '      "examples": ["..."],\n'
-        '      "synonyms": ["..."],\n'
-        '      "antonyms": ["..."]\n'
-        '    }}\n'
-        '  ],\n'
+        '  "meanings": [{{"pos": "...", "definition_en": "...", "definition_vn": "...", '
+        '"examples": ["..."], "synonyms": ["..."], "antonyms": ["..."], '
+        '"register": "neutral", "usage_notes": "..."}}],\n'
         '  "level": "B1",\n'
-        '  "word_family": ["related1", "related2"],\n'
-        '  "collocations": ["colloc1", "colloc2"],\n'
+        '  "frequency": "common",\n'
+        '  "word_family": ["..."],\n'
+        '  "collocations": ["..."],\n'
         '  "idioms": [{{"idiom": "...", "meaning_vn": "..."}}]\n'
         '}}\n\n'
         "Return ONLY valid JSON. No markdown."
@@ -366,7 +389,13 @@ def translate_meanings_with_ai(word: str, meanings: list, estimate_level: bool =
         result = parse_json_response(response.content)
         
         if isinstance(result, dict) and "meanings" in result:
-            return result["meanings"], result.get("level", "B1"), result.get("word_family", []), result.get("collocations", []), result.get("idioms", [])
+            return (
+                result["meanings"],
+                result.get("level", "B1"),
+                result.get("word_family", []),
+                result.get("collocations", []),
+                result.get("idioms", [])
+            )
     except Exception as e:
         print(f"[AI Translation & Consolidation] Error: {e}")
     
@@ -377,6 +406,7 @@ def lookup_dictionary_full_ai(word: str):
     """
     Full AI-powered dictionary lookup (fallback when Free API has no results).
     Used for abbreviations, slang, proper nouns, etc.
+    Multi-source: Cambridge, Oxford, Merriam-Webster, Longman, Collins, Urban Dictionary.
     """
     llm = get_llm()
     if not llm:
@@ -384,33 +414,32 @@ def lookup_dictionary_full_ai(word: str):
 
     prompt = PromptTemplate.from_template(
         "You are an advanced English dictionary combining data from Cambridge Dictionary, "
-        "Oxford Advanced Learner's Dictionary, Longman Dictionary, Collins, Macmillan, and Merriam-Webster.\n"
+        "Oxford Advanced Learner's Dictionary, Longman, Collins, Macmillan, Merriam-Webster, "
+        "AND Urban Dictionary (for slang/informal).\n"
         "Look up the English word/term: '{word}'\n\n"
         "IMPORTANT RULES:\n"
         "1. Group meanings logically. Provide 3-6 distinct meanings if the word has multiple senses.\n"
-        "2. Cover ALL different parts of speech (noun, verb, adjective, etc.).\n"
+        "2. Cover ALL parts of speech (noun, verb, adj, etc.).\n"
         "3. If the word is an ABBREVIATION (like IT, AI, USA), include its full form as the FIRST meaning.\n"
         "4. If the word has BOTH a common meaning AND an abbreviation meaning, include BOTH.\n"
-        "5. Provide at least 2-3 clearly natural example sentences for EVERY single meaning. DO NOT LEAVE EMPTY.\n"
-        "6. Provide 3-5 synonyms and 2-3 antonyms for EVERY meaning.\n"
-        "7. Provide accurate phonetic transcription (IPA) for both UK and US.\n\n"
+        "5. Include SLANG and INFORMAL meanings if they exist — mark them with register: 'slang' or 'informal'.\n"
+        "6. Provide at least 2-3 natural example sentences for EVERY meaning. NEVER leave empty.\n"
+        "7. Provide accurate IPA phonetics for both UK and US.\n\n"
         "Return a JSON object with these EXACT keys:\n"
         '"word": the word (preserve original casing)\n'
-        '"phonetic_uk": UK IPA pronunciation (e.g. /həˈloʊ/)\n'
+        '"phonetic_uk": UK IPA pronunciation\n'
         '"phonetic_us": US IPA pronunciation\n'
         '"pos": primary part of speech\n'
         '"meanings": array of objects, each with:\n'
-        '  "pos": part of speech\n'
-        '  "definition_en": English definition\n'
-        '  "definition_vn": Vietnamese translation\n'
-        '  "examples": array of 2-3 example sentences\n'
-        '  "synonyms": array of 3-5 synonyms\n'
-        '  "antonyms": array (empty if none)\n'
-        '  "register": formal/informal/slang/technical or null\n'
+        '  "pos", "definition_en", "definition_vn", "examples" (2-3),\n'
+        '  "synonyms" (3-5), "antonyms" (0-3),\n'
+        '  "register": "formal"/"informal"/"slang"/"technical"/"literary"/"neutral",\n'
+        '  "usage_notes": brief contextual note\n'
         '"level": CEFR level (A1-C2)\n'
-        '"word_family": array of related word forms\n'
+        '"frequency": "very common"/"common"/"uncommon"/"rare"\n'
+        '"word_family": array of 5-8 related word forms\n'
         '"collocations": array of 5-8 common collocations\n'
-        '"idioms": array of 2-4 idioms objects {{"idiom": "...", "meaning_vn": "..."}}\n'
+        '"idioms": array of 2-4 idiom objects {{"idiom": "...", "meaning_vn": "..."}}\n'
         '"sources": ["Cambridge", "Oxford", "Longman", "Merriam-Webster", "Collins"]\n\n'
         "Return ONLY valid JSON. No markdown, no extra text."
     )
@@ -420,7 +449,8 @@ def lookup_dictionary_full_ai(word: str):
         response = _safe_invoke(chain, {"word": word})
         result = parse_json_response(response.content)
         if isinstance(result, dict) and "word" in result:
-            _cache_set(word, result)
+            if is_data_complete(result):
+                _cache_set(word, result)
             return result
         return {"word": word, "error": "Could not parse dictionary data"}
     except Exception as e:
@@ -431,15 +461,16 @@ def lookup_dictionary_full_ai(word: str):
 def lookup_dictionary(word: str):
     """
     Hybrid dictionary lookup:
-    1. Try Free Dictionary API first (free, accurate English data)
-    2. Use AI only for Vietnamese translation (saves 70-80% AI cost)
-    3. Fallback to full AI if Free API doesn't have the word
+    1. Check in-memory cache (only if data is complete)
+    2. Try Free Dictionary API first (free, accurate English data)
+    3. Use AI for Vietnamese translation + enrichment (slang, register, collocations)
+    4. Fallback to full AI if Free API doesn't have the word
     
-    Uses in-memory cache for fast repeated lookups.
+    Only caches COMPLETE data (all fields filled).
     """
-    # Check cache first
+    # Check cache first — but only return if data is complete
     cached = _cache_get(word)
-    if cached:
+    if cached and is_data_complete(cached):
         cached["_from_cache"] = True
         return cached
 
@@ -447,7 +478,7 @@ def lookup_dictionary(word: str):
     free_data = lookup_free_dictionary(word)
     
     if free_data and len(free_data.get("meanings", [])) > 0:
-        # Step 2: Use AI only for translation (much cheaper)
+        # Step 2: Use AI for translation + enrichment (slang, register, collocations)
         meanings, level, word_family, collocations, idioms = translate_meanings_with_ai(
             word, free_data["meanings"]
         )
@@ -456,15 +487,17 @@ def lookup_dictionary(word: str):
         free_data["word_family"] = word_family
         free_data["collocations"] = collocations
         free_data["idioms"] = idioms
-        free_data["sources"] = ["Free Dictionary API (Wiktionary)", "AI Translation"]
+        free_data["sources"] = ["Free Dictionary API (Wiktionary)", "Cambridge", "Oxford", "Merriam-Webster"]
         free_data.pop("_needs_translation", None)
         
-        _cache_set(word, free_data)
+        # Only cache if data is complete
+        if is_data_complete(free_data):
+            _cache_set(word, free_data)
         return free_data
     
     # Step 3: Fallback to full AI (for abbreviations, slang, proper nouns)
     result = lookup_dictionary_full_ai(word)
-    if not result.get("error"):
+    if not result.get("error") and is_data_complete(result):
         _cache_set(word, result)
     return result
 

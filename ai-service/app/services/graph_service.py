@@ -26,7 +26,7 @@ def _get_setting(key, default=None):
 graph = None
 last_error = None
 _last_connect_attempt = 0
-_RECONNECT_COOLDOWN = 30  # seconds between reconnect attempts
+_RECONNECT_COOLDOWN = 10  # seconds between reconnect attempts
 
 def get_graph():
     global graph, last_error, _last_connect_attempt
