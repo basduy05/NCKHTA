@@ -100,7 +100,7 @@ def get_db(retries=3):
             if TURSO_URL and TURSO_AUTH_TOKEN:
                 if HAS_LIBSQL_EXPERIMENTAL:
                     # libSQL experimental with Turso sync (Local Replica)
-                    conn = libsql.connect(database=DB_PATH, sync_url=TURSO_URL, auth_token=TURSO_AUTH_TOKEN, timeout=15)
+                    conn = libsql.connect(database=DB_PATH, sync_url=TURSO_URL, auth_token=TURSO_AUTH_TOKEN)
                     try:
                         conn.sync()
                     except Exception as e:
@@ -112,7 +112,7 @@ def get_db(retries=3):
                     conn = libsql.connect(url_to_use, auth_token=TURSO_AUTH_TOKEN)
             else:
                 # standard sqlite3 or libsql without sync
-                conn = libsql.connect(DB_PATH, timeout=30)
+                conn = libsql.connect(DB_PATH)
             
             # Use standard Row for builtin sqlite3 if possible, but our wrapper is more consistent
             try:
