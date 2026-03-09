@@ -8,6 +8,8 @@ import sqlite3
 import time
 import threading
 from dotenv import load_dotenv
+import re
+import json_repair
 
 load_dotenv()
 
@@ -74,7 +76,6 @@ def _get_setting(key, default=None):
         pass
     return os.getenv(key, default)
 
-import re
 
 def parse_json_response(text: str):
     try:
@@ -509,18 +510,37 @@ def translate_meanings_with_ai_stream(word: str, meanings: list, estimate_level:
             raise e
 
     try:
+        accumulated_text = ""
+        last_yielded_json = ""
+        
         for content in _safe_stream_invoke(chain, {"word": word, "definitions": definitions_text}):
             if content:
-                yield content
+                accumulated_text += content
+                # Cố gắng repair json từ text accumulate
+                try:
+                    repaired = json_repair.repair_json(accumulated_text, return_objects=True)
+                    if isinstance(repaired, dict) and "meanings" in repaired:
+                        # Gắn thêm trường luồng suy nghĩ thô (tất cả những gì AI nói)
+                        repaired["_raw_thinking_stream"] = accumulated_text
+                        
+                        # Chỉ yield nếu dictionary có thay đổi so với chunk trước để tối ưu frontend render
+                        current_json = json.dumps(repaired, ensure_ascii=False)
+                        if current_json != last_yielded_json:
+                            # Frontend dùng buffer.split('\n') nên yield trả về phải kết thúc bằng newline "\n"
+                            yield current_json + "\n"
+                            last_yielded_json = current_json
+                except Exception:
+                    # Nếu JSON repair vẫn lỗi thì bỏ qua, chờ chunk token tiếp theo
+                    pass
     except Exception as e:
         print(f"[AI Stream Translation] Error: {e}")
-        yield json.dumps({"error": str(e)})
+        yield json.dumps({"error": str(e)}) + "\n"
 
 def lookup_dictionary_full_ai(word: str):
     """
     Full AI-powered dictionary lookup (fallback when Free API has no results).
     Used for abbreviations, slang, proper nouns, etc.
-    Multi-source: Cambridge, Oxford, Merriam-Webster, Longman, Collins, Urban Dictionary.
+    Multi-source: Cambridge, Oxford, Merriam-Webster, Longman, Urban Dictionary.
     """
     llm = get_llm()
     if not llm:
@@ -646,12 +666,25 @@ def lookup_dictionary_full_ai_stream(word: str):
             raise e
 
     try:
+        accumulated_text = ""
+        last_yielded_json = ""
         for content in _safe_stream_invoke(chain, {"word": word}):
             if content:
-                yield content
+                accumulated_text += content
+                try:
+                    repaired = json_repair.repair_json(accumulated_text, return_objects=True)
+                    if isinstance(repaired, dict) and "word" in repaired:
+                        # Thêm raw text stream để front-end hiển thị suy nghĩ
+                        repaired["_raw_thinking_stream"] = accumulated_text
+                        current_json = json.dumps(repaired, ensure_ascii=False)
+                        if current_json != last_yielded_json:
+                            yield current_json + "\n"
+                            last_yielded_json = current_json
+                except Exception:
+                    pass
     except Exception as e:
         print(f"lookup_dictionary_full_ai_stream error: {e}")
-        yield json.dumps({"word": word, "error": str(e)})
+        yield json.dumps({"word": word, "error": str(e)}) + "\n"
 
 def lookup_dictionary(word: str):
     """

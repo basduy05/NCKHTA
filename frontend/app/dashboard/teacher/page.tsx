@@ -1026,8 +1026,8 @@ function AIToolsTab({ token }: { token: string | null }) {
               {/* Word header */}
               <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-6 text-white relative">
                 {dictResult.status === "thinking" && (
-                  <div className="absolute inset-0 bg-blue-600/50 backdrop-blur-sm flex items-center justify-center z-10">
-                    <div className="flex items-center gap-3 bg-white/20 px-4 py-2 rounded-full">
+                  <div className="absolute inset-0 bg-blue-600/50 backdrop-blur-sm flex flex-col items-center justify-center z-10 p-6 overflow-hidden">
+                    <div className="flex items-center gap-3 bg-white/20 px-4 py-2 rounded-full mb-3 shadow-[0_0_15px_rgba(255,255,255,0.2)]">
                       <div className="flex gap-1">
                         <div className="w-2 h-2 rounded-full bg-white animate-bounce" style={{ animationDelay: '0ms' }}></div>
                         <div className="w-2 h-2 rounded-full bg-white animate-bounce" style={{ animationDelay: '150ms' }}></div>
@@ -1035,6 +1035,14 @@ function AIToolsTab({ token }: { token: string | null }) {
                       </div>
                       <span className="font-medium text-sm">AI đang suy nghĩ...</span>
                     </div>
+                    {dictResult._raw_thinking_stream && (
+                      <div className="w-full max-w-2xl bg-black/40 rounded-xl p-4 overflow-y-auto max-h-[120px] shadow-inner text-left animate-in fade-in slide-in-from-bottom-5">
+                        <p className="font-mono text-sm text-blue-100/90 whitespace-pre-wrap leading-relaxed break-words">
+                          {dictResult._raw_thinking_stream}
+                          <span className="w-2 h-4 bg-white/70 inline-block animate-pulse ml-1 align-middle"></span>
+                        </p>
+                      </div>
+                    )}
                   </div>
                 )}
                 <div className="flex items-start justify-between">

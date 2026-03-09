@@ -1,19 +1,49 @@
-import sqlite3
+try:
+    import libsql_experimental as sqlite3
+except ImportError:
+    import sqlite3
 import os
 import traceback
 import time
 from pydantic import BaseModel
 from typing import List, Optional
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "app.db")
+_default_db_path = os.path.join(os.path.dirname(__file__), "app.db")
+DB_PATH = os.getenv("DATABASE_PATH", _default_db_path)
+TURSO_URL = os.getenv("TURSO_URL")
+TURSO_AUTH_TOKEN = os.getenv("TURSO_AUTH_TOKEN")
 MIN_MEANINGS_COUNT = 3  # Minimum meanings required before skipping AI lookup
+
+def get_db():
+    if TURSO_URL and TURSO_AUTH_TOKEN:
+        try:
+            # Connect local replica and sync across Turso nodes
+            conn = sqlite3.connect(database=DB_PATH, sync_url=TURSO_URL, auth_token=TURSO_AUTH_TOKEN)
+            conn.sync()
+        except TypeError: # Fallback if libsql_experimental is not fully compatible or arguments are wrong
+            conn = sqlite3.connect(DB_PATH) # Fallback to local
+    else:
+        conn = sqlite3.connect(DB_PATH)
+        
+    conn.row_factory = sqlite3.Row
+    return conn
 
 def init_db():
     print(f"[DB] Initializing database at {DB_PATH}")
-    conn = sqlite3.connect(DB_PATH)
-    # Enable WAL mode for concurrent reads (prevents lock when multiple users)
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA busy_timeout=5000")  # Wait 5s instead of failing immediately
+    if TURSO_URL and TURSO_AUTH_TOKEN:
+        print("[DB] Using Turso External Connection")
+    conn = get_db()
+    
+    # Check if we are using libsql or standard sqlite3
+    driver_name = conn.__class__.__module__
+    if 'libsql' not in driver_name:
+        # Prevent lock when multiple users for normal sqlite
+        try:
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA busy_timeout=5000")
+        except Exception:
+            pass
+
     cursor = conn.cursor()
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS users (

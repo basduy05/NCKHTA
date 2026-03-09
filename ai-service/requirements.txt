@@ -15,3 +15,5 @@ python-jose[cryptography]
 email-validator
 python-docx
 PyPDF2
+json-repair
+libsql-experimental
