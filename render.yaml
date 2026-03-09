@@ -45,3 +45,7 @@ services:
         sync: false
       - key: SMTP_PASSWORD
         sync: false
+      - key: TURSO_URL
+        sync: false
+      - key: TURSO_AUTH_TOKEN
+        sync: false
