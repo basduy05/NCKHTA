@@ -1,7 +1,9 @@
 try:
     import libsql_experimental as sqlite3
+    SQLITE_OP_ERROR = Exception
 except ImportError:
     import sqlite3
+    SQLITE_OP_ERROR = sqlite3.OperationalError
 import os
 import traceback
 import time
@@ -79,27 +81,27 @@ def init_db():
     # --- MIGRATION FOR AUTHENTICATION ---
     try:
         cursor.execute("ALTER TABLE users ADD COLUMN password_hash TEXT")
-    except sqlite3.OperationalError: pass
+    except SQLITE_OP_ERROR: pass
     
     try:
         cursor.execute("ALTER TABLE users ADD COLUMN otp TEXT")
-    except sqlite3.OperationalError: pass
+    except SQLITE_OP_ERROR: pass
     
     try:
         cursor.execute("ALTER TABLE users ADD COLUMN is_verified BOOLEAN DEFAULT 0")
-    except sqlite3.OperationalError: pass
+    except SQLITE_OP_ERROR: pass
     
     try:
         cursor.execute("ALTER TABLE users ADD COLUMN is_active BOOLEAN DEFAULT 1")
-    except sqlite3.OperationalError: pass
+    except SQLITE_OP_ERROR: pass
     
     try:
         cursor.execute("ALTER TABLE users ADD COLUMN password_reset_token TEXT")
-    except sqlite3.OperationalError: pass
+    except SQLITE_OP_ERROR: pass
     
     try:
         cursor.execute("ALTER TABLE users ADD COLUMN password_reset_expires INTEGER")
-    except sqlite3.OperationalError: pass
+    except SQLITE_OP_ERROR: pass
 
     # --- MIGRATION: SET DEFAULT PASSWORDS FOR SEEDED USERS IF MISSING ---
     try:
