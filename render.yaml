@@ -12,19 +12,19 @@ services:
       - key: PYTHON_VERSION
         value: 3.11.0
       - key: NEO4J_URI
-        value: neo4j+s://75e80b28.databases.neo4j.io
+        sync: false
       - key: NEO4J_USERNAME
-        value: 75e80b28
+        sync: false
       - key: NEO4J_PASSWORD
-        value: 3RuJzYYjEpYHafQxx6S0tdba_GiDb3D1iFnBF0JYqb4
+        sync: false
       - key: NEO4J_DATABASE
-        value: neo4j
+        sync: false
       - key: GOOGLE_API_KEY
-        value: AIzaSyBx_1S1HnKt9sHNhEBuGWO50scGDKm0_Oo
+        sync: false
       - key: COHERE_API_KEY
-        value: 9j3ZNeJa37EMk8xGB30lfHuBXJ1Hgm3COMOuwANn
+        sync: false
       - key: SECRET_KEY
-        value: -Bu77jNNuKVwmvDPcE35lYHlySs8CLs1Z4ON90Ef8rUOI0chINBW9hncJU64M0QUH8XBYrEXBShhn9LA4tDR1g
+        sync: false
       - key: ALLOWED_ORIGINS
         value: https://nckhta-1wfu.vercel.app
       - key: EMAIL_PROVIDER
@@ -48,6 +48,6 @@ services:
       - key: SMTP_PASSWORD
         sync: false
       - key: TURSO_URL
-        value: libsql://nckhta-basduy05.aws-ap-northeast-1.turso.io
+        sync: false
       - key: TURSO_AUTH_TOKEN
-        value: eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJhIjoicnciLCJpYXQiOjE3NzMwMjYxMjYsImlkIjoiMDE5Y2QwOTUtMDEwMS03NzM2LWEyODEtMTczNTA3NTc3ZmUxIiwicmlkIjoiMTQwNTcxYzgtNTUzYS00NjE4LWI4MzYtOTA4MzMzZWQwMWM2In0.pcBDvE0YKELXezQrZK3T_ulxTSOaq5-m7yfhgsJ3XJtK8dxLpr6MHk3jhm0QdhSPg2YG7Yf0DAU1RpoT_PBIBA
+        sync: false

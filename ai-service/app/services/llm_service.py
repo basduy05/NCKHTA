@@ -159,7 +159,7 @@ def get_llm(provider=None):
     cohere_key = _get_setting("COHERE_API_KEY")
     if cohere_key and provider in (None, "cohere"):
         os.environ["COHERE_API_KEY"] = cohere_key
-        return ChatCohere(model="command-r-plus-08-2024")
+        return ChatCohere(model="command-r-plus")
 
     return None
 
