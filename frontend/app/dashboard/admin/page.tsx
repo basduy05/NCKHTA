@@ -16,6 +16,7 @@ async function authFetch(input: RequestInfo | URL, init: RequestInit = {}, token
 }
 
 function getAuthHeader(token: string | null) {
+  if (!token) return {};
   return { Authorization: `Bearer ${token}` };
 }
 
@@ -270,16 +271,42 @@ function ClassesTab() {
   const [formClass, setFormClass] = useState({ name: '', teacher_name: '', students_count: 0 });
 
   const fetchClasses = async () => {
-    try { const res = await fetch(`${API_URL}/admin/classes`, { headers: getAuthHeader(token) }); if (!res.ok) throw new Error(`API error ${res.status}`); const data = await res.json(); setClasses(Array.isArray(data) ? data : []); } catch { }
+    if (!token) return;
+    try { 
+      const res = await fetch(`${API_URL}/admin/classes`, { headers: getAuthHeader(token) }); 
+      if (!res.ok) {
+        console.error('Fetch classes error:', res.status, await res.text());
+        return;
+      }
+      const data = await res.json(); 
+      setClasses(Array.isArray(data) ? data : []); 
+    } catch (e) { 
+      console.error('Fetch classes exception:', e); 
+    }
   };
 
-  useEffect(() => { fetchClasses(); }, []);
+  useEffect(() => { fetchClasses(); }, [token]);
 
   const handleSave = async () => {
     if (!formClass.name || !formClass.teacher_name) return alert("Điền đủ thông tin!");
+    if (!token) return alert("Vui lòng đăng nhập lại!");
     const url = isEditing ? `${API_URL}/admin/classes/${isEditing}` : `${API_URL}/admin/classes`;
     const method = isEditing ? 'PUT' : 'POST';
-    await fetch(url, { method, headers: getAuthHeader(token), body: JSON.stringify(formClass) });
+    try {
+      const res = await fetch(url, { 
+        method, 
+        headers: { ...getAuthHeader(token), 'Content-Type': 'application/json' }, 
+        body: JSON.stringify(formClass) 
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: 'Lỗi không xác định' }));
+        alert(err.detail || 'Lỗi khi lưu');
+        return;
+      }
+      alert('Lưu thành công!');
+    } catch (e) {
+      alert('Lỗi kết nối: ' + (e as Error).message);
+    }
     resetForm();
     fetchClasses();
   };
@@ -290,9 +317,17 @@ function ClassesTab() {
   };
 
   const handleDelete = async (id: number) => {
-    if (confirm("Xoá lớp này?")) {
-      await fetch(`${API_URL}/admin/classes/${id}`, { method: 'DELETE', headers: getAuthHeader(token) });
+    if (!token) return alert("Vui lòng đăng nhập lại!");
+    if (!confirm("Xoá lớp này?")) return;
+    try {
+      const res = await fetch(`${API_URL}/admin/classes/${id}`, { method: 'DELETE', headers: getAuthHeader(token) });
+      if (!res.ok) {
+        alert('Lỗi khi xóa');
+        return;
+      }
       fetchClasses();
+    } catch (e) {
+      alert('Lỗi kết nối');
     }
   };
 
