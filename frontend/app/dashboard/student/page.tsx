@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, Suspense, useRef } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { useAuth } from "../../context/AuthContext";
 import {
   BookOpen, Sparkles, BrainCircuit, Trophy, PlayCircle, CheckCircle2, XCircle,
@@ -18,7 +18,25 @@ function getAuthHeader(token: string | null) {
 function StudentDashboardContent() {
   const searchParams = useSearchParams();
   const activeTab = searchParams.get("tab") || "overview";
-  const { user, token } = useAuth();
+  const { user, token, isInitialized } = useAuth();
+  const router = useRouter();
+
+  // Auth check
+  useEffect(() => {
+    if (!isInitialized) return;
+    if (!token || !user) {
+      router.replace("/login");
+      return;
+    }
+    const role = (user.role || "").toString().toLowerCase();
+    if (role !== "student") {
+      router.replace("/dashboard");
+    }
+  }, [isInitialized, token, user, router]);
+
+  if (!isInitialized || !token || !user) {
+    return <div className="flex justify-center items-center h-64"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600"></div></div>;
+  }
 
   return (
     <div className="space-y-6">

@@ -1,7 +1,7 @@
 "use client";
 import React, { Suspense } from "react";
 import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams, useRouter } from "next/navigation";
 import Image from "next/image";
 import { BookOpen, Users, LayoutDashboard, Component, Database, GraduationCap, BookText, FileSearch, LogOut, Settings, ClipboardList, Sparkles, Search, BookMarked, Mic, Award } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
@@ -94,8 +94,8 @@ function DashboardSidebar({ user, logout }: { user: any, logout: any }) {
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, logout, isInitialized } = useAuth();
-  const router = require('next/navigation').useRouter();
-  const pathname = require('next/navigation').usePathname();
+  const router = useRouter();
+  const pathname = usePathname();
 
   React.useEffect(() => {
     if (isInitialized && !user) {
