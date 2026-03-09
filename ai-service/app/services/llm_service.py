@@ -122,8 +122,10 @@ MAX_RETRIES = 2
 RETRY_DELAY = 1.5  # seconds
 
 def _safe_invoke(chain, params: dict, retries: int = MAX_RETRIES):
-    """Invoke LLM chain with automatic retry on transient failures."""
+    """Invoke LLM chain with automatic retry on transient failures and fallback to Cohere."""
     last_error = None
+    
+    # First attempt with the primary chain
     for attempt in range(retries + 1):
         try:
             response = chain.invoke(params)
@@ -131,15 +133,38 @@ def _safe_invoke(chain, params: dict, retries: int = MAX_RETRIES):
         except Exception as e:
             last_error = e
             error_str = str(e).lower()
-            # If it's a quota error, we raise it immediately so the caller can handle fallback
-            if any(k in error_str for k in ["quota", "rate_limit", "resource_exhausted", "429", "too many requests"]):
-                raise
+            
+            # If it's a quota/rate limit error, fallback to Cohere
+            if any(k in error_str for k in ["quota", "rate_limit", "resource_exhausted", "429", "too many requests", "503"]):
+                print(f"[LLM QUOTA] Primary LLM quota or rate limit exceeded: {e}. Falling back to Cohere...")
+                fallback_llm = get_llm(provider="cohere")
+                if fallback_llm:
+                    # We need to recreate the chain with the fallback LLM
+                    # The chain is typically a RunnableSequence (prompt | llm)
+                    # We can access the first part (prompt) from the existing chain
+                    if hasattr(chain, 'first'):
+                        fallback_chain = chain.first | fallback_llm
+                        try:
+                            return fallback_chain.invoke(params)
+                        except Exception as fallback_error:
+                            print(f"[LLM FALLBACK FAILED] Cohere also failed: {fallback_error}")
+                            last_error = fallback_error
+                            raise fallback_error
+                    else:
+                        print("[LLM FALLBACK FAILED] Could not extract prompt from chain for fallback.")
+                        raise e
+                else:
+                    print("[LLM FALLBACK FAILED] Cohere API key not configured or available.")
+                    raise e
+                    
             # Don't retry on auth errors
             if any(k in error_str for k in ["api_key", "unauthorized", "forbidden", "invalid"]):
                 raise
+                
             if attempt < retries:
                 print(f"[LLM RETRY] Attempt {attempt + 1} failed: {e}. Retrying in {RETRY_DELAY}s...")
                 time.sleep(RETRY_DELAY)
+                
     raise last_error
 
 
@@ -414,6 +439,82 @@ def translate_meanings_with_ai(word: str, meanings: list, estimate_level: bool =
     
     return meanings, "B1", [], [], []
 
+def translate_meanings_with_ai_stream(word: str, meanings: list, estimate_level: bool = True):
+    """
+    Streaming version of translate_meanings_with_ai. Yields JSON chunks as they arrive.
+    """
+    llm = get_llm()
+    if not llm:
+        yield json.dumps({"error": "LLM not configured"})
+        return
+    
+    definitions_text = "\n".join(
+        f"{i+1}. [{m.get('pos', '')}] {m.get('definition_en', '')} (Examples: {m.get('examples', [])})"
+        for i, m in enumerate(meanings[:20])
+    )
+    
+    prompt = PromptTemplate.from_template(
+        "You are an expert bilingual lexicographer combining knowledge from Cambridge Dictionary, "
+        "Oxford Advanced Learner's Dictionary, Merriam-Webster, Longman, Collins, Macmillan, "
+        "and Urban Dictionary (for slang/informal usage).\n"
+        "I have raw dictionary meanings for the English word '{word}'.\n"
+        "Your task is to consolidate into 4-6 distinct grouped meanings, BUT also ADD any important "
+        "meanings that are MISSING from the raw data (especially slang, informal, or specialized meanings).\n\n"
+        "Raw Definitions:\n{definitions}\n\n"
+        "For EACH distinct meaning, provide ALL of these fields (NEVER leave any empty):\n"
+        "1. 'pos' — part of speech\n"
+        "2. 'definition_en' — clean English definition\n"
+        "3. 'definition_vn' — natural Vietnamese translation\n"
+        "4. 'examples' — 2-3 realistic example sentences. MUST have at least 2.\n"
+        "5. 'synonyms' — 3-5 synonyms\n"
+        "6. 'antonyms' — 2-3 antonyms (empty array if none)\n"
+        "7. 'register' — one of: 'formal', 'informal', 'slang', 'technical', 'literary', 'neutral'\n"
+        "8. 'usage_notes' — brief note on when/how to use this meaning (e.g. 'common in spoken English')\n\n"
+        "Also provide:\n"
+        "- 'level': CEFR level (A1-C2)\n"
+        "- 'frequency': 'very common', 'common', 'uncommon', or 'rare'\n"
+        "- 'word_family': 5-8 related word forms (e.g. run → runner, running, ran)\n"
+        "- 'collocations': 5-8 common collocations\n"
+        "- 'idioms': 2-4 idioms with Vietnamese translations\n\n"
+        "Return EXACTLY a JSON object:\n"
+        '{{\n'
+        '  "meanings": [{{"pos": "...", "definition_en": "...", "definition_vn": "...", '
+        '"examples": ["..."], "synonyms": ["..."], "antonyms": ["..."], '
+        '"register": "neutral", "usage_notes": "..."}}],\n'
+        '  "level": "B1",\n'
+        '  "frequency": "common",\n'
+        '  "word_family": ["..."],\n'
+        '  "collocations": ["..."],\n'
+        '  "idioms": [{{"idiom": "...", "meaning_vn": "..."}}]\n'
+        '}}\n\n'
+        "Return ONLY valid JSON. No markdown."
+    )
+    
+    chain = prompt | llm
+    
+    def _safe_stream_invoke(chain_to_use, params, llm_name="Primary"):
+        try:
+            for chunk in chain_to_use.stream(params):
+                yield chunk.content
+        except Exception as e:
+            error_str = str(e).lower()
+            if any(k in error_str for k in ["quota", "rate_limit", "resource_exhausted", "429", "too many requests", "503"]):
+                if llm_name == "Primary":
+                    print(f"[LLM QUOTA] Primary LLM quota exceeded in stream. Falling back to Cohere...")
+                    fallback_llm = get_llm(provider="cohere")
+                    if fallback_llm and hasattr(chain_to_use, 'first'):
+                        fallback_chain = chain_to_use.first | fallback_llm
+                        yield from _safe_stream_invoke(fallback_chain, params, llm_name="Cohere")
+                        return
+            raise e
+
+    try:
+        for content in _safe_stream_invoke(chain, {"word": word, "definitions": definitions_text}):
+            if content:
+                yield content
+    except Exception as e:
+        print(f"[AI Stream Translation] Error: {e}")
+        yield json.dumps({"error": str(e)})
 
 def lookup_dictionary_full_ai(word: str):
     """
@@ -485,6 +586,72 @@ def lookup_dictionary_full_ai(word: str):
         print(f"lookup_dictionary_full_ai error: {e}")
         return {"word": word, "error": str(e)}
 
+def lookup_dictionary_full_ai_stream(word: str):
+    """
+    Streaming AI dictionary lookup. Yields JSON strings.
+    """
+    llm = get_llm()
+    if not llm:
+        yield json.dumps({"word": word, "error": "LLM not configured"})
+        return
+
+    prompt = PromptTemplate.from_template(
+        "You are an advanced English dictionary combining data from Cambridge Dictionary, "
+        "Oxford Advanced Learner's Dictionary, Longman, Collins, Macmillan, Merriam-Webster, "
+        "AND Urban Dictionary (for slang/informal).\n"
+        "Look up the English word/term: '{word}'\n\n"
+        "IMPORTANT RULES:\n"
+        "1. Group meanings logically. Provide 3-6 distinct meanings if the word has multiple senses.\n"
+        "2. Cover ALL parts of speech (noun, verb, adj, etc.).\n"
+        "3. If the word is an ABBREVIATION (like IT, AI, USA), include its full form as the FIRST meaning.\n"
+        "4. If the word has BOTH a common meaning AND an abbreviation meaning, include BOTH.\n"
+        "5. Include SLANG and INFORMAL meanings if they exist — mark them with register: 'slang' or 'informal'.\n"
+        "6. Provide at least 2-3 natural example sentences for EVERY meaning. NEVER leave empty.\n"
+        "7. Provide accurate IPA phonetics for both UK and US.\n\n"
+        "Return a JSON object with these EXACT keys:\n"
+        '"word": the word (preserve original casing)\n'
+        '"phonetic_uk": UK IPA pronunciation\n'
+        '"phonetic_us": US IPA pronunciation\n'
+        '"pos": primary part of speech\n'
+        '"meanings": array of objects, each with:\n'
+        '  "pos", "definition_en", "definition_vn", "examples" (2-3),\n'
+        '  "synonyms" (3-5), "antonyms" (0-3),\n'
+        '  "register": "formal"/"informal"/"slang"/"technical"/"literary"/"neutral",\n'
+        '  "usage_notes": brief contextual note\n'
+        '"level": CEFR level (A1-C2)\n'
+        '"frequency": "very common"/"common"/"uncommon"/"rare"\n'
+        '"word_family": array of 5-8 related word forms\n'
+        '"collocations": array of 5-8 common collocations\n'
+        '"idioms": array of 2-4 idiom objects {{"idiom": "...", "meaning_vn": "..."}}\n'
+        '"sources": ["Cambridge", "Oxford", "Longman", "Merriam-Webster", "Collins"]\n\n'
+        "Return ONLY valid JSON. No markdown, no extra text."
+    )
+
+    chain = prompt | llm
+
+    def _safe_stream_invoke(chain_to_use, params, llm_name="Primary"):
+        try:
+            for chunk in chain_to_use.stream(params):
+                yield chunk.content
+        except Exception as e:
+            error_str = str(e).lower()
+            if any(k in error_str for k in ["quota", "rate_limit", "resource_exhausted", "429", "too many requests", "503"]):
+                if llm_name == "Primary":
+                    print(f"[LLM QUOTA] Primary LLM quota exceeded in stream. Falling back to Cohere...")
+                    fallback_llm = get_llm(provider="cohere")
+                    if fallback_llm and hasattr(chain_to_use, 'first'):
+                        fallback_chain = chain_to_use.first | fallback_llm
+                        yield from _safe_stream_invoke(fallback_chain, params, llm_name="Cohere")
+                        return
+            raise e
+
+    try:
+        for content in _safe_stream_invoke(chain, {"word": word}):
+            if content:
+                yield content
+    except Exception as e:
+        print(f"lookup_dictionary_full_ai_stream error: {e}")
+        yield json.dumps({"word": word, "error": str(e)})
 
 def lookup_dictionary(word: str):
     """
@@ -528,6 +695,51 @@ def lookup_dictionary(word: str):
     if not result.get("error") and is_data_complete(result):
         _cache_set(word, result)
     return result
+
+
+def lookup_dictionary_stream(word: str):
+    """
+    Streaming version of hybrid dictionary lookup.
+    Yields JSON chunks.
+    1. Check cache -> yields full JSON if complete
+    2. Try Free Dictionary API
+    3. Use AI stream for translation + enrichment
+    4. Fallback to full AI stream
+    """
+    import json
+    
+    # Check cache first
+    cached = _cache_get(word)
+    if cached and is_data_complete(cached):
+        cached["_from_cache"] = True
+        yield json.dumps(cached)
+        return
+
+    # Step 1: Try Free Dictionary API
+    free_data = lookup_free_dictionary(word)
+    
+    if free_data and len(free_data.get("meanings", [])) > 0:
+        # Step 2: Use AI stream for translation + enrichment
+        
+        # We need to broadcast the base English data first so UI feels fast?
+        # Actually it's easier to just yield the AI's response which combines everything.
+        # But we need to inject the free API data (phonetics, audio, sources) at the end or let frontend merge.
+        # Let's stream the AI parts (meanings, level, collocations, etc.) and let the backend reconstruct the final object later,
+        # OR we just let the AI output the whole JSON minus phonetic (which AI tends to hallucinate, but Free API is accurate).
+        pass
+
+        # Since we just want to replace translate_meanings_with_ai with a stream:
+        yield json.dumps({"status": "thinking"}) # initial event
+        for chunk in translate_meanings_with_ai_stream(word, free_data["meanings"]):
+            yield chunk
+        return
+    
+    # Step 3: Fallback to full AI stream
+    yield json.dumps({"status": "thinking"})
+    for chunk in lookup_dictionary_full_ai_stream(word):
+        yield chunk
+    return
+
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

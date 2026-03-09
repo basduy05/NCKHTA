@@ -769,20 +769,65 @@ function AIToolsTab({ token }: { token: string | null }) {
 
   const handleDictLookup = async () => {
     if (!dictWord.trim()) return;
-    setDictLoading(true); setDictResult(null);
+    setDictLoading(true);
+    setDictResult(null);
+
+    // Add temporary thinking state
+    const thinkingResult: any = { status: "thinking", word: dictWord.trim(), meanings: [] };
+    setDictResult(thinkingResult);
+
     try {
       const res = await fetch(`${API_URL}/teacher/dictionary/lookup`, {
         method: "POST",
         headers: { ...getAuthHeader(token), "Content-Type": "application/json" },
         body: JSON.stringify({ word: dictWord.trim() }),
       });
-      if (res.ok) setDictResult(await res.json());
-      else {
+      if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        alert(err.detail || "Lỗi tra từ điển");
+        throw new Error(err.detail || "Lỗi tra từ điển");
       }
-    } catch (e) { console.error(e); alert("Lỗi kết nối"); }
-    finally { setDictLoading(false); }
+
+      // Stream handling
+      const reader = res.body?.getReader();
+      const decoder = new TextDecoder();
+      let done = false;
+      let buffer = "";
+      let finalData: any = { word: dictWord.trim(), meanings: [] };
+
+      while (reader && !done) {
+        const { value, done: readerDone } = await reader.read();
+        done = readerDone;
+        if (value) {
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || "";
+
+          for (const line of lines) {
+            if (line.trim()) {
+              try {
+                const chunkData = JSON.parse(line);
+                finalData = { ...finalData, ...chunkData };
+                setDictResult({ ...finalData });
+              } catch (e) { }
+            }
+          }
+        }
+      }
+
+      if (buffer.trim()) {
+        try {
+          const chunkData = JSON.parse(buffer);
+          finalData = { ...finalData, ...chunkData };
+          setDictResult({ ...finalData });
+        } catch (e) { }
+      }
+    } catch (e: any) {
+      console.error(e);
+      alert(e.message || "Lỗi kết nối");
+      setDictResult(null);
+    } finally {
+      setDictLoading(false);
+    }
   };
 
   const handleLoadGraph = async () => {
@@ -979,7 +1024,19 @@ function AIToolsTab({ token }: { token: string | null }) {
           {dictResult && (
             <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden animate-in fade-in zoom-in-95 duration-300">
               {/* Word header */}
-              <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-6 text-white">
+              <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-6 text-white relative">
+                {dictResult.status === "thinking" && (
+                  <div className="absolute inset-0 bg-blue-600/50 backdrop-blur-sm flex items-center justify-center z-10">
+                    <div className="flex items-center gap-3 bg-white/20 px-4 py-2 rounded-full">
+                      <div className="flex gap-1">
+                        <div className="w-2 h-2 rounded-full bg-white animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                        <div className="w-2 h-2 rounded-full bg-white animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                        <div className="w-2 h-2 rounded-full bg-white animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                      </div>
+                      <span className="font-medium text-sm">AI đang suy nghĩ...</span>
+                    </div>
+                  </div>
+                )}
                 <div className="flex items-start justify-between">
                   <div>
                     <h2 className="text-3xl font-extrabold mb-1">{dictResult.word}</h2>

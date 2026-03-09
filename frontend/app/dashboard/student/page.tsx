@@ -721,6 +721,11 @@ function DictionaryTab({ token }: { token: string | null }) {
     setLoading(true);
     setResult(null);
     setSaved(false);
+
+    // Add temporary thinking state before result completes
+    const thinkingResult: any = { status: "thinking", word: word.trim(), meanings: [] };
+    setResult(thinkingResult);
+
     try {
       const res = await fetch(`${API_URL}/student/dictionary/lookup`, {
         method: "POST",
@@ -731,8 +736,47 @@ function DictionaryTab({ token }: { token: string | null }) {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.detail || "Lookup failed");
       }
-      const data = await res.json();
-      setResult(data);
+
+      // Stream handling
+      const reader = res.body?.getReader();
+      const decoder = new TextDecoder();
+      let done = false;
+      let buffer = "";
+
+      let finalData: any = { word: word.trim(), meanings: [] };
+
+      while (reader && !done) {
+        const { value, done: readerDone } = await reader.read();
+        done = readerDone;
+        if (value) {
+          buffer += decoder.decode(value, { stream: true });
+          // Split by newline since chunks are complete JSON objects per line
+          const lines = buffer.split('\n');
+          // Keep the last incomplete block in buffer
+          buffer = lines.pop() || "";
+
+          for (const line of lines) {
+            if (line.trim()) {
+              try {
+                const chunkData = JSON.parse(line);
+                finalData = { ...finalData, ...chunkData };
+                setResult({ ...finalData }); // Update UI progressively
+              } catch (e) {
+                console.warn("Error parsing chunk:", line, e);
+              }
+            }
+          }
+        }
+      }
+
+      // Process remaining buffer
+      if (buffer.trim()) {
+        try {
+          const chunkData = JSON.parse(buffer);
+          finalData = { ...finalData, ...chunkData };
+          setResult({ ...finalData });
+        } catch (e) { }
+      }
 
       setHistory(prev => {
         const next = [word.trim().toLowerCase(), ...prev.filter(w => w !== word.trim().toLowerCase())].slice(0, 10);
@@ -741,6 +785,7 @@ function DictionaryTab({ token }: { token: string | null }) {
       });
     } catch (e: any) {
       alert(e.message || "Lỗi khi tra từ điển");
+      setResult(null);
     } finally {
       setLoading(false);
     }
@@ -833,7 +878,19 @@ function DictionaryTab({ token }: { token: string | null }) {
       {result && (
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
           {/* Word header */}
-          <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-6 text-white">
+          <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-6 text-white relative">
+            {result.status === "thinking" && (
+              <div className="absolute inset-0 bg-blue-600/50 backdrop-blur-sm flex items-center justify-center z-10">
+                <div className="flex items-center gap-3 bg-white/20 px-4 py-2 rounded-full">
+                  <div className="flex gap-1">
+                    <div className="w-2 h-2 rounded-full bg-white animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                    <div className="w-2 h-2 rounded-full bg-white animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                    <div className="w-2 h-2 rounded-full bg-white animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                  </div>
+                  <span className="font-medium text-sm">AI đang suy nghĩ...</span>
+                </div>
+              </div>
+            )}
             <div className="flex items-start justify-between">
               <div>
                 <h2 className="text-3xl font-extrabold mb-1">{result.word}</h2>

@@ -290,15 +290,18 @@ class DictionaryRequest(BaseModel):
 @router.post("/dictionary/lookup")
 def dictionary_lookup(req: DictionaryRequest, authorization: str = Header(...), background_tasks: BackgroundTasks = None):
     """
-    Hybrid dictionary lookup with completeness validation:
+    Hybrid dictionary lookup with completeness validation and STREAMING:
     1. DB cache (only if data is COMPLETE — all fields filled)
     2. Neo4j cache fallback (for Render ephemeral restarts)
-    3. AI lookup if missing or incomplete
+    3. AI lookup stream if missing or incomplete
     4. Save to DB + Neo4j asynchronously
     
     Case-sensitive: "IT" and "it" are treated as different words.
     """
-    from ..services.llm_service import is_data_complete
+    from fastapi.responses import StreamingResponse
+    from ..services.llm_service import is_data_complete, lookup_dictionary_stream
+    import json
+    
     _get_current_student(authorization)
     
     word_original = req.word.strip()
@@ -364,26 +367,17 @@ def dictionary_lookup(req: DictionaryRequest, authorization: str = Header(...), 
         neo4j_cached["graph_connections"] = connections.get("connections", [])
         return neo4j_cached
 
-    # 2) Not cached or incomplete → ask AI (Hybrid: Free API + AI)
+    # 2) Not cached or incomplete → ask AI Stream
     llm = llm_service.get_llm()
     if not llm:
-        # If no LLM but we have some cached data, return it anyway
         if row:
             cached = json.loads(row["data_json"])
             cached["_source"] = "database_partial"
             return cached
         raise HTTPException(status_code=503, detail="LLM service unavailable")
     
-    result = llm_service.lookup_dictionary(lookup_key)
-    if result.get("error"):
-        # If AI failed but we have cached data, return cached
-        if row:
-            cached = json.loads(row["data_json"])
-            cached["_source"] = "database_fallback"
-            return cached
-        raise HTTPException(status_code=500, detail=result["error"])
-
-    # 3) Save to SQLite + Neo4j asynchronously
+    # We will use StreamingResponse to stream the AI output to the client.
+    # 3) Save to SQLite + Neo4j asynchronously AFTER the stream finishes successfully
     def _save_to_db_and_neo4j(key, original, data):
         # Save to SQLite dictionary_cache
         try:
@@ -443,17 +437,39 @@ def dictionary_lookup(req: DictionaryRequest, authorization: str = Header(...), 
         except Exception as e:
             print(f"[Neo4j SAVE] error: {e}")
 
-    if background_tasks:
-        background_tasks.add_task(_save_to_db_and_neo4j, lookup_key, word_original, result)
-    else:
-        _save_to_db_and_neo4j(lookup_key, word_original, result)
+    # We will use StreamingResponse to stream the AI output to the client.
+    # Note: Because the frontend now expects an event stream, we yield chunks.
+    def stream_generator():
+        try:
+            full_content = ""
+            for chunk in lookup_dictionary_stream(lookup_key):
+                # The frontend will receive these chunks
+                full_content += chunk
+                yield f"data: {chunk}\n\n"
+            
+            # In a real streaming scenario, we'd need to parse the final accumulated string
+            # and save it. But because we yield partial JSON chunks, we must parse it here.
+            try:
+                # The full_content might be an accumulated JSON string from `lookup_dictionary_full_ai_stream`
+                # or a combination of `status: thinking` + final JSON string.
+                # We do our best to save it in background if valid.
+                final_result = llm_service.parse_json_response(full_content)
+                if isinstance(final_result, dict) and "word" in final_result:
+                    if is_data_complete(final_result):
+                        if background_tasks:
+                            background_tasks.add_task(_save_to_db_and_neo4j, lookup_key, word_original, final_result)
+                        else:
+                            _save_to_db_and_neo4j(lookup_key, word_original, final_result)
+            except Exception as e:
+                print(f"Failed to parse or save streamed result: {e}")
 
-    # 4) Add graph connections and return
-    connections = graph_service.get_word_connections(word_lower)
-    result["graph_connections"] = connections.get("connections", [])
-    result["_source"] = "ai"
-    result["_meanings_count"] = len(result.get("meanings", []))
-    return result
+        except Exception as e:
+            print(f"Dictionary STREAM error: {e}")
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+        
+        yield "data: [DONE]\n\n"
+
+    return StreamingResponse(stream_generator(), media_type="text/event-stream")
 
 
 # ─── SAVED VOCABULARY ─────────────────────────────────────────────────────────
