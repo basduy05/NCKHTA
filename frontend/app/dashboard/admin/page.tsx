@@ -126,8 +126,9 @@ function UsersTab() {
     if (!token) return;
     try {
       const res = await authFetch(`${API_URL}/admin/users`, {}, token);
+      if (!res.ok) throw new Error(`API error ${res.status}`);
       const data = await res.json();
-      setUsers(data);
+      setUsers(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error(err);
     } finally {
@@ -264,7 +265,7 @@ function ClassesTab() {
   const [formClass, setFormClass] = useState({ name: '', teacher_name: '', students_count: 0 });
 
   const fetchClasses = async () => {
-    try { const res = await fetch(`${API_URL}/admin/classes`); setClasses(await res.json()); } catch { }
+    try { const res = await fetch(`${API_URL}/admin/classes`); if (!res.ok) throw new Error(`API error ${res.status}`); const data = await res.json(); setClasses(Array.isArray(data) ? data : []); } catch { }
   };
 
   useEffect(() => { fetchClasses(); }, []);
@@ -384,10 +385,10 @@ function LessonsTab() {
   };
 
   const fetchLessons = async () => {
-    try { const res = await fetch(`${API_URL}/admin/lessons`); setLessons(await res.json()); } catch { }
+    try { const res = await fetch(`${API_URL}/admin/lessons`); if (!res.ok) throw new Error(`API error ${res.status}`); const data = await res.json(); setLessons(Array.isArray(data) ? data : []); } catch { }
   };
   const fetchClasses = async () => {
-    try { const res = await fetch(`${API_URL}/admin/classes`); setClasses(await res.json()); } catch { }
+    try { const res = await fetch(`${API_URL}/admin/classes`); if (!res.ok) throw new Error(`API error ${res.status}`); const data = await res.json(); setClasses(Array.isArray(data) ? data : []); } catch { }
   };
 
   useEffect(() => { fetchLessons(); fetchClasses(); }, []);
@@ -732,7 +733,7 @@ function GrammarTab() {
 
   const fetchRules = async () => {
     setLoading(true);
-    try { const res = await fetch(`${API_URL}/admin/grammar`); setRules(await res.json()); } catch { }
+    try { const res = await fetch(`${API_URL}/admin/grammar`); if (!res.ok) throw new Error(`API error ${res.status}`); const data = await res.json(); setRules(Array.isArray(data) ? data : []); } catch { }
     finally { setLoading(false); }
   };
 
