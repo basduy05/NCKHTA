@@ -20,8 +20,9 @@ def get_db():
             # Connect local replica and sync across Turso nodes
             conn = sqlite3.connect(database=DB_PATH, sync_url=TURSO_URL, auth_token=TURSO_AUTH_TOKEN)
             conn.sync()
-        except TypeError: # Fallback if libsql_experimental is not fully compatible or arguments are wrong
-            conn = sqlite3.connect(DB_PATH) # Fallback to local
+        except Exception as e: # Catch all errors if libsql is missing or sync fails
+            print(f"[DB] Turso connection failed, falling back to local SQLite. Reason: {e}")
+            conn = sqlite3.connect(DB_PATH)
     else:
         conn = sqlite3.connect(DB_PATH)
         
