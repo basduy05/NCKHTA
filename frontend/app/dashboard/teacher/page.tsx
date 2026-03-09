@@ -6,7 +6,7 @@ import {
   Users, BookOpen, Plus, Edit, Trash2, GraduationCap, X, Check,
   FileText, Upload, Download, ClipboardList, Sparkles, Brain,
   BarChart3, UserPlus, UserMinus, ChevronDown, ChevronUp, Eye,
-  Search, Volume2, ArrowRight, Bookmark, Network, Terminal, Check
+  Search, Volume2, ArrowRight, Bookmark, Network, Terminal
 } from "lucide-react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://iedu-ksk7.onrender.com";
