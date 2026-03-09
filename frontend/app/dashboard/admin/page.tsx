@@ -1,13 +1,45 @@
 "use client";
 import { useState, Suspense, useEffect } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { Users, Database, Plus, UploadCloud, FileSpreadsheet, Save, Edit, Trash2, GraduationCap, X, Check, BookOpen, BookText, Settings, RefreshCw, Mail, Eye, EyeOff, Sparkles } from "lucide-react";
+import { useAuth } from "@/app/context/AuthContext";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://iedu-ksk7.onrender.com";
 
+async function authFetch(input: RequestInfo | URL, init: RequestInit = {}, token: string | null = null) {
+  const headers = new Headers(init.headers);
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+  if (!headers.has("Content-Type") && !(init.body instanceof FormData)) {
+    headers.set("Content-Type", "application/json");
+  }
+  return fetch(input, { ...init, headers });
+}
+
 function AdminDashboardContent() {
   const searchParams = useSearchParams();
-  const activeTab = searchParams.get('tab') || 'overview';
+  const activeTab = searchParams.get("tab") || "overview";
+  const router = useRouter();
+  const { token, user, isInitialized } = useAuth();
+
+  useEffect(() => {
+    if (!isInitialized) return;
+    // Require login + admin role for this page
+    if (!token || !user) {
+      router.replace("/login");
+      return;
+    }
+    const role = (user.role || "").toString().toLowerCase();
+    if (role !== "admin") {
+      router.replace("/dashboard");
+    }
+  }, [isInitialized, token, user, router]);
+
+  if (!isInitialized) {
+    return <div className="text-indigo-600 font-medium">Đang khởi tạo phiên đăng nhập...</div>;
+  }
+  if (!token || !user) {
+    return <div className="text-indigo-600 font-medium">Đang chuyển hướng...</div>;
+  }
 
   return (
     <div className="space-y-6">
@@ -43,13 +75,17 @@ export default function AdminDashboard() {
 }
 
 function OverviewTab() {
+  const { token, isInitialized } = useAuth();
   const [stats, setStats] = useState({ users: 0, vocab: 0, classes: 0, lessons: 0 });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!isInitialized || !token) return;
+
     const fetchStats = async () => {
       try {
-        const res = await fetch(`${API_URL}/admin/stats`, { signal: AbortSignal.timeout(5000) });
+        const res = await authFetch(`${API_URL}/admin/stats`, { signal: AbortSignal.timeout(5000) }, token);
+        if (res.status === 401 || res.status === 403) throw new Error("Unauthorized");
         if (!res.ok) throw new Error("API failed");
         const data = await res.json();
         setStats(data);
@@ -60,7 +96,7 @@ function OverviewTab() {
       }
     };
     fetchStats();
-  }, []);
+  }, [isInitialized, token]);
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-4 gap-6 animate-in fade-in zoom-in-95 duration-300">
@@ -80,14 +116,16 @@ function OverviewTab() {
 }
 
 function UsersTab() {
-  const [users, setUsers] = useState([]);
+  const { token, isInitialized } = useAuth();
+  const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isEditing, setIsEditing] = useState(null);
-  const [formUser, setFormUser] = useState({ name: '', email: '', role: 'STUDENT', password: '' });
+  const [isEditing, setIsEditing] = useState<number | null>(null);
+  const [formUser, setFormUser] = useState({ name: "", email: "", role: "STUDENT", password: "" });
 
   const fetchUsers = async () => {
+    if (!token) return;
     try {
-      const res = await fetch(`${API_URL}/admin/users`);
+      const res = await authFetch(`${API_URL}/admin/users`, {}, token);
       const data = await res.json();
       setUsers(data);
     } catch (err) {
@@ -95,43 +133,46 @@ function UsersTab() {
     } finally {
       setLoading(false);
     }
-  }
+  };
 
-  useEffect(() => { fetchUsers(); }, []);
+  useEffect(() => {
+    if (!isInitialized || !token) return;
+    fetchUsers();
+  }, [isInitialized, token]);
 
   const handleSaveUser = async () => {
+    if (!token) return alert("Chưa đăng nhập");
     if (!formUser.name || !formUser.email) return alert("Vui lòng điền đủ thông tin!");
     try {
       if (isEditing !== null) {
-        await fetch(`${API_URL}/admin/users/${isEditing}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(formUser)
-        });
+        await authFetch(
+          `${API_URL}/admin/users/${isEditing}`,
+          { method: "PUT", body: JSON.stringify(formUser) },
+          token
+        );
       } else {
-        const res = await fetch(`${API_URL}/admin/users`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(formUser)
-        });
-        if (!res.ok) {
-          const errData = await res.json();
-          return alert(errData.detail || "Lỗi tạo người dùng");
-        }
+        const res = await authFetch(
+          `${API_URL}/admin/users`,
+          { method: "POST", body: JSON.stringify(formUser) },
+          token
+        );
+        const payload = await res.json();
+        if (!res.ok) return alert(payload.detail || "Lỗi tạo người dùng");
       }
       resetForm();
       fetchUsers();
     } catch (err) {
       alert("Có lỗi kết nối tới máy chủ.");
     }
-  }
+  };
 
-  const handleDeleteUser = async (id) => {
+  const handleDeleteUser = async (id: number) => {
+    if (!token) return;
     if (confirm("Bạn có chắc chắn xoá người dùng này?")) {
-      await fetch(`${API_URL}/admin/users/${id}`, { method: 'DELETE' });
+      await authFetch(`${API_URL}/admin/users/${id}`, { method: "DELETE" }, token);
       fetchUsers();
     }
-  }
+  };
 
   const handleEditClick = (u) => {
     setIsEditing(u.id);
@@ -291,6 +332,7 @@ function ClassesTab() {
 }
 
 function LessonsTab() {
+  const { token } = useAuth();
   const [lessons, setLessons] = useState<any[]>([]);
   const [classes, setClasses] = useState<any[]>([]);
   const [file, setFile] = useState<File | null>(null);
@@ -310,9 +352,8 @@ function LessonsTab() {
       fd.append("exercise_type", exerciseType);
       fd.append("num_questions", "5");
 
-      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : '';
       const res = await fetch(`${API_URL}/teacher/file/generate-assignment`, {
-        method: 'POST',
+        method: "POST",
         headers: { Authorization: `Bearer ${token}` },
         body: fd
       });
@@ -803,40 +844,47 @@ function SettingsTab() {
   const [showPasswords, setShowPasswords] = useState<Record<string, boolean>>({});
   const [testingEmail, setTestingEmail] = useState(false);
   const [testingNeo4j, setTestingNeo4j] = useState(false);
+  const { token } = useAuth();
 
   const fetchSettings = async () => {
     try {
-      const res = await fetch(`${API_URL}/admin/settings`);
-      if (res.ok) setSettings(await res.json());
+      // FIXED: include Bearer token — admin routes require authentication
+      const res = await authFetch(`${API_URL}/admin/settings`, {}, token);
+      if (res.ok) {
+        setSettings(await res.json());
+      } else if (res.status === 401 || res.status === 403) {
+        console.error('Settings fetch: unauthorized. Check admin token.');
+      }
     } catch (err) { console.error(err); }
     finally { setLoading(false); }
   };
 
-  useEffect(() => { fetchSettings(); }, []);
+  useEffect(() => { fetchSettings(); }, [token]);
 
   const handleSave = async () => {
     setSaving(true);
     try {
-      const res = await fetch(`${API_URL}/admin/settings`, {
+      // FIXED: include Bearer token
+      const res = await authFetch(`${API_URL}/admin/settings`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ settings })
-      });
+      }, token);
       const data = await res.json();
       if (res.ok) {
-        alert(`Saved ${data.updated_keys?.length || 0} settings. Neo4j: ${data.neo4j_status}`);
+        alert(`Đã lưu ${data.updated_keys?.length || 0} cài đặt. Neo4j: ${data.neo4j_status}`);
         fetchSettings();
       } else {
-        alert(data.detail || 'Error saving settings');
+        alert(data.detail || 'Lỗi khi lưu cài đặt');
       }
-    } catch (err) { alert('Server connection error'); }
+    } catch (err) { alert('Lỗi kết nối tới server'); }
     finally { setSaving(false); }
   };
 
   const handleTestEmail = async () => {
     setTestingEmail(true);
     try {
-      const res = await fetch(`${API_URL}/admin/settings/test-email`, { method: 'POST' });
+      // FIXED: include Bearer token
+      const res = await authFetch(`${API_URL}/admin/settings/test-email`, { method: 'POST' }, token);
       const data = await res.json();
       const steps = data.steps ? '\n' + data.steps.join('\n') : '';
       if (data.success) {
@@ -844,17 +892,18 @@ function SettingsTab() {
       } else {
         alert(`❌ ${data.error || 'Email test failed'}${steps}`);
       }
-    } catch { alert('Connection error'); }
+    } catch { alert('Lỗi kết nối'); }
     finally { setTestingEmail(false); }
   };
 
   const handleTestNeo4j = async () => {
     setTestingNeo4j(true);
     try {
-      const res = await fetch(`${API_URL}/admin/settings/test-neo4j`, { method: 'POST' });
+      // FIXED: include Bearer token
+      const res = await authFetch(`${API_URL}/admin/settings/test-neo4j`, { method: 'POST' }, token);
       const data = await res.json();
       alert(res.ok ? data.message : (data.detail || 'Neo4j connection failed'));
-    } catch { alert('Connection error'); }
+    } catch { alert('Lỗi kết nối'); }
     finally { setTestingNeo4j(false); }
   };
 

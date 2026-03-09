@@ -21,6 +21,22 @@ services:
         sync: false
       - key: GOOGLE_API_KEY
         sync: false
+      - key: SECRET_KEY
+        sync: false   # Generate with: python -c "import secrets; print(secrets.token_urlsafe(64))"
+      - key: ALLOWED_ORIGINS
+        value: https://nckhta-1wfu.vercel.app
+      - key: EMAIL_PROVIDER
+        value: brevo  # Set to 'brevo' for Render (SMTP ports are blocked on Render free tier)
+      - key: BREVO_API_KEY
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: SENDER_EMAIL
+        sync: false
+      - key: SENDER_NAME
+        value: iEdu System
+      - key: FRONTEND_URL
+        value: https://nckhta-1wfu.vercel.app
       - key: SMTP_SERVER
         value: smtp.gmail.com
       - key: SMTP_PORT
@@ -28,6 +44,4 @@ services:
       - key: SMTP_USERNAME
         sync: false
       - key: SMTP_PASSWORD
-        sync: false
-      - key: SENDER_EMAIL
         sync: false

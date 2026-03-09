@@ -1,30 +1,74 @@
-from fastapi import APIRouter, HTTPException, Depends, status
+from fastapi import APIRouter, HTTPException, Depends, status, BackgroundTasks
+from pydantic import BaseModel, EmailStr
 import sqlite3
 import time
 from ..database import get_db, UserCreate
 from ..services import auth_service
-from ..services.auth_service import UserRegister, UserLogin, OTPVerify
+from ..dependencies import get_admin_user
+from ..services.auth_service import (
+    UserRegister, UserLogin, OTPVerify, OTP_EXPIRE_MINUTES
+)
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
-class ForgotPasswordRequest:
-    def __init__(self, email: str):
-        self.email = email
+# ---------------------------------------------------------------------------
+# Pydantic models for request bodies
+# ---------------------------------------------------------------------------
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
 
-class ResetPasswordRequest:
-    def __init__(self, email: str, reset_token: str, new_password: str):
-        self.email = email
-        self.reset_token = reset_token
-        self.new_password = new_password
+class ResetPasswordRequest(BaseModel):
+    email: EmailStr
+    reset_token: str
+    new_password: str
+
+class NotifyRequest(BaseModel):
+    email: EmailStr
+    title: str
+    message: str
+
+# ---------------------------------------------------------------------------
+# Simple in-memory login attempt tracking (per email)
+# ---------------------------------------------------------------------------
+_login_attempts: dict = {}   # email -> [timestamps]
+MAX_LOGIN_ATTEMPTS = 5
+LOGIN_WINDOW_SECONDS = 300   # 5 minutes
+
+
+def _check_login_rate_limit(email: str):
+    """Raise 429 if too many failed login attempts in the last 5 minutes."""
+    now = time.time()
+    attempts = [t for t in _login_attempts.get(email, []) if now - t < LOGIN_WINDOW_SECONDS]
+    if len(attempts) >= MAX_LOGIN_ATTEMPTS:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Too many failed login attempts. Please wait {LOGIN_WINDOW_SECONDS // 60} minutes.",
+        )
+
+
+def _record_failed_login(email: str):
+    now = time.time()
+    attempts = _login_attempts.get(email, [])
+    attempts.append(now)
+    _login_attempts[email] = attempts[-MAX_LOGIN_ATTEMPTS * 2:]  # keep bounded
+
+
+def _clear_login_attempts(email: str):
+    _login_attempts.pop(email, None)
+
+
+# ---------------------------------------------------------------------------
+# Endpoints
+# ---------------------------------------------------------------------------
 
 @router.post("/register", status_code=status.HTTP_201_CREATED)
-async def register(user: UserRegister):
+async def register(user: UserRegister, background_tasks: BackgroundTasks):
     try:
         conn = get_db()
         cursor = conn.cursor()
 
         # Check if user exists
-        cursor.execute("SELECT id FROM users WHERE email = ?", (user.email,))     
+        cursor.execute("SELECT id FROM users WHERE email = ?", (user.email,))
         if cursor.fetchone():
             conn.close()
             raise HTTPException(status_code=400, detail="Email already registered")
@@ -32,78 +76,106 @@ async def register(user: UserRegister):
         # Generate OTP & Hash Password
         otp = auth_service.generate_otp()
         hashed_password = auth_service.get_password_hash(user.password)
+        otp_expires = int(time.time()) + OTP_EXPIRE_MINUTES * 60
 
         cursor.execute(
-            "INSERT INTO users (name, email, role, password_hash, otp, is_verified) VALUES (?, ?, ?, ?, ?, ?)",
-            (user.name, user.email, user.role, hashed_password, otp, 0)       
+            "INSERT INTO users (name, email, role, password_hash, otp, otp_expires, is_verified) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (user.name, user.email, user.role, hashed_password, otp, otp_expires, 0)
         )
         conn.commit()
-
-        # Send Email
-        auth_service.send_otp_email(user.email, otp)
-        
         conn.close()
+
+        # Send OTP email asynchronously in the background
+        background_tasks.add_task(auth_service.send_otp_email, user.email, otp)
+
         return {"message": "User registered. Please check email for OTP.", "email": user.email}
 
     except sqlite3.OperationalError as e:
-        if 'conn' in locals() and conn: conn.close()
+        if 'conn' in locals() and conn:
+            conn.close()
         raise HTTPException(status_code=500, detail=f"Database schema error: {e}. Please restart service to migrate.")
+    except HTTPException:
+        raise
     except Exception as e:
-        if 'conn' in locals() and conn: conn.close()
+        if 'conn' in locals() and conn:
+            conn.close()
         raise HTTPException(status_code=500, detail=f"Server error: {str(e)}")
 
+
 @router.post("/verify-otp")
-async def verify_otp(data: OTPVerify):
+async def verify_otp(data: OTPVerify, background_tasks: BackgroundTasks):
     conn = get_db()
     cursor = conn.cursor()
-    
-    cursor.execute("SELECT id, name, otp FROM users WHERE email = ?", (data.email,))
+
+    cursor.execute("SELECT id, name, otp, otp_expires FROM users WHERE email = ?", (data.email,))
     user = cursor.fetchone()
-    
+
     if not user:
         conn.close()
         raise HTTPException(status_code=404, detail="User not found")
-        
+
+    # Check OTP expiry
+    otp_expires = user['otp_expires'] if 'otp_expires' in (user.keys() if hasattr(user, 'keys') else {}) else None
+    if otp_expires and int(time.time()) > otp_expires:
+        conn.close()
+        raise HTTPException(status_code=400, detail="OTP has expired. Please register again or request a new OTP.")
+
     if user['otp'] != data.otp:
         conn.close()
         raise HTTPException(status_code=400, detail="Invalid OTP")
-        
+
     # Activate user
     try:
-        cursor.execute("UPDATE users SET is_verified = 1, otp = NULL WHERE id = ?", (user['id'],))
+        cursor.execute(
+            "UPDATE users SET is_verified = 1, otp = NULL, otp_expires = NULL WHERE id = ?",
+            (user['id'],)
+        )
         conn.commit()
-        
-        # Send Welcome Email
-        auth_service.send_welcome_email(data.email, user['name'])
-        
-    except Exception as e:
         conn.close()
+
+        # Send welcome email asynchronously
+        background_tasks.add_task(auth_service.send_welcome_email, data.email, user['name'])
+
+    except Exception as e:
+        if 'conn' in locals() and conn:
+            conn.close()
         raise HTTPException(status_code=500, detail=str(e))
-        
-    conn.close()
+
     return {"message": "Account verified successfully. You can now login."}
+
 
 @router.post("/login")
 async def login(data: UserLogin):
     try:
+        # Rate limit check before DB query
+        _check_login_rate_limit(data.email)
+
         conn = get_db()
         cursor = conn.cursor()
 
-        cursor.execute("SELECT id, name, role, password_hash, is_verified FROM users WHERE email = ?", (data.email,))
+        cursor.execute(
+            "SELECT id, name, role, password_hash, is_verified FROM users WHERE email = ?",
+            (data.email,)
+        )
         user = cursor.fetchone()
         conn.close()
 
         if not user:
+            _record_failed_login(data.email)
             raise HTTPException(status_code=400, detail="User not found")
 
         if not auth_service.verify_password(data.password, user['password_hash']):
-            raise HTTPException(status_code=400, detail="Incorrect password")     
+            _record_failed_login(data.email)
+            raise HTTPException(status_code=400, detail="Incorrect password")
 
         if not user['is_verified']:
             raise HTTPException(status_code=400, detail="Account not verified. Please verify OTP first.")
 
+        # Success — clear failed attempts counter
+        _clear_login_attempts(data.email)
+
         # Generate JWT token
-        access_token = auth_service.generate_access_token(user['id'], data.email) 
+        access_token = auth_service.generate_access_token(user['id'], data.email)
 
         return {
             "access_token": access_token,
@@ -119,87 +191,120 @@ async def login(data: UserLogin):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Server error: {str(e)}")
+
+
+@router.post("/logout")
 def logout():
-    """Logout endpoint - frontend should clear token from localStorage"""
+    """Logout endpoint — frontend should clear token from localStorage."""
+    # Server-side blacklisting would require a token store (Redis etc.)
+    # For now, clients must clear the token; JTI-based blacklisting can be added later.
     return {"message": "Logged out successfully"}
 
-@router.post("/forgot-password")
-def forgot_password(email: str):
-    """
-    Send password reset email with reset token.
-    """
+
+@router.post("/resend-otp")
+async def resend_otp(data: ForgotPasswordRequest, background_tasks: BackgroundTasks):
+    """Resend OTP to unverified user."""
     conn = get_db()
     cursor = conn.cursor()
-    
-    cursor.execute("SELECT id, name FROM users WHERE email = ?", (email,))
+    cursor.execute("SELECT id, name, is_verified FROM users WHERE email = ?", (data.email,))
     user = cursor.fetchone()
-    
+
+    if not user:
+        conn.close()
+        return {"message": "If that email is registered, a new OTP has been sent."}
+
+    if user['is_verified']:
+        conn.close()
+        return {"message": "Account already verified. Please login."}
+
+    otp = auth_service.generate_otp()
+    otp_expires = int(time.time()) + OTP_EXPIRE_MINUTES * 60
+    cursor.execute(
+        "UPDATE users SET otp = ?, otp_expires = ? WHERE id = ?",
+        (otp, otp_expires, user['id'])
+    )
+    conn.commit()
+    conn.close()
+
+    background_tasks.add_task(auth_service.send_otp_email, data.email, otp)
+    return {"message": "If that email is registered, a new OTP has been sent."}
+
+
+@router.post("/forgot-password")
+async def forgot_password(data: ForgotPasswordRequest, background_tasks: BackgroundTasks):
+    """Send password reset email with reset token."""
+    conn = get_db()
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT id, name FROM users WHERE email = ?", (data.email,))
+    user = cursor.fetchone()
+
     if not user:
         conn.close()
         # Don't reveal if email exists for security
         return {"message": "If email exists, password reset link has been sent."}
-    
+
     # Generate reset token
     reset_token = auth_service.generate_reset_token()
     expires_at = int(time.time()) + 3600  # 1 hour
-    
+
     try:
         cursor.execute(
             "UPDATE users SET password_reset_token = ?, password_reset_expires = ? WHERE id = ?",
             (reset_token, expires_at, user['id'])
         )
         conn.commit()
-        
-        # Send reset email using configured frontend URL
-        frontend_url = auth_service._get_setting("FRONTEND_URL", "http://localhost:3000").rstrip("/")
-        reset_link = f"{frontend_url}/reset-password?token={reset_token}&email={email}"
-        sent = auth_service.send_password_reset_email(email, reset_token, reset_link)
-        if not sent:
-            raise HTTPException(status_code=500, detail="Failed to send reset email")
-        
-    except Exception as e:
         conn.close()
+
+        # Send reset email asynchronously
+        frontend_url = auth_service._get_setting("FRONTEND_URL", "http://localhost:3000").rstrip("/")
+        reset_link = f"{frontend_url}/reset-password?token={reset_token}&email={data.email}"
+        background_tasks.add_task(
+            auth_service.send_password_reset_email, data.email, reset_token, reset_link
+        )
+
+    except Exception as e:
+        if 'conn' in locals() and conn:
+            conn.close()
         raise HTTPException(status_code=500, detail=str(e))
-    
-    conn.close()
+
     return {"message": "If email exists, password reset link has been sent."}
 
+
 @router.post("/reset-password")
-def reset_password(email: str, reset_token: str, new_password: str):
-    """
-    Reset password using reset token from email.
-    """
-    if not new_password or len(new_password) < 6:
+def reset_password(data: ResetPasswordRequest):
+    """Reset password using reset token from email."""
+    if not data.new_password or len(data.new_password) < 6:
         raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
-    
+
     conn = get_db()
     cursor = conn.cursor()
-    
+
     cursor.execute(
         "SELECT id, password_reset_token, password_reset_expires FROM users WHERE email = ?",
-        (email,)
+        (data.email,)
     )
     user = cursor.fetchone()
-    
+
     if not user:
         conn.close()
         raise HTTPException(status_code=404, detail="User not found")
-    
+
     if not user['password_reset_token']:
         conn.close()
         raise HTTPException(status_code=400, detail="No reset request found")
-    
-    if user['password_reset_token'] != reset_token:
+
+    if user['password_reset_token'] != data.reset_token:
         conn.close()
         raise HTTPException(status_code=400, detail="Invalid reset token")
-    
+
     if int(time.time()) > user['password_reset_expires']:
         conn.close()
         raise HTTPException(status_code=400, detail="Reset token has expired")
-    
+
     # Hash new password
-    hashed_password = auth_service.get_password_hash(new_password)
-    
+    hashed_password = auth_service.get_password_hash(data.new_password)
+
     try:
         cursor.execute(
             "UPDATE users SET password_hash = ?, password_reset_token = NULL, password_reset_expires = NULL WHERE id = ?",
@@ -209,16 +314,15 @@ def reset_password(email: str, reset_token: str, new_password: str):
     except Exception as e:
         conn.close()
         raise HTTPException(status_code=500, detail=str(e))
-    
+
     conn.close()
     return {"message": "Password reset successfully. You can now login."}
 
+
 @router.post("/notify")
-def send_notification(email: str, title: str, message: str):
-    """
-    Admin utility to send notifications manually.
-    """
-    success = auth_service.send_notification_email(email, title, message)
-    if not success:
-        raise HTTPException(status_code=500, detail="Failed to send email")
-    return {"message": "Notification sent"}
+def send_notification(data: NotifyRequest, background_tasks: BackgroundTasks, admin: dict = Depends(get_admin_user)):
+    """Admin utility to send notifications manually (no auth check here, use admin router instead)."""
+    background_tasks.add_task(
+        auth_service.send_notification_email, data.email, data.title, data.message
+    )
+    return {"message": "Notification queued for delivery"}

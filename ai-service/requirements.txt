@@ -9,6 +9,7 @@ langchain-google-genai
 langchain-cohere
 pydantic
 requests
+httpx
 python-multipart
 bcrypt
 python-jose[cryptography]

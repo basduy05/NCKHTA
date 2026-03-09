@@ -1,5 +1,5 @@
 
-from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form, Query
+from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form, Query, BackgroundTasks
 from fastapi.responses import Response
 from ..database import get_db, UserCreate, ClassCreate, LessonCreate, get_all_settings, set_setting
 from ..services import graph_service, llm_service, auth_service
@@ -7,13 +7,14 @@ import sqlite3
 import csv
 import io
 import base64
+import asyncio
 from pydantic import BaseModel
 from typing import Dict, Optional
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
 
 @router.get("/stats")
-def get_admin_stats():
+async def get_admin_stats():
     conn = get_db()
     cursor = conn.cursor()
 
@@ -29,11 +30,15 @@ def get_admin_stats():
 
     vocab_count = 0
     try:
-        g = graph_service.get_graph()
-        if g:
-            res = g.query("MATCH (n) RETURN count(n) as count LIMIT 1")
-            if res and len(res) > 0:
-                vocab_count = res[0]["count"]
+        # Wrap blocking Neo4j call in a thread to avoid blocking the event loop
+        def _query_neo4j():
+            g = graph_service.get_graph()
+            if g:
+                res = g.query("MATCH (n) RETURN count(n) as count LIMIT 1")
+                if res and len(res) > 0:
+                    return res[0]["count"]
+            return 0
+        vocab_count = await asyncio.to_thread(_query_neo4j)
     except Exception as e:
         print("Neo4j Error:", e)
 
@@ -500,10 +505,10 @@ def update_settings(data: SettingsUpdate):
 
 @router.post("/settings/test-email")
 def test_email():
-    """Send a test email using the configured provider."""
-    import urllib.request
-    import json as _json
+    """Send a test email using the configured provider (uses httpx for reliable HTTP)."""
+    import httpx
 
+    # auth_service._get_setting is an alias for get_setting from database.py
     provider = (auth_service._get_setting("EMAIL_PROVIDER") or "auto").lower().strip()
     sender = auth_service._get_setting("SENDER_EMAIL") or auth_service._get_setting("SMTP_USERNAME")
     test_recipient = auth_service._get_setting("SMTP_USERNAME") or sender
@@ -518,24 +523,22 @@ def test_email():
         brevo_key = auth_service._get_setting("BREVO_API_KEY")
         if brevo_key:
             try:
-                data = _json.dumps({
-                    "sender": {"name": "EAM System", "email": sender},
-                    "to": [{"email": test_recipient}],
-                    "subject": "EAM Test Email",
-                    "htmlContent": "<h2>Test email from EAM</h2><p>Brevo is working!</p>"
-                }).encode()
-                req = urllib.request.Request(
+                resp = httpx.post(
                     "https://api.brevo.com/v3/smtp/email",
-                    data=data,
-                    headers={"api-key": brevo_key, "Content-Type": "application/json", "User-Agent": "EAM/1.0"},
+                    json={
+                        "sender": {"name": "EAM System", "email": sender},
+                        "to": [{"email": test_recipient}],
+                        "subject": "EAM Test Email",
+                        "htmlContent": "<h2>Test email from EAM</h2><p>Brevo is working! ✅</p>"
+                    },
+                    headers={"api-key": brevo_key, "User-Agent": "EAM/1.0"},
+                    timeout=15,
                 )
-                with urllib.request.urlopen(req, timeout=15) as resp:
-                    result = _json.loads(resp.read())
-                    steps.append(f"Brevo OK: {result}")
-                    return {"success": True, "steps": steps, "message": f"Email sent via Brevo to {test_recipient}"}
-            except urllib.error.HTTPError as e:
-                body = e.read().decode()
-                steps.append(f"Brevo HTTP {e.code}: {body}")
+                resp.raise_for_status()
+                steps.append(f"Brevo OK: {resp.json()}")
+                return {"success": True, "steps": steps, "message": f"Email sent via Brevo to {test_recipient}"}
+            except httpx.HTTPStatusError as e:
+                steps.append(f"Brevo HTTP {e.response.status_code}: {e.response.text}")
             except Exception as e:
                 steps.append(f"Brevo error: {type(e).__name__}: {e}")
         else:
@@ -546,24 +549,22 @@ def test_email():
         resend_key = auth_service._get_setting("RESEND_API_KEY")
         if resend_key:
             try:
-                data = _json.dumps({
-                    "from": f"EAM System <{sender}>",
-                    "to": [test_recipient],
-                    "subject": "EAM Test Email",
-                    "html": "<h2>Test email from EAM</h2><p>Resend is working!</p>"
-                }).encode()
-                req = urllib.request.Request(
+                resp = httpx.post(
                     "https://api.resend.com/emails",
-                    data=data,
-                    headers={"Authorization": f"Bearer {resend_key}", "Content-Type": "application/json", "User-Agent": "EAM/1.0"},
+                    json={
+                        "from": f"EAM System <{sender}>",
+                        "to": [test_recipient],
+                        "subject": "EAM Test Email",
+                        "html": "<h2>Test email from EAM</h2><p>Resend is working! ✅</p>"
+                    },
+                    headers={"Authorization": f"Bearer {resend_key}", "User-Agent": "EAM/1.0"},
+                    timeout=15,
                 )
-                with urllib.request.urlopen(req, timeout=15) as resp:
-                    result = _json.loads(resp.read())
-                    steps.append(f"Resend OK: {result}")
-                    return {"success": True, "steps": steps, "message": f"Email sent via Resend to {test_recipient}"}
-            except urllib.error.HTTPError as e:
-                body = e.read().decode()
-                steps.append(f"Resend HTTP {e.code}: {body}")
+                resp.raise_for_status()
+                steps.append(f"Resend OK: {resp.json()}")
+                return {"success": True, "steps": steps, "message": f"Email sent via Resend to {test_recipient}"}
+            except httpx.HTTPStatusError as e:
+                steps.append(f"Resend HTTP {e.response.status_code}: {e.response.text}")
             except Exception as e:
                 steps.append(f"Resend error: {type(e).__name__}: {e}")
         else:
@@ -576,9 +577,9 @@ def test_email():
             steps.append("SMTP send OK")
             return {"success": True, "steps": steps, "message": f"Email sent via SMTP to {test_recipient}"}
         else:
-            steps.append("SMTP failed (ports 587/465 likely blocked)")
+            steps.append("SMTP failed (ports 587/465 likely blocked on Render free tier)")
 
-    return {"success": False, "steps": steps, "error": "All providers failed. See steps."}
+    return {"success": False, "steps": steps, "error": "All providers failed. See steps for details."}
 
 @router.post("/settings/test-neo4j")
 def test_neo4j():

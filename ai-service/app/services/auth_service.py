@@ -4,35 +4,31 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import os
-import random
+import secrets
 import string
 import bcrypt
 import sqlite3
 from jose import JWTError, jwt
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from dotenv import load_dotenv
 
 load_dotenv()
 
-# --- Helper: read from DB settings first, then env ---
-def _get_setting(key, default=None):
-    try:
-        db_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "app.db")
-        conn = sqlite3.connect(db_path)
-        cursor = conn.cursor()
-        cursor.execute("SELECT value FROM settings WHERE key = ?", (key,))
-        row = cursor.fetchone()
-        conn.close()
-        if row and row[0]:
-            return row[0]
-    except Exception:
-        pass
-    return os.getenv(key, default)
+from ..database import get_db, get_setting
+
+# Alias so admin.py can call auth_service._get_setting(...)
+_get_setting = get_setting
 
 # --- JWT CONFIG ---
-SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")
+SECRET_KEY = os.getenv("SECRET_KEY")
+if not SECRET_KEY:
+    # If no key set, generate a temporary one per-process (not ideal for multi-worker but better than a known default)
+    import warnings
+    warnings.warn("[AUTH] SECRET_KEY is not set in environment! Using a temporary key. Set SECRET_KEY in your .env or Render env vars for persistent sessions.", stacklevel=1)
+    SECRET_KEY = secrets.token_urlsafe(64)
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 hours
+OTP_EXPIRE_MINUTES = 10  # OTP expires in 10 minutes
 
 # --- MODELS ---
 class UserRegister(BaseModel):
@@ -62,15 +58,18 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     return bcrypt.checkpw(password_byte_enc, hashed_password_byte_enc)
 
 def generate_otp(length=6):
-    return "".join(random.choices(string.digits, k=length))
+    """Generate a cryptographically secure 6-digit OTP."""
+    return "".join(secrets.choice(string.digits) for _ in range(length))
 
 def generate_access_token(user_id: int, email: str):
     """Create JWT access token"""
+    now = datetime.now(timezone.utc)
     payload = {
         "sub": str(user_id),
         "email": email,
-        "exp": datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
-        "iat": datetime.utcnow()
+        "exp": now + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
+        "iat": now,
+        "jti": secrets.token_urlsafe(16),  # Unique token ID for future blacklisting
     }
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
@@ -86,46 +85,37 @@ def verify_access_token(token: str):
     except JWTError:
         return None
 
-def generate_reset_token(length=32):
-    """Generate random token for password reset"""
-    return "".join(random.choices(string.ascii_letters + string.digits, k=length))
+def generate_reset_token():
+    """Generate cryptographically secure token for password reset."""
+    return secrets.token_urlsafe(32)
 
 def _send_via_resend(to_email: str, subject: str, html_content: str) -> bool:
     """Send email via Resend HTTP API (works on Render/cloud where SMTP is blocked)."""
-    import urllib.request
-    import json as _json
-
-    api_key = _get_setting("RESEND_API_KEY")
-    sender = _get_setting("SENDER_EMAIL") or _get_setting("SMTP_USERNAME")
+    api_key = get_setting("RESEND_API_KEY")
+    sender = get_setting("SENDER_EMAIL") or get_setting("SMTP_USERNAME")
     if not api_key:
         print("RESEND_API_KEY not configured")
         return False
 
-    data = _json.dumps({
-        "from": f"EAM System <{sender}>",
-        "to": [to_email],
-        "subject": subject,
-        "html": html_content,
-    }).encode()
-
-    req = urllib.request.Request(
-        "https://api.resend.com/emails",
-        data=data,
-        headers={
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-            "User-Agent": "EAM/1.0",
-        },
-    )
     try:
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            result = _json.loads(resp.read())
-            print(f"Resend OK: {result}")
-            return True
-    except urllib.error.HTTPError as e:
-        body = e.read().decode()
-        print(f"Resend HTTP {e.code}: {body}")
-        return False
+        import httpx
+        response = httpx.post(
+            "https://api.resend.com/emails",
+            json={
+                "from": f"EAM System <{sender}>",
+                "to": [to_email],
+                "subject": subject,
+                "html": html_content,
+            },
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "User-Agent": "EAM/1.0",
+            },
+            timeout=15,
+        )
+        response.raise_for_status()
+        print(f"Resend OK: {response.json()}")
+        return True
     except Exception as e:
         print(f"Resend failed: {type(e).__name__}: {e}")
         return False
@@ -133,41 +123,32 @@ def _send_via_resend(to_email: str, subject: str, html_content: str) -> bool:
 
 def _send_via_brevo(to_email: str, subject: str, html_content: str) -> bool:
     """Send email via Brevo (Sendinblue) HTTP API. Free 300 emails/day, sends to anyone."""
-    import urllib.request
-    import json as _json
-
-    api_key = _get_setting("BREVO_API_KEY")
-    sender = _get_setting("SENDER_EMAIL") or _get_setting("SMTP_USERNAME")
-    sender_name = _get_setting("SENDER_NAME") or "EAM System"
+    api_key = get_setting("BREVO_API_KEY")
+    sender = get_setting("SENDER_EMAIL") or get_setting("SMTP_USERNAME")
+    sender_name = get_setting("SENDER_NAME") or "EAM System"
     if not api_key:
         print("BREVO_API_KEY not configured")
         return False
 
-    data = _json.dumps({
-        "sender": {"name": sender_name, "email": sender},
-        "to": [{"email": to_email}],
-        "subject": subject,
-        "htmlContent": html_content,
-    }).encode()
-
-    req = urllib.request.Request(
-        "https://api.brevo.com/v3/smtp/email",
-        data=data,
-        headers={
-            "api-key": api_key,
-            "Content-Type": "application/json",
-            "User-Agent": "EAM/1.0",
-        },
-    )
     try:
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            result = _json.loads(resp.read())
-            print(f"Brevo OK: {result}")
-            return True
-    except urllib.error.HTTPError as e:
-        body = e.read().decode()
-        print(f"Brevo HTTP {e.code}: {body}")
-        return False
+        import httpx
+        response = httpx.post(
+            "https://api.brevo.com/v3/smtp/email",
+            json={
+                "sender": {"name": sender_name, "email": sender},
+                "to": [{"email": to_email}],
+                "subject": subject,
+                "htmlContent": html_content,
+            },
+            headers={
+                "api-key": api_key,
+                "User-Agent": "EAM/1.0",
+            },
+            timeout=15,
+        )
+        response.raise_for_status()
+        print(f"Brevo OK: {response.json()}")
+        return True
     except Exception as e:
         print(f"Brevo failed: {type(e).__name__}: {e}")
         return False
@@ -175,11 +156,11 @@ def _send_via_brevo(to_email: str, subject: str, html_content: str) -> bool:
 
 def _send_via_smtp(to_email: str, subject: str, html_content: str) -> bool:
     """Send email via SMTP (works locally, blocked on some cloud hosts)."""
-    smtp_server = _get_setting("SMTP_SERVER", "smtp.gmail.com")
-    smtp_port = int(_get_setting("SMTP_PORT", "587"))
-    smtp_username = _get_setting("SMTP_USERNAME")
-    smtp_password = _get_setting("SMTP_PASSWORD")
-    sender_email = _get_setting("SENDER_EMAIL", smtp_username)
+    smtp_server = get_setting("SMTP_SERVER", "smtp.gmail.com")
+    smtp_port = int(get_setting("SMTP_PORT", "587"))
+    smtp_username = get_setting("SMTP_USERNAME")
+    smtp_password = get_setting("SMTP_PASSWORD")
+    sender_email = get_setting("SENDER_EMAIL", smtp_username)
 
     if not smtp_username or not smtp_password:
         print(f"SMTP credentials not configured. SMTP_USERNAME={smtp_username!r}, SMTP_PASSWORD={'***' if smtp_password else None}")
@@ -210,7 +191,7 @@ def _send_via_smtp(to_email: str, subject: str, html_content: str) -> bool:
 
 
 def send_email(to_email: str, subject: str, html_content: str) -> bool:
-    provider = (_get_setting("EMAIL_PROVIDER") or "auto").lower().strip()
+    provider = (get_setting("EMAIL_PROVIDER") or "auto").lower().strip()
 
     if provider == "resend":
         return _send_via_resend(to_email, subject, html_content)
@@ -220,11 +201,11 @@ def send_email(to_email: str, subject: str, html_content: str) -> bool:
         return _send_via_smtp(to_email, subject, html_content)
     else:
         # auto: try Brevo first, then Resend, then SMTP
-        if _get_setting("BREVO_API_KEY"):
+        if get_setting("BREVO_API_KEY"):
             if _send_via_brevo(to_email, subject, html_content):
                 return True
             print("Brevo failed, trying next...")
-        if _get_setting("RESEND_API_KEY"):
+        if get_setting("RESEND_API_KEY"):
             if _send_via_resend(to_email, subject, html_content):
                 return True
             print("Resend failed, trying SMTP...")
@@ -281,7 +262,7 @@ def send_otp_email(to_email: str, otp_code: str):
     return send_email(to_email, subject, html)
 
 def send_welcome_email(to_email: str, name: str):
-    frontend_url = _get_setting("FRONTEND_URL") or "https://nckhta-1wfu.vercel.app"
+    frontend_url = get_setting("FRONTEND_URL") or "https://nckhta-1wfu.vercel.app"
     subject = "🎉 Chào mừng bạn đến với iEdu!"
     html = f"""
     <html>

@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, Body, Request
+from fastapi import FastAPI, UploadFile, File, Body, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -36,6 +36,8 @@ except Exception as e:
     auth = None
     teacher = None
     student = None
+    
+from .dependencies import get_admin_user, get_teacher_user, get_current_user
 
 import sqlite3
 
@@ -70,15 +72,31 @@ app = FastAPI(
 # uvicorn, fastapi, python-multipart, python-dotenv, neo4j, langchain
 # langchain-community, google-generativeai, openai
 
-origins = ["*"]  # Restrict in production
+# CORS: Allow specific origins (restrict wildcard for security)
+_raw_origins = os.getenv("ALLOWED_ORIGINS", "https://nckhta-1wfu.vercel.app,http://localhost:3000")
+origins = [o.strip() for o in _raw_origins.split(",") if o.strip()]
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept"],
 )
+
+
+# ─── SECURITY HEADERS MIDDLEWARE ─────────────────────────────────────────────
+@app.middleware("http")
+async def security_headers_middleware(request: Request, call_next):
+    """Add essential security headers to every response."""
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+    return response
 
 
 # ─── GLOBAL EXCEPTION HANDLER: prevent crashes from bubbling up ──────────────
@@ -153,10 +171,10 @@ async def rate_limit_middleware(request: Request, call_next):
 
     return await call_next(request)
 
-app.include_router(admin.router) if admin else None
+app.include_router(admin.router, dependencies=[Depends(get_admin_user)]) if admin else None
 app.include_router(auth.router) if auth else None
-app.include_router(teacher.router) if teacher else None
-app.include_router(student.router) if student else None
+app.include_router(teacher.router, dependencies=[Depends(get_teacher_user)]) if teacher else None
+app.include_router(student.router, dependencies=[Depends(get_current_user)]) if student else None
 
 
 @app.get("/")

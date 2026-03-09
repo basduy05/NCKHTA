@@ -191,7 +191,11 @@ def init_db():
     try:
         cursor.execute("ALTER TABLE users ADD COLUMN is_active BOOLEAN DEFAULT 1")
     except SQLITE_OP_ERROR: pass
-    
+
+    try:
+        cursor.execute("ALTER TABLE users ADD COLUMN otp_expires INTEGER")
+    except SQLITE_OP_ERROR: pass
+
     try:
         cursor.execute("ALTER TABLE users ADD COLUMN password_reset_token TEXT")
     except SQLITE_OP_ERROR: pass
@@ -416,8 +420,10 @@ def init_db():
     env_keys = [
         "GOOGLE_API_KEY", "OPENAI_API_KEY", "COHERE_API_KEY",
         "NEO4J_URI", "NEO4J_USERNAME", "NEO4J_PASSWORD", "NEO4J_DATABASE",
-        "SMTP_SERVER", "SMTP_PORT", "SMTP_USERNAME", "SMTP_PASSWORD", "SENDER_EMAIL",
-        "EMAIL_PROVIDER", "RESEND_API_KEY", "BREVO_API_KEY", "FRONTEND_URL",
+        "SMTP_SERVER", "SMTP_PORT", "SMTP_USERNAME", "SMTP_PASSWORD",
+        "SENDER_EMAIL", "SENDER_NAME",
+        "EMAIL_PROVIDER", "RESEND_API_KEY", "BREVO_API_KEY",
+        "FRONTEND_URL", "SECRET_KEY", "ALLOWED_ORIGINS",
     ]
     for k in env_keys:
         val = os.getenv(k)
@@ -457,25 +463,41 @@ _thread_local = threading.local()
 
 def get_setting(key, default=None):
     """Read a single setting: DB first, then env var."""
-    conn = get_db()
-    cursor = conn.cursor()
-    cursor.execute("SELECT value FROM settings WHERE key = ?", (key,))
-    row = cursor.fetchone()
-    conn.close()
-    if row and row['value']:
-        return row['value']
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute("SELECT value FROM settings WHERE key = ?", (key,))
+        row = cursor.fetchone()
+        conn.close()
+        if row and row['value']:
+            return row['value']
+    except Exception as e:
+        print(f"[DB SETTINGS] Error reading '{key}': {e}")
     return os.getenv(key, default)
 
 def set_setting(key, value):
     """Upsert a setting."""
-    conn = get_db()
-    cursor = conn.cursor()
-    cursor.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, value))
-    conn.commit()
-    conn.close()
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, str(value)))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"[DB SETTINGS] Error writing '{key}': {e}")
 
-    conn.close()
-    return settings
+def get_all_settings():
+    """Returns all settings as a dictionary."""
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute("SELECT key, value FROM settings")
+        rows = cursor.fetchall()
+        conn.close()
+        settings = {row['key']: row['value'] for row in rows}
+        return settings
+    except Exception:
+        return {}
 
 def get_cached_dictionary(word: str):
     """Retrieve dictionary data from DB cache (matches router schema)."""
