@@ -477,14 +477,34 @@ def get_setting(key, default=None):
 
 def set_setting(key, value):
     """Upsert a setting."""
+    print(f"[DB SETTINGS] Attempting to save: {key} = {value[:20]}..." if len(str(value)) > 20 else f"[DB SETTINGS] Attempting to save: {key} = {value}", flush=True)
     try:
         conn = get_db()
         cursor = conn.cursor()
         cursor.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, str(value)))
         conn.commit()
+        print(f"[DB SETTINGS] Committed {key} to local DB", flush=True)
+        
+        # Sync to Turso after write (required for libsql-experimental)
+        # Also try with standard libsql in case it helps
+        try:
+            if HAS_LIBSQL_EXPERIMENTAL and TURSO_URL and TURSO_AUTH_TOKEN:
+                conn.sync()
+                print(f"[DB SETTINGS] Synced '{key}' to Turso (libsql_experimental)", flush=True)
+            elif TURSO_URL and TURSO_AUTH_TOKEN:
+                # For standard libsql, try to verify write worked
+                cursor.execute("SELECT value FROM settings WHERE key = ?", (key,))
+                result = cursor.fetchone()
+                print(f"[DB SETTINGS] Verified {key}: {result}", flush=True)
+        except Exception as sync_err:
+            print(f"[DB SETTINGS] Sync/verify failed for '{key}': {sync_err}", flush=True)
+            
         conn.close()
+        print(f"[DB SETTINGS] Successfully saved: {key}", flush=True)
     except Exception as e:
-        print(f"[DB SETTINGS] Error writing '{key}': {e}")
+        print(f"[DB SETTINGS] Error writing '{key}': {e}", flush=True)
+        import traceback
+        traceback.print_exc()
 
 def get_all_settings():
     """Returns all settings as a dictionary."""
@@ -541,9 +561,19 @@ def set_cached_dictionary(word: str, data: dict):
             (word.lower().strip(), word_original, json_data, mc)
         )
         conn.commit()
+        print(f"[DB CACHE] Committed cache for '{word}'", flush=True)
+        
+        # Sync to Turso after write (required for libsql-experimental)
+        try:
+            if HAS_LIBSQL_EXPERIMENTAL and TURSO_URL and TURSO_AUTH_TOKEN:
+                conn.sync()
+                print(f"[DB CACHE] Synced '{word}' to Turso", flush=True)
+        except Exception as sync_err:
+            print(f"[DB CACHE] Sync failed for '{word}': {sync_err}", flush=True)
+        
         conn.close()
     except Exception as e:
-        print(f"[DB CACHE] Set error for '{word}': {e}")
+        print(f"[DB CACHE] Set error for '{word}': {e}", flush=True)
 
 from typing import Optional
 
