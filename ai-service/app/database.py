@@ -14,6 +14,24 @@ TURSO_URL = os.getenv("TURSO_URL")
 TURSO_AUTH_TOKEN = os.getenv("TURSO_AUTH_TOKEN")
 MIN_MEANINGS_COUNT = 3  # Minimum meanings required before skipping AI lookup
 
+class DictRow:
+    def __init__(self, cursor, row):
+        self._data = {}
+        self._row = row
+        for idx, col in enumerate(cursor.description):
+            self._data[col[0]] = row[idx]
+
+    def __getitem__(self, key):
+        if isinstance(key, int):
+            return self._row[key]
+        return self._data[key]
+        
+    def keys(self):
+        return self._data.keys()
+        
+def dict_factory(cursor, row):
+    return DictRow(cursor, row)
+
 def get_db():
     if TURSO_URL and TURSO_AUTH_TOKEN:
         try:
@@ -26,7 +44,10 @@ def get_db():
     else:
         conn = sqlite3.connect(DB_PATH)
         
-    conn.row_factory = sqlite3.Row
+    try:
+        conn.row_factory = dict_factory
+    except Exception:
+        pass
     return conn
 
 def init_db():
