@@ -15,6 +15,10 @@ async function authFetch(input: RequestInfo | URL, init: RequestInit = {}, token
   return fetch(input, { ...init, headers });
 }
 
+function getAuthHeader(token: string | null) {
+  return { Authorization: `Bearer ${token}` };
+}
+
 function AdminDashboardContent() {
   const searchParams = useSearchParams();
   const activeTab = searchParams.get("tab") || "overview";
@@ -260,12 +264,13 @@ function UsersTab() {
 }
 
 function ClassesTab() {
+  const { token } = useAuth();
   const [classes, setClasses] = useState<any[]>([]);
   const [isEditing, setIsEditing] = useState<number | null>(null);
   const [formClass, setFormClass] = useState({ name: '', teacher_name: '', students_count: 0 });
 
   const fetchClasses = async () => {
-    try { const res = await fetch(`${API_URL}/admin/classes`); if (!res.ok) throw new Error(`API error ${res.status}`); const data = await res.json(); setClasses(Array.isArray(data) ? data : []); } catch { }
+    try { const res = await fetch(`${API_URL}/admin/classes`, { headers: getAuthHeader(token) }); if (!res.ok) throw new Error(`API error ${res.status}`); const data = await res.json(); setClasses(Array.isArray(data) ? data : []); } catch { }
   };
 
   useEffect(() => { fetchClasses(); }, []);
@@ -274,7 +279,7 @@ function ClassesTab() {
     if (!formClass.name || !formClass.teacher_name) return alert("Điền đủ thông tin!");
     const url = isEditing ? `${API_URL}/admin/classes/${isEditing}` : `${API_URL}/admin/classes`;
     const method = isEditing ? 'PUT' : 'POST';
-    await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(formClass) });
+    await fetch(url, { method, headers: getAuthHeader(token), body: JSON.stringify(formClass) });
     resetForm();
     fetchClasses();
   };
@@ -286,7 +291,7 @@ function ClassesTab() {
 
   const handleDelete = async (id: number) => {
     if (confirm("Xoá lớp này?")) {
-      await fetch(`${API_URL}/admin/classes/${id}`, { method: 'DELETE' });
+      await fetch(`${API_URL}/admin/classes/${id}`, { method: 'DELETE', headers: getAuthHeader(token) });
       fetchClasses();
     }
   };
@@ -385,10 +390,10 @@ function LessonsTab() {
   };
 
   const fetchLessons = async () => {
-    try { const res = await fetch(`${API_URL}/admin/lessons`); if (!res.ok) throw new Error(`API error ${res.status}`); const data = await res.json(); setLessons(Array.isArray(data) ? data : []); } catch { }
+    try { const res = await fetch(`${API_URL}/admin/lessons`, { headers: getAuthHeader(token) }); if (!res.ok) throw new Error(`API error ${res.status}`); const data = await res.json(); setLessons(Array.isArray(data) ? data : []); } catch { }
   };
   const fetchClasses = async () => {
-    try { const res = await fetch(`${API_URL}/admin/classes`); if (!res.ok) throw new Error(`API error ${res.status}`); const data = await res.json(); setClasses(Array.isArray(data) ? data : []); } catch { }
+    try { const res = await fetch(`${API_URL}/admin/classes`, { headers: getAuthHeader(token) }); if (!res.ok) throw new Error(`API error ${res.status}`); const data = await res.json(); setClasses(Array.isArray(data) ? data : []); } catch { }
   };
 
   useEffect(() => { fetchLessons(); fetchClasses(); }, []);
@@ -404,7 +409,7 @@ function LessonsTab() {
       if (file) fd.append("file", file);
       const url = isEditing ? `${API_URL}/admin/lessons/${isEditing}` : `${API_URL}/admin/lessons`;
       const method = isEditing ? 'PUT' : 'POST';
-      const res = await fetch(url, { method, body: fd });
+      const res = await fetch(url, { method, headers: getAuthHeader(token), body: fd });
       if (!res.ok) { const e = await res.json(); throw new Error(e.detail || 'Error'); }
       resetForm();
       fetchLessons();
@@ -420,7 +425,7 @@ function LessonsTab() {
 
   const handleDelete = async (id: number) => {
     if (confirm("Xóa bài học này?")) {
-      await fetch(`${API_URL}/admin/lessons/${id}`, { method: 'DELETE' });
+      await fetch(`${API_URL}/admin/lessons/${id}`, { method: 'DELETE', headers: getAuthHeader(token) });
       fetchLessons();
     }
   };
@@ -502,6 +507,7 @@ function LessonsTab() {
 }
 
 function VocabTab() {
+  const { token } = useAuth();
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [words, setWords] = useState<any[]>([]);
@@ -523,7 +529,7 @@ function VocabTab() {
       const params = new URLSearchParams({ limit: String(PAGE_SIZE), skip: String(skip) });
       if (level) params.set('level', level);
       if (searchQ) params.set('search', searchQ);
-      const res = await fetch(`${API_URL}/admin/vocab/list?${params}`);
+      const res = await fetch(`${API_URL}/admin/vocab/list?${params}`, { headers: getAuthHeader(token) });
       const data = await res.json();
       setWords(data.words || []);
       setTotalWords(data.total || 0);
@@ -539,7 +545,7 @@ function VocabTab() {
     const formData = new FormData();
     formData.append("file", file);
     try {
-      const res = await fetch(`${API_URL}/admin/vocab/import`, { method: "POST", body: formData });
+      const res = await fetch(`${API_URL}/admin/vocab/import`, { method: "POST", headers: getAuthHeader(token), body: formData });
       const result = await res.json();
       if (!res.ok) throw new Error(result.detail || "Upload failed");
       alert(result.message);
@@ -552,7 +558,7 @@ function VocabTab() {
   const handleDeleteWord = async (word: string) => {
     if (!confirm(`Xoá từ "${word}"?`)) return;
     try {
-      const res = await fetch(`${API_URL}/admin/vocab/${encodeURIComponent(word)}`, { method: 'DELETE' });
+      const res = await fetch(`${API_URL}/admin/vocab/${encodeURIComponent(word)}`, { method: 'DELETE', headers: getAuthHeader(token) });
       if (res.ok) fetchWords();
       else alert('Lỗi xoá từ');
     } catch { alert('Lỗi kết nối'); }
@@ -591,7 +597,7 @@ function VocabTab() {
       const isNew = editingWord === '';
       const url = isNew ? `${API_URL}/admin/vocab` : `${API_URL}/admin/vocab/${encodeURIComponent(editingWord!)}`;
       const method = isNew ? 'POST' : 'PUT';
-      const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(formWord) });
+      const res = await fetch(url, { method, headers: { ...getAuthHeader(token), 'Content-Type': 'application/json' }, body: JSON.stringify(formWord) });
       if (!res.ok) { const e = await res.json(); throw new Error(e.detail || 'Error'); }
       setEditingWord(null);
       setFormWord({ word: '', pronunciation: '', meaning: '', level: 'A1', type: 'noun', example: '' });
@@ -723,6 +729,7 @@ function VocabTab() {
 }
 
 function GrammarTab() {
+  const { token } = useAuth();
   const [rules, setRules] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [name, setName] = useState('');
@@ -733,7 +740,7 @@ function GrammarTab() {
 
   const fetchRules = async () => {
     setLoading(true);
-    try { const res = await fetch(`${API_URL}/admin/grammar`); if (!res.ok) throw new Error(`API error ${res.status}`); const data = await res.json(); setRules(Array.isArray(data) ? data : []); } catch { }
+    try { const res = await fetch(`${API_URL}/admin/grammar`, { headers: getAuthHeader(token) }); if (!res.ok) throw new Error(`API error ${res.status}`); const data = await res.json(); setRules(Array.isArray(data) ? data : []); } catch { }
     finally { setLoading(false); }
   };
 
@@ -749,7 +756,7 @@ function GrammarTab() {
       if (file) fd.append("file", file);
       const url = isEditing ? `${API_URL}/admin/grammar/${isEditing}` : `${API_URL}/admin/grammar`;
       const method = isEditing ? 'PUT' : 'POST';
-      const res = await fetch(url, { method, body: fd });
+      const res = await fetch(url, { method, headers: getAuthHeader(token), body: fd });
       if (!res.ok) throw new Error((await res.json()).detail || 'Error');
       resetForm();
       fetchRules();
@@ -766,7 +773,7 @@ function GrammarTab() {
 
   const handleDelete = async (id: number) => {
     if (!confirm("Xoá cấu trúc ngữ pháp này?")) return;
-    await fetch(`${API_URL}/admin/grammar/${id}`, { method: 'DELETE' });
+    await fetch(`${API_URL}/admin/grammar/${id}`, { method: 'DELETE', headers: getAuthHeader(token) });
     fetchRules();
   };
 
