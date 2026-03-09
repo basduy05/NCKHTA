@@ -719,6 +719,7 @@ function AIToolsTab({ token }: { token: string | null }) {
   const [dictWord, setDictWord] = useState("");
   const [dictResult, setDictResult] = useState<any>(null);
   const [dictLoading, setDictLoading] = useState(false);
+  const [dictCanceled, setDictCanceled] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
 
   // Knowledge graph state
@@ -796,6 +797,7 @@ function AIToolsTab({ token }: { token: string | null }) {
     abortControllerRef.current = controller;
 
     setDictLoading(true);
+    setDictCanceled(false);
     setDictResult(null);
 
     // Add temporary thinking state
@@ -856,7 +858,11 @@ function AIToolsTab({ token }: { token: string | null }) {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
       setDictLoading(false);
-      setDictResult(null);
+      setDictCanceled(true);
+      setTimeout(() => {
+        setDictCanceled(false);
+        setDictResult(null);
+      }, 1500);
     }
   };
 
@@ -1066,39 +1072,17 @@ function AIToolsTab({ token }: { token: string | null }) {
               {/* Word header */}
               <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-6 text-white relative">
                 {dictResult.status === "thinking" && (
-                  <div className="absolute inset-0 bg-blue-600/60 backdrop-blur-sm flex flex-col items-center justify-center z-10 p-6 overflow-hidden">
-                    <div className="flex items-center gap-4 bg-white/20 backdrop-blur-md px-5 py-2.5 rounded-full mb-4 shadow-xl border border-white/10">
-                      <div className="flex gap-1.5 Items-center">
-                        <span className="relative flex h-3 w-3">
-                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
-                          <span className="relative inline-flex rounded-full h-3 w-3 bg-white"></span>
-                        </span>
-                      </div>
-                      <div className="flex flex-col">
-                        <span className="font-bold text-sm tracking-tight text-white">AI đang suy nghĩ...</span>
-                        {dictResult.elapsed !== undefined && (
-                          <span className="text-[10px] text-white/80 font-mono tracking-widest">{dictResult.elapsed}s</span>
-                        )}
-                      </div>
+                  <div className="absolute inset-0 bg-blue-600/60 backdrop-blur-sm flex items-center justify-center z-10 p-6">
+                    <div className="flex items-center gap-4 bg-white/20 backdrop-blur-md px-6 py-3 rounded-full shadow-xl border border-white/10">
+                      <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
+                      <span className="font-bold text-sm tracking-tight text-white">Đang tra cứu...</span>
                       <button
                         onClick={cancelDictLookup}
-                        className="ml-2 bg-red-500/80 hover:bg-red-500 text-white p-1.5 rounded-full transition-all hover:scale-110 active:scale-95"
+                        className="ml-2 bg-red-500/80 hover:bg-red-500 text-white px-3 py-1.5 rounded-full text-sm font-medium transition-all hover:scale-105 active:scale-95"
                       >
-                        <X size={14} />
+                        Huỷ
                       </button>
                     </div>
-                    {dictResult._raw_thinking_stream && (
-                      <div className="w-full max-w-2xl bg-black/50 backdrop-blur-lg border border-white/10 rounded-2xl p-5 overflow-y-auto max-h-[160px] shadow-2xl animate-in fade-in slide-in-from-bottom-5">
-                        <div className="flex items-center gap-2 mb-2 text-blue-200/50 text-[10px] uppercase font-bold tracking-widest">
-                          <Terminal size={10} />
-                          <span>AI Reasoning Stream</span>
-                        </div>
-                        <p className="font-mono text-xs text-blue-100/90 whitespace-pre-wrap leading-relaxed break-words text-left">
-                          {dictResult._raw_thinking_stream}
-                          <span className="w-1.5 h-3.5 bg-blue-400 inline-block animate-pulse ml-1 align-middle"></span>
-                        </p>
-                      </div>
-                    )}
                   </div>
                 )}
                 <div className="flex items-start justify-between">
