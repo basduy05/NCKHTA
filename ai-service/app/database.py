@@ -107,9 +107,14 @@ def get_db(retries=3):
                         print(f"[DB] Turso sync failed: {e}")
                 else:
                     # libSQL (standard/new) - Using Direct Connection URL
-                    # On Windows, using auth_token keyword argument is more reliable
-                    url_to_use = TURSO_URL.replace("libsql://", "https://")
-                    conn = libsql.connect(url_to_use, auth_token=TURSO_AUTH_TOKEN)
+                    try:
+                         # Method 1: standard auth_token keyword
+                         url_to_use = TURSO_URL.replace("libsql://", "https://")
+                         conn = libsql.connect(url_to_use, auth_token=TURSO_AUTH_TOKEN)
+                    except (TypeError, Exception):
+                         # Method 2: Token in URL fallback
+                         token_url = f"{TURSO_URL}?authToken={TURSO_AUTH_TOKEN}"
+                         conn = libsql.connect(token_url)
             else:
                 # standard sqlite3 or libsql without sync
                 conn = libsql.connect(DB_PATH)
@@ -233,6 +238,24 @@ def init_db():
             value TEXT
         )
     """)
+    
+    # --- DICTIONARY CACHE TABLE ---
+    try:
+        cursor.execute("SELECT data_json FROM dictionary_cache LIMIT 1")
+    except Exception:
+        # Table might be missing 'data_json' or not exist at all, or have old 'data' name
+        print("[DB] dictionary_cache schema mismatch or missing. Resetting to match routers...")
+        cursor.execute("DROP TABLE IF EXISTS dictionary_cache")
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS dictionary_cache (
+                word TEXT PRIMARY KEY,
+                word_original TEXT,
+                data_json TEXT,
+                meanings_count INTEGER,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        conn.commit()
 
     # --- GRAMMAR RULES TABLE ---
     cursor.execute("""
@@ -451,24 +474,54 @@ def set_setting(key, value):
     conn.commit()
     conn.close()
 
-def get_all_settings():
-    """Return all settings as a dict, merged with env defaults."""
-    settings = {}
-    keys = [
-        "GOOGLE_API_KEY", "OPENAI_API_KEY", "COHERE_API_KEY",
-        "NEO4J_URI", "NEO4J_USERNAME", "NEO4J_PASSWORD", "NEO4J_DATABASE",
-        "SMTP_SERVER", "SMTP_PORT", "SMTP_USERNAME", "SMTP_PASSWORD", "SENDER_EMAIL",
-        "EMAIL_PROVIDER", "RESEND_API_KEY", "BREVO_API_KEY", "FRONTEND_URL",
-    ]
-    conn = get_db()
-    cursor = conn.cursor()
-    for k in keys:
-        cursor.execute("SELECT value FROM settings WHERE key = ?", (k,))
-        row = cursor.fetchone()
-        val = (row['value'] if row and row['value'] else os.getenv(k, "")) or ""
-        settings[k] = val
     conn.close()
     return settings
+
+def get_cached_dictionary(word: str):
+    """Retrieve dictionary data from DB cache (matches router schema)."""
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute("SELECT data_json FROM dictionary_cache WHERE word = ?", (word.lower().strip(),))
+        row = cursor.fetchone()
+        conn.close()
+        if row and row['data_json']:
+            import json
+            return json.loads(row['data_json'])
+    except Exception as e:
+        # Fallback check for old 'data' column if it still exists somehow
+        try:
+             conn = get_db()
+             cursor = conn.cursor()
+             cursor.execute("SELECT data FROM dictionary_cache WHERE word = ?", (word.lower().strip(),))
+             row = cursor.fetchone()
+             conn.close()
+             if row and row['data']:
+                 import json
+                 return json.loads(row['data'])
+        except Exception: pass
+        # print(f"[DB CACHE] Get error for '{word}': {e}")
+    return None
+
+def set_cached_dictionary(word: str, data: dict):
+    """Save dictionary data to DB cache (matches router schema)."""
+    try:
+        import json
+        json_data = json.dumps(data, ensure_ascii=False)
+        mc = len(data.get("meanings", []))
+        word_original = data.get("word", word)
+        
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute(
+            """INSERT OR REPLACE INTO dictionary_cache (word, word_original, data_json, meanings_count, updated_at) 
+               VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)""", 
+            (word.lower().strip(), word_original, json_data, mc)
+        )
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"[DB CACHE] Set error for '{word}': {e}")
 
 from typing import Optional
 

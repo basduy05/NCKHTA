@@ -1,12 +1,12 @@
 "use client";
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, Suspense, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { useAuth } from "../../context/AuthContext";
 import {
   BookOpen, Sparkles, BrainCircuit, Trophy, PlayCircle, CheckCircle2, XCircle,
   GraduationCap, ClipboardList, BarChart3, FileText, ChevronRight, Clock,
   Award, TrendingUp, Layers, Search, BookMarked, Volume2, Save, Trash2,
-  ExternalLink, Star, Filter, X, ArrowRight, Bookmark, Network, Mic, Upload, Brain, Headphones, Edit3
+  ExternalLink, Star, Filter, X, ArrowRight, Bookmark, Network, Mic, Upload, Brain, Headphones, Edit3, Terminal
 } from "lucide-react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://iedu-ksk7.onrender.com";
@@ -706,6 +706,7 @@ function DictionaryTab({ token }: { token: string | null }) {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [history, setHistory] = useState<string[]>([]);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     try {
@@ -718,31 +719,39 @@ function DictionaryTab({ token }: { token: string | null }) {
 
   const lookup = async () => {
     if (!word.trim()) return;
+
+    // Cancel previous request if any
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     setLoading(true);
     setResult(null);
     setSaved(false);
 
-    // Add temporary thinking state before result completes
-    const thinkingResult: any = { status: "thinking", word: word.trim(), meanings: [] };
-    setResult(thinkingResult);
+    // Initial result state for "thinking"
+    setResult({ status: "thinking", word: word.trim(), meanings: [], elapsed: 0 });
 
     try {
       const res = await fetch(`${API_URL}/student/dictionary/lookup`, {
         method: "POST",
         headers: getAuthHeader(token),
         body: JSON.stringify({ word: word.trim() }),
+        signal: controller.signal
       });
+
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.detail || "Lookup failed");
       }
 
-      // Stream handling
       const reader = res.body?.getReader();
       const decoder = new TextDecoder();
       let done = false;
       let buffer = "";
-
       let finalData: any = { word: word.trim(), meanings: [] };
 
       while (reader && !done) {
@@ -750,17 +759,24 @@ function DictionaryTab({ token }: { token: string | null }) {
         done = readerDone;
         if (value) {
           buffer += decoder.decode(value, { stream: true });
-          // Split by newline since chunks are complete JSON objects per line
           const lines = buffer.split('\n');
-          // Keep the last incomplete block in buffer
           buffer = lines.pop() || "";
 
           for (const line of lines) {
-            if (line.trim()) {
+            if (line.trim() && line.startsWith("data: ")) {
               try {
-                const chunkData = JSON.parse(line);
+                const rawJson = line.replace("data: ", "");
+                if (rawJson === "[DONE]") continue;
+
+                const chunkData = JSON.parse(rawJson);
+
+                // If this is a final result chunk, it might have is_saved
+                if (chunkData.status === "result" && chunkData.is_saved !== undefined) {
+                  setSaved(chunkData.is_saved);
+                }
+
                 finalData = { ...finalData, ...chunkData };
-                setResult({ ...finalData }); // Update UI progressively
+                setResult({ ...finalData });
               } catch (e) {
                 console.warn("Error parsing chunk:", line, e);
               }
@@ -769,13 +785,9 @@ function DictionaryTab({ token }: { token: string | null }) {
         }
       }
 
-      // Process remaining buffer
-      if (buffer.trim()) {
-        try {
-          const chunkData = JSON.parse(buffer);
-          finalData = { ...finalData, ...chunkData };
-          setResult({ ...finalData });
-        } catch (e) { }
+      // Check if the final non-streamed response has is_saved (for database hits)
+      if (finalData.is_saved !== undefined) {
+        setSaved(finalData.is_saved);
       }
 
       setHistory(prev => {
@@ -784,10 +796,23 @@ function DictionaryTab({ token }: { token: string | null }) {
         return next;
       });
     } catch (e: any) {
+      if (e.name === 'AbortError') {
+        console.log('Lookup aborted');
+        return;
+      }
       alert(e.message || "Lỗi khi tra từ điển");
       setResult(null);
     } finally {
       setLoading(false);
+      abortControllerRef.current = null;
+    }
+  };
+
+  const cancelLookup = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      setLoading(false);
+      setResult(null);
     }
   };
 
@@ -854,7 +879,16 @@ function DictionaryTab({ token }: { token: string | null }) {
             className="btn-primary py-3.5 px-8 rounded-xl flex items-center gap-2 shadow-md disabled:opacity-50 transition text-lg"
           >
             {loading ? (
-              <div className="flex items-center gap-2"><div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white" /> Đang tra...</div>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={(e) => { e.stopPropagation(); cancelLookup(); }}
+                  className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded-lg text-sm font-medium transition"
+                >
+                  Huỷ
+                </button>
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white" />
+                <span className="text-white/90">Đang tra...</span>
+              </div>
             ) : (
               <><Search size={20} /> Tra từ</>
             )}
@@ -880,20 +914,37 @@ function DictionaryTab({ token }: { token: string | null }) {
           {/* Word header */}
           <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-6 text-white relative">
             {result.status === "thinking" && (
-              <div className="absolute inset-0 bg-blue-600/50 backdrop-blur-sm flex flex-col items-center justify-center z-10 p-6 overflow-hidden">
-                <div className="flex items-center gap-3 bg-white/20 px-4 py-2 rounded-full mb-3 shadow-[0_0_15px_rgba(255,255,255,0.2)]">
-                  <div className="flex gap-1">
-                    <div className="w-2 h-2 rounded-full bg-white animate-bounce" style={{ animationDelay: '0ms' }}></div>
-                    <div className="w-2 h-2 rounded-full bg-white animate-bounce" style={{ animationDelay: '150ms' }}></div>
-                    <div className="w-2 h-2 rounded-full bg-white animate-bounce" style={{ animationDelay: '300ms' }}></div>
+              <div className="absolute inset-0 bg-blue-600/60 backdrop-blur-sm flex flex-col items-center justify-center z-10 p-6 overflow-hidden">
+                <div className="flex items-center gap-4 bg-white/20 backdrop-blur-md px-5 py-2.5 rounded-full mb-4 shadow-xl border border-white/10">
+                  <div className="flex gap-1.5 Items-center">
+                    <span className="relative flex h-3 w-3">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-3 w-3 bg-white"></span>
+                    </span>
                   </div>
-                  <span className="font-medium text-sm">AI đang suy nghĩ...</span>
+                  <div className="flex flex-col">
+                    <span className="font-bold text-sm tracking-tight">AI đang suy nghĩ...</span>
+                    {result.elapsed !== undefined && (
+                      <span className="text-[10px] opacity-80 font-mono tracking-widest">{result.elapsed}s</span>
+                    )}
+                  </div>
+                  <button
+                    onClick={cancelLookup}
+                    className="ml-2 bg-red-500/80 hover:bg-red-500 text-white p-1.5 rounded-full transition-all hover:scale-110 active:scale-95"
+                    title="Huỷ tra cứu"
+                  >
+                    <X size={14} />
+                  </button>
                 </div>
                 {result._raw_thinking_stream && (
-                  <div className="w-full max-w-2xl bg-black/40 rounded-xl p-4 overflow-y-auto max-h-[120px] shadow-inner text-left animate-in fade-in slide-in-from-bottom-5">
-                    <p className="font-mono text-sm text-blue-100/90 whitespace-pre-wrap leading-relaxed break-words">
+                  <div className="w-full max-w-2xl bg-black/50 backdrop-blur-lg border border-white/10 rounded-2xl p-5 overflow-y-auto max-h-[160px] shadow-2xl animate-in fade-in slide-in-from-bottom-5">
+                    <div className="flex items-center gap-2 mb-2 text-blue-200/50 text-[10px] uppercase font-bold tracking-widest">
+                      <Terminal size={10} />
+                      <span>AI Reasoning Stream</span>
+                    </div>
+                    <p className="font-mono text-xs text-blue-100/90 whitespace-pre-wrap leading-relaxed break-words selection:bg-blue-500/30">
                       {result._raw_thinking_stream}
-                      <span className="w-2 h-4 bg-white/70 inline-block animate-pulse ml-1 align-middle"></span>
+                      <span className="w-1.5 h-3.5 bg-blue-400 inline-block animate-pulse ml-1 align-middle"></span>
                     </p>
                   </div>
                 )}

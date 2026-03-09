@@ -452,7 +452,8 @@ def teacher_dictionary_lookup(req: TeacherDictRequest, authorization: str = Head
     from ..services.llm_service import is_data_complete, lookup_dictionary_stream
     import json
     
-    _get_current_teacher(authorization)
+    user = _get_current_teacher(authorization)
+    user_id = user["id"]
     word_original = req.word.strip()
     word_lower = word_original.lower()
     if not word_original or len(word_original) > 100:
@@ -476,6 +477,14 @@ def teacher_dictionary_lookup(req: TeacherDictRequest, authorization: str = Head
             cached["_meanings_count"] = row["meanings_count"] or 0
             connections = graph_service.get_word_connections(word_lower)
             cached["graph_connections"] = connections.get("connections", [])
+            
+            # CHECK IF ALREADY SAVED (Fixing "saved status" bug)
+            try:
+                cursor = get_db().execute("SELECT id FROM saved_vocabulary WHERE user_id = ? AND word = ?", (user_id, lookup_key))
+                cached["is_saved"] = cursor.fetchone() is not None
+            except:
+                cached["is_saved"] = False
+                
             return cached
 
     # 1.5) Check Neo4j cache
@@ -504,6 +513,14 @@ def teacher_dictionary_lookup(req: TeacherDictRequest, authorization: str = Head
 
         connections = graph_service.get_word_connections(word_lower)
         neo4j_cached["graph_connections"] = connections.get("connections", [])
+        
+        # CHECK IF ALREADY SAVED (Fixing "saved status" bug)
+        try:
+            cursor = get_db().execute("SELECT id FROM saved_vocabulary WHERE user_id = ? AND word = ?", (user_id, lookup_key))
+            neo4j_cached["is_saved"] = cursor.fetchone() is not None
+        except:
+            neo4j_cached["is_saved"] = False
+            
         return neo4j_cached
 
     # 2) Not cached → ask AI Stream
@@ -576,8 +593,23 @@ def teacher_dictionary_lookup(req: TeacherDictRequest, authorization: str = Head
 
     def stream_generator():
         try:
+            # CHECK SAVED STATUS ONCE AT START
+            try:
+                cursor = get_db().execute("SELECT id FROM saved_vocabulary WHERE user_id = ? AND word = ?", (user_id, lookup_key))
+                is_saved = cursor.fetchone() is not None
+            except:
+                is_saved = False
+                
             full_content = ""
             for chunk in lookup_dictionary_stream(lookup_key):
+                # We can inject is_saved into result chunks
+                if '"status": "result"' in chunk:
+                    try:
+                        data = json.loads(chunk)
+                        data["is_saved"] = is_saved
+                        chunk = json.dumps(data, ensure_ascii=False)
+                    except: pass
+                
                 full_content += chunk
                 yield f"data: {chunk}\n\n"
             

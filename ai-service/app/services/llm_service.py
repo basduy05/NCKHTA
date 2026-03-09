@@ -10,6 +10,7 @@ import threading
 from dotenv import load_dotenv
 import re
 import json_repair
+from ..database import get_db, get_cached_dictionary, set_cached_dictionary
 
 load_dotenv()
 
@@ -19,24 +20,46 @@ _cache_lock = threading.Lock()
 CACHE_TTL = 3600 * 24       # 24 hours
 CACHE_MAX_SIZE = 500
 
+# ─── IN-MEMORY CACHE for settings ──────────────────────────────────────────
+_settings_cache: dict = {}
+_settings_lock = threading.Lock()
+SETTINGS_TTL = 300  # 5 minutes
+
 def _cache_get(word: str):
-    """Get cached dictionary result if still valid."""
+    """Get cached dictionary result if still valid (Memory -> DB)."""
     key = word.lower().strip()
+    
+    # 1. Memory Cache
     with _cache_lock:
         entry = _dict_cache.get(key)
         if entry and (time.time() - entry["ts"]) < CACHE_TTL:
             return entry["data"]
+                
+    # 2. Database Cache
+    db_cached = get_cached_dictionary(key)
+    if db_cached:
+        if isinstance(db_cached, dict):
+            db_cached["_from_cache"] = True
+        # Update memory cache
+        with _cache_lock:
+            _dict_cache[key] = {"data": db_cached, "ts": time.time()}
+        return db_cached
+        
     return None
 
 def _cache_set(word: str, data: dict):
-    """Cache dictionary result."""
+    """Save dictionary result to both memory and DB."""
     key = word.lower().strip()
+    
+    # 1. Memory Cache
     with _cache_lock:
-        # Evict oldest entries if cache is full
         if len(_dict_cache) >= CACHE_MAX_SIZE:
             oldest_key = min(_dict_cache, key=lambda k: _dict_cache[k]["ts"])
             del _dict_cache[oldest_key]
         _dict_cache[key] = {"data": data, "ts": time.time()}
+        
+    # 2. Database Cache
+    set_cached_dictionary(key, data)
 
 
 def is_data_complete(data: dict) -> bool:
@@ -63,30 +86,52 @@ def is_data_complete(data: dict) -> bool:
     return (not missing_vn) and (not missing_en) and (not missing_examples) and has_phonetic and has_level and has_new_fields
 
 def _get_setting(key, default=None):
+    # 1. Check in-memory cache
+    now = time.time()
+    with _settings_lock:
+        if key in _settings_cache:
+            val, ts = _settings_cache[key]
+            if now - ts < SETTINGS_TTL:
+                return val
+
+    # 2. Check DB using consolidated get_db
     try:
-        db_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "app.db")
-        conn = sqlite3.connect(db_path)
+        conn = get_db()
         cursor = conn.cursor()
         cursor.execute("SELECT value FROM settings WHERE key = ?", (key,))
         row = cursor.fetchone()
         conn.close()
-        if row and row[0]:
-            return row[0]
-    except Exception:
-        pass
-    return os.getenv(key, default)
+        
+        val = None
+        if row and row["value"]:
+            val = row["value"]
+        else:
+            val = os.getenv(key, default)
+            
+        # Update cache
+        with _settings_lock:
+            _settings_cache[key] = (val, now)
+        return val
+    except Exception as e:
+        print(f"[LLM SETTING] Error fetching '{key}': {e}")
+        return os.getenv(key, default)
 
 
-def parse_json_response(text: str):
+def parse_json_response(text):
     try:
         if not text:
             return []
+        if isinstance(text, (list, dict)):
+            return text
+        
         # Try to find JSON block using regex if there's surrounding text
-        match = re.search(r'\{.*\}|\[.*\]', text.strip(), re.DOTALL)
+        # If it's a string, we strip it
+        text_str = str(text).strip()
+        match = re.search(r'\{.*\}|\[.*\]', text_str, re.DOTALL)
         if match:
-            text = match.group(0)
+            text_str = match.group(0)
             
-        return json.loads(text.strip())
+        return json.loads(text_str)
     except Exception as e:
         print("JSON parse error:", e)
         # print("Raw text was:", text[:200] + "...")
@@ -103,7 +148,7 @@ def get_llm(provider=None):
         google_key = _get_setting("GOOGLE_API_KEY")
         if google_key and provider in (None, "google"):
             os.environ["GOOGLE_API_KEY"] = google_key
-            return ChatGoogleGenerativeAI(model="models/gemini-2.5-flash")
+            return ChatGoogleGenerativeAI(model="models/gemini-pro-latest")
 
     if provider != "google" and provider != "cohere":
         openai_key = _get_setting("OPENAI_API_KEY")
@@ -119,8 +164,8 @@ def get_llm(provider=None):
     return None
 
 # ─── SAFE LLM INVOKE with retry ──────────────────────────────────────────────
-MAX_RETRIES = 2
-RETRY_DELAY = 1.5  # seconds
+MAX_RETRIES = 1
+RETRY_DELAY = 0.5  # seconds
 
 def _safe_invoke(chain, params: dict, retries: int = MAX_RETRIES):
     """Invoke LLM chain with automatic retry on transient failures and fallback to Cohere."""
@@ -277,6 +322,7 @@ def lookup_free_dictionary(word: str):
     Returns structured data with all meanings, phonetics, examples.
     This is FREE and has no rate limits.
     """
+    start_time = time.time()
     try:
         url = f"https://api.dictionaryapi.dev/api/v2/entries/en/{word}"
         resp = requests.get(url, timeout=10)
@@ -353,9 +399,12 @@ def lookup_free_dictionary(word: str):
     except Exception as e:
         print(f"[Free Dictionary API] Error: {e}")
         return None
-
+    finally:
+        if 'start_time' in locals():
+             print(f"[LATENCY] lookup_free_dictionary for '{word}' took {time.time() - start_time:.2f}s")
 
 def translate_meanings_with_ai(word: str, meanings: list, estimate_level: bool = True):
+    start_time = time.time()
     """
     Use AI as multi-source lexicographer (Cambridge, Oxford, Merriam-Webster, Longman, Urban Dictionary)
     to translate, consolidate, and enrich raw Free Dictionary API data.
@@ -437,6 +486,8 @@ def translate_meanings_with_ai(word: str, meanings: list, estimate_level: bool =
             )
     except Exception as e:
         print(f"[AI Translation & Consolidation] Error: {e}")
+    finally:
+        print(f"[LATENCY] translate_meanings_with_ai for '{word}' took {time.time() - start_time:.2f}s")
     
     return meanings, "B1", [], [], []
 
@@ -444,6 +495,7 @@ def translate_meanings_with_ai_stream(word: str, meanings: list, estimate_level:
     """
     Streaming version of translate_meanings_with_ai. Yields JSON chunks as they arrive.
     """
+    start_time = time.time()
     llm = get_llm()
     if not llm:
         yield json.dumps({"error": "LLM not configured"})
@@ -516,27 +568,40 @@ def translate_meanings_with_ai_stream(word: str, meanings: list, estimate_level:
         for content in _safe_stream_invoke(chain, {"word": word, "definitions": definitions_text}):
             if content:
                 accumulated_text += content
+                elapsed = time.time() - start_time
+                
+                # Yield raw thinking chunk
+                yield json.dumps({
+                    "status": "thinking", 
+                    "chunk": content, 
+                    "full_thinking": accumulated_text,
+                    "elapsed": round(elapsed, 1)
+                }, ensure_ascii=False) + "\n"
+                
                 # Cố gắng repair json từ text accumulate
                 try:
                     repaired = json_repair.repair_json(accumulated_text, return_objects=True)
                     if isinstance(repaired, dict) and "meanings" in repaired:
-                        # Gắn thêm trường luồng suy nghĩ thô (tất cả những gì AI nói)
+                        # Gắn thêm trường metadata
+                        repaired["status"] = "result"
                         repaired["_raw_thinking_stream"] = accumulated_text
+                        repaired["elapsed"] = round(elapsed, 1)
                         
-                        # Chỉ yield nếu dictionary có thay đổi so với chunk trước để tối ưu frontend render
+                        # Chỉ yield nếu dictionary có thay đổi so với chunk trước
                         current_json = json.dumps(repaired, ensure_ascii=False)
                         if current_json != last_yielded_json:
-                            # Frontend dùng buffer.split('\n') nên yield trả về phải kết thúc bằng newline "\n"
                             yield current_json + "\n"
                             last_yielded_json = current_json
                 except Exception:
-                    # Nếu JSON repair vẫn lỗi thì bỏ qua, chờ chunk token tiếp theo
                     pass
     except Exception as e:
         print(f"[AI Stream Translation] Error: {e}")
         yield json.dumps({"error": str(e)}) + "\n"
+    finally:
+         print(f"[LATENCY] translate_meanings_with_ai_stream for '{word}' TOTAL took {time.time() - start_time:.2f}s")
 
 def lookup_dictionary_full_ai(word: str):
+    start_time = time.time()
     """
     Full AI-powered dictionary lookup (fallback when Free API has no results).
     Used for abbreviations, slang, proper nouns, etc.
@@ -666,16 +731,28 @@ def lookup_dictionary_full_ai_stream(word: str):
             raise e
 
     try:
+        start_time = time.time()
         accumulated_text = ""
         last_yielded_json = ""
         for content in _safe_stream_invoke(chain, {"word": word}):
             if content:
                 accumulated_text += content
+                elapsed = time.time() - start_time
+                
+                # Yield thinking status
+                yield json.dumps({
+                    "status": "thinking",
+                    "chunk": content,
+                    "full_thinking": accumulated_text,
+                    "elapsed": round(elapsed, 1)
+                }, ensure_ascii=False) + "\n"
+                
                 try:
                     repaired = json_repair.repair_json(accumulated_text, return_objects=True)
                     if isinstance(repaired, dict) and "word" in repaired:
-                        # Thêm raw text stream để front-end hiển thị suy nghĩ
+                        repaired["status"] = "result"
                         repaired["_raw_thinking_stream"] = accumulated_text
+                        repaired["elapsed"] = round(elapsed, 1)
                         current_json = json.dumps(repaired, ensure_ascii=False)
                         if current_json != last_yielded_json:
                             yield current_json + "\n"
@@ -745,7 +822,8 @@ def lookup_dictionary_stream(word: str):
     cached = _cache_get(word)
     if cached and is_data_complete(cached):
         cached["_from_cache"] = True
-        yield json.dumps(cached)
+        cached["status"] = "result"
+        yield json.dumps(cached, ensure_ascii=False)
         return
 
     # Step 1: Try Free Dictionary API
@@ -753,22 +831,11 @@ def lookup_dictionary_stream(word: str):
     
     if free_data and len(free_data.get("meanings", [])) > 0:
         # Step 2: Use AI stream for translation + enrichment
-        
-        # We need to broadcast the base English data first so UI feels fast?
-        # Actually it's easier to just yield the AI's response which combines everything.
-        # But we need to inject the free API data (phonetics, audio, sources) at the end or let frontend merge.
-        # Let's stream the AI parts (meanings, level, collocations, etc.) and let the backend reconstruct the final object later,
-        # OR we just let the AI output the whole JSON minus phonetic (which AI tends to hallucinate, but Free API is accurate).
-        pass
-
-        # Since we just want to replace translate_meanings_with_ai with a stream:
-        yield json.dumps({"status": "thinking"}) # initial event
         for chunk in translate_meanings_with_ai_stream(word, free_data["meanings"]):
             yield chunk
         return
     
     # Step 3: Fallback to full AI stream
-    yield json.dumps({"status": "thinking"})
     for chunk in lookup_dictionary_full_ai_stream(word):
         yield chunk
     return
@@ -1033,3 +1100,6 @@ def generate_speaking_topic(level: str = "B1", topic_type: str = "general"):
     except Exception as e:
         print(f"generate_speaking_topic error: {e}")
         return {"error": str(e)}
+    finally:
+        if 'start_time' in locals():
+             print(f"[LATENCY] lookup_dictionary_full_ai for '{word}' took {time.time() - start_time:.2f}s")

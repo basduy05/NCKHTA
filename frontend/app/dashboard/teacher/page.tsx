@@ -1,12 +1,12 @@
 "use client";
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, Suspense, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { useAuth } from "../../context/AuthContext";
 import {
   Users, BookOpen, Plus, Edit, Trash2, GraduationCap, X, Check,
   FileText, Upload, Download, ClipboardList, Sparkles, Brain,
   BarChart3, UserPlus, UserMinus, ChevronDown, ChevronUp, Eye,
-  Search, Volume2, ArrowRight, Bookmark, Network
+  Search, Volume2, ArrowRight, Bookmark, Network, Terminal, Check
 } from "lucide-react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://iedu-ksk7.onrender.com";
@@ -701,6 +701,7 @@ function AIToolsTab({ token }: { token: string | null }) {
   const [dictWord, setDictWord] = useState("");
   const [dictResult, setDictResult] = useState<any>(null);
   const [dictLoading, setDictLoading] = useState(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   // Knowledge graph state
   const [graphData, setGraphData] = useState<any>(null);
@@ -769,25 +770,32 @@ function AIToolsTab({ token }: { token: string | null }) {
 
   const handleDictLookup = async () => {
     if (!dictWord.trim()) return;
+
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     setDictLoading(true);
     setDictResult(null);
 
     // Add temporary thinking state
-    const thinkingResult: any = { status: "thinking", word: dictWord.trim(), meanings: [] };
-    setDictResult(thinkingResult);
+    setDictResult({ status: "thinking", word: dictWord.trim(), meanings: [], elapsed: 0 });
 
     try {
       const res = await fetch(`${API_URL}/teacher/dictionary/lookup`, {
         method: "POST",
         headers: { ...getAuthHeader(token), "Content-Type": "application/json" },
         body: JSON.stringify({ word: dictWord.trim() }),
+        signal: controller.signal
       });
+
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.detail || "Lỗi tra từ điển");
       }
 
-      // Stream handling
       const reader = res.body?.getReader();
       const decoder = new TextDecoder();
       let done = false;
@@ -803,9 +811,11 @@ function AIToolsTab({ token }: { token: string | null }) {
           buffer = lines.pop() || "";
 
           for (const line of lines) {
-            if (line.trim()) {
+            if (line.trim() && line.startsWith("data: ")) {
               try {
-                const chunkData = JSON.parse(line);
+                const rawJson = line.replace("data: ", "");
+                if (rawJson === "[DONE]") continue;
+                const chunkData = JSON.parse(rawJson);
                 finalData = { ...finalData, ...chunkData };
                 setDictResult({ ...finalData });
               } catch (e) { }
@@ -813,20 +823,22 @@ function AIToolsTab({ token }: { token: string | null }) {
           }
         }
       }
-
-      if (buffer.trim()) {
-        try {
-          const chunkData = JSON.parse(buffer);
-          finalData = { ...finalData, ...chunkData };
-          setDictResult({ ...finalData });
-        } catch (e) { }
-      }
     } catch (e: any) {
+      if (e.name === 'AbortError') return;
       console.error(e);
       alert(e.message || "Lỗi kết nối");
       setDictResult(null);
     } finally {
       setDictLoading(false);
+      abortControllerRef.current = null;
+    }
+  };
+
+  const cancelDictLookup = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      setDictLoading(false);
+      setDictResult(null);
     }
   };
 
@@ -1016,7 +1028,17 @@ function AIToolsTab({ token }: { token: string | null }) {
               </div>
               <button onClick={handleDictLookup} disabled={dictLoading || !dictWord.trim()}
                 className="btn-primary py-3 px-6 rounded-xl flex items-center gap-2 disabled:opacity-50">
-                {dictLoading ? "Đang tra..." : <><Search size={18} /> Tra từ</>}
+                {dictLoading ? (
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); cancelDictLookup(); }}
+                      className="bg-red-500 hover:bg-red-600 text-white px-2 py-0.5 rounded text-xs transition"
+                    >
+                      Huỷ
+                    </button>
+                    <span>Đang tra...</span>
+                  </div>
+                ) : <><Search size={18} /> Tra từ</>}
               </button>
             </div>
           </div>
@@ -1026,20 +1048,36 @@ function AIToolsTab({ token }: { token: string | null }) {
               {/* Word header */}
               <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-6 text-white relative">
                 {dictResult.status === "thinking" && (
-                  <div className="absolute inset-0 bg-blue-600/50 backdrop-blur-sm flex flex-col items-center justify-center z-10 p-6 overflow-hidden">
-                    <div className="flex items-center gap-3 bg-white/20 px-4 py-2 rounded-full mb-3 shadow-[0_0_15px_rgba(255,255,255,0.2)]">
-                      <div className="flex gap-1">
-                        <div className="w-2 h-2 rounded-full bg-white animate-bounce" style={{ animationDelay: '0ms' }}></div>
-                        <div className="w-2 h-2 rounded-full bg-white animate-bounce" style={{ animationDelay: '150ms' }}></div>
-                        <div className="w-2 h-2 rounded-full bg-white animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                  <div className="absolute inset-0 bg-blue-600/60 backdrop-blur-sm flex flex-col items-center justify-center z-10 p-6 overflow-hidden">
+                    <div className="flex items-center gap-4 bg-white/20 backdrop-blur-md px-5 py-2.5 rounded-full mb-4 shadow-xl border border-white/10">
+                      <div className="flex gap-1.5 Items-center">
+                        <span className="relative flex h-3 w-3">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-3 w-3 bg-white"></span>
+                        </span>
                       </div>
-                      <span className="font-medium text-sm">AI đang suy nghĩ...</span>
+                      <div className="flex flex-col">
+                        <span className="font-bold text-sm tracking-tight text-white">AI đang suy nghĩ...</span>
+                        {dictResult.elapsed !== undefined && (
+                          <span className="text-[10px] text-white/80 font-mono tracking-widest">{dictResult.elapsed}s</span>
+                        )}
+                      </div>
+                      <button
+                        onClick={cancelDictLookup}
+                        className="ml-2 bg-red-500/80 hover:bg-red-500 text-white p-1.5 rounded-full transition-all hover:scale-110 active:scale-95"
+                      >
+                        <X size={14} />
+                      </button>
                     </div>
                     {dictResult._raw_thinking_stream && (
-                      <div className="w-full max-w-2xl bg-black/40 rounded-xl p-4 overflow-y-auto max-h-[120px] shadow-inner text-left animate-in fade-in slide-in-from-bottom-5">
-                        <p className="font-mono text-sm text-blue-100/90 whitespace-pre-wrap leading-relaxed break-words">
+                      <div className="w-full max-w-2xl bg-black/50 backdrop-blur-lg border border-white/10 rounded-2xl p-5 overflow-y-auto max-h-[160px] shadow-2xl animate-in fade-in slide-in-from-bottom-5">
+                        <div className="flex items-center gap-2 mb-2 text-blue-200/50 text-[10px] uppercase font-bold tracking-widest">
+                          <Terminal size={10} />
+                          <span>AI Reasoning Stream</span>
+                        </div>
+                        <p className="font-mono text-xs text-blue-100/90 whitespace-pre-wrap leading-relaxed break-words text-left">
                           {dictResult._raw_thinking_stream}
-                          <span className="w-2 h-4 bg-white/70 inline-block animate-pulse ml-1 align-middle"></span>
+                          <span className="w-1.5 h-3.5 bg-blue-400 inline-block animate-pulse ml-1 align-middle"></span>
                         </p>
                       </div>
                     )}

@@ -302,7 +302,8 @@ def dictionary_lookup(req: DictionaryRequest, authorization: str = Header(...), 
     from ..services.llm_service import is_data_complete, lookup_dictionary_stream
     import json
     
-    _get_current_student(authorization)
+    user = _get_current_student(authorization)
+    user_id = user["id"]
     
     word_original = req.word.strip()
     word_lower = word_original.lower()
@@ -334,6 +335,11 @@ def dictionary_lookup(req: DictionaryRequest, authorization: str = Header(...), 
             # Enrich with graph connections
             connections = graph_service.get_word_connections(word_lower)
             cached["graph_connections"] = connections.get("connections", [])
+            
+            # CHECK IF ALREADY SAVED (Fixing "saved status" bug)
+            cursor = get_db().execute("SELECT id FROM saved_vocabulary WHERE user_id = ? AND word = ?", (user_id, lookup_key))
+            cached["is_saved"] = cursor.fetchone() is not None
+            
             return cached
         # Else: data is incomplete, fall through to AI lookup for better data
         print(f"[DICT] Cached data for '{lookup_key}' is incomplete, re-fetching with AI...")
@@ -365,6 +371,14 @@ def dictionary_lookup(req: DictionaryRequest, authorization: str = Header(...), 
 
         connections = graph_service.get_word_connections(word_lower)
         neo4j_cached["graph_connections"] = connections.get("connections", [])
+        
+        # CHECK IF ALREADY SAVED (Fixing "saved status" bug)
+        try:
+            cursor = get_db().execute("SELECT id FROM saved_vocabulary WHERE user_id = ? AND word = ?", (user_id, lookup_key))
+            neo4j_cached["is_saved"] = cursor.fetchone() is not None
+        except:
+            neo4j_cached["is_saved"] = False
+            
         return neo4j_cached
 
     # 2) Not cached or incomplete → ask AI Stream
@@ -441,9 +455,20 @@ def dictionary_lookup(req: DictionaryRequest, authorization: str = Header(...), 
     # Note: Because the frontend now expects an event stream, we yield chunks.
     def stream_generator():
         try:
+            # CHECK SAVED STATUS ONCE AT START
+            cursor = get_db().execute("SELECT id FROM saved_vocabulary WHERE user_id = ? AND word = ?", (user_id, lookup_key))
+            is_saved = cursor.fetchone() is not None
+            
             full_content = ""
             for chunk in lookup_dictionary_stream(lookup_key):
-                # The frontend will receive these chunks
+                # We can inject is_saved into result chunks
+                if '"status": "result"' in chunk:
+                    try:
+                        data = json.loads(chunk)
+                        data["is_saved"] = is_saved
+                        chunk = json.dumps(data, ensure_ascii=False)
+                    except: pass
+                
                 full_content += chunk
                 yield f"data: {chunk}\n\n"
             
