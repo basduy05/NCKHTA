@@ -1,14 +1,25 @@
-try:
-    import libsql_experimental as sqlite3
-    SQLITE_OP_ERROR = Exception
-except ImportError:
-    import sqlite3
-    SQLITE_OP_ERROR = sqlite3.OperationalError
 import os
 import traceback
 import time
+
+try:
+    import libsql_experimental as libsql
+    SQLITE_OP_ERROR = Exception
+    HAS_LIBSQL_EXPERIMENTAL = True
+except ImportError:
+    HAS_LIBSQL_EXPERIMENTAL = False
+    try:
+        import libsql
+        SQLITE_OP_ERROR = Exception
+    except ImportError:
+        import sqlite3 as libsql
+        SQLITE_OP_ERROR = libsql.OperationalError
+
 from pydantic import BaseModel
 from typing import List, Optional
+
+# Use libsql-experimental compatible sqlite3 interface
+sqlite3 = libsql
 
 _default_db_path = os.path.join(os.path.dirname(__file__), "app.db")
 DB_PATH = os.getenv("DATABASE_PATH", _default_db_path)
@@ -20,8 +31,12 @@ class DictRow:
     def __init__(self, cursor, row):
         self._data = {}
         self._row = row
-        for idx, col in enumerate(cursor.description):
-            self._data[col[0]] = row[idx]
+        if hasattr(cursor, 'description') and cursor.description:
+            for idx, col in enumerate(cursor.description):
+                self._data[col[0]] = row[idx]
+        else:
+            # Fallback for drivers that don't provide description early or at all
+            pass
 
     def __getitem__(self, key):
         if isinstance(key, int):
@@ -34,23 +49,96 @@ class DictRow:
 def dict_factory(cursor, row):
     return DictRow(cursor, row)
 
-def get_db():
-    if TURSO_URL and TURSO_AUTH_TOKEN:
+class CursorWrapper:
+    def __init__(self, cursor):
+        self._cursor = cursor
+    def execute(self, *args, **kwargs):
+        self._cursor.execute(*args, **kwargs)
+        return self
+    def fetchone(self):
+        row = self._cursor.fetchone()
+        if row: return DictRow(self._cursor, row)
+        return None
+    def fetchall(self):
+        rows = self._cursor.fetchall()
+        return [DictRow(self._cursor, row) for row in rows]
+    def __iter__(self):
+        for row in self._cursor:
+            yield DictRow(self._cursor, row)
+    def __getattr__(self, name):
+        return getattr(self._cursor, name)
+
+class ConnectionWrapper:
+    def __init__(self, conn):
+        self._conn = conn
+    def cursor(self):
+        return CursorWrapper(self._conn.cursor())
+    def execute(self, *args, **kwargs):
+        cursor = self._conn.cursor()
+        cursor.execute(*args, **kwargs)
+        return CursorWrapper(cursor)
+    def commit(self): self._conn.commit()
+    def close(self): self._conn.close()
+    def __enter__(self): return self
+    def __exit__(self, exc_type, exc_val, exc_tb): self._conn.close()
+    def __getattr__(self, name):
+        return getattr(self._conn, name)
+
+def get_db(retries=3):
+    """
+    Consolidated thread-safe database connection.
+    Connects to Turso if configured, otherwise falls back to local SQLite.
+    Includes WAL mode and retry logic for robustness.
+    """
+    global TURSO_URL, TURSO_AUTH_TOKEN
+    # Refresh env vars in case they were set dynamically
+    TURSO_URL = (os.getenv("TURSO_URL") or "").strip()
+    TURSO_AUTH_TOKEN = (os.getenv("TURSO_AUTH_TOKEN") or "").strip()
+
+    for attempt in range(retries):
         try:
-            # Connect local replica and sync across Turso nodes
-            conn = sqlite3.connect(database=DB_PATH, sync_url=TURSO_URL, auth_token=TURSO_AUTH_TOKEN)
-            conn.sync()
-        except Exception as e: # Catch all errors if libsql is missing or sync fails
-            print(f"[DB] Turso connection failed, falling back to local SQLite. Reason: {e}")
-            conn = sqlite3.connect(DB_PATH)
-    else:
-        conn = sqlite3.connect(DB_PATH)
-        
-    try:
-        conn.row_factory = dict_factory
-    except Exception:
-        pass
-    return conn
+            if TURSO_URL and TURSO_AUTH_TOKEN:
+                if HAS_LIBSQL_EXPERIMENTAL:
+                    # libSQL experimental with Turso sync (Local Replica)
+                    conn = libsql.connect(database=DB_PATH, sync_url=TURSO_URL, auth_token=TURSO_AUTH_TOKEN, timeout=15)
+                    try:
+                        conn.sync()
+                    except Exception as e:
+                        print(f"[DB] Turso sync failed: {e}")
+                else:
+                    # libSQL (standard/new) - Using Direct Connection URL
+                    # On Windows, using auth_token keyword argument is more reliable
+                    url_to_use = TURSO_URL.replace("libsql://", "https://")
+                    conn = libsql.connect(url_to_use, auth_token=TURSO_AUTH_TOKEN)
+            else:
+                # standard sqlite3 or libsql without sync
+                conn = libsql.connect(DB_PATH, timeout=30)
+            
+            # Use standard Row for builtin sqlite3 if possible, but our wrapper is more consistent
+            try:
+                conn.row_factory = dict_factory
+            except Exception:
+                pass
+            
+            # Performance & Concurrency settings
+            try:
+                # PRAGMAs only for local SQLite
+                is_remote = TURSO_URL and TURSO_AUTH_TOKEN and not HAS_LIBSQL_EXPERIMENTAL
+                if not is_remote:
+                    conn.execute("PRAGMA journal_mode=WAL")
+                    conn.execute("PRAGMA busy_timeout=10000")
+            except Exception:
+                pass
+                
+            return ConnectionWrapper(conn)
+            
+        except Exception as e:
+            if attempt < retries - 1:
+                print(f"[DB] Connection attempt {attempt+1} failed: {e}, retrying...")
+                time.sleep(1.0 * (attempt + 1))
+            else:
+                print(f"[DB] All {retries} connection attempts failed: {e}")
+                raise
 
 def init_db():
     print(f"[DB] Initializing database at {DB_PATH}")
@@ -59,7 +147,11 @@ def init_db():
     conn = get_db()
     
     # Check if we are using libsql or standard sqlite3
-    driver_name = conn.__class__.__module__
+    try:
+        driver_name = conn.__class__.__module__
+    except Exception:
+        driver_name = "unknown"
+        
     if 'libsql' not in driver_name:
         # Prevent lock when multiple users for normal sqlite
         try:
@@ -236,25 +328,25 @@ def init_db():
     # --- MIGRATION: Add file columns to lessons ---
     try:
         cursor.execute("ALTER TABLE saved_vocabulary ADD COLUMN audio_url TEXT")
-    except sqlite3.OperationalError: pass
+    except SQLITE_OP_ERROR: pass
 
     # --- MIGRATION: Add file columns to lessons ---
     try:
         cursor.execute("ALTER TABLE lessons ADD COLUMN file_name TEXT")
-    except sqlite3.OperationalError: pass
+    except SQLITE_OP_ERROR: pass
     try:
         cursor.execute("ALTER TABLE lessons ADD COLUMN file_data BLOB")
-    except sqlite3.OperationalError: pass
+    except SQLITE_OP_ERROR: pass
 
     # --- MIGRATION: Add teacher_id to classes ---
     try:
         cursor.execute("ALTER TABLE classes ADD COLUMN teacher_id INTEGER REFERENCES users(id)")
-    except sqlite3.OperationalError: pass
+    except SQLITE_OP_ERROR: pass
 
     # --- MIGRATION: Add word_original to dictionary_cache ---
     try:
         cursor.execute("ALTER TABLE dictionary_cache ADD COLUMN word_original TEXT")
-    except sqlite3.OperationalError: pass
+    except SQLITE_OP_ERROR: pass
 
     # --- MIGRATION: Recreate saved_vocabulary with UNIQUE(user_id, word, pos) ---
     # SQLite can't alter constraints, so we recreate the table if needed
@@ -338,37 +430,22 @@ except Exception as e:
 import threading
 _thread_local = threading.local()
 
-def get_db(retries=3):
-    """Thread-safe database connection with WAL mode and retry logic."""
-    for attempt in range(retries):
-        try:
-            conn = sqlite3.connect(DB_PATH, timeout=15)
-            conn.row_factory = sqlite3.Row
-            conn.execute("PRAGMA journal_mode=WAL")
-            conn.execute("PRAGMA busy_timeout=10000")  # Wait 10s for locks
-            return conn
-        except sqlite3.OperationalError as e:
-            if attempt < retries - 1:
-                print(f"[DB] Connection attempt {attempt+1} failed: {e}, retrying...")
-                time.sleep(0.5 * (attempt + 1))
-            else:
-                print(f"[DB] All {retries} connection attempts failed")
-                raise
+# --- REMOVED DUPLICATE get_db ---
 
 def get_setting(key, default=None):
     """Read a single setting: DB first, then env var."""
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db()
     cursor = conn.cursor()
     cursor.execute("SELECT value FROM settings WHERE key = ?", (key,))
     row = cursor.fetchone()
     conn.close()
-    if row and row[0]:
-        return row[0]
+    if row and row['value']:
+        return row['value']
     return os.getenv(key, default)
 
 def set_setting(key, value):
     """Upsert a setting."""
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db()
     cursor = conn.cursor()
     cursor.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, value))
     conn.commit()
@@ -383,12 +460,12 @@ def get_all_settings():
         "SMTP_SERVER", "SMTP_PORT", "SMTP_USERNAME", "SMTP_PASSWORD", "SENDER_EMAIL",
         "EMAIL_PROVIDER", "RESEND_API_KEY", "BREVO_API_KEY", "FRONTEND_URL",
     ]
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db()
     cursor = conn.cursor()
     for k in keys:
         cursor.execute("SELECT value FROM settings WHERE key = ?", (k,))
         row = cursor.fetchone()
-        val = (row[0] if row and row[0] else os.getenv(k, "")) or ""
+        val = (row['value'] if row and row['value'] else os.getenv(k, "")) or ""
         settings[k] = val
     conn.close()
     return settings
