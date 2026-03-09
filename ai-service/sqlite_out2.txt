@@ -1,0 +1,17 @@
+{
+  "c:/Users/basdu/Downloads/NCKHTA/ai-service/app/app.db": [
+    [
+      "NEO4J_URI",
+      "neo4j+s://75e80b28.databases.neo4j.io"
+    ],
+    [
+      "NEO4J_USERNAME",
+      "75e80b28"
+    ],
+    [
+      "NEO4J_PASSWORD",
+      "3RuJzYYjEpYHafQxx6S0tdba_GiDb3D1iFnBF0JYqb4"
+    ]
+  ],
+  "c:/Users/basdu/Downloads/NCKHTA/ai-service/app.db": []
+}
