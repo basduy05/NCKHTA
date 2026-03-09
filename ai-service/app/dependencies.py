@@ -15,7 +15,7 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    user_id = payload.get("sub")
+    user_id = payload.get("user_id")
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute("SELECT id, name, email, role, is_active FROM users WHERE id = ?", (user_id,))

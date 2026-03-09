@@ -10,7 +10,11 @@ import asyncio
 import time
 
 # Load environment variables from .env file BEFORE importing services
-load_dotenv()
+# Use explicit path to ensure .env is loaded correctly
+import pathlib
+env_path = pathlib.Path(__file__).parent.parent / ".env"
+load_dotenv(dotenv_path=env_path)
+print(f"[STARTUP] Loading .env from: {env_path}")
 
 print("[STARTUP] Loading services...")
 try:

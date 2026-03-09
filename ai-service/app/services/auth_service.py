@@ -11,8 +11,10 @@ import sqlite3
 from jose import JWTError, jwt
 from datetime import datetime, timedelta, timezone
 from dotenv import load_dotenv
-
-load_dotenv()
+import pathlib
+# Load .env with explicit path
+env_path = pathlib.Path(__file__).parent.parent.parent / ".env"
+load_dotenv(dotenv_path=env_path)
 
 from ..database import get_db, get_setting
 
