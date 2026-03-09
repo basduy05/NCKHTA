@@ -28,6 +28,8 @@ if not SECRET_KEY:
     import warnings
     warnings.warn("[AUTH] SECRET_KEY is not set in environment! Using a temporary key. Set SECRET_KEY in your .env or Render env vars for persistent sessions.", stacklevel=1)
     SECRET_KEY = secrets.token_urlsafe(64)
+else:
+    print(f"[AUTH] SECRET_KEY loaded successfully: {SECRET_KEY[:20]}...")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 hours
 OTP_EXPIRE_MINUTES = 10  # OTP expires in 10 minutes
