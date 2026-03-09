@@ -719,7 +719,6 @@ function AIToolsTab({ token }: { token: string | null }) {
   const [dictWord, setDictWord] = useState("");
   const [dictResult, setDictResult] = useState<any>(null);
   const [dictLoading, setDictLoading] = useState(false);
-  const [dictCanceled, setDictCanceled] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
 
   // Knowledge graph state
@@ -797,7 +796,6 @@ function AIToolsTab({ token }: { token: string | null }) {
     abortControllerRef.current = controller;
 
     setDictLoading(true);
-    setDictCanceled(false);
     setDictResult(null);
 
     // Add temporary thinking state
@@ -858,11 +856,7 @@ function AIToolsTab({ token }: { token: string | null }) {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
       setDictLoading(false);
-      setDictCanceled(true);
-      setTimeout(() => {
-        setDictCanceled(false);
-        setDictResult(null);
-      }, 1500);
+      setDictResult(null);
     }
   };
 
@@ -1053,13 +1047,8 @@ function AIToolsTab({ token }: { token: string | null }) {
               <button onClick={handleDictLookup} disabled={dictLoading || !dictWord.trim()}
                 className="btn-primary py-3 px-6 rounded-xl flex items-center gap-2 disabled:opacity-50">
                 {dictLoading ? (
-                  <div className="flex items-center gap-3">
-                    <button
-                      onClick={(e) => { e.stopPropagation(); cancelDictLookup(); }}
-                      className="bg-red-500 hover:bg-red-600 text-white px-2 py-0.5 rounded text-xs transition"
-                    >
-                      Huỷ
-                    </button>
+                  <div className="flex items-center gap-2">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
                     <span>Đang tra...</span>
                   </div>
                 ) : <><Search size={18} /> Tra từ</>}

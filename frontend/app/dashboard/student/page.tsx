@@ -724,7 +724,6 @@ function DictionaryTab({ token }: { token: string | null }) {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [history, setHistory] = useState<string[]>([]);
-  const [canceled, setCanceled] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
@@ -748,7 +747,6 @@ function DictionaryTab({ token }: { token: string | null }) {
     abortControllerRef.current = controller;
 
     setLoading(true);
-    setCanceled(false);
     setResult(null);
     setSaved(false);
 
@@ -832,11 +830,7 @@ function DictionaryTab({ token }: { token: string | null }) {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
       setLoading(false);
-      setCanceled(true);
-      setTimeout(() => {
-        setCanceled(false);
-        setResult(null);
-      }, 1500);
+      setResult(null);
     }
   };
 
@@ -903,15 +897,9 @@ function DictionaryTab({ token }: { token: string | null }) {
             className="btn-primary py-3.5 px-8 rounded-xl flex items-center gap-2 shadow-md disabled:opacity-50 transition text-lg"
           >
             {loading ? (
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={(e) => { e.stopPropagation(); cancelLookup(); }}
-                  className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded-lg text-sm font-medium transition"
-                >
-                  Huỷ
-                </button>
+              <div className="flex items-center gap-2">
                 <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white" />
-                <span className="text-white/90">Đang tra...</span>
+                <span>Đang tra...</span>
               </div>
             ) : (
               <><Search size={20} /> Tra từ</>
