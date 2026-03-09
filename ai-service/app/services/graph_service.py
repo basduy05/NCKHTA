@@ -46,23 +46,23 @@ def get_graph():
         db_name = _get_setting("NEO4J_DATABASE", username)
 
         if not uri or not username or not password:
-            last_error = "Neo4j credentials not configured. Set them in Admin > Settings or environment variables."
-            print(f"Warning: {last_error}")
+            last_error = "Neo4j credentials not configured. Set them in Admin > Settings hoặc file .env."
+            print(f"[Neo4j ERROR] {last_error}")
             return None
 
-        print(f"Trying to connect to Neo4j at {uri} (db={db_name})...")
+        print(f"[Neo4j] Đang kết nối tới {uri} (db={db_name})...")
         graph = Neo4jGraph(
             url=uri,
             username=username,
             password=password,
             database=db_name
         )
-        print("Successfully connected to Neo4j DB.")
+        print("[Neo4j] Kết nối thành công.")
         last_error = None
         return graph
     except Exception as e:
         last_error = str(e)
-        print(f"Warning: Neo4j connection failed: {e}")
+        print(f"[Neo4j ERROR] Kết nối thất bại: {e}")
         return None
 
 def _safe_query(query: str, params: dict = None):
