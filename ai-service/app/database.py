@@ -415,7 +415,8 @@ def init_db():
         print(f"[DB MIGRATION] saved_vocabulary migration error: {e}")
 
     # Seed settings from environment variables
-    # Use INSERT OR REPLACE so env vars always persist across redeployments
+    # Use INSERT OR IGNORE so env vars only fill EMPTY slots
+    # This preserves user-modified settings across redeployments
     # (Render's ephemeral filesystem deletes app.db on each deploy)
     env_keys = [
         "GOOGLE_API_KEY", "OPENAI_API_KEY", "COHERE_API_KEY",
@@ -428,7 +429,8 @@ def init_db():
     for k in env_keys:
         val = os.getenv(k)
         if val:
-            cursor.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (k, val))
+            # Use INSERT OR IGNORE to avoid overwriting user-modified settings
+            cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", (k, val))
     conn.commit()
     
     cursor.execute("SELECT COUNT(*) FROM classes")
