@@ -960,6 +960,15 @@ function DictionaryTab({ token }: { token: string | null }) {
       {/* Result - Show debug info if meanings is empty */}
       {result && (
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+          {/* Show error if API failed */}
+          {result.error && result.error.includes("API key") && (
+            <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-center">
+              <AlertCircle size={40} className="text-red-500 mx-auto mb-3" />
+              <h3 className="text-lg font-bold text-red-700 mb-2">Lỗi API Key</h3>
+              <p className="text-red-600 mb-4">{result.error}</p>
+              <p className="text-sm text-gray-600">Vui lòng liên hệ admin để cập nhật API key mới.</p>
+            </div>
+          )}
           {/* Debug info - remove in production */}
           {(!result.meanings || result.meanings.length === 0) && (
             <div className="bg-yellow-50 p-4 text-xs text-yellow-700">
