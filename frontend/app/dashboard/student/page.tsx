@@ -789,23 +789,25 @@ function DictionaryTab({ token }: { token: string | null }) {
           buffer = lines.pop() || "";
 
           for (const line of lines) {
-            if (line.trim() && line.startsWith("data: ")) {
-              try {
-                const rawJson = line.replace("data: ", "");
-                if (rawJson === "[DONE]") continue;
+            // Handle both "data: " prefix and raw JSON
+            let rawJson = line.trim();
+            if (rawJson.startsWith("data: ")) {
+              rawJson = rawJson.replace("data: ", "");
+            }
+            if (rawJson === "[DONE]" || !rawJson) continue;
 
-                const chunkData = JSON.parse(rawJson);
+            try {
+              const chunkData = JSON.parse(rawJson);
 
-                // If this is a final result chunk, it might have is_saved
-                if (chunkData.status === "result" && chunkData.is_saved !== undefined) {
-                  setSaved(chunkData.is_saved);
-                }
-
-                finalData = { ...finalData, ...chunkData };
-                setResult({ ...finalData });
-              } catch (e) {
-                console.warn("Error parsing chunk:", line, e);
+              // If this is a final result chunk, it might have is_saved
+              if (chunkData.status === "result" && chunkData.is_saved !== undefined) {
+                setSaved(chunkData.is_saved);
               }
+
+              finalData = { ...finalData, ...chunkData };
+              setResult({ ...finalData });
+            } catch (e) {
+              console.warn("Error parsing chunk:", line, e);
             }
           }
         }

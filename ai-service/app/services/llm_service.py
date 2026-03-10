@@ -149,7 +149,7 @@ def get_llm(provider=None):
         if google_key and provider in (None, "google"):
             os.environ["GOOGLE_API_KEY"] = google_key
             # Use faster gemini-1.5-flash model instead of gemini-pro-latest
-            return ChatGoogleGenerativeAI(model="gemini-1.5-flash", timeout=30)
+            return ChatGoogleGenerativeAI(model="gemini-2.5-flash", timeout=30)
 
     if provider != "google" and provider != "cohere":
         openai_key = _get_setting("OPENAI_API_KEY")
