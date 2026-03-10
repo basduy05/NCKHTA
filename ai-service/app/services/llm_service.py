@@ -600,9 +600,9 @@ def translate_meanings_with_ai_stream(word: str, meanings: list, free_data: dict
         "- 'audio_url_us' — URL to US pronunciation audio (from dictionaryapi.dev if available)\n"
         "- 'level': CEFR level (A1-C2)\n"
         "- 'frequency': 'very common', 'common', 'uncommon', or 'rare'\n"
-        "- 'word_family': 3-5 related word forms (e.g. run → runner, running, ran)\n"
-        "- 'collocations': 3-5 common collocations\n"
-        "- 'idioms': 1-2 idioms with Vietnamese translations\n"
+        "- 'word_family': 5-8 related word forms (e.g. run → runner, running, ran)\n"
+        "- 'collocations': 5-8 common collocations with example sentences\n"
+        "- 'idioms': 2-4 idioms with Vietnamese translations\n"
         "- 'notes': additional notes about usage\n\n"
         "Return EXACTLY a JSON object:\n"
         '{{\n'
@@ -736,9 +736,9 @@ def lookup_dictionary_full_ai(word: str):
         '  "usage_notes": brief contextual note\n'
         '"level": CEFR level (A1-C2)\n'
         '"frequency": "very common"/"common"/"uncommon"/"rare"\n'
-        '"word_family": array of 3-5 related word forms\n'
-        '"collocations": array of 3-5 common collocations\n'
-        '"idioms": array of 1-2 idiom objects {{"idiom": "...", "meaning_vn": "..."}}\n'
+        '"word_family": array of 5-8 related word forms\n'
+        '"collocations": array of 5-8 common collocations\n'
+        '"idioms": array of 2-4 idiom objects {{"idiom": "...", "meaning_vn": "..."}}\n'
         '"sources": ["Cambridge", "Oxford", "Longman", "Merriam-Webster", "Collins"]\n\n'
         "Return ONLY valid JSON. No markdown, no extra text."
     )
@@ -805,9 +805,9 @@ def lookup_dictionary_full_ai_stream(word: str):
         '  "usage_notes": brief contextual note\n'
         '"level": CEFR level (A1-C2)\n'
         '"frequency": "very common"/"common"/"uncommon"/"rare"\n'
-        '"word_family": array of 3-5 related word forms\n'
-        '"collocations": array of 3-5 common collocations\n'
-        '"idioms": array of 1-2 idiom objects {{"idiom": "...", "meaning_vn": "..."}}\n'
+        '"word_family": array of 5-8 related word forms\n'
+        '"collocations": array of 5-8 common collocations\n'
+        '"idioms": array of 2-4 idiom objects {{"idiom": "...", "meaning_vn": "..."}}\n'
         '"sources": ["Cambridge", "Oxford", "Longman", "Merriam-Webster", "Collins"]\n\n'
         "Return ONLY valid JSON. No markdown, no extra text."
     )
