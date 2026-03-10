@@ -169,7 +169,8 @@ def get_llm(provider=None):
     cohere_key = _get_setting("COHERE_API_KEY")
     if cohere_key and provider in (None, "cohere"):
         os.environ["COHERE_API_KEY"] = cohere_key
-        return ChatCohere(model="command-r-plus")
+        # command-r-plus was removed on Sept 15, 2025 - use command instead
+        return ChatCohere(model="command")
 
     return None
 
