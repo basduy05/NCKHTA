@@ -954,9 +954,16 @@ function DictionaryTab({ token }: { token: string | null }) {
         </div>
       )}
 
-      {/* Result */}
+      {/* Result - Show debug info if meanings is empty */}
       {result && (
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+          {/* Debug info - remove in production */}
+          {(!result.meanings || result.meanings.length === 0) && (
+            <div className="bg-yellow-50 p-4 text-xs text-yellow-700">
+              <p>Debug: Received data but no meanings found</p>
+              <pre className="overflow-auto max-h-40">{JSON.stringify(result, null, 2)}</pre>
+            </div>
+          )}
           {/* Word header */}
           <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-6 text-white">
             <div className="flex items-start justify-between">
