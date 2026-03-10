@@ -316,11 +316,31 @@ class ChangePasswordRequest(BaseModel):
 
 
 @router.get("/me")
-async def get_current_user_info():
+async def get_current_user_info(credentials: HTTPAuthorizationCredentials = Depends(security)):
     """Get current user information"""
-    # This endpoint is used with token auth, get user from token in production
-    # For now, return a placeholder - the frontend will handle auth via context
-    return {"message": "Use token auth"}
+    token = credentials.credentials
+    try:
+        user_data = auth_service.verify_access_token(token)
+        user_id = int(user_data['sub'])
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, name, email, role, phone FROM users WHERE id = ?", (user_id,))
+    user = cursor.fetchone()
+    conn.close()
+    
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    return {
+        "id": user['id'],
+        "name": user['name'],
+        "email": user['email'],
+        "role": user['role'],
+        "phone": user.get('phone', '')
+    }
 
 
 @router.put("/profile")
