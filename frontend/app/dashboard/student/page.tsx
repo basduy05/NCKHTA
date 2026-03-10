@@ -759,9 +759,7 @@ function DictionaryTab({ token }: { token: string | null }) {
     setLoading(true);
     setResult(null);
     setSaved(false);
-
-    // Initial result state for "thinking"
-    setResult({ status: "thinking", word: word.trim(), meanings: [], elapsed: 0 });
+    setError(null);
 
     try {
       const res = await fetch(`${API_URL}/student/dictionary/lookup`, {
@@ -894,12 +892,20 @@ function DictionaryTab({ token }: { token: string | null }) {
             <Search size={20} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
               type="text"
-              className="w-full pl-12 pr-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl text-gray-700 focus:bg-white focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 outline-none transition text-lg"
+              className="w-full pl-12 pr-10 py-3.5 bg-gray-50 border border-gray-200 rounded-xl text-gray-700 focus:bg-white focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 outline-none transition text-lg"
               placeholder="Nhập từ tiếng Anh cần tra (vd: accomplish, serendipity, ...)"
               value={word}
               onChange={(e) => setWord(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && lookup()}
             />
+            {word && (
+              <button
+                onClick={() => setWord("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              >
+                <X size={18} />
+              </button>
+            )}
           </div>
           <button
             onClick={lookup}
@@ -908,12 +914,6 @@ function DictionaryTab({ token }: { token: string | null }) {
           >
             {loading ? (
               <div className="flex items-center gap-2">
-                <button
-                  onClick={(e) => { e.stopPropagation(); cancelLookup(); }}
-                  className="bg-red-500 hover:bg-red-600 text-white px-2 py-0.5 rounded text-xs transition mr-1"
-                >
-                  Huỷ
-                </button>
                 <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white" />
                 <span>Đang tra...</span>
               </div>
@@ -956,14 +956,7 @@ function DictionaryTab({ token }: { token: string | null }) {
       {result && (
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
           {/* Word header */}
-          <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-6 text-white relative">
-            {/* Thinking indicator - small corner indicator */}
-            {result.status === "thinking" && (
-              <div className="absolute top-3 right-3 flex items-center gap-2 bg-white/20 backdrop-blur-sm px-3 py-1.5 rounded-full">
-                <div className="animate-spin rounded-full h-3 w-3 border-2 border-white border-t-transparent"></div>
-                <span className="text-white text-xs font-medium">AI tra cứu...</span>
-              </div>
-            )}
+          <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-6 text-white">
             <div className="flex items-start justify-between">
               <div>
                 <h2 className="text-3xl font-extrabold mb-1">{result.word}</h2>

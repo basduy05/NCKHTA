@@ -74,7 +74,7 @@ function DashboardSidebar({ user, logout }: { user: any, logout: any }) {
         })}
       </nav>
       <div className="pt-6 border-t border-gray-100 flex items-center justify-between">
-        <div className="flex items-center">
+        <Link href="/profile" className="flex items-center hover:opacity-80 transition">
           <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center text-blue-700 font-bold mr-3">
             {user ? user.name.charAt(0).toUpperCase() : (isAdmin ? "A" : isTeacher ? "T" : "S")}
           </div>
@@ -82,7 +82,7 @@ function DashboardSidebar({ user, logout }: { user: any, logout: any }) {
             <p className="text-sm font-semibold text-gray-900">{user ? user.name : (isAdmin ? "Admin" : isTeacher ? "Teacher" : "Student")}</p>
             <p className="text-xs text-gray-500 capitalize">{user ? user.role : "Guest"}</p>
           </div>
-        </div>
+        </Link>
 
         <button onClick={handleLogout} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition" title="Đăng xuất" type="button">
           <LogOut size={20} />
