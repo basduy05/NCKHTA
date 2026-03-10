@@ -34,6 +34,7 @@ function DashboardSidebar({ user, logout }: { user: any, logout: any }) {
       { name: "Quản lý Học sinh", href: "/dashboard/teacher?tab=students", icon: Users, id: "students" },
       { name: "Quản lý Bài học", href: "/dashboard/teacher?tab=lessons", icon: BookOpen, id: "lessons" },
       { name: "Bài tập & Kiểm tra", href: "/dashboard/teacher?tab=assignments", icon: ClipboardList, id: "assignments" },
+      { name: "Kho Ngữ Pháp", href: "/dashboard/teacher?tab=grammar", icon: BookText, id: "grammar" },
       { name: "Công cụ AI", href: "/dashboard/teacher?tab=ai-tools", icon: Sparkles, id: "ai-tools" },
     ];
   } else if (isStudent) {
@@ -46,6 +47,7 @@ function DashboardSidebar({ user, logout }: { user: any, logout: any }) {
       { name: "Luyện phát âm IPA", href: "/dashboard/student?tab=ipa", icon: Mic, id: "ipa" },
       { name: "Luyện thi & Kỹ năng", href: "/dashboard/student?tab=practice", icon: Award, id: "practice" },
       { name: "Học với AI", href: "/dashboard/student?tab=ai-tools", icon: Sparkles, id: "ai-tools" },
+      { name: "Kho Ngữ Pháp", href: "/dashboard/student?tab=grammar", icon: BookText, id: "grammar" },
       { name: "Kết quả học tập", href: "/dashboard/student?tab=scores", icon: Component, id: "scores" },
     ];
   } else {

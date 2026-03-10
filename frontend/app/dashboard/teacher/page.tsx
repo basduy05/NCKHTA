@@ -6,7 +6,7 @@ import {
   Users, BookOpen, Plus, Edit, Trash2, GraduationCap, X, Check,
   FileText, Upload, Download, ClipboardList, Sparkles, Brain,
   BarChart3, UserPlus, UserMinus, ChevronDown, ChevronUp, Eye,
-  Search, Volume2, ArrowRight, Bookmark, Network, Terminal, AlertCircle
+  Search, Volume2, ArrowRight, Bookmark, Network, Terminal, AlertCircle, BookText
 } from "lucide-react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://iedu-ksk7.onrender.com";
@@ -48,6 +48,7 @@ function TeacherDashboardContent() {
           {activeTab === "lessons" && "Quản lý Bài học"}
           {activeTab === "assignments" && "Bài tập & Kiểm tra"}
           {activeTab === "ai-tools" && "Công cụ AI"}
+          {activeTab === "grammar" && "Kho Ngữ Pháp"}
         </h1>
       </div>
 
@@ -57,6 +58,7 @@ function TeacherDashboardContent() {
       {activeTab === "lessons" && <LessonsTab token={token} />}
       {activeTab === "assignments" && <AssignmentsTab token={token} />}
       {activeTab === "ai-tools" && <AIToolsTab token={token} />}
+      {activeTab === "grammar" && <GrammarTab token={token} />}
     </div>
   );
 }
@@ -852,6 +854,18 @@ function AIToolsTab({ token }: { token: string | null }) {
           }
         }
       }
+
+      if (buffer.trim()) {
+        try {
+          let rawJson = buffer.trim();
+          if (rawJson.startsWith("data: ")) rawJson = rawJson.replace("data: ", "");
+          if (rawJson !== "[DONE]") {
+            const chunkData = JSON.parse(rawJson);
+            finalData = { ...finalData, ...chunkData };
+            setDictResult({ ...finalData });
+          }
+        } catch (e) { }
+      }
     } catch (e: any) {
       if (e.name === 'AbortError') return;
       console.error(e);
@@ -1079,8 +1093,8 @@ function AIToolsTab({ token }: { token: string | null }) {
               <AlertCircle size={20} className="text-red-500 flex-shrink-0" />
               <div>
                 <p className="text-red-700 font-medium">{dictError}</p>
-                <button 
-                  onClick={() => setDictError(null)} 
+                <button
+                  onClick={() => setDictError(null)}
                   className="text-red-500 text-sm underline hover:text-red-600"
                 >
                   Đóng
@@ -1093,7 +1107,7 @@ function AIToolsTab({ token }: { token: string | null }) {
             <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden animate-in fade-in zoom-in-95 duration-300">
               {/* Word header */}
               <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-6 text-white relative">
-              {/* Thinking indicator - small corner indicator */}
+                {/* Thinking indicator - small corner indicator */}
                 {dictResult.status === "thinking" && (
                   <div className="absolute top-3 right-3 flex items-center gap-2 bg-white/20 backdrop-blur-sm px-3 py-1.5 rounded-full">
                     <div className="animate-spin rounded-full h-3 w-3 border-2 border-white border-t-transparent"></div>
@@ -1251,7 +1265,7 @@ function AIToolsTab({ token }: { token: string | null }) {
                   {dictResult.wikipedia && (
                     <div className="bg-blue-50 rounded-xl p-4">
                       <h4 className="text-sm font-bold text-blue-700 mb-2 flex items-center gap-1">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><line x1="2" y1="12" x2="22" y2="12" /><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" /></svg>
                         Wikipedia
                       </h4>
                       {dictResult.wikipedia.thumbnail && (
@@ -1350,4 +1364,64 @@ function AIToolsTab({ token }: { token: string | null }) {
       )}
     </div>
   );
+}
+
+// ==================== GRAMMAR TAB ====================
+function GrammarTab({ token }: { token: string | null }) {
+  const [rules, setRules] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchRules = async () => {
+    setLoading(true);
+    try {
+      const prefix = typeof window !== "undefined" && window.location.href.includes("/teacher") ? "teacher" : "student";
+      const res = await fetch(`${API_URL}/${prefix}/grammar`, { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) throw new Error(`API error ${res.status}`);
+      const data = await res.json();
+      setRules(Array.isArray(data) ? data : []);
+    } catch { }
+    finally { setLoading(false); }
+  };
+
+  useEffect(() => { fetchRules(); }, []);
+
+  return (
+    <div className="animate-in fade-in duration-300">
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 mb-6">
+        <h2 className="text-lg font-bold text-gray-900 mb-2 flex items-center"><BookText className="mr-2 text-teal-600" /> Kho Ngữ Pháp (Grammar Rules)</h2>
+        <p className="text-gray-500 text-sm">Học các cấu trúc ngữ pháp và xem các tài liệu do giáo viên chia sẻ.</p>
+      </div>
+
+      <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
+        <h3 className="font-bold mb-4">Danh sách Ngữ pháp</h3>
+        {loading ? <p className="text-gray-400 text-sm">Đang tải...</p> : rules.length === 0 ? <p className="text-gray-400 text-sm">Chưa có tài liệu ngữ pháp nào.</p> : (
+          <ul className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {rules.map((r: any) => {
+              const prefix = typeof window !== "undefined" && window.location.href.includes("/teacher") ? "teacher" : "student";
+              return (
+                <li key={r.id} className="p-4 bg-gray-50 rounded-xl border border-gray-200 shadow-sm">
+                  <div className="flex flex-col h-full justify-between">
+                    <div>
+                      <h4 className="font-bold text-lg text-teal-700">{r.name}</h4>
+                      {r.description && <p className="text-sm text-gray-600 mt-2 whitespace-pre-wrap">{r.description}</p>}
+                    </div>
+                    {r.file_name && (
+                      <div className="mt-4 pt-3 border-t border-gray-200">
+                        <a href={`${API_URL}/${prefix}/grammar/${r.id}/file`} target="_blank" rel="noopener noreferrer"
+                          className="inline-flex items-center text-sm font-medium text-indigo-600 hover:text-indigo-800 bg-indigo-50 px-3 py-1.5 rounded-lg transition"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /><polyline points="10 9 9 9 8 9" /></svg>
+                          {r.file_name}
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
+        )}
+      </div>
+    </div>
+  )
 }

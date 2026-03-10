@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Header, Query, UploadFile, File, Form, BackgroundTasks
+from fastapi import APIRouter, HTTPException, Header, Query, UploadFile, File, Form, BackgroundTasks, Response
 from ..database import get_db
 from ..services import auth_service, llm_service, graph_service, file_service
 from pydantic import BaseModel
@@ -718,3 +718,37 @@ async def student_upload_analyze(
     except Exception as e:
         print(f"File upload error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ─── GRAMMAR ────────────────────────────────────────────────────────────────
+
+@router.get("/grammar")
+def get_grammar_rules(authorization: str = Header(...)):
+    _get_current_student(authorization)
+    conn = get_db()
+    cursor = conn.execute("SELECT id, name, description, file_name, created_at FROM grammar_rules ORDER BY id DESC")
+    columns = [column[0] for column in cursor.description]
+    results = [dict(zip(columns, row)) for row in cursor.fetchall()]
+    conn.close()
+    return results
+
+@router.get("/grammar/{rule_id}/file")
+def get_grammar_file(rule_id: int):
+    conn = get_db()
+    cursor = conn.execute("SELECT file_name, file_data FROM grammar_rules WHERE id = ?", (rule_id,))
+    row = cursor.fetchone()
+    conn.close()
+    if not row or not row[0]:
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    file_name = row[0]
+    file_data = row[1]
+    
+    import mimetypes
+    media_type, _ = mimetypes.guess_type(file_name)
+    if not media_type:
+        media_type = "application/octet-stream"
+        
+    return Response(content=file_data, media_type=media_type, headers={
+        "Content-Disposition": f'inline; filename="{file_name}"'
+    })
