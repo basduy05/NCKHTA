@@ -338,22 +338,34 @@ async def dictionary_lookup(req: DictionaryRequest, authorization: str = Header(
 
     # 1) Parallel Lookup
     cache_task = asyncio.create_task(check_local_cache())
-    neo4j_task = asyncio.create_task(check_neo4j())
-    free_dict_task = asyncio.create_task(check_free_dict())
-    
-    local_row, neo4j_data, free_data = await asyncio.gather(cache_task, neo4j_task, free_dict_task)
+    local_row = await cache_task
 
-    # 2) Process Results (Fast Path)
-    result_to_return = None
-    source = ""
-
+    # 1.1) Fast Exit on local cache hit
     if local_row:
         cached = json.loads(local_row["data_json"])
         if is_data_complete(cached):
-            result_to_return = cached
-            source = "database"
+            cached["_source"] = "database"
+            # Enrich with graph connections
+            connections = graph_service.get_word_connections(word_lower)
+            cached["graph_connections"] = connections.get("connections", [])
+            # Check saved status
+            conn = get_db()
+            cursor = conn.execute("SELECT id FROM saved_vocabulary WHERE user_id = ? AND word = ?", (user_id, lookup_key))
+            cached["is_saved"] = cursor.fetchone() is not None
+            conn.close()
+            return cached
+
+    # 2) Fallback Parallel Lookup (Rest of caches)
+    neo4j_task = asyncio.create_task(check_neo4j())
+    free_dict_task = asyncio.create_task(check_free_dict())
     
-    if not result_to_return and neo4j_data and is_data_complete(neo4j_data):
+    neo4j_data, free_data = await asyncio.gather(neo4j_task, free_dict_task)
+
+    # 2.1) Process Results (Neo4j and other caches)
+    result_to_return = None
+    source = ""
+    
+    if neo4j_data and is_data_complete(neo4j_data):
         result_to_return = neo4j_data
         source = "database_neo4j_restored"
         # Async restore to SQLite
@@ -375,8 +387,6 @@ async def dictionary_lookup(req: DictionaryRequest, authorization: str = Header(
         result_to_return["graph_connections"] = connections.get("connections", [])
         
         # Check saved status
-        # Using a fresh connection for thread-safety within background execution context
-        # but here we are in main request flow.
         conn = get_db()
         cursor = conn.execute("SELECT id FROM saved_vocabulary WHERE user_id = ? AND word = ?", (user_id, lookup_key))
         result_to_return["is_saved"] = cursor.fetchone() is not None
@@ -416,10 +426,11 @@ async def dictionary_lookup(req: DictionaryRequest, authorization: str = Header(
                 c.commit()
             finally:
                 c.close()
+            print(f"[DB SAVE] dictionary_cache success for: {key}")
         except Exception as e:
             print(f"[DB SAVE] dictionary_cache error: {e}")
 
-        # Save ALL meanings to Neo4j
+        # Save meanings to Neo4j
         try:
             all_synonyms = []
             all_antonyms = []
@@ -442,7 +453,7 @@ async def dictionary_lookup(req: DictionaryRequest, authorization: str = Header(
                 "pos": primary_pos,
                 "meaning_en": primary_meaning_en,
                 "meaning_vn": primary_meaning_vn,
-                "example": (data.get("meanings", [{}])[0].get("examples") or [""])[0] if data.get("meanings") else "",
+                "example": (data.get("meanings", [{}])[0].get("examples") or [""])[0].split("|")[0] if data.get("meanings") else "",
                 "level": data.get("level", "B1"),
                 "word_family": data.get("word_family", []),
                 "collocations": data.get("collocations", []),
@@ -457,47 +468,43 @@ async def dictionary_lookup(req: DictionaryRequest, authorization: str = Header(
             print(f"[Neo4j SAVE] error: {e}")
 
     # We will use StreamingResponse to stream the AI output to the client.
-    # Note: Because the frontend now expects an event stream, we yield chunks.
     def stream_generator():
         try:
             # CHECK SAVED STATUS ONCE AT START
             cursor = get_db().execute("SELECT id FROM saved_vocabulary WHERE user_id = ? AND word = ?", (user_id, lookup_key))
             is_saved = cursor.fetchone() is not None
             
-            full_content = ""
+            final_result_data = None
+            
             for chunk in lookup_dictionary_stream(lookup_key):
+                if not chunk: continue
                 # We can inject is_saved into result chunks
                 if '"status": "result"' in chunk:
                     try:
                         data = json.loads(chunk)
                         data["is_saved"] = is_saved
+                        final_result_data = data # Capture the latest complete result
                         chunk = json.dumps(data, ensure_ascii=False)
                     except: pass
                 
-                full_content += chunk
                 yield f"data: {chunk}\n\n"
             
-            # In a real streaming scenario, we'd need to parse the final accumulated string
-            # and save it. But because we yield partial JSON chunks, we must parse it here.
-            try:
-                # The full_content might be an accumulated JSON string from `lookup_dictionary_full_ai_stream`
-                # or a combination of `status: thinking` + final JSON string.
-                # We do our best to save it in background if valid.
-                final_result = llm_service.parse_json_response(full_content)
-                if isinstance(final_result, dict) and "word" in final_result:
-                    if is_data_complete(final_result):
-                        if background_tasks:
-                            background_tasks.add_task(_save_to_db_and_neo4j, lookup_key, word_original, final_result)
-                        else:
-                            _save_to_db_and_neo4j(lookup_key, word_original, final_result)
-            except Exception as e:
-                print(f"Failed to parse or save streamed result: {e}")
+            # Save final parsed result if valid and complete
+            if final_result_data and is_data_complete(final_result_data):
+                if background_tasks:
+                    background_tasks.add_task(_save_to_db_and_neo4j, lookup_key, word_original, final_result_data)
+                else:
+                    _save_to_db_and_neo4j(lookup_key, word_original, final_result_data)
+            else:
+                print(f"[STREAM] No complete final_result_data to save for '{lookup_key}'")
 
         except Exception as e:
             print(f"Dictionary STREAM error: {e}")
             yield f"data: {json.dumps({'error': str(e)})}\n\n"
         
         yield "data: [DONE]\n\n"
+
+    return StreamingResponse(stream_generator(), media_type="text/event-stream")
 
     return StreamingResponse(stream_generator(), media_type="text/event-stream")
 

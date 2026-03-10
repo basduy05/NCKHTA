@@ -323,7 +323,7 @@ async def get_current_user_info(credentials: HTTPAuthorizationCredentials = Depe
     token = credentials.credentials
     try:
         user_data = auth_service.verify_access_token(token)
-        user_id = int(user_data['sub'])
+        user_id = user_data['user_id']
     except Exception:
         raise HTTPException(status_code=401, detail="Invalid token")
     
@@ -351,7 +351,7 @@ async def update_profile(data: UpdateProfileRequest, credentials: HTTPAuthorizat
     token = credentials.credentials
     try:
         user_data = auth_service.verify_access_token(token)
-        user_id = int(user_data['sub'])
+        user_id = user_data['user_id']
     except Exception:
         raise HTTPException(status_code=401, detail="Invalid token")
     
@@ -407,7 +407,7 @@ async def change_password(data: ChangePasswordRequest, credentials: HTTPAuthoriz
     token = credentials.credentials
     try:
         user_data = auth_service.verify_access_token(token)
-        user_id = int(user_data['sub'])
+        user_id = user_data['user_id']
     except Exception:
         raise HTTPException(status_code=401, detail="Invalid token")
     
