@@ -359,12 +359,15 @@ def get_word_connections(word: str) -> Dict:
     if not g:
         return {"word": word, "connections": [], "message": "Graph DB not connected"}
     try:
+        # Try exact match first
+        word_lower = word.lower().strip()
         query = """
-        MATCH (w:Word {text: $word})-[r]-(related)
+        MATCH (w:Word {text: $word})-[r]-(related:Word)
         RETURN type(r) as relation, related.text as related_word,
                related.meaning_vn as meaning, labels(related) as labels
+        LIMIT 20
         """
-        results = _safe_query(query, {"word": word.lower().strip()})
+        results = _safe_query(query, {"word": word_lower})
         connections = []
         if results:
             for record in results:
@@ -374,6 +377,47 @@ def get_word_connections(word: str) -> Dict:
                     "meaning": record.get("meaning", ""),
                     "type": record.get("labels", [""])[0] if record.get("labels") else "",
                 })
+        
+        # If no connections found, try case-insensitive search
+        if not connections:
+            query = """
+            MATCH (w:Word)
+            WHERE toLower(w.text) = $word_lower
+            MATCH (w)-[r]-(related:Word)
+            RETURN type(r) as relation, related.text as related_word,
+                   related.meaning_vn as meaning, labels(related) as labels
+            LIMIT 20
+            """
+            results = _safe_query(query, {"word_lower": word_lower})
+            if results:
+                for record in results:
+                    connections.append({
+                        "relation": record.get("relation", ""),
+                        "word": record.get("related_word", ""),
+                        "meaning": record.get("meaning", ""),
+                        "type": record.get("labels", [""])[0] if record.get("labels") else "",
+                    })
+        
+        # If still no connections, search for related words containing the term
+        if not connections:
+            query = """
+            MATCH (w:Word)
+            WHERE toLower(w.text) CONTAINS $word_lower
+            MATCH (w)-[r]-(related:Word)
+            RETURN type(r) as relation, w.text as word, w.meaning_vn as word_meaning,
+                   related.text as related_word, related.meaning_vn as meaning
+            LIMIT 20
+            """
+            results = _safe_query(query, {"word_lower": word_lower})
+            if results:
+                for record in results:
+                    connections.append({
+                        "relation": record.get("relation", ""),
+                        "word": record.get("related_word", record.get("word", "")),
+                        "meaning": record.get("meaning", record.get("word_meaning", "")),
+                        "type": "Word",
+                    })
+        
         return {"word": word, "connections": connections}
     except Exception as e:
         return {"word": word, "connections": [], "error": str(e)}

@@ -1248,6 +1248,31 @@ function AIToolsTab({ token }: { token: string | null }) {
                       </div>
                     </div>
                   )}
+                  {dictResult.wikipedia && (
+                    <div className="bg-blue-50 rounded-xl p-4">
+                      <h4 className="text-sm font-bold text-blue-700 mb-2 flex items-center gap-1">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                        Wikipedia
+                      </h4>
+                      {dictResult.wikipedia.thumbnail && (
+                        <img src={dictResult.wikipedia.thumbnail} alt={dictResult.wikipedia.title} className="w-full h-32 object-cover rounded-lg mb-2" />
+                      )}
+                      {dictResult.wikipedia.title && (
+                        <p className="font-bold text-blue-800 text-sm">{dictResult.wikipedia.title}</p>
+                      )}
+                      {dictResult.wikipedia.description && (
+                        <p className="text-blue-600 text-xs mt-1">{dictResult.wikipedia.description}</p>
+                      )}
+                      {dictResult.wikipedia.extract && (
+                        <p className="text-blue-700 text-xs mt-2 line-clamp-4">{dictResult.wikipedia.extract}</p>
+                      )}
+                      {dictResult.wikipedia.url && (
+                        <a href={dictResult.wikipedia.url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-500 hover:underline mt-2 inline-block">
+                          Đọc thêm trên Wikipedia →
+                        </a>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* Sources */}

@@ -404,6 +404,48 @@ def lookup_free_dictionary(word: str):
         if 'start_time' in locals():
              print(f"[LATENCY] lookup_free_dictionary for '{word}' took {time.time() - start_time:.2f}s")
 
+
+
+def lookup_wikipedia(word: str) -> dict:
+    """
+    Look up a word using Wikipedia API (FREE, no API key needed).
+    Returns summary and additional information from Wikipedia.
+    """
+    try:
+        # Use Wikipedia REST API (free, no key required)
+        url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{word.lower()}"
+        resp = requests.get(url, timeout=10)
+        
+        if resp.status_code != 200:
+            # Try with disambiguation
+            url = f"https://en.wikipedia.org/w/api.php?action=opensearch&search={word}&limit=1&format=json"
+            resp = requests.get(url, timeout=10)
+            if resp.status_code == 200:
+                data = resp.json()
+                if len(data) > 1 and len(data[1]) > 0:
+                    # Get first result
+                    title = data[1][0]
+                    url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{title}"
+                    resp = requests.get(url, timeout=10)
+                else:
+                    return None
+            else:
+                return None
+        
+        data = resp.json()
+        
+        return {
+            "title": data.get("title", ""),
+            "extract": data.get("extract", ""),  # Summary text
+            "description": data.get("description", ""),
+            "thumbnail": data.get("thumbnail", {}).get("source", "") if data.get("thumbnail") else "",
+            "url": data.get("content_urls", {}).get("desktop", {}).get("page", ""),
+            "wikipedia_source": True
+        }
+    except Exception as e:
+        print(f"[Wikipedia API] Error: {e}")
+        return None
+
 def translate_meanings_with_ai(word: str, meanings: list, estimate_level: bool = True):
     start_time = time.time()
     """
@@ -481,15 +523,25 @@ def translate_meanings_with_ai(word: str, meanings: list, estimate_level: bool =
             return (
                 result["meanings"],
                 result.get("level", "B1"),
-                result.get("word_family", []),
-                result.get("collocations", []),
-                result.get("idioms", [])
+                result.get("word_family", []) or [],
+                result.get("collocations", []) or [],
+                result.get("idioms", []) or []
+            )
+        elif isinstance(result, list) and len(result) > 0:
+            # If result is a list of meanings, use it directly
+            return (
+                result,
+                "B1",
+                [],
+                [],
+                []
             )
     except Exception as e:
         print(f"[AI Translation & Consolidation] Error: {e}")
     finally:
         print(f"[LATENCY] translate_meanings_with_ai for '{word}' took {time.time() - start_time:.2f}s")
     
+    # Return original meanings with defaults instead of empty arrays
     return meanings, "B1", [], [], []
 
 def translate_meanings_with_ai_stream(word: str, meanings: list, free_data: dict = None, estimate_level: bool = True):
@@ -804,6 +856,7 @@ def lookup_dictionary(word: str):
     2. Try Free Dictionary API first (free, accurate English data)
     3. Use AI for Vietnamese translation + enrichment (slang, register, collocations)
     4. Fallback to full AI if Free API doesn't have the word
+    5. Try Wikipedia for additional context
     
     Only caches COMPLETE data (all fields filled).
     """
@@ -811,10 +864,18 @@ def lookup_dictionary(word: str):
     cached = _cache_get(word)
     if cached and is_data_complete(cached):
         cached["_from_cache"] = True
+        # Also try to get Wikipedia data if not cached
+        if not cached.get("wikipedia"):
+            wikipedia_data = lookup_wikipedia(word)
+            if wikipedia_data:
+                cached["wikipedia"] = wikipedia_data
         return cached
 
     # Step 1: Try Free Dictionary API (free, comprehensive English data)
     free_data = lookup_free_dictionary(word)
+    
+    # Also try Wikipedia in parallel (for additional context)
+    wikipedia_data = lookup_wikipedia(word)
     
     if free_data and len(free_data.get("meanings", [])) > 0:
         # Step 2: Use AI for translation + enrichment (slang, register, collocations)
@@ -823,11 +884,15 @@ def lookup_dictionary(word: str):
         )
         free_data["meanings"] = meanings
         free_data["level"] = level
-        free_data["word_family"] = word_family
-        free_data["collocations"] = collocations
-        free_data["idioms"] = idioms
+        free_data["word_family"] = word_family if word_family else []
+        free_data["collocations"] = collocations if collocations else []
+        free_data["idioms"] = idioms if idioms else []
         free_data["sources"] = ["Free Dictionary API (Wiktionary)", "Cambridge", "Oxford", "Merriam-Webster"]
         free_data.pop("_needs_translation", None)
+        
+        # Add Wikipedia data if available
+        if wikipedia_data:
+            free_data["wikipedia"] = wikipedia_data
         
         # Only cache if data is complete
         if is_data_complete(free_data):
@@ -838,6 +903,11 @@ def lookup_dictionary(word: str):
     result = lookup_dictionary_full_ai(word)
     if not result.get("error") and is_data_complete(result):
         _cache_set(word, result)
+    
+    # Add Wikipedia data if available
+    if wikipedia_data and result:
+        result["wikipedia"] = wikipedia_data
+    
     return result
 
 
@@ -849,6 +919,7 @@ def lookup_dictionary_stream(word: str):
     2. Try Free Dictionary API
     3. Use AI stream for translation + enrichment
     4. Fallback to full AI stream
+    5. Include Wikipedia data
     """
     import json
     
@@ -857,20 +928,48 @@ def lookup_dictionary_stream(word: str):
     if cached and is_data_complete(cached):
         cached["_from_cache"] = True
         cached["status"] = "result"
+        # Also try to get Wikipedia data if not cached
+        if not cached.get("wikipedia"):
+            wikipedia_data = lookup_wikipedia(word)
+            if wikipedia_data:
+                cached["wikipedia"] = wikipedia_data
         yield json.dumps(cached, ensure_ascii=False)
         return
 
     # Step 1: Try Free Dictionary API
     free_data = lookup_free_dictionary(word)
     
+    # Also try Wikipedia in parallel
+    wikipedia_data = lookup_wikipedia(word)
+    
     if free_data and len(free_data.get("meanings", [])) > 0:
         # Step 2: Use AI stream for translation + enrichment (pass full free_data to preserve phonetics)
         for chunk in translate_meanings_with_ai_stream(word, free_data["meanings"], free_data):
+            # Add Wikipedia data to the chunk if available
+            if wikipedia_data and "wikipedia" not in chunk:
+                try:
+                    import json
+                    chunk_data = json.loads(chunk)
+                    if "error" not in chunk_data:
+                        chunk_data["wikipedia"] = wikipedia_data
+                        chunk = json.dumps(chunk_data, ensure_ascii=False)
+                except:
+                    pass
             yield chunk
         return
     
     # Step 3: Fallback to full AI stream
     for chunk in lookup_dictionary_full_ai_stream(word):
+        # Add Wikipedia data if available
+        if wikipedia_data and "wikipedia" not in chunk:
+            try:
+                import json
+                chunk_data = json.loads(chunk)
+                if "error" not in chunk_data:
+                    chunk_data["wikipedia"] = wikipedia_data
+                    chunk = json.dumps(chunk_data, ensure_ascii=False)
+            except:
+                pass
         yield chunk
     return
 
