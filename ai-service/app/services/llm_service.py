@@ -64,26 +64,35 @@ def _cache_set(word: str, data: dict):
 
 def is_data_complete(data: dict) -> bool:
     """Check if dictionary data has all required fields filled.
-    Returns False if data is missing critical information and should be re-looked up."""
+    Returns False if data is missing critical information and should be re-looked up.
+    
+    NOTE: This function decides whether cached data is "complete enough" to use.
+    We should be lenient - core data (meanings with translations) is essential,
+    but additional fields (idioms, collocations, register) can be enriched later."""
     if not data or not isinstance(data, dict):
         return False
     meanings = data.get("meanings", [])
     if not meanings or len(meanings) == 0:
         return False
         
-    # Check that ALL meanings have VN translation, EN definition, and examples
+    # Check that ALL meanings have VN translation, EN definition, and examples (CRITICAL)
     missing_vn = any(not m.get("definition_vn") for m in meanings)
     missing_en = any(not m.get("definition_en") for m in meanings)
     missing_examples = any(not m.get("examples") or len(m.get("examples", [])) == 0 for m in meanings)
     
-    # Check phonetics and level
+    # Check phonetics (important)
     has_phonetic = bool(data.get("phonetic_uk") or data.get("phonetic_us"))
+    
+    # Level is helpful but not required for basic functionality
     has_level = bool(data.get("level") and data.get("level") in ("A1", "A2", "B1", "B2", "C1", "C2"))
     
-    # Check for presence of ALL new Phase 1 fields to force re-fetch of old incomplete cache
-    has_new_fields = "idioms" in data and "collocations" in data and "register" in meanings[0]
+    # Additional fields (idioms, collocations, register) - these are ENRICHMENT, not required
+    # Don't block caching just because these are missing - they can be added later
+    # Old cached data without these fields should still be usable
     
-    return (not missing_vn) and (not missing_en) and (not missing_examples) and has_phonetic and has_level and has_new_fields
+    # CORE REQUIREMENTS: meanings with translations + examples + phonetic
+    # These are the minimum for a usable dictionary entry
+    return (not missing_vn) and (not missing_en) and (not missing_examples) and has_phonetic
 
 def _get_setting(key, default=None):
     # 1. Check in-memory cache
