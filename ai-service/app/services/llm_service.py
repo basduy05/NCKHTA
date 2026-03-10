@@ -157,7 +157,7 @@ def get_llm(provider=None):
         google_key = _get_setting("GOOGLE_API_KEY")
         if google_key and provider in (None, "google"):
             os.environ["GOOGLE_API_KEY"] = google_key
-            # Use faster gemini-1.5-flash model instead of gemini-pro-latest
+            # Use gemini-2.5-flash which is available in this environment
             return ChatGoogleGenerativeAI(model="gemini-2.5-flash", timeout=30)
 
     if provider != "google" and provider != "cohere":
@@ -169,8 +169,8 @@ def get_llm(provider=None):
     cohere_key = _get_setting("COHERE_API_KEY")
     if cohere_key and provider in (None, "cohere"):
         os.environ["COHERE_API_KEY"] = cohere_key
-        # Use command-r as previous 'command' model was deprecated
-        return ChatCohere(model="command-r")
+        # Use command-r-08-2024 as previous aliases were retired Sept 15, 2025
+        return ChatCohere(model="command-r-08-2024")
 
     return None
 
