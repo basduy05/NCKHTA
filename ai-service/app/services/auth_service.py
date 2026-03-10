@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, field_validator
 from typing import Optional
 import smtplib
 from email.mime.text import MIMEText
@@ -41,6 +41,35 @@ class UserRegister(BaseModel):
     password: str
     phone: str | None = None
     role: str = "STUDENT"
+    
+    @field_validator('name')
+    @classmethod
+    def validate_name(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError('Name cannot be empty')
+        if len(v.strip()) < 2:
+            raise ValueError('Name must be at least 2 characters')
+        return v.strip()
+    
+    @field_validator('password')
+    @classmethod
+    def validate_password(cls, v: str) -> str:
+        if len(v) < 8:
+            raise ValueError('Password must be at least 8 characters')
+        if not any(c.isupper() for c in v):
+            raise ValueError('Password must contain at least one uppercase letter')
+        if not any(c.islower() for c in v):
+            raise ValueError('Password must contain at least one lowercase letter')
+        if not any(c.isdigit() for c in v):
+            raise ValueError('Password must contain at least one number')
+        return v
+    
+    @field_validator('role')
+    @classmethod
+    def validate_role(cls, v: str) -> str:
+        if v.upper() not in ['STUDENT', 'TEACHER']:
+            raise ValueError('Role must be STUDENT or TEACHER')
+        return v.upper()
 
 class UserLogin(BaseModel):
     email: EmailStr

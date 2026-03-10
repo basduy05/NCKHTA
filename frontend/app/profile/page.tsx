@@ -16,7 +16,7 @@ interface ProfileData {
 }
 
 export default function ProfilePage() {
-  const { user, token, logout } = useAuth();
+  const { user, token, logout, isInitialized } = useAuth();
   const router = useRouter();
   
   const [profile, setProfile] = useState<ProfileData>({
@@ -30,18 +30,25 @@ export default function ProfilePage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   
+  // Wait for auth to initialize before rendering
+  if (!isInitialized) {
+    return <div className="flex justify-center items-center h-64"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600"></div></div>;
+  }
+  
   // Password change state
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
   useEffect(() => {
+    // Wait for auth to initialize before checking
+    if (!isInitialized) return;
     if (!token) {
       router.push("/login");
       return;
     }
     fetchProfile();
-  }, [token]);
+  }, [token, isInitialized, router]);
 
   const fetchProfile = async () => {
     if (!token) return;

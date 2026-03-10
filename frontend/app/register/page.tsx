@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { Mail, Lock, UserPlus, LogIn, Phone } from "lucide-react";
+import { Mail, Lock, UserPlus, LogIn, Phone, Eye, EyeOff, AlertCircle, CheckCircle } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { useAuth } from "../context/AuthContext";
@@ -13,12 +13,60 @@ export default function RegisterPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [phone, setPhone] = useState("");
   const [role, setRole] = useState("STUDENT");
   const [otp, setOtp] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
+
+  // Validation errors
+  const [errors, setErrors] = useState<{[key: string]: string}>({});
+
+  // Password strength validation
+  const validatePassword = (pwd: string): string => {
+    if (pwd.length < 8) return "Mật khẩu phải có ít nhất 8 ký tự";
+    if (!/[A-Z]/.test(pwd)) return "Mật khẩu phải có ít nhất 1 chữ cái viết hoa";
+    if (!/[a-z]/.test(pwd)) return "Mật khẩu phải có ít nhất 1 chữ cái viết thường";
+    if (!/[0-9]/.test(pwd)) return "Mật khẩu phải có ít nhất 1 số";
+    return "";
+  };
+
+  // Validate all fields
+  const validateForm = (): boolean => {
+    const newErrors: {[key: string]: string} = {};
+    
+    if (!name.trim()) {
+      newErrors.name = "Vui lòng nhập họ tên";
+    } else if (name.trim().length < 2) {
+      newErrors.name = "Họ tên phải có ít nhất 2 ký tự";
+    }
+    
+    if (!email.trim()) {
+      newErrors.email = "Vui lòng nhập email";
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      newErrors.email = "Email không hợp lệ";
+    }
+    
+    if (!password) {
+      newErrors.password = "Vui lòng nhập mật khẩu";
+    } else {
+      const pwdError = validatePassword(password);
+      if (pwdError) newErrors.password = pwdError;
+    }
+    
+    if (!confirmPassword) {
+      newErrors.confirmPassword = "Vui lòng xác nhận mật khẩu";
+    } else if (password !== confirmPassword) {
+      newErrors.confirmPassword = "Mật khẩu xác nhận không khớp";
+    }
+    
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
 
   useEffect(() => {
     if (isInitialized && user) {
@@ -28,8 +76,14 @@ export default function RegisterPage() {
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
     setError("");
+    
+    // Validate form before submitting
+    if (!validateForm()) {
+      return;
+    }
+    
+    setIsLoading(true);
 
     try {
       const result = await register(name, email, password, role, phone || undefined);
@@ -123,16 +177,40 @@ export default function RegisterPage() {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Họ và Tên</label>
                 <div className="relative">
-                  <input type="text" required value={name} onChange={e => setName(e.target.value)} className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none" placeholder="Nguyễn Văn A" />
+                  <input 
+                    type="text" 
+                    required 
+                    value={name} 
+                    onChange={e => { setName(e.target.value); setErrors({...errors, name: ""}); }} 
+                    className={`w-full px-4 py-2 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none ${errors.name ? 'border-red-300 focus:ring-red-200' : 'border-gray-200'}`} 
+                    placeholder="Nguyễn Văn A" 
+                  />
                 </div>
+                {errors.name && (
+                  <p className="text-red-500 text-xs mt-1 flex items-center gap-1">
+                    <AlertCircle size={12} />{errors.name}
+                  </p>
+                )}
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
-                  <input type="email" required value={email} onChange={e => setEmail(e.target.value)} className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none" placeholder="your.email@example.com" />
+                  <input 
+                    type="email" 
+                    required 
+                    value={email} 
+                    onChange={e => { setEmail(e.target.value); setErrors({...errors, email: ""}); }} 
+                    className={`w-full pl-10 pr-4 py-2 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none ${errors.email ? 'border-red-300 focus:ring-red-200' : 'border-gray-200'}`} 
+                    placeholder="your.email@example.com" 
+                  />
                 </div>
+                {errors.email && (
+                  <p className="text-red-500 text-xs mt-1 flex items-center gap-1">
+                    <AlertCircle size={12} />{errors.email}
+                  </p>
+                )}
               </div>
 
               <div>
@@ -147,8 +225,54 @@ export default function RegisterPage() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Mật khẩu</label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
-                  <input type="password" required value={password} onChange={e => setPassword(e.target.value)} className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none" placeholder="••••••••"/>
+                  <input 
+                    type={showPassword ? "text" : "password"} 
+                    required 
+                    value={password} 
+                    onChange={e => { setPassword(e.target.value); setErrors({...errors, password: ""}); }} 
+                    className={`w-full pl-10 pr-10 py-2 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none ${errors.password ? 'border-red-300 focus:ring-red-200' : 'border-gray-200'}`} 
+                    placeholder="Mật khẩu (ít nhất 8 ký tự)"
+                  />
+                  <button 
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-3 text-gray-400 hover:text-gray-600"
+                  >
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
                 </div>
+                {errors.password && (
+                  <p className="text-red-500 text-xs mt-1 flex items-center gap-1">
+                    <AlertCircle size={12} />{errors.password}
+                  </p>
+                )}
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Xác nhận mật khẩu</label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+                  <input 
+                    type={showConfirmPassword ? "text" : "password"} 
+                    required 
+                    value={confirmPassword} 
+                    onChange={e => { setConfirmPassword(e.target.value); setErrors({...errors, confirmPassword: ""}); }} 
+                    className={`w-full pl-10 pr-10 py-2 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none ${errors.confirmPassword ? 'border-red-300 focus:ring-red-200' : 'border-gray-200'}`} 
+                    placeholder="Nhập lại mật khẩu"
+                  />
+                  <button 
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    className="absolute right-3 top-3 text-gray-400 hover:text-gray-600"
+                  >
+                    {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+                {errors.confirmPassword && (
+                  <p className="text-red-500 text-xs mt-1 flex items-center gap-1">
+                    <AlertCircle size={12} />{errors.confirmPassword}
+                  </p>
+                )}
               </div>
               
               <div>
@@ -160,7 +284,11 @@ export default function RegisterPage() {
               </div>
             </div>
 
-            <button type="submit" disabled={isLoading || !email || !password} className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition flex items-center justify-center shadow-lg shadow-blue-200 disabled:opacity-50">
+            <button 
+              type="submit" 
+              disabled={isLoading || !email || !password || !name || !confirmPassword} 
+              className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition flex items-center justify-center shadow-lg shadow-blue-200 disabled:opacity-50"
+            >
               {isLoading ? "Đang xử lý..." : <><UserPlus className="mr-2 h-5 w-5" /> Đăng kí</>}
             </button>
             

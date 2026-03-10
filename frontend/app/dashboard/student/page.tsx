@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, Suspense, useRef } from "react";
+import { useState, useEffect, Suspense, useRef, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useAuth } from "../../context/AuthContext";
 import {
@@ -957,13 +957,11 @@ function DictionaryTab({ token }: { token: string | null }) {
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
           {/* Word header */}
           <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-6 text-white relative">
-            {/* Thinking indicator - simplified without blur overlay */}
+            {/* Thinking indicator - small corner indicator */}
             {result.status === "thinking" && (
-              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-blue-600/80 to-transparent p-4 flex items-center justify-center">
-                <div className="flex items-center gap-2 bg-white/20 backdrop-blur-sm px-4 py-2 rounded-full">
-                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
-                  <span className="text-white text-sm font-medium">AI đang tra cứu...</span>
-                </div>
+              <div className="absolute top-3 right-3 flex items-center gap-2 bg-white/20 backdrop-blur-sm px-3 py-1.5 rounded-full">
+                <div className="animate-spin rounded-full h-3 w-3 border-2 border-white border-t-transparent"></div>
+                <span className="text-white text-xs font-medium">AI tra cứu...</span>
               </div>
             )}
             <div className="flex items-start justify-between">
@@ -1139,6 +1137,15 @@ function VocabularyTab({ token }: { token: string | null }) {
   const [levelFilter, setLevelFilter] = useState("");
   const [deleting, setDeleting] = useState<number | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+
+  // Debounce search input to prevent excessive API calls
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [search]);
 
   // Save words to localStorage as backup
   const cacheToLocal = (data: any[]) => {
@@ -1194,10 +1201,11 @@ function VocabularyTab({ token }: { token: string | null }) {
     finally { setSyncing(false); }
   };
 
-  const fetchWords = async () => {
+  const fetchWords = useCallback(async () => {
+    if (!token) return;
     try {
       const params = new URLSearchParams();
-      if (search) params.set("search", search);
+      if (debouncedSearch) params.set("search", debouncedSearch);
       if (levelFilter) params.set("level", levelFilter);
       const res = await fetch(`${API_URL}/student/vocabulary?${params}`, { headers: getAuthHeader(token) });
       if (res.ok) {
@@ -1205,8 +1213,8 @@ function VocabularyTab({ token }: { token: string | null }) {
         if (serverWords.length > 0) {
           setWords(serverWords);
           // Only cache full list (no filters)
-          if (!search && !levelFilter) cacheToLocal(serverWords);
-        } else if (!search && !levelFilter) {
+          if (!debouncedSearch && !levelFilter) cacheToLocal(serverWords);
+        } else if (!debouncedSearch && !levelFilter) {
           // Server is empty — check localStorage backup
           const cached = getLocalCache();
           if (cached.length > 0) {
@@ -1218,9 +1226,9 @@ function VocabularyTab({ token }: { token: string | null }) {
       }
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
-  };
+  }, [token, debouncedSearch, levelFilter]);
 
-  useEffect(() => { fetchWords(); }, [token, search, levelFilter]);
+  useEffect(() => { fetchWords(); }, [fetchWords]);
 
   const deleteWord = async (id: number) => {
     if (!confirm("Xóa từ này khỏi kho từ vựng?")) return;

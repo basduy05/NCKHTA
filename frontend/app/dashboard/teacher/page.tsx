@@ -1093,13 +1093,11 @@ function AIToolsTab({ token }: { token: string | null }) {
             <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden animate-in fade-in zoom-in-95 duration-300">
               {/* Word header */}
               <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-6 text-white relative">
-              {/* Thinking indicator - simplified without blur overlay */}
+              {/* Thinking indicator - small corner indicator */}
                 {dictResult.status === "thinking" && (
-                  <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-blue-600/80 to-transparent p-4 flex items-center justify-center">
-                    <div className="flex items-center gap-2 bg-white/20 backdrop-blur-sm px-4 py-2 rounded-full">
-                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
-                      <span className="text-white text-sm font-medium">AI đang tra cứu...</span>
-                    </div>
+                  <div className="absolute top-3 right-3 flex items-center gap-2 bg-white/20 backdrop-blur-sm px-3 py-1.5 rounded-full">
+                    <div className="animate-spin rounded-full h-3 w-3 border-2 border-white border-t-transparent"></div>
+                    <span className="text-white text-xs font-medium">AI tra cứu...</span>
                   </div>
                 )}
                 <div className="flex items-start justify-between">
