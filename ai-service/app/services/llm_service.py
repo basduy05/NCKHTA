@@ -492,9 +492,10 @@ def translate_meanings_with_ai(word: str, meanings: list, estimate_level: bool =
     
     return meanings, "B1", [], [], []
 
-def translate_meanings_with_ai_stream(word: str, meanings: list, estimate_level: bool = True):
+def translate_meanings_with_ai_stream(word: str, meanings: list, free_data: dict = None, estimate_level: bool = True):
     """
     Streaming version of translate_meanings_with_ai. Yields JSON chunks as they arrive.
+    Takes optional free_data to preserve phonetics and other metadata from Free Dictionary API.
     """
     start_time = time.time()
     llm = get_llm()
@@ -502,22 +503,64 @@ def translate_meanings_with_ai_stream(word: str, meanings: list, estimate_level:
         yield json.dumps({"error": "LLM not configured"})
         return
     
+    # Get phonetics from free_data if available
+    phonetic_uk = free_data.get("phonetic_uk", "") if free_data else ""
+    phonetic_us = free_data.get("phonetic_us", "") if free_data else ""
+    audio_url = free_data.get("audio_url", "") if free_data else ""
+    
     definitions_text = "\n".join(
         f"{i+1}. [{m.get('pos', '')}] {m.get('definition_en', '')} (Examples: {m.get('examples', [])})"
         for i, m in enumerate(meanings[:20])
     )
     
-    # Simplified prompt for faster translation
+    # Full comprehensive prompt for complete vocabulary data
     prompt = PromptTemplate.from_template(
-        "You are an English-Vietnamese dictionary translator.\n"
-        "Translate the following English meanings to Vietnamese.\n\n"
-        "Word: {word}\n"
-        "Definitions:\n{definitions}\n\n"
-        "Return a JSON object with:\n"
-        "- 'meanings': array of meanings with 'pos', 'definition_en', 'definition_vn', 'examples'\n"
+        "You are an expert bilingual lexicographer combining knowledge from Cambridge Dictionary, "
+        "Oxford Advanced Learner's Dictionary, Merriam-Webster, Longman, Collins, Macmillan, "
+        "and Urban Dictionary (for slang/informal usage).\n"
+        "I have raw dictionary meanings for the English word '{word}'.\n"
+        "Your task is to consolidate into 4-6 distinct grouped meanings, BUT also ADD any important "
+        "meanings that are MISSING from the raw data (especially slang, informal, or specialized meanings).\n\n"
+        "Raw Definitions:\n{definitions}\n\n"
+        "For EACH distinct meaning, provide ALL of these fields (NEVER leave any empty):\n"
+        "1. 'pos' — part of speech\n"
+        "2. 'definition_en' — clean English definition\n"
+        "3. 'definition_vn' — natural Vietnamese translation\n"
+        "4. 'examples' — 2-3 realistic example sentences with Vietnamese translation. MUST have at least 2.\n"
+        "5. 'synonyms' — 3-5 synonyms\n"
+        "6. 'antonyms' — 2-3 antonyms (empty array if none)\n"
+        "7. 'register' — one of: 'formal', 'informal', 'slang', 'technical', 'literary', 'neutral'\n"
+        "8. 'usage_notes' — brief note on when/how to use this meaning (e.g. 'common in spoken English')\n\n"
+        "Also provide:\n"
+        "- 'phonetic_uk' — UK phonetic pronunciation (e.g. /kəmˈpjuːtər/)\n"
+        "- 'phonetic_us' — US phonetic pronunciation (e.g. /kəmˈpjuːtər/)\n"
+        "- 'audio_url_uk' — URL to UK pronunciation audio (from dictionaryapi.dev if available)\n"
+        "- 'audio_url_us' — URL to US pronunciation audio (from dictionaryapi.dev if available)\n"
         "- 'level': CEFR level (A1-C2)\n"
-        "- 'word_family': related word forms\n"
-        "Return ONLY valid JSON."
+        "- 'frequency': 'very common', 'common', 'uncommon', or 'rare'\n"
+        "- 'word_family': 5-8 related word forms (e.g. run → runner, running, ran)\n"
+        "- 'collocations': 5-8 common collocations with example sentences\n"
+        "- 'idioms': 2-4 idioms with Vietnamese translations\n"
+        "- 'notes': additional notes about usage\n\n"
+        "Return EXACTLY a JSON object:\n"
+        '{{\n'
+        '  "word": "...",\n'
+        '  "phonetic_uk": "...",\n'
+        '  "phonetic_us": "...",\n'
+        '  "audio_url_uk": "...",\n'
+        '  "audio_url_us": "...",\n'
+        '  "meanings": [{{"pos": "...", "definition_en": "...", "definition_vn": "...", '
+        '"examples": ["..."], "examples_vn": ["..."], "synonyms": ["..."], "antonyms": ["..."], '
+        '"register": "neutral", "usage_notes": "..."}}],\n'
+        '  "level": "B1",\n'
+        '  "frequency": "common",\n'
+        '  "word_family": ["..."],\n'
+        '  "collocations": ["..."],\n'
+        '  "idioms": [{{"idiom": "...", "meaning_vn": "...", "example": "..."}}],\n'
+        '  "notes": "...",\n'
+        '  "sources": ["Cambridge Dictionary", "Oxford Advanced Learner", "Merriam-Webster", "Longman", "Urban Dictionary"]\n'
+        '}}\n\n'
+        "Return ONLY valid JSON. No markdown."
     )
     
     chain = prompt | llm
@@ -563,6 +606,20 @@ def translate_meanings_with_ai_stream(word: str, meanings: list, estimate_level:
                         repaired["status"] = "result"
                         repaired["_raw_thinking_stream"] = accumulated_text
                         repaired["elapsed"] = round(elapsed, 1)
+                        
+                        # Bổ sung phonetics từ Free Dictionary API nếu AI không trả về
+                        if free_data:
+                            # UK phonetics
+                            if not repaired.get("phonetic_uk") and phonetic_uk:
+                                repaired["phonetic_uk"] = phonetic_uk
+                            # US phonetics
+                            if not repaired.get("phonetic_us") and phonetic_us:
+                                repaired["phonetic_us"] = phonetic_us
+                            # Audio URLs
+                            if not repaired.get("audio_url_uk") and audio_url:
+                                repaired["audio_url_uk"] = audio_url
+                            if not repaired.get("audio_url_us") and audio_url:
+                                repaired["audio_url_us"] = audio_url
                         
                         # Chỉ yield nếu dictionary có thay đổi so với chunk trước
                         current_json = json.dumps(repaired, ensure_ascii=False)
@@ -807,8 +864,8 @@ def lookup_dictionary_stream(word: str):
     free_data = lookup_free_dictionary(word)
     
     if free_data and len(free_data.get("meanings", [])) > 0:
-        # Step 2: Use AI stream for translation + enrichment
-        for chunk in translate_meanings_with_ai_stream(word, free_data["meanings"]):
+        # Step 2: Use AI stream for translation + enrichment (pass full free_data to preserve phonetics)
+        for chunk in translate_meanings_with_ai_stream(word, free_data["meanings"], free_data):
             yield chunk
         return
     
