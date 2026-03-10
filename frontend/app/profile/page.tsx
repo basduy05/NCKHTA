@@ -182,7 +182,7 @@ export default function ProfilePage() {
             </div>
           </div>
           <button
-            onClick={logout}
+            onClick={() => logout(false)}
             className="bg-white/10 hover:bg-white/20 px-4 py-2 rounded-lg transition text-sm"
           >
             Đăng xuất

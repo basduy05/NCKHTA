@@ -1,6 +1,7 @@
 "use client";
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useToast } from '../components/Toast';
 
 type User = {
   id: number;
@@ -17,7 +18,7 @@ type AuthContextType = {
   login: (email: string, password: string) => Promise<boolean>;
   loginSendOTP: (email: string) => Promise<boolean>;
   loginVerifyOTP: (email: string, otp: string) => Promise<boolean>;
-  logout: () => void;
+  logout: (showConfirm?: boolean) => Promise<boolean>;
   forgotPassword: (email: string) => Promise<boolean>;
   isLoading: boolean;
   isInitialized: boolean;
@@ -33,6 +34,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
   const router = useRouter();
+  const { showToast } = useToast();
 
   useEffect(() => {
     const storedToken = localStorage.getItem('eam_token');
@@ -70,14 +72,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
       const data = await res.json();
       if (!res.ok) {
-        alert(data.detail || 'Registration failed');
+        showToast(data.detail || 'Registration failed', 'error');
         return false;
       }
-      alert('Registration successful! Check your email for OTP.');
+      showToast('Registration successful! Check your email for OTP.', 'success');
       return true;
     } catch (error: any) {
       console.error('Register error:', error);
-      alert(error?.message || 'Failed to register. Please try again.');
+      showToast(error?.message || 'Failed to register. Please try again.', 'error');
       return false;
     } finally {
       setIsLoading(false);
@@ -94,14 +96,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
       const data = await res.json();
       if (!res.ok) {
-        alert(data.detail || 'OTP verification failed');
+        showToast(data.detail || 'OTP verification failed', 'error');
         return false;
       }
-      alert('Account verified! You can now login.');
+      showToast('Account verified! You can now login.', 'success');
       return true;
     } catch (error: any) {
       console.error('OTP verify error:', error);
-      alert(error?.message || 'Failed to verify OTP. Please try again.');
+      showToast(error?.message || 'Failed to verify OTP. Please try again.', 'error');
       return false;
     } finally {
       setIsLoading(false);
@@ -118,7 +120,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
       const data = await res.json();
       if (!res.ok) {
-        alert(data.detail || 'Login failed');
+        showToast(data.detail || 'Login failed', 'error');
         return false;
       }
 
@@ -132,19 +134,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return true;
     } catch (error: any) {
       console.error('Login error:', error);
-      alert(error?.message || 'Failed to login. Please try again.');
+      showToast(error?.message || 'Failed to login. Please try again.', 'error');
       return false;
     } finally {
       setIsLoading(false);
     }
   };
 
-  const logout = () => {
+  const logout = async (showConfirm: boolean = true) => {
+    if (showConfirm) {
+      const confirmed = window.confirm("Bạn có chắc chắn muốn đăng xuất?");
+      if (!confirmed) return false;
+    }
     setUser(null);
     setToken(null);
     localStorage.removeItem('eam_token');
     localStorage.removeItem('eam_user');
     router.push('/login');
+    return true;
   };
 
   // Login with OTP (2FA)
@@ -158,13 +165,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
       const data = await res.json();
       if (!res.ok) {
-        alert(data.detail || 'Failed to send OTP');
+        showToast(data.detail || 'Failed to send OTP', 'error');
         return false;
       }
       return true;
     } catch (error: any) {
       console.error('Login send OTP error:', error);
-      alert(error?.message || 'Failed to send OTP. Please try again.');
+      showToast(error?.message || 'Failed to send OTP. Please try again.', 'error');
       return false;
     } finally {
       setIsLoading(false);
@@ -181,7 +188,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
       const data = await res.json();
       if (!res.ok) {
-        alert(data.detail || 'OTP verification failed');
+        showToast(data.detail || 'OTP verification failed', 'error');
         return false;
       }
 
@@ -195,7 +202,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return true;
     } catch (error: any) {
       console.error('Login verify OTP error:', error);
-      alert(error?.message || 'Failed to verify OTP. Please try again.');
+      showToast(error?.message || 'Failed to verify OTP. Please try again.', 'error');
       return false;
     } finally {
       setIsLoading(false);
@@ -211,14 +218,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
       const data = await res.json();
       if (!res.ok) {
-        alert(data.detail || 'Failed to send reset email');
+        showToast(data.detail || 'Failed to send reset email', 'error');
         return false;
       }
-      alert(data.message);
+      showToast(data.message, 'success');
       return true;
     } catch (error: any) {
       console.error('Forgot password error:', error);
-      alert(error?.message || 'Failed to send reset email. Please try again.');
+      showToast(error?.message || 'Failed to send reset email. Please try again.', 'error');
       return false;
     } finally {
       setIsLoading(false);
