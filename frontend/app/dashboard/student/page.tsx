@@ -748,7 +748,14 @@ function DictionaryTab({ token }: { token: string | null }) {
   }, []);
 
   const lookup = async () => {
-    if (!word.trim()) return;
+    const trimmedWord = word.trim();
+    if (!trimmedWord) return;
+
+    // Reset state early to provide immediate feedback
+    setLoading(true);
+    setResult({ status: "thinking", word: trimmedWord, meanings: [], elapsed: 0 });
+    setSaved(false);
+    setError(null);
 
     // Cancel previous request if any
     if (abortControllerRef.current) {
@@ -758,16 +765,11 @@ function DictionaryTab({ token }: { token: string | null }) {
     const controller = new AbortController();
     abortControllerRef.current = controller;
 
-    setLoading(true);
-    setResult(null);
-    setSaved(false);
-    setError(null);
-
     try {
       const res = await fetch(`${API_URL}/student/dictionary/lookup`, {
         method: "POST",
         headers: getAuthHeader(token),
-        body: JSON.stringify({ word: word.trim() }),
+        body: JSON.stringify({ word: trimmedWord }),
         signal: controller.signal
       });
 
@@ -780,7 +782,7 @@ function DictionaryTab({ token }: { token: string | null }) {
       const decoder = new TextDecoder();
       let done = false;
       let buffer = "";
-      let finalData: any = { word: word.trim(), meanings: [] };
+      let finalData: any = { word: trimmedWord, meanings: [] };
 
       while (reader && !done) {
         const { value, done: readerDone } = await reader.read();
@@ -839,7 +841,7 @@ function DictionaryTab({ token }: { token: string | null }) {
       }
 
       setHistory(prev => {
-        const next = [word.trim().toLowerCase(), ...prev.filter(w => w !== word.trim().toLowerCase())].slice(0, 10);
+        const next = [trimmedWord.toLowerCase(), ...prev.filter(w => w !== trimmedWord.toLowerCase())].slice(0, 10);
         if (typeof window !== "undefined") localStorage.setItem("dictionaryHistory", JSON.stringify(next));
         return next;
       });
@@ -936,28 +938,36 @@ function DictionaryTab({ token }: { token: string | null }) {
           >
             {loading ? (
               <div className="flex items-center gap-2">
-                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white" />
-                <span>Đang tra...</span>
+                <Sparkles className="animate-pulse text-yellow-300" size={20} />
+                <span>AI đang tra...</span>
               </div>
             ) : (
               <><Search size={20} /> Tra từ</>
             )}
           </button>
-        </div>
 
-        {/* Search history */}
-        {history.length > 0 && (
-          <div className="mt-3 flex items-center gap-2 flex-wrap">
-            <span className="text-xs text-gray-400">Gần đây:</span>
-            {history.slice(0, 10).map((h, i) => (
-              <button key={i} onClick={() => { setWord(h); }} className="text-xs px-2.5 py-1 bg-gray-100 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition">
-                {h}
-              </button>
-            ))}
-          </div>
-        )}
+          {loading && (
+            <button
+              onClick={cancelLookup}
+              className="px-6 py-3.5 border border-red-200 text-red-500 rounded-xl hover:bg-red-50 transition font-medium"
+            >
+              Hủy
+            </button>
+          )}
+        </div>
       </div>
 
+      {/* Search history */}
+      {history.length > 0 && (
+        <div className="mt-3 flex items-center gap-2 flex-wrap">
+          <span className="text-xs text-gray-400">Gần đây:</span>
+          {history.slice(0, 10).map((h, i) => (
+            <button key={i} onClick={() => { setWord(h); }} className="text-xs px-2.5 py-1 bg-gray-100 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition">
+              {h}
+            </button>
+          ))}
+        </div>
+      )}
       {/* Error message */}
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-center gap-3">
@@ -974,9 +984,43 @@ function DictionaryTab({ token }: { token: string | null }) {
         </div>
       )}
 
-      {/* Result - Show debug info if meanings is empty */}
+      {/* Result UI */}
       {result && (
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500">
+          {result.status === "thinking" && (!result.meanings || result.meanings.length === 0) && (
+            <div className="bg-gradient-to-br from-blue-50/80 via-white to-indigo-50/80 p-16 text-center border-b border-blue-100 flex flex-col items-center justify-center min-h-[400px]">
+              <div className="relative mb-8">
+                <div className="absolute inset-0 bg-blue-500 rounded-full animate-ping opacity-10"></div>
+                <div className="absolute inset-0 bg-indigo-500 rounded-full animate-pulse opacity-10 blur-xl"></div>
+                <div className="relative bg-gradient-to-tr from-blue-600 to-indigo-600 p-6 rounded-3xl text-white shadow-2xl overflow-hidden group">
+                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+                  <Sparkles size={40} className="animate-[spin_4s_linear_infinite]" />
+                </div>
+              </div>
+              <h3 className="text-2xl font-bold bg-gradient-to-r from-blue-900 to-indigo-900 bg-clip-text text-transparent mb-3">AI iEdu đang khai phá kiến thức...</h3>
+              <p className="text-gray-600 max-w-md mx-auto text-lg leading-relaxed">
+                Đang phân tích sâu sắc về từ <span className="font-extrabold text-blue-600">"{result.word}"</span>.
+                Chúng tôi đang trích xuất ngữ nghĩa, cách dùng và các mối liên kết từ kho dữ liệu tri thức khổng lồ.
+              </p>
+
+              <div className="mt-10 flex items-center gap-3 px-6 py-3 bg-white/60 backdrop-blur-sm rounded-2xl border border-blue-100/50 shadow-sm">
+                <div className="flex gap-1.5">
+                  {[0, 1, 2].map(i => (
+                    <div key={i} className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: `${i * 0.2}s` }}></div>
+                  ))}
+                </div>
+                <span className="text-sm font-medium text-blue-500/80 tracking-wide uppercase">AI Engine Processing</span>
+              </div>
+
+              {result.chunk && (
+                <div className="mt-8 font-mono text-[10px] text-blue-400 opacity-60 flex items-center gap-2">
+                  <Terminal size={12} />
+                  <span>Loading: {result.chunk}...</span>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Show error if API failed */}
           {result.error && result.error.includes("API key") && (
             <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-center">
@@ -984,13 +1028,6 @@ function DictionaryTab({ token }: { token: string | null }) {
               <h3 className="text-lg font-bold text-red-700 mb-2">Lỗi API Key</h3>
               <p className="text-red-600 mb-4">{result.error}</p>
               <p className="text-sm text-gray-600">Vui lòng liên hệ admin để cập nhật API key mới.</p>
-            </div>
-          )}
-          {/* Debug info - remove in production */}
-          {(!result.meanings || result.meanings.length === 0) && (
-            <div className="bg-yellow-50 p-4 text-xs text-yellow-700">
-              <p>Debug: Received data but no meanings found</p>
-              <pre className="overflow-auto max-h-40">{JSON.stringify(result, null, 2)}</pre>
             </div>
           )}
           {/* Word header */}
