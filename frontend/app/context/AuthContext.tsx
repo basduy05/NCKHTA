@@ -7,6 +7,7 @@ type User = {
   email: string;
   role: 'student' | 'teacher' | 'admin';
   name: string;
+  phone?: string;
 };
 
 type AuthContextType = {
@@ -19,6 +20,7 @@ type AuthContextType = {
   loginVerifyOTP: (email: string, otp: string) => Promise<boolean>;
   logout: (showConfirm?: boolean) => Promise<boolean>;
   forgotPassword: (email: string) => Promise<boolean>;
+  updateUser: (userData: Partial<User>) => void;
   isLoading: boolean;
   isInitialized: boolean;
 };
@@ -120,7 +122,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(userData);
       localStorage.setItem('eam_token', access_token);
       localStorage.setItem('eam_user', JSON.stringify(userData));
-      
+
       router.push(`/dashboard/${userData.role.toLowerCase()}`);
       return true;
     } catch (error: any) {
@@ -184,7 +186,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(userData);
       localStorage.setItem('eam_token', access_token);
       localStorage.setItem('eam_user', JSON.stringify(userData));
-      
+
       router.push(`/dashboard/${userData.role.toLowerCase()}`);
       return true;
     } catch (error: any) {
@@ -215,8 +217,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const updateUser = (userData: Partial<User>) => {
+    if (!user) return;
+    const updatedUser = { ...user, ...userData };
+    setUser(updatedUser);
+    localStorage.setItem('eam_user', JSON.stringify(updatedUser));
+  };
+
   return (
-    <AuthContext.Provider value={{ user, token, register, verifyOTP, login, loginSendOTP, loginVerifyOTP, logout, forgotPassword, isLoading, isInitialized }}>
+    <AuthContext.Provider value={{ user, token, register, verifyOTP, login, loginSendOTP, loginVerifyOTP, logout, forgotPassword, updateUser, isLoading, isInitialized }}>
       {children}
     </AuthContext.Provider>
   );

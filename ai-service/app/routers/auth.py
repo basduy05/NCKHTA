@@ -168,7 +168,7 @@ async def login(data: UserLogin):
         cursor = conn.cursor()
 
         cursor.execute(
-            "SELECT id, name, role, password_hash, is_verified FROM users WHERE email = ?",
+            "SELECT id, name, role, password_hash, is_verified, phone FROM users WHERE email = ?",
             (data.email,)
         )
         user = cursor.fetchone()
@@ -198,7 +198,8 @@ async def login(data: UserLogin):
                 "id": user['id'],
                 "name": user['name'],
                 "email": data.email,
-                "role": user['role']
+                "role": user['role'],
+                "phone": user.get('phone', '')
             }
         }
     except HTTPException:
@@ -250,7 +251,7 @@ async def login_verify_otp(data: VerifyLoginOTP):
     cursor = conn.cursor()
     
     cursor.execute(
-        "SELECT id, name, role, login_otp, login_otp_expires FROM users WHERE email = ?",
+        "SELECT id, name, role, login_otp, login_otp_expires, phone FROM users WHERE email = ?",
         (data.email,)
     )
     user = cursor.fetchone()
@@ -292,7 +293,8 @@ async def login_verify_otp(data: VerifyLoginOTP):
             "id": user['id'],
             "name": user['name'],
             "email": data.email,
-            "role": user['role']
+            "role": user['role'],
+            "phone": user.get('phone', '')
         }
     }
 

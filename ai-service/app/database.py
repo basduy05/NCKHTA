@@ -43,8 +43,17 @@ class DictRow:
             return self._row[key]
         return self._data[key]
         
+    def get(self, key, default=None):
+        return self._data.get(key, default)
+        
     def keys(self):
         return self._data.keys()
+        
+    def __iter__(self):
+        return iter(self._data)
+        
+    def __len__(self):
+        return len(self._data)
         
 def dict_factory(cursor, row):
     return DictRow(cursor, row)

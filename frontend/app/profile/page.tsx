@@ -16,7 +16,7 @@ interface ProfileData {
 }
 
 export default function ProfilePage() {
-  const { user, token, logout, isInitialized } = useAuth();
+  const { user, token, logout, isInitialized, updateUser } = useAuth();
   const router = useRouter();
 
   const [profile, setProfile] = useState<ProfileData>({
@@ -65,6 +65,8 @@ export default function ProfilePage() {
           phone: data.phone || "",
           role: data.role || ""
         });
+        // Sync global state
+        updateUser({ name: data.name, phone: data.phone });
       }
     } catch (error) {
       console.error("Failed to fetch profile:", error);
@@ -94,13 +96,8 @@ export default function ProfilePage() {
 
       if (res.ok) {
         setSuccess("Cập nhật thông tin thành công!");
-        // Update localStorage
-        const storedUser = localStorage.getItem("eam_user");
-        if (storedUser) {
-          const userData = JSON.parse(storedUser);
-          userData.name = profile.name;
-          localStorage.setItem("eam_user", JSON.stringify(userData));
-        }
+        // Sync global state
+        updateUser({ name: profile.name, phone: profile.phone });
       } else {
         const data = await res.json();
         setError(data.detail || "Cập nhật thất bại");
