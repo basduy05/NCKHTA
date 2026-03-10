@@ -6,7 +6,7 @@ import {
   Users, BookOpen, Plus, Edit, Trash2, GraduationCap, X, Check,
   FileText, Upload, Download, ClipboardList, Sparkles, Brain,
   BarChart3, UserPlus, UserMinus, ChevronDown, ChevronUp, Eye,
-  Search, Volume2, ArrowRight, Bookmark, Network, Terminal
+  Search, Volume2, ArrowRight, Bookmark, Network, Terminal, AlertCircle
 } from "lucide-react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://iedu-ksk7.onrender.com";
@@ -719,7 +719,17 @@ function AIToolsTab({ token }: { token: string | null }) {
   const [dictWord, setDictWord] = useState("");
   const [dictResult, setDictResult] = useState<any>(null);
   const [dictLoading, setDictLoading] = useState(false);
+  const [dictError, setDictError] = useState<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+
+  // Cleanup AbortController on unmount or when search changes
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, []);
 
   // Knowledge graph state
   const [graphData, setGraphData] = useState<any>(null);
@@ -797,6 +807,7 @@ function AIToolsTab({ token }: { token: string | null }) {
 
     setDictLoading(true);
     setDictResult(null);
+    setDictError(null);
 
     // Add temporary thinking state
     setDictResult({ status: "thinking", word: dictWord.trim(), meanings: [], elapsed: 0 });
@@ -844,7 +855,7 @@ function AIToolsTab({ token }: { token: string | null }) {
     } catch (e: any) {
       if (e.name === 'AbortError') return;
       console.error(e);
-      alert(e.message || "Lỗi kết nối");
+      setDictError(e.message || "Lỗi kết nối");
       setDictResult(null);
     } finally {
       setDictLoading(false);
@@ -1048,6 +1059,12 @@ function AIToolsTab({ token }: { token: string | null }) {
                 className="btn-primary py-3 px-6 rounded-xl flex items-center gap-2 disabled:opacity-50">
                 {dictLoading ? (
                   <div className="flex items-center gap-2">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); cancelDictLookup(); }}
+                      className="bg-red-500 hover:bg-red-600 text-white px-2 py-0.5 rounded text-xs transition mr-1"
+                    >
+                      Huỷ
+                    </button>
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
                     <span>Đang tra...</span>
                   </div>
@@ -1056,21 +1073,32 @@ function AIToolsTab({ token }: { token: string | null }) {
             </div>
           </div>
 
+          {/* Error message */}
+          {dictError && (
+            <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-center gap-3">
+              <AlertCircle size={20} className="text-red-500 flex-shrink-0" />
+              <div>
+                <p className="text-red-700 font-medium">{dictError}</p>
+                <button 
+                  onClick={() => setDictError(null)} 
+                  className="text-red-500 text-sm underline hover:text-red-600"
+                >
+                  Đóng
+                </button>
+              </div>
+            </div>
+          )}
+
           {dictResult && (
             <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden animate-in fade-in zoom-in-95 duration-300">
               {/* Word header */}
               <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-6 text-white relative">
+              {/* Thinking indicator - simplified without blur overlay */}
                 {dictResult.status === "thinking" && (
-                  <div className="absolute inset-0 bg-blue-600/60 backdrop-blur-sm flex items-center justify-center z-10 p-6">
-                    <div className="flex items-center gap-4 bg-white/20 backdrop-blur-md px-6 py-3 rounded-full shadow-xl border border-white/10">
-                      <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
-                      <span className="font-bold text-sm tracking-tight text-white">Đang tra cứu...</span>
-                      <button
-                        onClick={cancelDictLookup}
-                        className="ml-2 bg-red-500/80 hover:bg-red-500 text-white px-3 py-1.5 rounded-full text-sm font-medium transition-all hover:scale-105 active:scale-95"
-                      >
-                        Huỷ
-                      </button>
+                  <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-blue-600/80 to-transparent p-4 flex items-center justify-center">
+                    <div className="flex items-center gap-2 bg-white/20 backdrop-blur-sm px-4 py-2 rounded-full">
+                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                      <span className="text-white text-sm font-medium">AI đang tra cứu...</span>
                     </div>
                   </div>
                 )}

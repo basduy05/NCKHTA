@@ -6,7 +6,7 @@ import {
   BookOpen, Sparkles, BrainCircuit, Trophy, PlayCircle, CheckCircle2, XCircle,
   GraduationCap, ClipboardList, BarChart3, FileText, ChevronRight, Clock,
   Award, TrendingUp, Layers, Search, BookMarked, Volume2, Save, Trash2,
-  ExternalLink, Star, Filter, X, ArrowRight, Bookmark, Network, Mic, Upload, Brain, Headphones, Edit3, Terminal
+  ExternalLink, Star, Filter, X, ArrowRight, Bookmark, Network, Mic, Upload, Brain, Headphones, Edit3, Terminal, AlertCircle
 } from "lucide-react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://iedu-ksk7.onrender.com";
@@ -724,7 +724,17 @@ function DictionaryTab({ token }: { token: string | null }) {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [history, setHistory] = useState<string[]>([]);
+  const [error, setError] = useState<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+
+  // Cleanup AbortController on unmount
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, []);
 
   useEffect(() => {
     try {
@@ -818,7 +828,7 @@ function DictionaryTab({ token }: { token: string | null }) {
         console.log('Lookup aborted');
         return;
       }
-      alert(e.message || "Lỗi khi tra từ điển");
+      setError(e.message || "Lỗi khi tra từ điển");
       setResult(null);
     } finally {
       setLoading(false);
@@ -898,6 +908,12 @@ function DictionaryTab({ token }: { token: string | null }) {
           >
             {loading ? (
               <div className="flex items-center gap-2">
+                <button
+                  onClick={(e) => { e.stopPropagation(); cancelLookup(); }}
+                  className="bg-red-500 hover:bg-red-600 text-white px-2 py-0.5 rounded text-xs transition mr-1"
+                >
+                  Huỷ
+                </button>
                 <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white" />
                 <span>Đang tra...</span>
               </div>
@@ -920,22 +936,33 @@ function DictionaryTab({ token }: { token: string | null }) {
         )}
       </div>
 
+      {/* Error message */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-center gap-3">
+          <AlertCircle size={20} className="text-red-500 flex-shrink-0" />
+          <div>
+            <p className="text-red-700 font-medium">{error}</p>
+            <button 
+              onClick={() => setError(null)} 
+              className="text-red-500 text-sm underline hover:text-red-600"
+            >
+              Đóng
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Result */}
       {result && (
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
           {/* Word header */}
           <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-6 text-white relative">
+            {/* Thinking indicator - simplified without blur overlay */}
             {result.status === "thinking" && (
-              <div className="absolute inset-0 bg-blue-600/60 backdrop-blur-sm flex items-center justify-center z-10 p-6">
-                <div className="flex items-center gap-4 bg-white/20 backdrop-blur-md px-6 py-3 rounded-full shadow-xl border border-white/10">
-                  <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
-                  <span className="font-bold text-sm tracking-tight text-white">Đang tra cứu...</span>
-                  <button
-                    onClick={cancelLookup}
-                    className="ml-2 bg-red-500/80 hover:bg-red-500 text-white px-3 py-1.5 rounded-full text-sm font-medium transition-all hover:scale-105 active:scale-95"
-                  >
-                    Huỷ
-                  </button>
+              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-blue-600/80 to-transparent p-4 flex items-center justify-center">
+                <div className="flex items-center gap-2 bg-white/20 backdrop-blur-sm px-4 py-2 rounded-full">
+                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                  <span className="text-white text-sm font-medium">AI đang tra cứu...</span>
                 </div>
               </div>
             )}
