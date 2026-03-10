@@ -288,7 +288,7 @@ class DictionaryRequest(BaseModel):
 
 
 @router.post("/dictionary/lookup")
-def dictionary_lookup(req: DictionaryRequest, authorization: str = Header(...), background_tasks: BackgroundTasks = None):
+async def dictionary_lookup(req: DictionaryRequest, authorization: str = Header(...), background_tasks: BackgroundTasks = None):
     """
     Hybrid dictionary lookup with completeness validation and STREAMING:
     1. DB cache (only if data is COMPLETE — all fields filled)
@@ -299,8 +299,9 @@ def dictionary_lookup(req: DictionaryRequest, authorization: str = Header(...), 
     Case-sensitive: "IT" and "it" are treated as different words.
     """
     from fastapi.responses import StreamingResponse
-    from ..services.llm_service import is_data_complete, lookup_dictionary_stream
+    from ..services.llm_service import is_data_complete, lookup_dictionary_stream, lookup_free_dictionary
     import json
+    import asyncio
     
     user = _get_current_student(authorization)
     user_id = user["id"]
@@ -311,94 +312,87 @@ def dictionary_lookup(req: DictionaryRequest, authorization: str = Header(...), 
     if not word_original or len(word_original) > 100:
         raise HTTPException(status_code=400, detail="Invalid word")
 
-    # Determine lookup key: use original casing if it's all-uppercase (abbreviation)
     is_abbreviation = word_original.isupper() and len(word_original) >= 2
     lookup_key = word_original if is_abbreviation else word_lower
 
-    # 1) Check SQLite dictionary_cache first — but validate completeness
-    conn = get_db()
-    try:
-        row = conn.execute(
-            "SELECT data_json, meanings_count, word_original FROM dictionary_cache WHERE word = ?",
-            (lookup_key,)
-        ).fetchone()
-    finally:
-        conn.close()
-    
-    if row:
-        cached = json.loads(row["data_json"])
-        
-        # Completeness check: only return cached data if ALL fields are filled
-        if is_data_complete(cached):
-            cached["_source"] = "database"
-            cached["_meanings_count"] = row["meanings_count"] or 0
-            # Enrich with graph connections
-            connections = graph_service.get_word_connections(word_lower)
-            cached["graph_connections"] = connections.get("connections", [])
-            
-            # CHECK IF ALREADY SAVED (Fixing "saved status" bug)
-            cursor = get_db().execute("SELECT id FROM saved_vocabulary WHERE user_id = ? AND word = ?", (user_id, lookup_key))
-            cached["is_saved"] = cursor.fetchone() is not None
-            
-            return cached
-        # Else: data is incomplete, fall through to AI lookup for better data
-        print(f"[DICT] Cached data for '{lookup_key}' is incomplete, re-fetching with AI...")
-
-    # 1.5) Check Neo4j cache (survives Render restarts)
-    neo4j_cached = graph_service.get_dictionary_cache(lookup_key)
-    if neo4j_cached and is_data_complete(neo4j_cached):
-        neo4j_cached["_source"] = "database_neo4j_restored"
-        neo4j_cached["_meanings_count"] = len(neo4j_cached.get("meanings", []))
-        
-        # Restore to local SQLite asynchronously
-        def _restore_sqlite(key, original, data):
+    async def check_local_cache():
+        loop = asyncio.get_event_loop()
+        def _get():
+            conn = get_db()
             try:
-                c = get_db()
+                return conn.execute(
+                    "SELECT data_json, meanings_count, word_original FROM dictionary_cache WHERE word = ?",
+                    (lookup_key,)
+                ).fetchone()
+            finally:
+                conn.close()
+        return await loop.run_in_executor(None, _get)
+
+    async def check_neo4j():
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, graph_service.get_dictionary_cache, lookup_key)
+
+    async def check_free_dict():
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, lookup_free_dictionary, lookup_key)
+
+    # 1) Parallel Lookup
+    cache_task = asyncio.create_task(check_local_cache())
+    neo4j_task = asyncio.create_task(check_neo4j())
+    free_dict_task = asyncio.create_task(check_free_dict())
+    
+    local_row, neo4j_data, free_data = await asyncio.gather(cache_task, neo4j_task, free_dict_task)
+
+    # 2) Process Results (Fast Path)
+    result_to_return = None
+    source = ""
+
+    if local_row:
+        cached = json.loads(local_row["data_json"])
+        if is_data_complete(cached):
+            result_to_return = cached
+            source = "database"
+    
+    if not result_to_return and neo4j_data and is_data_complete(neo4j_data):
+        result_to_return = neo4j_data
+        source = "database_neo4j_restored"
+        # Async restore to SQLite
+        def _sync_restore():
+            c = get_db()
+            try:
                 c.execute(
-                    """INSERT OR REPLACE INTO dictionary_cache (word, word_original, data_json, meanings_count)
-                       VALUES (?, ?, ?, ?)""",
-                    (key, original, json.dumps(data, ensure_ascii=False), data["_meanings_count"])
+                    "INSERT OR REPLACE INTO dictionary_cache (word, word_original, data_json, meanings_count) VALUES (?, ?, ?, ?)",
+                    (lookup_key, word_original, json.dumps(neo4j_data, ensure_ascii=False), len(neo4j_data.get("meanings", [])))
                 )
                 c.commit()
-                c.close()
-            except Exception as e:
-                print(f"[DB RESTORE] error: {e}")
-        
-        if background_tasks:
-            background_tasks.add_task(_restore_sqlite, lookup_key, word_original, neo4j_cached)
-        else:
-            _restore_sqlite(lookup_key, word_original, neo4j_cached)
+            finally: c.close()
+        if background_tasks: background_tasks.add_task(_sync_restore)
 
+    if result_to_return:
+        result_to_return["_source"] = source
+        # Enrich with graph connections
         connections = graph_service.get_word_connections(word_lower)
-        neo4j_cached["graph_connections"] = connections.get("connections", [])
+        result_to_return["graph_connections"] = connections.get("connections", [])
         
-        # CHECK IF ALREADY SAVED (Fixing "saved status" bug)
-        try:
-            cursor = get_db().execute("SELECT id FROM saved_vocabulary WHERE user_id = ? AND word = ?", (user_id, lookup_key))
-            neo4j_cached["is_saved"] = cursor.fetchone() is not None
-        except:
-            neo4j_cached["is_saved"] = False
-            
-        return neo4j_cached
+        # Check saved status
+        # Using a fresh connection for thread-safety within background execution context
+        # but here we are in main request flow.
+        conn = get_db()
+        cursor = conn.execute("SELECT id FROM saved_vocabulary WHERE user_id = ? AND word = ?", (user_id, lookup_key))
+        result_to_return["is_saved"] = cursor.fetchone() is not None
+        conn.close()
+        return result_to_return
 
-    # 2) Not cached or incomplete → ask AI Stream
+    # 3) Fallback or Stream if no complete data found
     llm = llm_service.get_llm()
     if not llm:
-        # LLM unavailable - return partial cache if exists
-        if row:
-            cached = json.loads(row["data_json"])
+        if local_row:
+            cached = json.loads(local_row["data_json"])
             cached["_source"] = "database_partial"
-            # Try to get graph connections anyway
-            connections = graph_service.get_word_connections(word_lower)
-            cached["graph_connections"] = connections.get("connections", [])
             return cached
-        # Try Neo4j as last resort
-        neo4j_cached = graph_service.get_dictionary_cache(lookup_key)
-        if neo4j_cached:
-            neo4j_cached["_source"] = "database_neo4j_fallback"
-            connections = graph_service.get_word_connections(word_lower)
-            neo4j_cached["graph_connections"] = connections.get("connections", [])
-            return neo4j_cached
+        if neo4j_data:
+            neo4j_data["_source"] = "database_neo4j_fallback"
+            return neo4j_data
         raise HTTPException(status_code=503, detail="LLM service unavailable")
     
     # We will use StreamingResponse to stream the AI output to the client.

@@ -936,13 +936,11 @@ function DictionaryTab({ token }: { token: string | null }) {
             className="btn-primary py-3.5 px-8 rounded-xl flex items-center gap-2 shadow-md disabled:opacity-50 transition text-lg"
           >
             {loading ? (
-              <div className="flex items-center gap-2">
-                <Sparkles className="animate-pulse text-yellow-300" size={20} />
-                <span>AI đang tra...</span>
-              </div>
+              <Sparkles className="animate-spin text-yellow-300" size={20} />
             ) : (
-              <><Search size={20} /> Tra từ</>
+              <Search size={20} />
             )}
+            <span>Tra từ</span>
           </button>
 
           {loading && (
@@ -987,26 +985,8 @@ function DictionaryTab({ token }: { token: string | null }) {
       {result && (
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500">
           {result.status === "thinking" && (!result.meanings || result.meanings.length === 0) && (
-            <div className="bg-white p-12 text-center border-b border-gray-100 flex flex-col items-center justify-center min-h-[300px]">
-              <div className="relative mb-6">
-                <div className="absolute inset-0 bg-blue-500 rounded-full animate-ping opacity-5"></div>
-                <div className="relative bg-blue-50 p-4 rounded-2xl text-blue-600 shadow-sm">
-                  <Sparkles size={32} className="animate-pulse" />
-                </div>
-              </div>
-              <h3 className="text-xl font-bold text-gray-800 mb-2">Đang tra cứu từ vựng...</h3>
-              <p className="text-gray-500 text-sm max-w-sm mx-auto">
-                AI iEdu đang phân tích <span className="font-semibold text-blue-600">"{result.word}"</span> để cung cấp thông tin chính xác nhất.
-              </p>
-
-              <div className="mt-8 flex items-center gap-2 px-4 py-2 bg-gray-50 rounded-xl border border-gray-100">
-                <div className="flex gap-1">
-                  {[0, 1, 2].map(i => (
-                    <div key={i} className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: `${i * 0.15}s` }}></div>
-                  ))}
-                </div>
-                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Processing</span>
-              </div>
+            <div className="absolute top-0 left-0 w-full h-1 z-50">
+              <div className="h-full bg-gradient-to-r from-blue-500 via-indigo-500 to-blue-500 bg-[length:200%_100%] animate-[shimmer_2s_infinite_linear]"></div>
             </div>
           )}
 
