@@ -1160,12 +1160,12 @@ function AIToolsTab({ token }: { token: string | null }) {
 
               {/* Meanings */}
               <div className="p-6 space-y-6">
-                {dictResult.meanings?.length > 0 && (
+                {Array.isArray(dictResult.meanings) && dictResult.meanings.length > 0 && (
                   <div className="flex items-center gap-2 mb-2">
                     <span className="text-sm font-bold text-gray-500">{dictResult.meanings.length} nghĩa được tìm thấy</span>
                   </div>
                 )}
-                {dictResult.meanings?.map((m: any, i: number) => (
+                {Array.isArray(dictResult.meanings) && dictResult.meanings.map((m: any, i: number) => (
                   <div key={i} className="border-l-4 border-blue-400 pl-4">
                     <div className="flex items-center gap-2 mb-2">
                       <span className="bg-blue-100 text-blue-700 px-2.5 py-0.5 rounded-lg text-sm font-bold">{m.pos || dictResult.pos}</span>
@@ -1189,7 +1189,7 @@ function AIToolsTab({ token }: { token: string | null }) {
                     )}
 
                     <div className="flex gap-6 mt-3 text-sm">
-                      {m.synonyms?.length > 0 && (
+                      {Array.isArray(m.synonyms) && m.synonyms.length > 0 && (
                         <div>
                           <span className="text-gray-400 text-xs uppercase font-semibold">Đồng nghĩa: </span>
                           {m.synonyms.map((s: string, k: number) => (
@@ -1197,7 +1197,7 @@ function AIToolsTab({ token }: { token: string | null }) {
                           ))}
                         </div>
                       )}
-                      {m.antonyms?.length > 0 && (
+                      {Array.isArray(m.antonyms) && m.antonyms.length > 0 && (
                         <div>
                           <span className="text-gray-400 text-xs uppercase font-semibold">Trái nghĩa: </span>
                           {m.antonyms.map((a: string, k: number) => (
@@ -1211,7 +1211,7 @@ function AIToolsTab({ token }: { token: string | null }) {
 
                 {/* Word family, collocations, idioms, graph connections */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 pt-4 border-t border-gray-100">
-                  {dictResult.word_family?.length > 0 && (
+                  {Array.isArray(dictResult.word_family) && dictResult.word_family.length > 0 && (
                     <div className="bg-purple-50 rounded-xl p-4">
                       <h4 className="text-sm font-bold text-purple-700 mb-2">Họ từ (Word Family)</h4>
                       <div className="flex flex-wrap gap-2">
@@ -1221,7 +1221,7 @@ function AIToolsTab({ token }: { token: string | null }) {
                       </div>
                     </div>
                   )}
-                  {dictResult.collocations?.length > 0 && (
+                  {Array.isArray(dictResult.collocations) && dictResult.collocations.length > 0 && (
                     <div className="bg-orange-50 rounded-xl p-4">
                       <h4 className="text-sm font-bold text-orange-700 mb-2">Kết hợp từ (Collocations)</h4>
                       <div className="flex flex-wrap gap-2">
@@ -1231,7 +1231,7 @@ function AIToolsTab({ token }: { token: string | null }) {
                       </div>
                     </div>
                   )}
-                  {dictResult.idioms?.length > 0 && (
+                  {Array.isArray(dictResult.idioms) && dictResult.idioms.length > 0 && (
                     <div className="bg-green-50 rounded-xl p-4">
                       <h4 className="text-sm font-bold text-green-700 mb-2">Thành ngữ (Idioms)</h4>
                       <div className="space-y-3">
@@ -1249,7 +1249,7 @@ function AIToolsTab({ token }: { token: string | null }) {
                       </div>
                     </div>
                   )}
-                  {dictResult.graph_connections?.length > 0 && (
+                  {Array.isArray(dictResult.graph_connections) && dictResult.graph_connections.length > 0 && (
                     <div className="bg-cyan-50 rounded-xl p-4">
                       <h4 className="text-sm font-bold text-cyan-700 mb-2 flex items-center gap-1"><Network size={14} /> Đồ thị tri thức</h4>
                       <div className="space-y-1">

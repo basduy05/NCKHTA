@@ -600,9 +600,9 @@ def translate_meanings_with_ai_stream(word: str, meanings: list, free_data: dict
         "- 'audio_url_us' — URL to US pronunciation audio (from dictionaryapi.dev if available)\n"
         "- 'level': CEFR level (A1-C2)\n"
         "- 'frequency': 'very common', 'common', 'uncommon', or 'rare'\n"
-        "- 'word_family': 5-8 related word forms (e.g. run → runner, running, ran)\n"
-        "- 'collocations': 5-8 common collocations with example sentences\n"
-        "- 'idioms': 2-4 idioms with Vietnamese translations\n"
+        "- 'word_family': 3-5 related word forms (e.g. run → runner, running, ran)\n"
+        "- 'collocations': 3-5 common collocations\n"
+        "- 'idioms': 1-2 idioms with Vietnamese translations\n"
         "- 'notes': additional notes about usage\n\n"
         "Return EXACTLY a JSON object:\n"
         '{{\n'
@@ -646,11 +646,13 @@ def translate_meanings_with_ai_stream(word: str, meanings: list, free_data: dict
     try:
         accumulated_text = ""
         last_yielded_json = ""
+        chunk_count = 0
         
         for content in _safe_stream_invoke(chain, {"word": word, "definitions": definitions_text}):
             if content:
                 accumulated_text += content
                 elapsed = time.time() - start_time
+                chunk_count += 1
                 
                 # Yield raw thinking chunk
                 yield json.dumps({
@@ -660,37 +662,38 @@ def translate_meanings_with_ai_stream(word: str, meanings: list, free_data: dict
                     "elapsed": round(elapsed, 1)
                 }, ensure_ascii=False) + "\n"
                 
-                # Cố gắng repair json từ text accumulate
-                try:
-                    repaired = json_repair.repair_json(accumulated_text, return_objects=True)
-                    if isinstance(repaired, dict) and "meanings" in repaired:
-                        # Gắn thêm trường metadata
-                        repaired["status"] = "result"
-                        repaired["_source"] = "ai"  # Mark as AI-generated
-                        repaired["_raw_thinking_stream"] = accumulated_text
-                        repaired["elapsed"] = round(elapsed, 1)
-                        
-                        # Bổ sung phonetics từ Free Dictionary API nếu AI không trả về
-                        if free_data:
-                            # UK phonetics
-                            if not repaired.get("phonetic_uk") and phonetic_uk:
-                                repaired["phonetic_uk"] = phonetic_uk
-                            # US phonetics
-                            if not repaired.get("phonetic_us") and phonetic_us:
-                                repaired["phonetic_us"] = phonetic_us
-                            # Audio URLs
-                            if not repaired.get("audio_url_uk") and audio_url:
-                                repaired["audio_url_uk"] = audio_url
-                            if not repaired.get("audio_url_us") and audio_url:
-                                repaired["audio_url_us"] = audio_url
-                        
-                        # Chỉ yield nếu dictionary có thay đổi so với chunk trước
-                        current_json = json.dumps(repaired, ensure_ascii=False)
-                        if current_json != last_yielded_json:
-                            yield current_json + "\n"
-                            last_yielded_json = current_json
-                except Exception:
-                    pass
+                # Cố gắng repair json từ text accumulate, nhưng chỉ làm mỗi 10 chunks để tiết kiệm CPU
+                if chunk_count % 10 == 0 or len(content) > 100:
+                    try:
+                        repaired = json_repair.repair_json(accumulated_text, return_objects=True)
+                        if isinstance(repaired, dict) and isinstance(repaired.get("meanings"), list):
+                            # Gắn thêm trường metadata
+                            repaired["status"] = "result"
+                            repaired["_source"] = "ai"  # Mark as AI-generated
+                            repaired["_raw_thinking_stream"] = accumulated_text
+                            repaired["elapsed"] = round(elapsed, 1)
+                            
+                            # Bổ sung phonetics từ Free Dictionary API nếu AI không trả về
+                            if free_data:
+                                # UK phonetics
+                                if not repaired.get("phonetic_uk") and phonetic_uk:
+                                    repaired["phonetic_uk"] = phonetic_uk
+                                # US phonetics
+                                if not repaired.get("phonetic_us") and phonetic_us:
+                                    repaired["phonetic_us"] = phonetic_us
+                                # Audio URLs
+                                if not repaired.get("audio_url_uk") and audio_url:
+                                    repaired["audio_url_uk"] = audio_url
+                                if not repaired.get("audio_url_us") and audio_url:
+                                    repaired["audio_url_us"] = audio_url
+                            
+                            # Chỉ yield nếu dictionary có thay đổi so với chunk trước
+                            current_json = json.dumps(repaired, ensure_ascii=False)
+                            if current_json != last_yielded_json:
+                                yield current_json + "\n"
+                                last_yielded_json = current_json
+                    except Exception:
+                        pass
     except Exception as e:
         print(f"[AI Stream Translation] Error: {e}")
         yield json.dumps({"error": str(e)}) + "\n"
@@ -733,9 +736,9 @@ def lookup_dictionary_full_ai(word: str):
         '  "usage_notes": brief contextual note\n'
         '"level": CEFR level (A1-C2)\n'
         '"frequency": "very common"/"common"/"uncommon"/"rare"\n'
-        '"word_family": array of 5-8 related word forms\n'
-        '"collocations": array of 5-8 common collocations\n'
-        '"idioms": array of 2-4 idiom objects {{"idiom": "...", "meaning_vn": "..."}}\n'
+        '"word_family": array of 3-5 related word forms\n'
+        '"collocations": array of 3-5 common collocations\n'
+        '"idioms": array of 1-2 idiom objects {{"idiom": "...", "meaning_vn": "..."}}\n'
         '"sources": ["Cambridge", "Oxford", "Longman", "Merriam-Webster", "Collins"]\n\n'
         "Return ONLY valid JSON. No markdown, no extra text."
     )
@@ -802,9 +805,9 @@ def lookup_dictionary_full_ai_stream(word: str):
         '  "usage_notes": brief contextual note\n'
         '"level": CEFR level (A1-C2)\n'
         '"frequency": "very common"/"common"/"uncommon"/"rare"\n'
-        '"word_family": array of 5-8 related word forms\n'
-        '"collocations": array of 5-8 common collocations\n'
-        '"idioms": array of 2-4 idiom objects {{"idiom": "...", "meaning_vn": "..."}}\n'
+        '"word_family": array of 3-5 related word forms\n'
+        '"collocations": array of 3-5 common collocations\n'
+        '"idioms": array of 1-2 idiom objects {{"idiom": "...", "meaning_vn": "..."}}\n'
         '"sources": ["Cambridge", "Oxford", "Longman", "Merriam-Webster", "Collins"]\n\n'
         "Return ONLY valid JSON. No markdown, no extra text."
     )
@@ -831,10 +834,12 @@ def lookup_dictionary_full_ai_stream(word: str):
         start_time = time.time()
         accumulated_text = ""
         last_yielded_json = ""
+        chunk_count = 0
         for content in _safe_stream_invoke(chain, {"word": word}):
             if content:
                 accumulated_text += content
                 elapsed = time.time() - start_time
+                chunk_count += 1
                 
                 # Yield thinking status
                 yield json.dumps({
@@ -844,19 +849,21 @@ def lookup_dictionary_full_ai_stream(word: str):
                     "elapsed": round(elapsed, 1)
                 }, ensure_ascii=False) + "\n"
                 
-                try:
-                    repaired = json_repair.repair_json(accumulated_text, return_objects=True)
-                    if isinstance(repaired, dict) and "word" in repaired:
-                        repaired["status"] = "result"
-                        repaired["_source"] = "ai"  # Mark as AI-generated
-                        repaired["_raw_thinking_stream"] = accumulated_text
-                        repaired["elapsed"] = round(elapsed, 1)
-                        current_json = json.dumps(repaired, ensure_ascii=False)
-                        if current_json != last_yielded_json:
-                            yield current_json + "\n"
-                            last_yielded_json = current_json
-                except Exception:
-                    pass
+                # Chỉ repair json mỗi 10 chunks
+                if chunk_count % 10 == 0:
+                    try:
+                        repaired = json_repair.repair_json(accumulated_text, return_objects=True)
+                        if isinstance(repaired, dict) and "word" in repaired and isinstance(repaired.get("meanings"), list):
+                            repaired["status"] = "result"
+                            repaired["_source"] = "ai"
+                            repaired["elapsed"] = round(elapsed, 1)
+                            
+                            current_json = json.dumps(repaired, ensure_ascii=False)
+                            if current_json != last_yielded_json:
+                                yield current_json + "\n"
+                                last_yielded_json = current_json
+                    except Exception:
+                        pass
     except Exception as e:
         print(f"lookup_dictionary_full_ai_stream error: {e}")
         yield json.dumps({"word": word, "error": str(e)}) + "\n"
