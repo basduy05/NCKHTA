@@ -1049,9 +1049,27 @@ def generate_exercises_from_text(text: str, exercise_type: str = "mixed", num_qu
     # Truncate long texts
     text_truncated = text[:3000] if len(text) > 3000 else text
 
+    # Fetch grammar rules from database
+    grammar_context = ""
+    try:
+        from ..database import get_db
+        conn = get_db()
+        cursor = conn.execute("SELECT name, description FROM grammar_rules ORDER BY id DESC")
+        rules = cursor.fetchall()
+        conn.close()
+        if rules:
+            grammar_context = "\n\nWe are currently focusing on the following GRAMMAR STRUCTURES. You MUST prioritize applying these grammar rules in your generated exercises if they fit the context of the text:\n"
+            for r in rules:
+                name = r["name"]
+                desc = r["description"] or ""
+                grammar_context += f"- {name}: {desc[:100]}...\n"
+    except Exception as e:
+        print(f"Error fetching grammar rules for AI: {e}")
+
     prompt = PromptTemplate.from_template(
         "You are an English teacher creating exercises from the following text.\n\n"
         "TEXT:\n{text}\n\n"
+        "{grammar_context}"
         "Create {num} exercises of type: {exercise_type}\n\n"
         "Return a JSON object with:\n"
         '"title": suggested exercise title\n'
@@ -1075,6 +1093,7 @@ def generate_exercises_from_text(text: str, exercise_type: str = "mixed", num_qu
             "text": text_truncated,
             "exercise_type": exercise_type,
             "num": num_questions,
+            "grammar_context": grammar_context
         })
         result = parse_json_response(response.content)
         if isinstance(result, dict):

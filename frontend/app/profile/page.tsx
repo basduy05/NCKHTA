@@ -18,7 +18,7 @@ interface ProfileData {
 export default function ProfilePage() {
   const { user, token, logout, isInitialized } = useAuth();
   const router = useRouter();
-  
+
   const [profile, setProfile] = useState<ProfileData>({
     name: "",
     email: "",
@@ -29,12 +29,12 @@ export default function ProfilePage() {
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
-  
+
   // Wait for auth to initialize before rendering
   if (!isInitialized) {
     return <div className="flex justify-center items-center h-64"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600"></div></div>;
   }
-  
+
   // Password change state
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -259,7 +259,7 @@ export default function ProfilePage() {
                   <User className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
                   <input
                     type="text"
-                    value={profile.role === "STUDENT" ? "Học sinh" : profile.role === "TEACHER" ? "Giáo viên" : "Quản trị viên"}
+                    value={profile.role?.toUpperCase() === "STUDENT" ? "Học sinh" : profile.role?.toUpperCase() === "TEACHER" ? "Giáo viên" : "Quản trị viên"}
                     disabled
                     className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-xl bg-gray-50 text-gray-500 cursor-not-allowed"
                   />
