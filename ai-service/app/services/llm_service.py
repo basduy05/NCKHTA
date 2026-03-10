@@ -896,8 +896,9 @@ def lookup_dictionary(word: str):
         free_data["meanings"] = meanings
         free_data["level"] = level
         free_data["word_family"] = word_family if word_family else []
-        free_data["collocations"] = collocations if collocations else []
-        free_data["idioms"] = idioms if idioms else []
+        free_data["collocations"] = collocations if collocations else free_data.get("collocations", [])
+        # Preserve idioms from Free Dictionary API if AI returns empty
+        free_data["idioms"] = idioms if idioms else free_data.get("idioms", [])
         free_data["sources"] = ["Free Dictionary API (Wiktionary)", "Cambridge", "Oxford", "Merriam-Webster"]
         free_data.pop("_needs_translation", None)
         

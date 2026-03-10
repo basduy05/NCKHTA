@@ -384,10 +384,21 @@ def dictionary_lookup(req: DictionaryRequest, authorization: str = Header(...), 
     # 2) Not cached or incomplete → ask AI Stream
     llm = llm_service.get_llm()
     if not llm:
+        # LLM unavailable - return partial cache if exists
         if row:
             cached = json.loads(row["data_json"])
             cached["_source"] = "database_partial"
+            # Try to get graph connections anyway
+            connections = graph_service.get_word_connections(word_lower)
+            cached["graph_connections"] = connections.get("connections", [])
             return cached
+        # Try Neo4j as last resort
+        neo4j_cached = graph_service.get_dictionary_cache(lookup_key)
+        if neo4j_cached:
+            neo4j_cached["_source"] = "database_neo4j_fallback"
+            connections = graph_service.get_word_connections(word_lower)
+            neo4j_cached["graph_connections"] = connections.get("connections", [])
+            return neo4j_cached
         raise HTTPException(status_code=503, detail="LLM service unavailable")
     
     # We will use StreamingResponse to stream the AI output to the client.
