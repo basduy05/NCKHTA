@@ -566,7 +566,7 @@ def list_vocabulary(
         params.append(level)
 
     query += " ORDER BY created_at DESC"
-    rows = conn.execute(query, params).fetchall()
+    rows = conn.execute(query, tuple(params)).fetchall()
     conn.close()
     return [dict(r) for r in rows]
 

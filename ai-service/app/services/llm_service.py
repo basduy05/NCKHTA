@@ -148,7 +148,8 @@ def get_llm(provider=None):
         google_key = _get_setting("GOOGLE_API_KEY")
         if google_key and provider in (None, "google"):
             os.environ["GOOGLE_API_KEY"] = google_key
-            return ChatGoogleGenerativeAI(model="models/gemini-pro-latest")
+            # Use faster gemini-1.5-flash model instead of gemini-pro-latest
+            return ChatGoogleGenerativeAI(model="gemini-1.5-flash", timeout=30)
 
     if provider != "google" and provider != "cohere":
         openai_key = _get_setting("OPENAI_API_KEY")
@@ -506,41 +507,17 @@ def translate_meanings_with_ai_stream(word: str, meanings: list, estimate_level:
         for i, m in enumerate(meanings[:20])
     )
     
+    # Simplified prompt for faster translation
     prompt = PromptTemplate.from_template(
-        "You are an expert bilingual lexicographer combining knowledge from Cambridge Dictionary, "
-        "Oxford Advanced Learner's Dictionary, Merriam-Webster, Longman, Collins, Macmillan, "
-        "and Urban Dictionary (for slang/informal usage).\n"
-        "I have raw dictionary meanings for the English word '{word}'.\n"
-        "Your task is to consolidate into 4-6 distinct grouped meanings, BUT also ADD any important "
-        "meanings that are MISSING from the raw data (especially slang, informal, or specialized meanings).\n\n"
-        "Raw Definitions:\n{definitions}\n\n"
-        "For EACH distinct meaning, provide ALL of these fields (NEVER leave any empty):\n"
-        "1. 'pos' — part of speech\n"
-        "2. 'definition_en' — clean English definition\n"
-        "3. 'definition_vn' — natural Vietnamese translation\n"
-        "4. 'examples' — 2-3 realistic example sentences. MUST have at least 2.\n"
-        "5. 'synonyms' — 3-5 synonyms\n"
-        "6. 'antonyms' — 2-3 antonyms (empty array if none)\n"
-        "7. 'register' — one of: 'formal', 'informal', 'slang', 'technical', 'literary', 'neutral'\n"
-        "8. 'usage_notes' — brief note on when/how to use this meaning (e.g. 'common in spoken English')\n\n"
-        "Also provide:\n"
+        "You are an English-Vietnamese dictionary translator.\n"
+        "Translate the following English meanings to Vietnamese.\n\n"
+        "Word: {word}\n"
+        "Definitions:\n{definitions}\n\n"
+        "Return a JSON object with:\n"
+        "- 'meanings': array of meanings with 'pos', 'definition_en', 'definition_vn', 'examples'\n"
         "- 'level': CEFR level (A1-C2)\n"
-        "- 'frequency': 'very common', 'common', 'uncommon', or 'rare'\n"
-        "- 'word_family': 5-8 related word forms (e.g. run → runner, running, ran)\n"
-        "- 'collocations': 5-8 common collocations\n"
-        "- 'idioms': 2-4 idioms with Vietnamese translations\n\n"
-        "Return EXACTLY a JSON object:\n"
-        '{{\n'
-        '  "meanings": [{{"pos": "...", "definition_en": "...", "definition_vn": "...", '
-        '"examples": ["..."], "synonyms": ["..."], "antonyms": ["..."], '
-        '"register": "neutral", "usage_notes": "..."}}],\n'
-        '  "level": "B1",\n'
-        '  "frequency": "common",\n'
-        '  "word_family": ["..."],\n'
-        '  "collocations": ["..."],\n'
-        '  "idioms": [{{"idiom": "...", "meaning_vn": "..."}}]\n'
-        '}}\n\n'
-        "Return ONLY valid JSON. No markdown."
+        "- 'word_family': related word forms\n"
+        "Return ONLY valid JSON."
     )
     
     chain = prompt | llm
