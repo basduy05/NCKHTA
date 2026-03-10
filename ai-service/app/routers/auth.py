@@ -1,15 +1,22 @@
 from fastapi import APIRouter, HTTPException, Depends, status, BackgroundTasks
 from pydantic import BaseModel, EmailStr
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import sqlite3
 import time
 from ..database import get_db, UserCreate
 from ..services import auth_service
-from ..dependencies import get_admin_user
+from ..dependencies import get_admin_user, get_current_user
 from ..services.auth_service import (
-    UserRegister, UserLogin, OTPVerify, OTP_EXPIRE_MINUTES
+    UserRegister, UserLogin, OTPVerify, OTP_EXPIRE_MINUTES,
+    LoginOTPRequest, VerifyLoginOTP
 )
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
+security = HTTPBearer()
+
+# ---------------------------------------------------------------------------
+# Pydantic models for request bodies
+# ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
 # Pydantic models for request bodies
@@ -78,10 +85,17 @@ async def register(user: UserRegister, background_tasks: BackgroundTasks):
         hashed_password = auth_service.get_password_hash(user.password)
         otp_expires = int(time.time()) + OTP_EXPIRE_MINUTES * 60
 
-        cursor.execute(
-            "INSERT INTO users (name, email, role, password_hash, otp, otp_expires, is_verified) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (user.name, user.email, user.role, hashed_password, otp, otp_expires, 0)
-        )
+        # Insert user with phone number if provided
+        if user.phone:
+            cursor.execute(
+                "INSERT INTO users (name, email, role, password_hash, phone, otp, otp_expires, is_verified) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (user.name, user.email, user.role, hashed_password, user.phone, otp, otp_expires, 0)
+            )
+        else:
+            cursor.execute(
+                "INSERT INTO users (name, email, role, password_hash, otp, otp_expires, is_verified) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (user.name, user.email, user.role, hashed_password, otp, otp_expires, 0)
+            )
         conn.commit()
         conn.close()
 
@@ -193,12 +207,211 @@ async def login(data: UserLogin):
         raise HTTPException(status_code=500, detail=f"Server error: {str(e)}")
 
 
+# --- Login 2FA OTP endpoints ---
+@router.post("/login/send-otp")
+async def login_send_otp(data: LoginOTPRequest, background_tasks: BackgroundTasks):
+    """Send OTP for login 2FA verification."""
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    cursor.execute("SELECT id, name, is_verified FROM users WHERE email = ?", (data.email,))
+    user = cursor.fetchone()
+    
+    if not user:
+        conn.close()
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    if not user['is_verified']:
+        conn.close()
+        raise HTTPException(status_code=400, detail="Account not verified. Please verify your account first.")
+    
+    # Generate OTP for login
+    otp = auth_service.generate_otp()
+    otp_expires = int(time.time()) + OTP_EXPIRE_MINUTES * 60
+    
+    # Store login OTP (use separate fields to distinguish from registration OTP)
+    cursor.execute(
+        "UPDATE users SET login_otp = ?, login_otp_expires = ? WHERE id = ?",
+        (otp, otp_expires, user['id'])
+    )
+    conn.commit()
+    conn.close()
+    
+    # Send OTP email
+    background_tasks.add_task(auth_service.send_otp_email, data.email, otp, is_login_otp=True)
+    
+    return {"message": "OTP sent to your email. Please verify to login.", "email": data.email}
+
+
+@router.post("/login/verify-otp")
+async def login_verify_otp(data: VerifyLoginOTP):
+    """Verify OTP for login 2FA and return token."""
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    cursor.execute(
+        "SELECT id, name, role, login_otp, login_otp_expires FROM users WHERE email = ?",
+        (data.email,)
+    )
+    user = cursor.fetchone()
+    
+    if not user:
+        conn.close()
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Check if login OTP exists
+    if not user['login_otp']:
+        conn.close()
+        raise HTTPException(status_code=400, detail="No login OTP found. Please request a new OTP.")
+    
+    # Check OTP expiry
+    if int(time.time()) > user['login_otp_expires']:
+        conn.close()
+        raise HTTPException(status_code=400, detail="OTP has expired. Please request a new OTP.")
+    
+    # Verify OTP
+    if user['login_otp'] != data.otp:
+        conn.close()
+        raise HTTPException(status_code=400, detail="Invalid OTP")
+    
+    # Clear login OTP after successful verification
+    cursor.execute(
+        "UPDATE users SET login_otp = NULL, login_otp_expires = NULL WHERE id = ?",
+        (user['id'],)
+    )
+    conn.commit()
+    conn.close()
+    
+    # Generate JWT token
+    access_token = auth_service.generate_access_token(user['id'], data.email)
+    
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user": {
+            "id": user['id'],
+            "name": user['name'],
+            "email": data.email,
+            "role": user['role']
+        }
+    }
+
+
 @router.post("/logout")
 def logout():
     """Logout endpoint — frontend should clear token from localStorage."""
     # Server-side blacklisting would require a token store (Redis etc.)
     # For now, clients must clear the token; JTI-based blacklisting can be added later.
     return {"message": "Logged out successfully"}
+
+
+# --- Profile endpoints ---
+class UpdateProfileRequest(BaseModel):
+    name: str | None = None
+    phone: str | None = None
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+
+@router.get("/me")
+async def get_current_user_info():
+    """Get current user information"""
+    # This endpoint is used with token auth, get user from token in production
+    # For now, return a placeholder - the frontend will handle auth via context
+    return {"message": "Use token auth"}
+
+
+@router.put("/profile")
+async def update_profile(data: UpdateProfileRequest, credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """Update user profile"""
+    token = credentials.credentials
+    try:
+        user_data = auth_service.verify_access_token(token)
+        user_id = int(user_data['sub'])
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    # Build update query dynamically
+    updates = []
+    params = []
+    if data.name is not None:
+        updates.append("name = ?")
+        params.append(data.name)
+    if data.phone is not None:
+        updates.append("phone = ?")
+        params.append(data.phone)
+    
+    if not updates:
+        conn.close()
+        raise HTTPException(status_code=400, detail="No fields to update")
+    
+    params.append(user_id)
+    
+    try:
+        cursor.execute(f"UPDATE users SET {', '.join(updates)} WHERE id = ?", params)
+        conn.commit()
+        
+        # Fetch updated user
+        cursor.execute("SELECT id, name, email, role, phone FROM users WHERE id = ?", (user_id,))
+        user = cursor.fetchone()
+        conn.close()
+        
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        return {
+            "id": user['id'],
+            "name": user['name'],
+            "email": user['email'],
+            "role": user['role'],
+            "phone": user.get('phone', '')
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        if 'conn' in locals() and conn:
+            conn.close()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/change-password")
+async def change_password(data: ChangePasswordRequest, credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """Change user password"""
+    token = credentials.credentials
+    try:
+        user_data = auth_service.verify_access_token(token)
+        user_id = int(user_data['sub'])
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    # Get current password hash
+    cursor.execute("SELECT password_hash FROM users WHERE id = ?", (user_id,))
+    user = cursor.fetchone()
+    
+    if not user:
+        conn.close()
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Verify current password
+    if not auth_service.verify_password(data.current_password, user['password_hash']):
+        conn.close()
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+    
+    # Hash new password and update
+    new_hash = auth_service.get_password_hash(data.new_password)
+    cursor.execute("UPDATE users SET password_hash = ? WHERE id = ?", (new_hash, user_id))
+    conn.commit()
+    conn.close()
+    
+    return {"message": "Password changed successfully"}
 
 
 @router.post("/resend-otp")

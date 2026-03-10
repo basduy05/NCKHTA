@@ -204,6 +204,20 @@ def init_db():
         cursor.execute("ALTER TABLE users ADD COLUMN password_reset_expires INTEGER")
     except SQLITE_OP_ERROR: pass
 
+    # --- MIGRATION: Phone number for user ---
+    try:
+        cursor.execute("ALTER TABLE users ADD COLUMN phone TEXT")
+    except SQLITE_OP_ERROR: pass
+
+    # --- MIGRATION: Login 2FA OTP ---
+    try:
+        cursor.execute("ALTER TABLE users ADD COLUMN login_otp TEXT")
+    except SQLITE_OP_ERROR: pass
+
+    try:
+        cursor.execute("ALTER TABLE users ADD COLUMN login_otp_expires INTEGER")
+    except SQLITE_OP_ERROR: pass
+
     # --- MIGRATION: SET DEFAULT PASSWORDS FOR SEEDED USERS IF MISSING ---
     try:
         cursor.execute("SELECT id FROM users WHERE password_hash IS NULL OR password_hash = '' LIMIT 1")

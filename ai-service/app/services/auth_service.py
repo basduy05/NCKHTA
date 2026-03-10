@@ -39,13 +39,24 @@ class UserRegister(BaseModel):
     name: str
     email: EmailStr
     password: str
+    phone: str | None = None
     role: str = "STUDENT"
 
 class UserLogin(BaseModel):
     email: EmailStr
     password: str
+    otp: str | None = None  # Optional OTP for 2FA
     
 class OTPVerify(BaseModel):
+    email: EmailStr
+    otp: str
+
+class LoginOTPRequest(BaseModel):
+    """Request to send OTP for login verification"""
+    email: EmailStr
+
+class VerifyLoginOTP(BaseModel):
+    """Verify OTP for login 2FA"""
     email: EmailStr
     otp: str
 
@@ -217,9 +228,57 @@ def send_email(to_email: str, subject: str, html_content: str) -> bool:
 
 # --- EMAIL TEMPLATES ---
 
-def send_otp_email(to_email: str, otp_code: str):
-    subject = "🔐 Xác thực tài khoản - Hệ thống iEdu"
-    html = f"""
+def send_otp_email(to_email: str, otp_code: str, is_login_otp: bool = False):
+    """Send OTP email - can be for registration verification or login 2FA"""
+    if is_login_otp:
+        subject = "🔐 Xác thực đăng nhập - Hệ thống iEdu"
+        html = f"""
+        <html>
+        <head>
+            <meta charset="utf-8">
+        </head>
+        <body style="margin:0;padding:0;background-color:#f4f7fa;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;">
+            <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f7fa;padding:40px 0;">
+                <tr><td align="center">
+                    <table width="520" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;box-shadow:0 2px 12px rgba(0,0,0,0.08);overflow:hidden;">
+                        <!-- Header -->
+                        <tr>
+                            <td style="background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);padding:30px 40px;text-align:center;">
+                                <h1 style="margin:0;color:#ffffff;font-size:24px;font-weight:700;">📚 iEdu</h1>
+                                <p style="margin:5px 0 0;color:rgba(255,255,255,0.85);font-size:13px;">English Assessment &amp; Management</p>
+                            </td>
+                        </tr>
+                        <!-- Body -->
+                        <tr>
+                            <td style="padding:35px 40px;">
+                                <h2 style="margin:0 0 15px;color:#2d3748;font-size:20px;">Xác thực đăng nhập</h2>
+                                <p style="color:#4a5568;font-size:15px;line-height:1.6;margin:0 0 25px;">
+                                    Chào bạn! Chúng tôi nhận được yêu cầu đăng nhập vào hệ thống <strong>iEdu</strong>. Vui lòng sử dụng mã OTP bên dưới để xác thực:
+                                </p>
+                                <div style="background:#f0f4ff;border:2px dashed #667eea;border-radius:10px;padding:20px;text-align:center;margin:0 0 25px;">
+                                    <span style="font-size:36px;font-weight:800;letter-spacing:8px;color:#667eea;">{otp_code}</span>
+                                </div>
+                                <p style="color:#718096;font-size:13px;line-height:1.5;margin:0 0 10px;">
+                                    ⏰ Mã này sẽ hết hạn sau <strong>10 phút</strong>.<br>
+                                    🔒 Nếu bạn không yêu cầu mã này, vui lòng bỏ qua email.
+                                </p>
+                            </td>
+                        </tr>
+                        <!-- Footer -->
+                        <tr>
+                            <td style="background:#f8fafc;padding:20px 40px;border-top:1px solid #e2e8f0;text-align:center;">
+                                <p style="margin:0;color:#a0aec0;font-size:12px;">© 2025 iEdu - English Assessment &amp; Management System</p>
+                            </td>
+                        </tr>
+                    </table>
+                </td></tr>
+            </table>
+        </body>
+        </html>
+        """
+    else:
+        subject = "🔐 Xác thực tài khoản - Hệ thống iEdu"
+        html = f""""
     <html>
     <head>
         <meta charset="utf-8">

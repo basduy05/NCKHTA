@@ -1,17 +1,19 @@
 ﻿"use client";
 import { useEffect, useState } from "react";
-import { Mail, Lock, LogIn } from "lucide-react";
+import { Mail, Lock, LogIn, ArrowLeft } from "lucide-react";
 import Image from "next/image";
 import { useAuth } from "../context/AuthContext";
 import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
-  const { login, user, isInitialized } = useAuth();
+  const { login, loginSendOTP, loginVerifyOTP, user, isInitialized } = useAuth();
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [otp, setOtp] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const [showOTP, setShowOTP] = useState(false);  // Show OTP input after password verification
 
   useEffect(() => {
     if (isInitialized && user) {
@@ -31,6 +33,30 @@ export default function LoginPage() {
     setIsLoading(false);
   };
 
+  const handleSendOTP = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setError("");
+
+    const success = await loginSendOTP(email);
+    if (success) {
+      setShowOTP(true);
+    }
+    setIsLoading(false);
+  };
+
+  const handleVerifyOTP = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setError("");
+
+    const success = await loginVerifyOTP(email, otp);
+    if (!success) {
+      setError("Mã OTP không hợp lệ hoặc đã hết hạn.");
+    }
+    setIsLoading(false);
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
       <div className="max-w-md w-full bg-white rounded-3xl shadow-xl overflow-hidden">
@@ -43,6 +69,44 @@ export default function LoginPage() {
         </div>
 
         <div className="p-8">
+          {showOTP ? (
+            // OTP Verification Form
+            <form onSubmit={handleVerifyOTP} className="space-y-6">
+              <div className="text-center mb-4">
+                <button
+                  type="button"
+                  onClick={() => { setShowOTP(false); setOtp(""); }}
+                  className="text-blue-600 hover:text-blue-800 text-sm flex items-center justify-center gap-1"
+                >
+                  <ArrowLeft size={16} /> Quay lại đăng nhập
+                </button>
+                <h2 className="text-xl font-bold text-gray-800 mt-3">Xác thực 2 bước</h2>
+                <p className="text-gray-600 text-sm mt-1">Nhập mã OTP được gửi đến email của bạn</p>
+              </div>
+              
+              {error && (
+                <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm text-center">
+                  {error}
+                </div>
+              )}
+
+              <div>
+                <input 
+                  type="text" 
+                  required 
+                  value={otp} 
+                  onChange={e => setOtp(e.target.value)} 
+                  className="w-full px-4 py-3 text-center tracking-widest text-lg border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none" 
+                  placeholder="Nhập mã OTP 6 số" 
+                  maxLength={6}
+                />
+              </div>
+
+              <button type="submit" disabled={isLoading || otp.length < 6} className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition flex items-center justify-center shadow-lg disabled:opacity-50">
+                {isLoading ? "Đang xác thực..." : "Xác nhận OTP"}
+              </button>
+            </form>
+          ) : (
           <form onSubmit={handleLogin} className="space-y-6">
             {error && (
               <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm text-center">
@@ -77,6 +141,7 @@ export default function LoginPage() {
               <a href="/register" className="text-gray-500 hover:text-blue-600 transition font-semibold">Tạo tài khoản mới</a>
             </div>
           </form>
+          )}
         </div>
       </div>
     </div>
