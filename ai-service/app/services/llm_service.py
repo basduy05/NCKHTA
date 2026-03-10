@@ -665,6 +665,7 @@ def translate_meanings_with_ai_stream(word: str, meanings: list, free_data: dict
                     if isinstance(repaired, dict) and "meanings" in repaired:
                         # Gắn thêm trường metadata
                         repaired["status"] = "result"
+                        repaired["_source"] = "ai"  # Mark as AI-generated
                         repaired["_raw_thinking_stream"] = accumulated_text
                         repaired["elapsed"] = round(elapsed, 1)
                         
@@ -846,6 +847,7 @@ def lookup_dictionary_full_ai_stream(word: str):
                     repaired = json_repair.repair_json(accumulated_text, return_objects=True)
                     if isinstance(repaired, dict) and "word" in repaired:
                         repaired["status"] = "result"
+                        repaired["_source"] = "ai"  # Mark as AI-generated
                         repaired["_raw_thinking_stream"] = accumulated_text
                         repaired["elapsed"] = round(elapsed, 1)
                         current_json = json.dumps(repaired, ensure_ascii=False)
