@@ -338,10 +338,10 @@ async def get_current_user_info(credentials: HTTPAuthorizationCredentials = Depe
     
     return {
         "id": user['id'],
-        "name": user['name'],
+        "name": user['name'] or "Người dùng iEdu",
         "email": user['email'],
         "role": user['role'],
-        "phone": user.get('phone', '')
+        "phone": user.get('phone') or ""
     }
 
 

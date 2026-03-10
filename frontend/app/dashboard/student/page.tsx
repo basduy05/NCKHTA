@@ -784,6 +784,7 @@ function DictionaryTab({ token }: { token: string | null }) {
       let buffer = "";
       let finalData: any = { word: trimmedWord, meanings: [] };
 
+      let lastUpdate = Date.now();
       while (reader && !done) {
         const { value, done: readerDone } = await reader.read();
         done = readerDone;
@@ -793,32 +794,30 @@ function DictionaryTab({ token }: { token: string | null }) {
           buffer = lines.pop() || "";
 
           for (const line of lines) {
-            // Handle both "data: " prefix and raw JSON
             let rawJson = line.trim();
-            console.log("[DEBUG] Raw line received:", rawJson);
-            if (rawJson.startsWith("data: ")) {
-              rawJson = rawJson.replace("data: ", "");
-            }
+            if (rawJson.startsWith("data: ")) rawJson = rawJson.replace("data: ", "");
             if (rawJson === "[DONE]" || !rawJson) continue;
 
             try {
               const chunkData = JSON.parse(rawJson);
-              console.log("[DEBUG] Parsed chunk:", chunkData);
-
-              // If this is a final result chunk, it might have is_saved
-              if (chunkData.status === "result" && chunkData.is_saved !== undefined) {
-                setSaved(chunkData.is_saved);
-              }
+              if (chunkData.status === "result" && chunkData.is_saved !== undefined) setSaved(chunkData.is_saved);
 
               finalData = { ...finalData, ...chunkData };
-              console.log("[DEBUG] Updated finalData:", finalData);
-              setResult({ ...finalData });
+
+              // Throttle UI updates to every 100ms to avoid 'laggy' feeling
+              const now = Date.now();
+              if (now - lastUpdate > 100) {
+                setResult({ ...finalData });
+                lastUpdate = now;
+              }
             } catch (e) {
               console.warn("[DEBUG] Error parsing chunk:", line, e);
             }
           }
         }
       }
+      // Final update to ensure last chunks are rendered
+      setResult({ ...finalData });
 
       if (buffer.trim()) {
         try {
@@ -988,36 +987,26 @@ function DictionaryTab({ token }: { token: string | null }) {
       {result && (
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500">
           {result.status === "thinking" && (!result.meanings || result.meanings.length === 0) && (
-            <div className="bg-gradient-to-br from-blue-50/80 via-white to-indigo-50/80 p-16 text-center border-b border-blue-100 flex flex-col items-center justify-center min-h-[400px]">
-              <div className="relative mb-8">
-                <div className="absolute inset-0 bg-blue-500 rounded-full animate-ping opacity-10"></div>
-                <div className="absolute inset-0 bg-indigo-500 rounded-full animate-pulse opacity-10 blur-xl"></div>
-                <div className="relative bg-gradient-to-tr from-blue-600 to-indigo-600 p-6 rounded-3xl text-white shadow-2xl overflow-hidden group">
-                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-                  <Sparkles size={40} className="animate-[spin_4s_linear_infinite]" />
+            <div className="bg-white p-12 text-center border-b border-gray-100 flex flex-col items-center justify-center min-h-[300px]">
+              <div className="relative mb-6">
+                <div className="absolute inset-0 bg-blue-500 rounded-full animate-ping opacity-5"></div>
+                <div className="relative bg-blue-50 p-4 rounded-2xl text-blue-600 shadow-sm">
+                  <Sparkles size={32} className="animate-pulse" />
                 </div>
               </div>
-              <h3 className="text-2xl font-bold bg-gradient-to-r from-blue-900 to-indigo-900 bg-clip-text text-transparent mb-3">AI iEdu đang khai phá kiến thức...</h3>
-              <p className="text-gray-600 max-w-md mx-auto text-lg leading-relaxed">
-                Đang phân tích sâu sắc về từ <span className="font-extrabold text-blue-600">"{result.word}"</span>.
-                Chúng tôi đang trích xuất ngữ nghĩa, cách dùng và các mối liên kết từ kho dữ liệu tri thức khổng lồ.
+              <h3 className="text-xl font-bold text-gray-800 mb-2">Đang tra cứu từ vựng...</h3>
+              <p className="text-gray-500 text-sm max-w-sm mx-auto">
+                AI iEdu đang phân tích <span className="font-semibold text-blue-600">"{result.word}"</span> để cung cấp thông tin chính xác nhất.
               </p>
 
-              <div className="mt-10 flex items-center gap-3 px-6 py-3 bg-white/60 backdrop-blur-sm rounded-2xl border border-blue-100/50 shadow-sm">
-                <div className="flex gap-1.5">
+              <div className="mt-8 flex items-center gap-2 px-4 py-2 bg-gray-50 rounded-xl border border-gray-100">
+                <div className="flex gap-1">
                   {[0, 1, 2].map(i => (
-                    <div key={i} className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: `${i * 0.2}s` }}></div>
+                    <div key={i} className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: `${i * 0.15}s` }}></div>
                   ))}
                 </div>
-                <span className="text-sm font-medium text-blue-500/80 tracking-wide uppercase">AI Engine Processing</span>
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Processing</span>
               </div>
-
-              {result.chunk && (
-                <div className="mt-8 font-mono text-[10px] text-blue-400 opacity-60 flex items-center gap-2">
-                  <Terminal size={12} />
-                  <span>Loading: {result.chunk}...</span>
-                </div>
-              )}
             </div>
           )}
 

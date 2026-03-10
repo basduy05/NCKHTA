@@ -153,24 +153,26 @@ def get_llm(provider=None):
     If provider is specified ("google", "openai", "cohere"), only return that provider.
     Default order: Google Gemini → OpenAI → Cohere.
     """
+    # Prioritize Cohere as requested by user
+    cohere_key = _get_setting("COHERE_API_KEY")
+    if cohere_key and provider in (None, "cohere"):
+        os.environ["COHERE_API_KEY"] = cohere_key
+        # Use command-r-plus-08-2024 (Best for performance/reasoning)
+        return ChatCohere(model="command-r-plus-08-2024")
+
     if provider != "cohere" and provider != "openai":
         google_key = _get_setting("GOOGLE_API_KEY")
         if google_key and provider in (None, "google"):
             os.environ["GOOGLE_API_KEY"] = google_key
-            # Use gemini-2.5-flash which is available in this environment
-            return ChatGoogleGenerativeAI(model="gemini-2.5-flash", timeout=30)
+            # Use gemini-2.0-flash (Newest/Fastest)
+            return ChatGoogleGenerativeAI(model="gemini-2.0-flash", timeout=30)
 
     if provider != "google" and provider != "cohere":
         openai_key = _get_setting("OPENAI_API_KEY")
         if openai_key and provider in (None, "openai"):
             os.environ["OPENAI_API_KEY"] = openai_key
-            return ChatOpenAI(model="gpt-3.5-turbo")
-
-    cohere_key = _get_setting("COHERE_API_KEY")
-    if cohere_key and provider in (None, "cohere"):
-        os.environ["COHERE_API_KEY"] = cohere_key
-        # Use command-r-08-2024 as previous aliases were retired Sept 15, 2025
-        return ChatCohere(model="command-r-08-2024")
+            # Use gpt-4o-mini for better speed and cost-effectiveness
+            return ChatOpenAI(model="gpt-4o-mini")
 
     return None
 
@@ -507,6 +509,7 @@ def translate_meanings_with_ai(word: str, meanings: list, estimate_level: bool =
         '  "collocations": ["..."],\n'
         '  "idioms": [{{"idiom": "...", "meaning_vn": "..."}}]\n'
         '}}\n\n'
+        "CRITICAL: Every English field must have a high-quality Vietnamese translation in 'definition_vn' and 'meaning_vn'. NEVER return English text in those fields.\n"
         "Return ONLY valid JSON. No markdown."
     )
     
@@ -587,8 +590,8 @@ def translate_meanings_with_ai_stream(word: str, meanings: list, free_data: dict
         "For EACH distinct meaning, provide ALL of these fields (NEVER leave any empty):\n"
         "1. 'pos' — part of speech\n"
         "2. 'definition_en' — clean English definition\n"
-        "3. 'definition_vn' — natural Vietnamese translation\n"
-        "4. 'examples' — 2-3 realistic example sentences with Vietnamese translation. MUST have at least 2.\n"
+        "3. 'definition_vn' — accurate and natural Vietnamese translation (MANDATORY)\n"
+        "4. 'examples' — 2-3 realistic example sentences. EACH sentence must be followed by its Vietnamese translation. Format: ['English sentence | Dịch tiếng Việt', ...]. MUST have at least 2.\n"
         "5. 'synonyms' — 3-5 synonyms\n"
         "6. 'antonyms' — 2-3 antonyms (empty array if none)\n"
         "7. 'register' — one of: 'formal', 'informal', 'slang', 'technical', 'literary', 'neutral'\n"
