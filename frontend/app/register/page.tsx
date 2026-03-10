@@ -22,6 +22,8 @@ export default function RegisterPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
+  const [resendTimer, setResendTimer] = useState(0);
+  const [showEmailChange, setShowEmailChange] = useState(false);
 
   // Validation errors
   const [errors, setErrors] = useState<{[key: string]: string}>({});
@@ -74,6 +76,45 @@ export default function RegisterPage() {
     }
   }, [isInitialized, user, router]);
 
+  // Countdown timer for resend OTP
+  useEffect(() => {
+    if (resendTimer > 0) {
+      const timer = setTimeout(() => setResendTimer(resendTimer - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [resendTimer]);
+
+  // Mask email function
+  const maskEmail = (email: string) => {
+    const [username, domain] = email.split('@');
+    if (!username || !domain) return email;
+    const maskedUsername = username.length > 3 
+      ? username.substring(0, 2) + '***' 
+      : username[0] + '***';
+    return `${maskedUsername}@${domain}`;
+  };
+
+  // Start resend countdown
+  const startResendCountdown = () => {
+    setResendTimer(90);
+  };
+
+  // Handle resend OTP
+  const handleResendOTP = async () => {
+    if (resendTimer > 0) return;
+    setIsLoading(true);
+    try {
+      const result = await register(name, email, password, role, phone || undefined);
+      if (result) {
+        startResendCountdown();
+      }
+    } catch (err: any) {
+      setError(err?.message || "Lỗi gửi lại OTP");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
@@ -89,6 +130,7 @@ export default function RegisterPage() {
       const result = await register(name, email, password, role, phone || undefined);
       if (result) {
         setSuccess(true);
+        startResendCountdown(); // Start countdown after successful OTP send
       } else {
         setError("Đăng kí thất bại. Email có thể đã tồn tại.");
       }
@@ -126,7 +168,16 @@ export default function RegisterPage() {
               <UserPlus className="text-green-600 w-8 h-8" />
             </div>
             <h2 className="text-2xl font-bold text-gray-800 mb-2">Xác thực Email</h2>
-            <p className="text-gray-600 mb-6">Xin vui lòng kiểm tra email để lấy mã OTP và nhập vào bên dưới.</p>
+            <p className="text-gray-600 mb-2">Mã OTP đã được gửi đến:</p>
+            <div className="flex items-center justify-center gap-2 mb-6">
+              <span className="font-medium text-blue-600">{maskEmail(email)}</span>
+              <button 
+                onClick={() => { setSuccess(false); setOtp(""); }} 
+                className="text-xs text-gray-500 hover:text-blue-600 underline"
+              >
+                Thay đổi
+              </button>
+            </div>
             
             <form onSubmit={handleVerifyOTP} className="space-y-4">
               {error && (
@@ -148,6 +199,24 @@ export default function RegisterPage() {
               <button type="submit" disabled={isLoading || otp.length < 6} className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition flex items-center justify-center shadow-lg disabled:opacity-50">
                 {isLoading ? "Đang xác thực..." : "Xác nhận OTP"}
               </button>
+              
+              {/* Resend OTP with countdown */}
+              <div className="pt-2">
+                {resendTimer > 0 ? (
+                  <div className="text-gray-500 text-sm">
+                    Gửi lại mã sau: <span className="font-bold text-orange-600">{resendTimer}s</span>
+                  </div>
+                ) : (
+                  <button 
+                    type="button"
+                    onClick={handleResendOTP}
+                    disabled={isLoading}
+                    className="text-blue-600 hover:text-blue-800 text-sm font-medium disabled:opacity-50"
+                  >
+                    Gửi lại mã OTP
+                  </button>
+                )}
+              </div>
             </form>
         </div>
       </div>

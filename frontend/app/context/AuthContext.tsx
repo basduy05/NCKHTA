@@ -1,7 +1,6 @@
 "use client";
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useToast } from '../components/Toast';
 
 type User = {
   id: number;
@@ -34,7 +33,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
   const router = useRouter();
-  const { showToast } = useToast();
 
   useEffect(() => {
     const storedToken = localStorage.getItem('eam_token');
@@ -72,14 +70,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
       const data = await res.json();
       if (!res.ok) {
-        showToast(data.detail || 'Registration failed', 'error');
         return false;
       }
-      showToast('Registration successful! Check your email for OTP.', 'success');
       return true;
     } catch (error: any) {
       console.error('Register error:', error);
-      showToast(error?.message || 'Failed to register. Please try again.', 'error');
       return false;
     } finally {
       setIsLoading(false);
@@ -96,14 +91,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
       const data = await res.json();
       if (!res.ok) {
-        showToast(data.detail || 'OTP verification failed', 'error');
         return false;
       }
-      showToast('Account verified! You can now login.', 'success');
       return true;
     } catch (error: any) {
       console.error('OTP verify error:', error);
-      showToast(error?.message || 'Failed to verify OTP. Please try again.', 'error');
       return false;
     } finally {
       setIsLoading(false);
@@ -120,7 +112,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
       const data = await res.json();
       if (!res.ok) {
-        showToast(data.detail || 'Login failed', 'error');
         return false;
       }
 
@@ -134,7 +125,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return true;
     } catch (error: any) {
       console.error('Login error:', error);
-      showToast(error?.message || 'Failed to login. Please try again.', 'error');
       return false;
     } finally {
       setIsLoading(false);
@@ -165,13 +155,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
       const data = await res.json();
       if (!res.ok) {
-        showToast(data.detail || 'Failed to send OTP', 'error');
         return false;
       }
       return true;
     } catch (error: any) {
       console.error('Login send OTP error:', error);
-      showToast(error?.message || 'Failed to send OTP. Please try again.', 'error');
       return false;
     } finally {
       setIsLoading(false);
@@ -188,7 +176,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
       const data = await res.json();
       if (!res.ok) {
-        showToast(data.detail || 'OTP verification failed', 'error');
         return false;
       }
 
@@ -202,7 +189,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return true;
     } catch (error: any) {
       console.error('Login verify OTP error:', error);
-      showToast(error?.message || 'Failed to verify OTP. Please try again.', 'error');
       return false;
     } finally {
       setIsLoading(false);
@@ -218,14 +204,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
       const data = await res.json();
       if (!res.ok) {
-        showToast(data.detail || 'Failed to send reset email', 'error');
         return false;
       }
-      showToast(data.message, 'success');
       return true;
     } catch (error: any) {
       console.error('Forgot password error:', error);
-      showToast(error?.message || 'Failed to send reset email. Please try again.', 'error');
       return false;
     } finally {
       setIsLoading(false);
