@@ -57,8 +57,8 @@ export default function ScreenTips() {
     <div 
       className={`fixed z-[60] transition-all duration-500 ease-in-out ${
         isMinimized 
-          ? 'bottom-6 left-6 w-12 h-12 rounded-full cursor-pointer hover:scale-110 shadow-lg' 
-          : 'bottom-6 left-6 right-6 lg:right-auto lg:w-[400px] rounded-2xl'
+          ? 'bottom-6 right-6 w-12 h-12 rounded-full cursor-pointer hover:scale-110 shadow-lg' 
+          : 'bottom-6 left-6 right-6 lg:left-auto lg:w-[400px] rounded-2xl'
       } bg-white/70 backdrop-blur-xl border border-white/40 shadow-[0_8px_32px_rgba(0,0,0,0.12)] p-1 overflow-hidden group`}
       onClick={() => isMinimized && setIsMinimized(false)}
     >
