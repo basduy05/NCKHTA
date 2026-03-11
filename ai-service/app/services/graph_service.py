@@ -8,20 +8,11 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Read settings from DB first, then env vars
+from ..database import get_setting
+
+# Read settings from DB (via database.py handles Turso/SQLite) first, then env vars
 def _get_setting(key, default=None):
-    try:
-        db_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "app.db")
-        conn = sqlite3.connect(db_path)
-        cursor = conn.cursor()
-        cursor.execute("SELECT value FROM settings WHERE key = ?", (key,))
-        row = cursor.fetchone()
-        conn.close()
-        if row and row[0]:
-            return row[0]
-    except Exception:
-        pass
-    return os.getenv(key, default)
+    return get_setting(key, default)
 
 graph = None
 last_error = None
