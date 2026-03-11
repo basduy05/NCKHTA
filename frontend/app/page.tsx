@@ -252,6 +252,7 @@ export default function Home() {
               <div className="flex items-center gap-6 justify-center lg:justify-start text-sm text-gray-500 pt-2 animate-fade-in delay-500">
                 <span className="flex items-center gap-1.5"><CheckCircle2 size={16} className="text-green-500" /> Miễn phí</span>
                 <span className="flex items-center gap-1.5"><CheckCircle2 size={16} className="text-green-500" /> AI Gemini</span>
+                <span className="flex items-center gap-1.5"><CheckCircle2 size={16} className="text-green-500" /> AI Cohere</span>
                 <span className="flex items-center gap-1.5"><CheckCircle2 size={16} className="text-green-500" /> Knowledge Graph</span>
               </div>
             </div>
@@ -435,6 +436,7 @@ export default function Home() {
                 { name: "TypeScript", cat: "Language", color: "bg-blue-700 text-white" },
                 { name: "Cohere Rerank", cat: "Accuracy", color: "bg-blue-800 text-white" },
                 { name: "SQLite", cat: "Database", color: "bg-orange-500 text-white" },
+                { name: "JWT Core", cat: "Security", color: "bg-rose-500 text-white" },
               ].map((t, i) => (
                 <div key={i} className={`${t.color} rounded-2xl p-5 hover:scale-105 hover:-rotate-1 transition-all duration-300 cursor-default shadow-lg`}>
                   <p className="font-bold text-lg">{t.name}</p>
