@@ -804,9 +804,9 @@ function DictionaryTab({ token }: { token: string | null }) {
 
               finalData = { ...finalData, ...chunkData };
 
-              // Throttle UI updates to every 100ms to avoid 'laggy' feeling
+              // Throttle UI updates to every 150ms for a smoother 'streaming' feel without jitters
               const now = Date.now();
-              if (now - lastUpdate > 100) {
+              if (now - lastUpdate > 150) {
                 setResult({ ...finalData });
                 lastUpdate = now;
               }
@@ -936,11 +936,17 @@ function DictionaryTab({ token }: { token: string | null }) {
             className="btn-primary py-3.5 px-8 rounded-xl flex items-center gap-2 shadow-md disabled:opacity-50 transition text-lg"
           >
             {loading ? (
-              <Sparkles className="animate-spin text-yellow-300" size={20} />
+              <div className="flex items-center gap-2">
+                <div className="flex gap-1 justify-center items-center h-5">
+                  <div className="w-1 h-3 bg-yellow-300 animate-bounce [animation-delay:-0.3s]"></div>
+                  <div className="w-1 h-4 bg-yellow-300 animate-bounce [animation-delay:-0.15s]"></div>
+                  <div className="w-1 h-3 bg-yellow-300 animate-bounce"></div>
+                </div>
+              </div>
             ) : (
               <Search size={20} />
             )}
-            <span>Tra từ</span>
+            <span>{loading ? "Đang xử lý..." : "Tra từ"}</span>
           </button>
 
           {loading && (
@@ -985,9 +991,18 @@ function DictionaryTab({ token }: { token: string | null }) {
       {result && (
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500">
           {result.status === "thinking" && (!result.meanings || result.meanings.length === 0) && (
-            <div className="absolute top-0 left-0 w-full h-1 z-50">
-              <div className="h-full bg-gradient-to-r from-blue-500 via-indigo-500 to-blue-500 bg-[length:200%_100%] animate-[shimmer_2s_infinite_linear]"></div>
-            </div>
+            <>
+              <div className="absolute top-0 left-0 w-full h-[2px] z-50 overflow-hidden">
+                <div className="h-full bg-gradient-to-r from-blue-400 via-indigo-500 to-blue-400 bg-[length:200%_100%] animate-[shimmer_1.5s_infinite_linear]"></div>
+              </div>
+              {/* Queue status indicator */}
+              {result.queue && (result.queue.waiting > 0 || result.queue.active > 1) && (
+                <div className="absolute top-2 right-4 z-50 bg-black/10 backdrop-blur-md px-2 py-0.5 rounded text-[10px] text-white font-medium flex items-center gap-1.5 animate-pulse">
+                  <div className="w-1.5 h-1.5 rounded-full bg-yellow-400"></div>
+                  Hàng đợi: {result.queue.active}/7 {result.queue.waiting > 0 && `(Chờ: ${result.queue.waiting})`}
+                </div>
+              )}
+            </>
           )}
 
           {/* Show error if API failed */}

@@ -468,7 +468,7 @@ async def dictionary_lookup(req: DictionaryRequest, authorization: str = Header(
             print(f"[Neo4j SAVE] error: {e}")
 
     # We will use StreamingResponse to stream the AI output to the client.
-    def stream_generator():
+    async def stream_generator():
         try:
             # CHECK SAVED STATUS ONCE AT START
             cursor = get_db().execute("SELECT id FROM saved_vocabulary WHERE user_id = ? AND word = ?", (user_id, lookup_key))
@@ -476,7 +476,7 @@ async def dictionary_lookup(req: DictionaryRequest, authorization: str = Header(
             
             final_result_data = None
             
-            for chunk in lookup_dictionary_stream(lookup_key):
+            async for chunk in llm_service.lookup_dictionary_stream(lookup_key):
                 if not chunk: continue
                 # We can inject is_saved into result chunks
                 if '"status": "result"' in chunk:
@@ -503,8 +503,6 @@ async def dictionary_lookup(req: DictionaryRequest, authorization: str = Header(
             yield f"data: {json.dumps({'error': str(e)})}\n\n"
         
         yield "data: [DONE]\n\n"
-
-    return StreamingResponse(stream_generator(), media_type="text/event-stream")
 
     return StreamingResponse(stream_generator(), media_type="text/event-stream")
 

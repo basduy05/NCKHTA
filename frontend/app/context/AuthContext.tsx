@@ -20,6 +20,7 @@ type AuthContextType = {
   loginVerifyOTP: (email: string, otp: string) => Promise<boolean>;
   logout: (showConfirm?: boolean) => Promise<boolean>;
   forgotPassword: (email: string) => Promise<boolean>;
+  resetPassword: (email: string, token: string, newPassword: string) => Promise<boolean>;
   updateUser: (userData: Partial<User>) => void;
   isLoading: boolean;
   isInitialized: boolean;
@@ -200,9 +201,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const forgotPassword = async (email: string) => {
     setIsLoading(true);
     try {
-      const res = await retryFetch(`${API_URL}/auth/forgot-password?email=${encodeURIComponent(email)}`, {
+      const res = await retryFetch(`${API_URL}/auth/forgot-password`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email })
       });
       const data = await res.json();
       if (!res.ok) {
@@ -217,6 +219,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const resetPassword = async (email: string, reset_token: string, new_password: string) => {
+    setIsLoading(true);
+    try {
+      const res = await retryFetch(`${API_URL}/auth/reset-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, reset_token, new_password })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        return false;
+      }
+      return true;
+    } catch (error: any) {
+      console.error('Reset password error:', error);
+      return false;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const updateUser = (userData: Partial<User>) => {
     if (!user) return;
     const updatedUser = { ...user, ...userData };
@@ -225,7 +248,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, register, verifyOTP, login, loginSendOTP, loginVerifyOTP, logout, forgotPassword, updateUser, isLoading, isInitialized }}>
+    <AuthContext.Provider value={{ user, token, register, verifyOTP, login, loginSendOTP, loginVerifyOTP, logout, forgotPassword, resetPassword, updateUser, isLoading, isInitialized }}>
       {children}
     </AuthContext.Provider>
   );

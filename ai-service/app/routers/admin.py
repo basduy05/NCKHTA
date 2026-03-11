@@ -382,7 +382,8 @@ def delete_vocab(word: str):
     if not g:
         raise HTTPException(status_code=500, detail="Graph DB not connected")
     try:
-        g.query("MATCH (w:Word {text: $word}) DETACH DELETE w", params={"word": word})
+        # Sử dụng so khớp không phân biệt hoa thường để đảm bảo xoá chính xác
+        g.query("MATCH (w:Word) WHERE toLower(w.text) = toLower($word) DETACH DELETE w", params={"word": word})
         return {"message": f"Deleted '{word}'"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

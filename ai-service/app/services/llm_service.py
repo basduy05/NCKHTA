@@ -4,12 +4,14 @@ from langchain_cohere import ChatCohere
 from langchain_core.prompts import PromptTemplate
 import os
 import json
+import asyncio
 import sqlite3
 import time
 import threading
 from dotenv import load_dotenv
 import re
 import json_repair
+import cohere
 from ..database import get_db, get_cached_dictionary, set_cached_dictionary
 
 load_dotenv()
@@ -94,6 +96,64 @@ def is_data_complete(data: dict) -> bool:
     # These are the minimum for a usable dictionary entry
     return (not missing_vn) and (not missing_en) and (not missing_examples) and has_phonetic
 
+# ─── REQUEST QUEUING (SEMAPHORE) ───────────────────────────────────────────
+
+# Limit concurrent AI requests to 7 as requested by user
+ai_semaphore = asyncio.Semaphore(7)
+
+def get_queue_status():
+    """Returns the current number of active and waiting requests."""
+    # Note: This is an approximation for UI updates
+    return {
+        "active": 7 - ai_semaphore._value,
+        "waiting": len(ai_semaphore._waiters) if ai_semaphore._waiters else 0
+    }
+
+# ─── CONTEXT WINDOW MANAGEMENT ──────────────────────────────────────────────
+
+def truncate_context(text: str, max_tokens: int = 5000) -> str:
+    """Rough token estimation and truncation to fit within context windows."""
+    # Simple estimate: 4 chars per token for English
+    char_limit = max_tokens * 4
+    if len(text) > char_limit:
+        print(f"[CONTEXT] Truncating text from {len(text)} to {char_limit} chars.")
+        return text[:char_limit] + "... [truncated]"
+    return text
+
+# ─── COHERE RERANK INTEGRATION ──────────────────────────────────────────────
+
+def rerank_results(query: str, documents: list, top_n: int = 3) -> list:
+    """Use Cohere Rerank v3.0 to find the most relevant meanings/results."""
+    api_key = _get_setting("COHERE_API_KEY")
+    if not api_key or len(documents) <= 1:
+        return documents[:top_n]
+        
+    try:
+        co = cohere.Client(api_key)
+        # Extract text from docs if they are objects
+        doc_texts = []
+        for doc in documents:
+            if isinstance(doc, dict):
+                # Combine relevant fields for reranking
+                text = f"{doc.get('definition_en', '')} {doc.get('definition_vn', '')} {doc.get('pos', '')}"
+                doc_texts.append(text)
+            else:
+                doc_texts.append(str(doc))
+                
+        results = co.rerank(
+            model="rerank-v3.0",
+            query=query,
+            documents=doc_texts,
+            top_n=top_n
+        )
+        
+        reranked = [documents[res.index] for res in results.results]
+        print(f"[RERANK] Successfully reranked {len(documents)} results.")
+        return reranked
+    except Exception as e:
+        print(f"[RERANK] Error: {e}")
+        return documents[:top_n]
+
 def _get_setting(key, default=None):
     # 1. Check in-memory cache
     now = time.time()
@@ -134,8 +194,16 @@ def parse_json_response(text):
             return text
         
         # Try to find JSON block using regex if there's surrounding text
-        # If it's a string, we strip it
         text_str = str(text).strip()
+        
+        # Fix possible escaped unicode strings before parsing
+        if "\\u" in text_str:
+            try:
+                # This unescapes \uXXXX to actual characters
+                text_str = text_str.encode('utf-8').decode('unicode-escape')
+            except:
+                pass
+
         match = re.search(r'\{.*\}|\[.*\]', text_str, re.DOTALL)
         if match:
             text_str = match.group(0)
@@ -143,8 +211,11 @@ def parse_json_response(text):
         return json.loads(text_str)
     except Exception as e:
         print("JSON parse error:", e)
-        # print("Raw text was:", text[:200] + "...")
-        return []
+        # Attempt repair if standard parse fails
+        try:
+            return json.loads(json_repair.repair_json(text_str))
+        except:
+            return []
 
 def get_llm(provider=None):
     """
@@ -557,7 +628,7 @@ def translate_meanings_with_ai(word: str, meanings: list, estimate_level: bool =
     # Return original meanings with defaults instead of empty arrays
     return meanings, "B1", [], [], []
 
-def translate_meanings_with_ai_stream(word: str, meanings: list, free_data: dict = None, estimate_level: bool = True):
+async def translate_meanings_with_ai_stream(word: str, meanings: list, free_data: dict = None, estimate_level: bool = True):
     """
     Streaming version of translate_meanings_with_ai. Yields JSON chunks as they arrive.
     Takes optional free_data to preserve phonetics and other metadata from Free Dictionary API.
@@ -630,10 +701,14 @@ def translate_meanings_with_ai_stream(word: str, meanings: list, free_data: dict
     
     chain = prompt | llm
     
-    def _safe_stream_invoke(chain_to_use, params, llm_name="Primary"):
+    async def _safe_stream_invoke(chain_to_use, params, llm_name="Primary"):
         try:
-            for chunk in chain_to_use.stream(params):
-                yield chunk.content
+            if hasattr(chain_to_use, 'astream'):
+                async for chunk in chain_to_use.astream(params):
+                    yield chunk.content
+            else:
+                for chunk in chain_to_use.stream(params):
+                    yield chunk.content
         except Exception as e:
             error_str = str(e).lower()
             if any(k in error_str for k in ["quota", "rate_limit", "resource_exhausted", "429", "too many requests", "503"]):
@@ -642,7 +717,8 @@ def translate_meanings_with_ai_stream(word: str, meanings: list, free_data: dict
                     fallback_llm = get_llm(provider="cohere")
                     if fallback_llm and hasattr(chain_to_use, 'first'):
                         fallback_chain = chain_to_use.first | fallback_llm
-                        yield from _safe_stream_invoke(fallback_chain, params, llm_name="Cohere")
+                        async for c in _safe_stream_invoke(fallback_chain, params, llm_name="Cohere"):
+                            yield c
                         return
             raise e
 
@@ -651,19 +727,27 @@ def translate_meanings_with_ai_stream(word: str, meanings: list, free_data: dict
         last_yielded_json = ""
         chunk_count = 0
         
-        for content in _safe_stream_invoke(chain, {"word": word, "definitions": definitions_text}):
-            if content:
-                accumulated_text += content
-                elapsed = time.time() - start_time
-                chunk_count += 1
-                
-                # Yield raw thinking chunk
-                yield json.dumps({
-                    "status": "thinking", 
-                    "chunk": content, 
-                    "full_thinking": accumulated_text,
-                    "elapsed": round(elapsed, 1)
-                }, ensure_ascii=False) + "\n"
+        async with ai_semaphore:
+            async for content in _safe_stream_invoke(chain, {"word": word, "definitions": definitions_text}):
+                if content:
+                    # Unescape Unicode characters if present (prevents \u00f4 issues)
+                    if "\\" in content:
+                        try:
+                            content = content.encode('utf-8').decode('unicode_escape')
+                        except: pass
+                    
+                    accumulated_text += content
+                    elapsed = time.time() - start_time
+                    chunk_count += 1
+                    
+                    # Yield raw thinking chunk
+                    yield json.dumps({
+                        "status": "thinking", 
+                        "chunk": content, 
+                        "full_thinking": accumulated_text,
+                        "elapsed": round(elapsed, 1),
+                        "queue": get_queue_status()
+                    }, ensure_ascii=False) + "\n"
                 
                 # Cố gắng repair json từ text accumulate, nhưng chỉ làm mỗi 10 chunks để tiết kiệm CPU
                 if chunk_count % 10 == 0 or len(content) > 100:
@@ -774,7 +858,7 @@ def lookup_dictionary_full_ai(word: str):
         print(f"lookup_dictionary_full_ai error: {e}")
         return {"word": word, "error": str(e)}
 
-def lookup_dictionary_full_ai_stream(word: str):
+async def lookup_dictionary_full_ai_stream(word: str):
     """
     Streaming AI dictionary lookup. Yields JSON strings.
     """
@@ -817,10 +901,14 @@ def lookup_dictionary_full_ai_stream(word: str):
 
     chain = prompt | llm
 
-    def _safe_stream_invoke(chain_to_use, params, llm_name="Primary"):
+    async def _safe_stream_invoke(chain_to_use, params, llm_name="Primary"):
         try:
-            for chunk in chain_to_use.stream(params):
-                yield chunk.content
+            if hasattr(chain_to_use, 'astream'):
+                async for chunk in chain_to_use.astream(params):
+                    yield chunk.content
+            else:
+                for chunk in chain_to_use.stream(params):
+                    yield chunk.content
         except Exception as e:
             error_str = str(e).lower()
             if any(k in error_str for k in ["quota", "rate_limit", "resource_exhausted", "429", "too many requests", "503"]):
@@ -829,7 +917,8 @@ def lookup_dictionary_full_ai_stream(word: str):
                     fallback_llm = get_llm(provider="cohere")
                     if fallback_llm and hasattr(chain_to_use, 'first'):
                         fallback_chain = chain_to_use.first | fallback_llm
-                        yield from _safe_stream_invoke(fallback_chain, params, llm_name="Cohere")
+                        async for c in _safe_stream_invoke(fallback_chain, params, llm_name="Cohere"):
+                            yield c
                         return
             raise e
 
@@ -838,19 +927,27 @@ def lookup_dictionary_full_ai_stream(word: str):
         accumulated_text = ""
         last_yielded_json = ""
         chunk_count = 0
-        for content in _safe_stream_invoke(chain, {"word": word}):
-            if content:
-                accumulated_text += content
-                elapsed = time.time() - start_time
-                chunk_count += 1
-                
-                # Yield thinking status
-                yield json.dumps({
-                    "status": "thinking",
-                    "chunk": content,
-                    "full_thinking": accumulated_text,
-                    "elapsed": round(elapsed, 1)
-                }, ensure_ascii=False) + "\n"
+        async with ai_semaphore:
+            async for content in _safe_stream_invoke(chain, {"word": word}):
+                if content:
+                    # Unescape Unicode characters
+                    if "\\" in content:
+                        try:
+                            content = content.encode('utf-8').decode('unicode_escape')
+                        except: pass
+                    
+                    accumulated_text += content
+                    elapsed = time.time() - start_time
+                    chunk_count += 1
+                    
+                    # Yield thinking status
+                    yield json.dumps({
+                        "status": "thinking",
+                        "chunk": content,
+                        "full_thinking": accumulated_text,
+                        "elapsed": round(elapsed, 1),
+                        "queue": get_queue_status()
+                    }, ensure_ascii=False) + "\n"
                 
                 # Chỉ repair json mỗi 10 chunks
                 if chunk_count % 10 == 0:
@@ -934,7 +1031,7 @@ def lookup_dictionary(word: str):
     return result
 
 
-def lookup_dictionary_stream(word: str):
+async def lookup_dictionary_stream(word: str):
     """
     Streaming version of hybrid dictionary lookup.
     Yields JSON chunks.
@@ -967,7 +1064,7 @@ def lookup_dictionary_stream(word: str):
     
     if free_data and len(free_data.get("meanings", [])) > 0:
         # Step 2: Use AI stream for translation + enrichment (pass full free_data to preserve phonetics)
-        for chunk in translate_meanings_with_ai_stream(word, free_data["meanings"], free_data):
+        async for chunk in translate_meanings_with_ai_stream(word, free_data["meanings"], free_data):
             # Add Wikipedia data to the chunk if available
             if wikipedia_data and "wikipedia" not in chunk:
                 try:
@@ -982,7 +1079,7 @@ def lookup_dictionary_stream(word: str):
         return
     
     # Step 3: Fallback to full AI stream
-    for chunk in lookup_dictionary_full_ai_stream(word):
+    async for chunk in lookup_dictionary_full_ai_stream(word):
         # Add Wikipedia data if available
         if wikipedia_data and "wikipedia" not in chunk:
             try:
