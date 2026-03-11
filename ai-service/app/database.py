@@ -238,6 +238,14 @@ def init_db():
     except Exception as e:
         print("Migration error:", e)
 
+    # --- MIGRATION: JWT Blacklist (Session Revocation) ---
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS revoked_tokens (
+            jti TEXT PRIMARY KEY,
+            expires_at INTEGER NOT NULL
+        )
+    """)
+
     # -----------------------------------
 
     cursor.execute("""

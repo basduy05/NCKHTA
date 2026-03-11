@@ -54,14 +54,7 @@ class UserRegister(BaseModel):
     @field_validator('password')
     @classmethod
     def validate_password(cls, v: str) -> str:
-        if len(v) < 8:
-            raise ValueError('Password must be at least 8 characters')
-        if not any(c.isupper() for c in v):
-            raise ValueError('Password must contain at least one uppercase letter')
-        if not any(c.islower() for c in v):
-            raise ValueError('Password must contain at least one lowercase letter')
-        if not any(c.isdigit() for c in v):
-            raise ValueError('Password must contain at least one number')
+        validate_password_strength(v)
         return v
     
     @field_validator('role')
@@ -70,6 +63,17 @@ class UserRegister(BaseModel):
         if v.upper() not in ['STUDENT', 'TEACHER']:
             raise ValueError('Role must be STUDENT or TEACHER')
         return v.upper()
+
+def validate_password_strength(password: str) -> None:
+    """Consolidated password strength validation."""
+    if len(password) < 8:
+        raise ValueError('Password must be at least 8 characters')
+    if not any(c.isupper() for c in password):
+        raise ValueError('Password must contain at least one uppercase letter')
+    if not any(c.islower() for c in password):
+        raise ValueError('Password must contain at least one lowercase letter')
+    if not any(c.isdigit() for c in password):
+        raise ValueError('Password must contain at least one number')
 
 class UserLogin(BaseModel):
     email: EmailStr
@@ -118,9 +122,14 @@ def generate_access_token(user_id: int, email: str):
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
 def verify_access_token(token: str):
-    """Verify JWT and return user_id, email"""
+    """Verify JWT and return user_id, email. Checks against blacklist."""
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        jti = payload.get("jti")
+        if jti and is_token_revoked(jti):
+            print(f"[AUTH] Blocked revoked token: {jti}")
+            return None
+            
         user_id = int(payload.get("sub"))
         email = payload.get("email")
         if user_id is None or email is None:
@@ -128,6 +137,29 @@ def verify_access_token(token: str):
         return {"user_id": user_id, "email": email}
     except JWTError:
         return None
+
+def blacklist_token(jti: str, expires_at: int):
+    """Store revoked token ID in the database."""
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute("INSERT OR IGNORE INTO revoked_tokens (jti, expires_at) VALUES (?, ?)", (jti, expires_at))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"[AUTH] Blacklist error: {e}")
+
+def is_token_revoked(jti: str) -> bool:
+    """Check if token ID is in the revoked list."""
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute("SELECT jti FROM revoked_tokens WHERE jti = ?", (jti,))
+        row = cursor.fetchone()
+        conn.close()
+        return row is not None
+    except Exception:
+        return False
 
 def generate_reset_token():
     """Generate cryptographically secure token for password reset."""

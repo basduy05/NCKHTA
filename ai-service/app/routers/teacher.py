@@ -38,22 +38,22 @@ def teacher_stats(authorization: str = Header(...)):
     conn = get_db()
     cursor = conn.cursor()
 
-    cursor.execute("SELECT COUNT(*) FROM classes WHERE teacher_id = ? OR teacher_name = ?",
-                   (teacher["id"], teacher["name"]))
+    cursor.execute("SELECT COUNT(*) FROM classes WHERE teacher_id = ?",
+                   (teacher["id"],))
     classes_count = cursor.fetchone()[0]
 
     cursor.execute("""
         SELECT COUNT(DISTINCT e.student_id) FROM enrollments e
         JOIN classes c ON e.class_id = c.id
-        WHERE c.teacher_id = ? OR c.teacher_name = ?
-    """, (teacher["id"], teacher["name"]))
+        WHERE c.teacher_id = ?
+    """, (teacher["id"],))
     students_count = cursor.fetchone()[0]
 
     cursor.execute("""
         SELECT COUNT(*) FROM lessons l
         JOIN classes c ON l.class_id = c.id
-        WHERE c.teacher_id = ? OR c.teacher_name = ?
-    """, (teacher["id"], teacher["name"]))
+        WHERE c.teacher_id = ?
+    """, (teacher["id"],))
     lessons_count = cursor.fetchone()[0]
 
     cursor.execute("""
@@ -82,9 +82,9 @@ def get_my_classes(authorization: str = Header(...)):
         SELECT c.id, c.name, c.teacher_name, c.students_count, c.teacher_id,
                (SELECT COUNT(*) FROM enrollments e WHERE e.class_id = c.id) as enrolled_count
         FROM classes c
-        WHERE c.teacher_id = ? OR c.teacher_name = ?
+        WHERE c.teacher_id = ?
         ORDER BY c.id DESC
-    """, (teacher["id"], teacher["name"]))
+    """, (teacher["id"],))
     classes = [dict(row) for row in cursor.fetchall()]
     conn.close()
     return classes
@@ -107,8 +107,8 @@ def update_my_class(class_id: int, authorization: str = Header(...), name: str =
     teacher = _get_current_teacher(authorization)
     conn = get_db()
     # Verify ownership
-    cursor = conn.execute("SELECT id FROM classes WHERE id = ? AND (teacher_id = ? OR teacher_name = ?)",
-                          (class_id, teacher["id"], teacher["name"]))
+    cursor = conn.execute("SELECT id FROM classes WHERE id = ? AND teacher_id = ?",
+                          (class_id, teacher["id"]))
     if not cursor.fetchone():
         conn.close()
         raise HTTPException(status_code=403, detail="Bạn không có quyền sửa lớp này")
@@ -121,8 +121,8 @@ def update_my_class(class_id: int, authorization: str = Header(...), name: str =
 def delete_my_class(class_id: int, authorization: str = Header(...)):
     teacher = _get_current_teacher(authorization)
     conn = get_db()
-    cursor = conn.execute("SELECT id FROM classes WHERE id = ? AND (teacher_id = ? OR teacher_name = ?)",
-                          (class_id, teacher["id"], teacher["name"]))
+    cursor = conn.execute("SELECT id FROM classes WHERE id = ? AND teacher_id = ?",
+                          (class_id, teacher["id"]))
     if not cursor.fetchone():
         conn.close()
         raise HTTPException(status_code=403, detail="Bạn không có quyền xoá lớp này")
@@ -142,8 +142,8 @@ def get_class_students(class_id: int, authorization: str = Header(...)):
     teacher = _get_current_teacher(authorization)
     conn = get_db()
     # Verify ownership
-    cursor = conn.execute("SELECT id FROM classes WHERE id = ? AND (teacher_id = ? OR teacher_name = ?)",
-                          (class_id, teacher["id"], teacher["name"]))
+    cursor = conn.execute("SELECT id FROM classes WHERE id = ? AND teacher_id = ?",
+                          (class_id, teacher["id"]))
     if not cursor.fetchone():
         conn.close()
         raise HTTPException(status_code=403, detail="Bạn không có quyền xem lớp này")
@@ -179,8 +179,8 @@ def get_available_students(authorization: str = Header(...), class_id: int = Que
 def enroll_student(class_id: int, authorization: str = Header(...), student_id: int = Form(...)):
     teacher = _get_current_teacher(authorization)
     conn = get_db()
-    cursor = conn.execute("SELECT id FROM classes WHERE id = ? AND (teacher_id = ? OR teacher_name = ?)",
-                          (class_id, teacher["id"], teacher["name"]))
+    cursor = conn.execute("SELECT id FROM classes WHERE id = ? AND teacher_id = ?",
+                          (class_id, teacher["id"]))
     if not cursor.fetchone():
         conn.close()
         raise HTTPException(status_code=403, detail="Bạn không có quyền thêm học sinh vào lớp này")
@@ -199,8 +199,8 @@ def enroll_student(class_id: int, authorization: str = Header(...), student_id: 
 def remove_student(class_id: int, student_id: int, authorization: str = Header(...)):
     teacher = _get_current_teacher(authorization)
     conn = get_db()
-    cursor = conn.execute("SELECT id FROM classes WHERE id = ? AND (teacher_id = ? OR teacher_name = ?)",
-                          (class_id, teacher["id"], teacher["name"]))
+    cursor = conn.execute("SELECT id FROM classes WHERE id = ? AND teacher_id = ?",
+                          (class_id, teacher["id"]))
     if not cursor.fetchone():
         conn.close()
         raise HTTPException(status_code=403, detail="Bạn không có quyền")
@@ -217,8 +217,8 @@ def remove_student(class_id: int, student_id: int, authorization: str = Header(.
 def get_class_lessons(class_id: int, authorization: str = Header(...)):
     teacher = _get_current_teacher(authorization)
     conn = get_db()
-    cursor = conn.execute("SELECT id FROM classes WHERE id = ? AND (teacher_id = ? OR teacher_name = ?)",
-                          (class_id, teacher["id"], teacher["name"]))
+    cursor = conn.execute("SELECT id FROM classes WHERE id = ? AND teacher_id = ?",
+                          (class_id, teacher["id"]))
     if not cursor.fetchone():
         conn.close()
         raise HTTPException(status_code=403, detail="Bạn không có quyền xem lớp này")
@@ -244,8 +244,8 @@ async def create_class_lesson(
 ):
     teacher = _get_current_teacher(authorization)
     conn = get_db()
-    cursor = conn.execute("SELECT id FROM classes WHERE id = ? AND (teacher_id = ? OR teacher_name = ?)",
-                          (class_id, teacher["id"], teacher["name"]))
+    cursor = conn.execute("SELECT id FROM classes WHERE id = ? AND teacher_id = ?",
+                          (class_id, teacher["id"]))
     if not cursor.fetchone():
         conn.close()
         raise HTTPException(status_code=403, detail="Bạn không có quyền")
@@ -275,8 +275,8 @@ async def update_teacher_lesson(
     # Verify teacher owns the class that this lesson belongs to
     cursor = conn.execute("""
         SELECT l.id FROM lessons l JOIN classes c ON l.class_id = c.id
-        WHERE l.id = ? AND (c.teacher_id = ? OR c.teacher_name = ?)
-    """, (lesson_id, teacher["id"], teacher["name"]))
+        WHERE l.id = ? AND c.teacher_id = ?
+    """, (lesson_id, teacher["id"]))
     if not cursor.fetchone():
         conn.close()
         raise HTTPException(status_code=403, detail="Bạn không có quyền sửa bài này")
@@ -298,8 +298,8 @@ def delete_teacher_lesson(lesson_id: int, authorization: str = Header(...)):
     conn = get_db()
     cursor = conn.execute("""
         SELECT l.id FROM lessons l JOIN classes c ON l.class_id = c.id
-        WHERE l.id = ? AND (c.teacher_id = ? OR c.teacher_name = ?)
-    """, (lesson_id, teacher["id"], teacher["name"]))
+        WHERE l.id = ? AND c.teacher_id = ?
+    """, (lesson_id, teacher["id"]))
     if not cursor.fetchone():
         conn.close()
         raise HTTPException(status_code=403, detail="Bạn không có quyền xoá bài này")
@@ -327,8 +327,8 @@ def get_teacher_lesson_file(lesson_id: int, authorization: str = Header(...)):
 def get_class_assignments(class_id: int, authorization: str = Header(...)):
     teacher = _get_current_teacher(authorization)
     conn = get_db()
-    cursor = conn.execute("SELECT id FROM classes WHERE id = ? AND (teacher_id = ? OR teacher_name = ?)",
-                          (class_id, teacher["id"], teacher["name"]))
+    cursor = conn.execute("SELECT id FROM classes WHERE id = ? AND teacher_id = ?",
+                          (class_id, teacher["id"]))
     if not cursor.fetchone():
         conn.close()
         raise HTTPException(status_code=403, detail="Bạn không có quyền")
@@ -366,8 +366,8 @@ def create_assignment(data: AssignmentCreate, authorization: str = Header(...)):
     teacher = _get_current_teacher(authorization)
     conn = get_db()
     # Verify teacher owns this class
-    cursor = conn.execute("SELECT id FROM classes WHERE id = ? AND (teacher_id = ? OR teacher_name = ?)",
-                          (data.class_id, teacher["id"], teacher["name"]))
+    cursor = conn.execute("SELECT id FROM classes WHERE id = ? AND teacher_id = ?",
+                          (data.class_id, teacher["id"]))
     if not cursor.fetchone():
         conn.close()
         raise HTTPException(status_code=403, detail="Bạn không có quyền tạo bài tập cho lớp này")

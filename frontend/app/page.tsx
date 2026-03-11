@@ -63,7 +63,7 @@ function AuthorCard() {
           onMouseEnter={() => setIsHovered(true)}
           onMouseLeave={() => setIsHovered(false)}
         >
-          <div className="relative aspect-[4/5] overflow-hidden bg-gray-100">
+          <div className="relative h-full min-h-[500px] lg:min-h-0 overflow-hidden bg-gray-100">
             {AUTHOR_PHOTOS.map((src, i) => (
               <div
                 key={i}
@@ -345,6 +345,7 @@ export default function Home() {
             { icon: Target, title: "Semantic Reranking", desc: "Sử dụng Cohere Rerank v3.0 để tối ưu hóa độ chính xác của kết quả tra cứu gần như tuyệt đối.", gradient: "from-blue-700 to-indigo-800" },
             { icon: BarChart3, title: "Theo dõi Kết quả", desc: "Dashboard chi tiết hiển thị điểm số, tiến độ hoàn thành bài tập, thống kê từ vựng.", gradient: "from-orange-500 to-orange-600" },
             { icon: Sparkles, title: "Flashcard Thông minh", desc: "Hệ thống flashcard kết hợp spaced repetition, giúp ghi nhớ từ vựng lâu dài và hiệu quả.", gradient: "from-pink-500 to-pink-600" },
+            { icon: CheckCircle2, title: "Bảo mật & Tin cậy", desc: "Xác thực JWT đa tầng, thu hồi session tức thì và mã hóa dữ liệu chuẩn Enterprise.", gradient: "from-slate-700 to-slate-900" },
           ].map((f, i) => (
             <div key={i} data-reveal className="opacity-0 translate-y-8 group relative bg-white p-8 rounded-2xl border border-gray-100 hover:border-transparent hover:shadow-xl transition-all duration-300 hover:-translate-y-2" style={{ animationDelay: `${i * 0.1}s` }}>
               <div className={`w-14 h-14 bg-gradient-to-br ${f.gradient} rounded-xl flex items-center justify-center mb-6 shadow-lg group-hover:scale-110 group-hover:rotate-3 transition-all duration-300`}>
@@ -407,7 +408,8 @@ export default function Home() {
             </p>
             <div className="space-y-4">
               {[
-                { label: "Google Gemini AI", desc: "Mô hình ngôn ngữ lớn cho phân tích và tạo nội dung" },
+                { label: "Google Gemini AI + Cohere", desc: "Mô hình ngôn ngữ lớn cho phân tích và tạo nội dung" },
+                { label: "Security & Data Integrity", desc: "JWT Revocation, Session Management & Role-based Access" },
                 { label: "Neo4j Knowledge Graph", desc: "Đồ thị tri thức lưu trữ quan hệ ngữ nghĩa" },
                 { label: "Next.js + FastAPI", desc: "Kiến trúc hiện đại, hiệu năng cao" },
               ].map((t, i) => (

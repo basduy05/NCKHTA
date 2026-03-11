@@ -401,6 +401,27 @@ async def update_profile(data: UpdateProfileRequest, credentials: HTTPAuthorizat
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/logout")
+def logout(authorization: str = Header(...)):
+    """Invalidate the current access token."""
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Invalid authorization header")
+    token = authorization[7:]
+    
+    try:
+        from jose import jwt
+        payload = jwt.decode(token, auth_service.SECRET_KEY, algorithms=[auth_service.ALGORITHM])
+        jti = payload.get("jti")
+        exp = payload.get("exp")
+        if jti:
+            auth_service.blacklist_token(jti, exp)
+            return {"message": "Logged out successfully"}
+    except Exception:
+        pass
+        
+    return {"message": "Logged out successfully (session ended)"}
+
+
 @router.post("/change-password")
 async def change_password(data: ChangePasswordRequest, credentials: HTTPAuthorizationCredentials = Depends(security)):
     """Change user password"""
@@ -432,6 +453,17 @@ async def change_password(data: ChangePasswordRequest, credentials: HTTPAuthoriz
     cursor.execute("UPDATE users SET password_hash = ? WHERE id = ?", (new_hash, user_id))
     conn.commit()
     conn.close()
+    
+    # Revoke the current token
+    try:
+        from jose import jwt
+        payload = jwt.decode(token, auth_service.SECRET_KEY, algorithms=[auth_service.ALGORITHM])
+        jti = payload.get("jti")
+        exp = payload.get("exp")
+        if jti:
+            auth_service.blacklist_token(jti, exp)
+    except Exception as e:
+        print(f"[AUTH] Failed to blacklist token on password change: {e}")
     
     return {"message": "Password changed successfully"}
 
@@ -509,8 +541,10 @@ async def forgot_password(data: ForgotPasswordRequest, background_tasks: Backgro
 @router.post("/reset-password")
 def reset_password(data: ResetPasswordRequest):
     """Reset password using reset token from email."""
-    if not data.new_password or len(data.new_password) < 6:
-        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+    try:
+        auth_service.validate_password_strength(data.new_password)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
     conn = get_db()
     cursor = conn.cursor()
