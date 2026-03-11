@@ -133,7 +133,7 @@ function AuthorCard() {
           <div className="space-y-3 text-gray-600">
             <div className="flex items-start gap-3 group">
               <GraduationCap size={20} className="text-blue-500 mt-0.5 flex-shrink-0 group-hover:scale-110 transition-transform" />
-              <p>Sinh viên lớp <strong>74DCTT23</strong> — Khoa Công nghệ Thông tin, Trường Đại học Công nghệ Giao thông vận tải</p>
+              <p>Sinh viên lớp <strong>74DCTT23</strong> — Khoa Công nghệ thông tin, Trường Đại học Công nghệ Giao thông vận tải</p>
             </div>
             <div className="flex items-start gap-3 group">
               <Mail size={20} className="text-blue-500 mt-0.5 flex-shrink-0 group-hover:scale-110 transition-transform" />
@@ -502,7 +502,7 @@ export default function Home() {
               <p className="text-sm leading-relaxed max-w-sm">
                 Nền tảng học tập thông minh ứng dụng Đồ thị Tri thức và Trí tuệ Nhân tạo trong hỗ trợ học từ vựng và ngữ pháp tiếng Anh.
               </p>
-              <p className="text-xs text-gray-500">Phát triển bởi Nguyễn Bá Duy - Lớp 74DCTT23</p>
+              <p className="text-xs text-gray-500">Phát triển bởi Nguyễn Bá Duy - Lớp 74DCTT23 - Khoa Công nghệ thông tin, Trường Đại học Công nghệ Giao thông vận tải</p>
             </div>
             <div>
               <h4 className="text-white font-semibold mb-4">Truy cập</h4>
