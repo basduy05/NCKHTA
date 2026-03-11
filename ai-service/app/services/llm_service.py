@@ -1042,6 +1042,12 @@ async def lookup_dictionary_stream(word: str):
     5. Include Wikipedia data
     """
     import json
+    from . import graph_service
+    
+    # Pre-fetch graph connections early (even for cache misses)
+    # This fixes the "second lookup" bug
+    connections = graph_service.get_word_connections(word.lower())
+    graph_connections = connections.get("connections", [])
     
     # Check cache first
     cached = _cache_get(word)
@@ -1065,13 +1071,14 @@ async def lookup_dictionary_stream(word: str):
     if free_data and len(free_data.get("meanings", [])) > 0:
         # Step 2: Use AI stream for translation + enrichment (pass full free_data to preserve phonetics)
         async for chunk in translate_meanings_with_ai_stream(word, free_data["meanings"], free_data):
-            # Add Wikipedia data to the chunk if available
-            if wikipedia_data and "wikipedia" not in chunk:
+            # Add Wikipedia and Graph data to the chunk if available
+            if (wikipedia_data or graph_connections) and "wikipedia" not in chunk:
                 try:
                     import json
                     chunk_data = json.loads(chunk)
                     if "error" not in chunk_data:
-                        chunk_data["wikipedia"] = wikipedia_data
+                        if wikipedia_data: chunk_data["wikipedia"] = wikipedia_data
+                        if graph_connections: chunk_data["graph_connections"] = graph_connections
                         chunk = json.dumps(chunk_data, ensure_ascii=False)
                 except:
                     pass
@@ -1080,13 +1087,14 @@ async def lookup_dictionary_stream(word: str):
     
     # Step 3: Fallback to full AI stream
     async for chunk in lookup_dictionary_full_ai_stream(word):
-        # Add Wikipedia data if available
-        if wikipedia_data and "wikipedia" not in chunk:
+        # Add Wikipedia and Graph data if available
+        if (wikipedia_data or graph_connections) and "wikipedia" not in chunk:
             try:
                 import json
                 chunk_data = json.loads(chunk)
                 if "error" not in chunk_data:
-                    chunk_data["wikipedia"] = wikipedia_data
+                    if wikipedia_data: chunk_data["wikipedia"] = wikipedia_data
+                    if graph_connections: chunk_data["graph_connections"] = graph_connections
                     chunk = json.dumps(chunk_data, ensure_ascii=False)
             except:
                 pass

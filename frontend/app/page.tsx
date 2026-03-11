@@ -340,8 +340,10 @@ export default function Home() {
             { icon: Brain, title: "Phân tích Văn bản AI", desc: "Dán bất kỳ đoạn văn nào, AI tự động trích xuất từ vựng, phân loại CEFR và phân tích cấu trúc ngữ pháp.", gradient: "from-blue-500 to-blue-600" },
             { icon: Network, title: "Đồ thị Tri thức", desc: "Trực quan hóa mạng lưới từ vựng: đồng nghĩa, trái nghĩa, collocation, word family trên đồ thị tương tác.", gradient: "from-cyan-500 to-blue-500" },
             { icon: GraduationCap, title: "Trắc nghiệm AI", desc: "AI tự động tạo câu hỏi đa dạng từ nội dung bài học, đánh giá năng lực và đưa ra gợi ý cải thiện.", gradient: "from-purple-500 to-purple-600" },
-            { icon: Users, title: "Quản lý Lớp học", desc: "Giáo viên tạo lớp, ghi danh học sinh, giao bài tập, theo dõi tiến độ học tập theo thời gian thực.", gradient: "from-green-500 to-green-600" },
-            { icon: BarChart3, title: "Theo dõi Kết quả", desc: "Dashboard chi tiết hiển thị điểm số, tiến độ hoàn thành bài tập, thống kê từ vựng đã học.", gradient: "from-orange-500 to-orange-600" },
+            { icon: Users, title: "Quản lý Lớp học", desc: "Giáo viên tạo lớp, giao bài tập, theo dõi tiến độ học tập theo thời gian thực.", gradient: "from-green-500 to-green-600" },
+            { icon: Zap, title: "Xử lý hàng đợi AI", desc: "Hệ thống hàng đợi thông minh giúp xử lý đồng thời nhiều yêu cầu mà không bị nghẽn mạng.", gradient: "from-yellow-500 to-orange-600" },
+            { icon: Target, title: "Semantic Reranking", desc: "Sử dụng Cohere Rerank v3.0 để tối ưu hóa độ chính xác của kết quả tra cứu gần như tuyệt đối.", gradient: "from-blue-700 to-indigo-800" },
+            { icon: BarChart3, title: "Theo dõi Kết quả", desc: "Dashboard chi tiết hiển thị điểm số, tiến độ hoàn thành bài tập, thống kê từ vựng.", gradient: "from-orange-500 to-orange-600" },
             { icon: Sparkles, title: "Flashcard Thông minh", desc: "Hệ thống flashcard kết hợp spaced repetition, giúp ghi nhớ từ vựng lâu dài và hiệu quả.", gradient: "from-pink-500 to-pink-600" },
           ].map((f, i) => (
             <div key={i} data-reveal className="opacity-0 translate-y-8 group relative bg-white p-8 rounded-2xl border border-gray-100 hover:border-transparent hover:shadow-xl transition-all duration-300 hover:-translate-y-2" style={{ animationDelay: `${i * 0.1}s` }}>
@@ -429,6 +431,7 @@ export default function Home() {
                 { name: "LangChain", cat: "AI Framework", color: "bg-cyan-600 text-white" },
                 { name: "Tailwind", cat: "UI", color: "bg-sky-500 text-white" },
                 { name: "TypeScript", cat: "Language", color: "bg-blue-700 text-white" },
+                { name: "Cohere Rerank", cat: "Accuracy", color: "bg-blue-800 text-white" },
                 { name: "SQLite", cat: "Database", color: "bg-orange-500 text-white" },
               ].map((t, i) => (
                 <div key={i} className={`${t.color} rounded-2xl p-5 hover:scale-105 hover:-rotate-1 transition-all duration-300 cursor-default shadow-lg`}>

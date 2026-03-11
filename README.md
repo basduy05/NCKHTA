@@ -4,9 +4,13 @@ Welcome! This is a cutting-edge educational platform built for the **Scientific 
 
 ## 🌟 Key Innovations (Breakthrough Features)
 1. **Knowledge Graph Visualization:** See your brain's network grow as you learn new words.
-2. **AI Flashcard Generator:** Instantly create learning materials from any text using GPT-4/Gemini.
-3. **GraphRAG Chatbot:** An AI tutor that understands context and relationships between concepts, not just keywords.
-4. **Real-time Pronunciation Feedback:** (Planned) Analyze speech patterns for correction.
+2. **AI Flashcard Generator:** Instantly create learning materials from any text using Gemini/LLMs.
+3. **GraphRAG Chatbot:** An AI tutor that understands context và các quan hệ khái niệm.
+4. **AI Reliability & Performance (NEW):** 
+   - **Request Queuing:** Hệ thống hàng đợi (Semaphore) chịu tải lên tới 7 yêu cầu đồng thời.
+   - **Semantic Reranking:** Sử dụng Cohere Rerank v3.0 để đảm bảo độ chính xác của nghĩa từ.
+   - **Unicode Integrity:** Không còn lỗi hiển thị ký tự đặc biệt tiếng Việt.
+5. **Real-time Pronunciation Feedback:** (Planned) Analyze speech patterns for correction.
 
 ## 📂 Project Structure
 
