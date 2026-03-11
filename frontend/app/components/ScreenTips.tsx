@@ -109,7 +109,7 @@ export default function ScreenTips() {
                 <div>
                   <p className="text-xs font-bold text-amber-800 uppercase tracking-tight">Khuyên dùng trên máy tính</p>
                   <p className="text-[11px] text-amber-700 leading-relaxed mt-1">
-                    Để học tập hiệu quả nhất với Đồ thị Tri thức (Graph) và các bài tập AI, bạn nên dùng trình duyệt Chrome trên máy tính.
+                    Để học tập hiệu quả nhất với Đồ thị Tri thức (Graph) và các bài tập AI, bạn nên dùng trình duyệt Chrome trên máy tính. Giao diện Mobile đang trong quá trình phát triển.
                   </p>
                 </div>
               </div>
