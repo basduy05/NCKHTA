@@ -313,8 +313,24 @@ def generate_flashcard_content(word: str, level: str = "A1"):
     )
     
     chain = prompt | llm
-    response = _safe_invoke(chain, {"word": word, "level": level})
-    return response.content
+    try:
+        response = _safe_invoke(chain, {"word": word, "level": level})
+        result = parse_json_response(response.content)
+        if isinstance(result, dict) and "definition" in result:
+            return result
+        # Fallback for plain text response
+        return {
+            "word": word,
+            "definition": str(response.content).strip(),
+            "example": f"Usage of {word} at {level} level."
+        }
+    except Exception as e:
+        print(f"generate_flashcard_content error: {e}")
+        return {
+            "word": word,
+            "definition": f"Error generating content: {str(e)}",
+            "example": ""
+        }
 
 def extract_vocabulary_from_text(text: str):
     """

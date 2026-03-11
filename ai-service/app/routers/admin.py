@@ -16,48 +16,59 @@ router = APIRouter(prefix="/admin", tags=["Admin"])
 @router.get("/stats")
 async def get_admin_stats():
     conn = get_db()
-    cursor = conn.cursor()
-
-    cursor.execute("SELECT COUNT(*) FROM users")
-    users_count = cursor.fetchone()[0]
-
-    cursor.execute("SELECT COUNT(*) FROM classes")
-    classes_count = cursor.fetchone()[0]
-    
-    cursor.execute("SELECT COUNT(*) FROM lessons")
-    lessons_count = cursor.fetchone()[0]
-    conn.close()
-
-    vocab_count = 0
     try:
-        # Wrap blocking Neo4j call in a thread to avoid blocking the event loop
-        def _query_neo4j():
-            g = graph_service.get_graph()
-            if g:
-                res = g.query("MATCH (n) RETURN count(n) as count LIMIT 1")
-                if res and len(res) > 0:
-                    return res[0]["count"]
-            return 0
-        vocab_count = await asyncio.to_thread(_query_neo4j)
-    except Exception as e:
-        print("Neo4j Error:", e)
+        cursor = conn.cursor()
 
-    return {
-        "users": users_count,
-        "vocab": vocab_count,
-        "classes": classes_count,
-        "lessons": lessons_count
-    }
+        cursor.execute("SELECT COUNT(*) FROM users")
+        users_count = cursor.fetchone()[0]
+
+        cursor.execute("SELECT COUNT(*) FROM classes")
+        classes_count = cursor.fetchone()[0]
+        
+        cursor.execute("SELECT COUNT(*) FROM lessons")
+        lessons_count = cursor.fetchone()[0]
+        conn.close()
+
+        vocab_count = 0
+        try:
+            # Wrap blocking Neo4j call in a thread to avoid blocking the event loop
+            def _query_neo4j():
+                g = graph_service.get_graph()
+                if g:
+                    res = g.query("MATCH (n) RETURN count(n) as count LIMIT 1")
+                    if res and len(res) > 0:
+                        return res[0]["count"]
+                return 0
+            vocab_count = await asyncio.to_thread(_query_neo4j)
+        except Exception as e:
+            print(f"[ADMIN STATS] Neo4j Error: {e}")
+
+        return {
+            "users": users_count,
+            "vocab": vocab_count,
+            "classes": classes_count,
+            "lessons": lessons_count
+        }
+    except Exception as e:
+        if conn:
+            try: conn.close()
+            except: pass
+        print(f"[ADMIN STATS ERROR] {e}")
+        raise HTTPException(status_code=500, detail=f"Lỗi truy vấn dữ liệu Admin: {str(e)}")
 
 # --- USERS CRUD ---
 
 @router.get("/users")
 def get_users():
     conn = get_db()
-    cursor = conn.execute("SELECT id, name, email, role FROM users ORDER BY id DESC")
-    users = [dict(row) for row in cursor.fetchall()]
-    conn.close()
-    return users
+    try:
+        cursor = conn.execute("SELECT id, name, email, role FROM users ORDER BY id DESC")
+        users = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        return users
+    except Exception as e:
+        if conn: conn.close()
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/users")
 def create_user(user: UserCreate):
@@ -143,20 +154,28 @@ def update_class(class_id: int, cls: ClassCreate):
 @router.delete("/classes/{class_id}")
 def delete_class(class_id: int):
     conn = get_db()
-    conn.execute("DELETE FROM classes WHERE id = ?", (class_id,))
-    conn.commit()
-    conn.close()
-    return {"message": "Class deleted"}
+    try:
+        conn.execute("DELETE FROM classes WHERE id = ?", (class_id,))
+        conn.commit()
+        conn.close()
+        return {"message": "Class deleted"}
+    except Exception as e:
+        if conn: conn.close()
+        raise HTTPException(status_code=500, detail=str(e))
 
 # --- LESSONS CRUD ---
 
 @router.get("/lessons")
 def get_lessons():
     conn = get_db()
-    cursor = conn.execute("SELECT lessons.id, lessons.class_id, lessons.title, lessons.content, lessons.file_name, classes.name as class_name FROM lessons JOIN classes ON lessons.class_id = classes.id ORDER BY lessons.id DESC")
-    lessons = [dict(row) for row in cursor.fetchall()]
-    conn.close()
-    return lessons
+    try:
+        cursor = conn.execute("SELECT lessons.id, lessons.class_id, lessons.title, lessons.content, lessons.file_name, classes.name as class_name FROM lessons JOIN classes ON lessons.class_id = classes.id ORDER BY lessons.id DESC")
+        lessons = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        return lessons
+    except Exception as e:
+        if conn: conn.close()
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/lessons")
 async def create_lesson(
@@ -192,10 +211,14 @@ def get_lesson_file(lesson_id: int):
 @router.delete("/lessons/{lesson_id}")
 def delete_lesson(lesson_id: int):
     conn = get_db()
-    conn.execute("DELETE FROM lessons WHERE id = ?", (lesson_id,))
-    conn.commit()
-    conn.close()
-    return {"message": "Lesson deleted"}
+    try:
+        conn.execute("DELETE FROM lessons WHERE id = ?", (lesson_id,))
+        conn.commit()
+        conn.close()
+        return {"message": "Lesson deleted"}
+    except Exception as e:
+        if conn: conn.close()
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.put("/lessons/{lesson_id}")
 async def update_lesson(

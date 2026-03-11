@@ -152,24 +152,25 @@ def blacklist_token(jti: str, expires_at: int):
 def is_token_revoked(jti: str, conn=None) -> bool:
     """Check if token ID is in the revoked list. Optionally reuse existing conn."""
     close_at_end = False
+    _conn = conn
     try:
-        if conn is None:
+        if _conn is None:
             from ..database import get_db
-            conn = get_db()
+            _conn = get_db()
             close_at_end = True
             
-        cursor = conn.cursor()
+        cursor = _conn.cursor()
         cursor.execute("SELECT jti FROM revoked_tokens WHERE jti = ?", (jti,))
         row = cursor.fetchone()
         
         if close_at_end:
-            conn.close()
+            _conn.close()
             
         return row is not None
     except Exception as e:
         print(f"[AUTH] is_token_revoked error: {e}")
-        if conn and close_at_end:
-            try: conn.close()
+        if _conn and close_at_end:
+            try: _conn.close()
             except: pass
         return False
 

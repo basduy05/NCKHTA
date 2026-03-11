@@ -7,11 +7,13 @@ security = HTTPBearer()
 
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
     token = credentials.credentials
-    conn = get_db()
+    conn = None
+    user = None
     try:
+        conn = get_db()
         payload = auth_service.verify_access_token(token, conn=conn)
         if not payload:
-            conn.close()
+            if conn: conn.close()
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid or expired token",
@@ -24,9 +26,12 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         user = cursor.fetchone()
         conn.close()
     except Exception as e:
-        if conn: conn.close()
+        if conn: 
+            try: conn.close()
+            except: pass
         if isinstance(e, HTTPException): raise e
-        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+        print(f"[AUTH ERROR] Database error in get_current_user: {e}")
+        raise HTTPException(status_code=500, detail="Database connection error during authentication")
     
     if not user:
         raise HTTPException(status_code=404, detail="User not found")

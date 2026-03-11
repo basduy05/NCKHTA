@@ -426,46 +426,62 @@ def logout(authorization: str = Header(...)):
 async def change_password(data: ChangePasswordRequest, credentials: HTTPAuthorizationCredentials = Depends(security)):
     """Change user password"""
     token = credentials.credentials
-    try:
-        user_data = auth_service.verify_access_token(token)
-        user_id = user_data['user_id']
-    except Exception:
-        raise HTTPException(status_code=401, detail="Invalid token")
-    
+@router.post("/change-password")
+async def change_password(data: ResetPasswordRequest, credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """Allow logged-in user to change their password. Revokes current token."""
+    token = credentials.credentials
     conn = get_db()
-    cursor = conn.cursor()
-    
-    # Get current password hash
-    cursor.execute("SELECT password_hash FROM users WHERE id = ?", (user_id,))
-    user = cursor.fetchone()
-    
-    if not user:
-        conn.close()
-        raise HTTPException(status_code=404, detail="User not found")
-    
-    # Verify current password
-    if not auth_service.verify_password(data.current_password, user['password_hash']):
-        conn.close()
-        raise HTTPException(status_code=400, detail="Current password is incorrect")
-    
-    # Hash new password and update
-    new_hash = auth_service.get_password_hash(data.new_password)
-    cursor.execute("UPDATE users SET password_hash = ? WHERE id = ?", (new_hash, user_id))
-    conn.commit()
-    conn.close()
-    
-    # Revoke the current token
     try:
-        from jose import jwt
-        payload = jwt.decode(token, auth_service.SECRET_KEY, algorithms=[auth_service.ALGORITHM])
+        payload = auth_service.verify_access_token(token, conn=conn)
+        if not payload:
+            conn.close()
+            raise HTTPException(status_code=401, detail="Invalid or expired token")
+        
+        user_id = payload["user_id"]
+        cursor = conn.cursor()
+        
+        # Verify old password
+        cursor.execute("SELECT password_hash FROM users WHERE id = ?", (user_id,))
+        user = cursor.fetchone()
+        if not user or not auth_service.verify_password(data.reset_token, user["password_hash"]):
+            # Note: Using reset_token field as old_password to reuse ResetPasswordRequest model
+            conn.close()
+            raise HTTPException(status_code=400, detail="Mật khẩu cũ không chính xác")
+
+        # Update to new password
+        auth_service.validate_password_strength(data.new_password)
+        hashed_password = auth_service.get_password_hash(data.new_password)
+        cursor.execute("UPDATE users SET password_hash = ? WHERE id = ?", (hashed_password, user_id))
+        
+        # Revoke the current token
         jti = payload.get("jti")
         exp = payload.get("exp")
         if jti:
             auth_service.blacklist_token(jti, exp)
+            
+        conn.commit()
+        conn.close()
+        return {"message": "Đổi mật khẩu thành công. Phiên đăng nhập hiện tại đã được cập nhật."}
     except Exception as e:
-        print(f"[AUTH] Failed to blacklist token on password change: {e}")
-    
-    return {"message": "Password changed successfully"}
+        if conn:
+            try: conn.close()
+            except: pass
+        if isinstance(e, HTTPException): raise e
+        print(f"[AUTH ERROR] change_password: {e}")
+        raise HTTPException(status_code=500, detail="Lỗi kết nối cơ sở dữ liệu")
+
+@router.post("/logout")
+async def logout(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """Explicitly revoke the current access token."""
+    token = credentials.credentials
+    payload = auth_service.verify_access_token(token)
+    if payload:
+        jti = payload.get("jti")
+        exp = payload.get("exp")
+        if jti:
+            auth_service.blacklist_token(jti, exp)
+            return {"message": "Logged out successfully"}
+    return {"message": "Already logged out or invalid token"}
 
 
 @router.post("/resend-otp")

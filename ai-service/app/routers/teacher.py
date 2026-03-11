@@ -15,19 +15,28 @@ def _get_current_teacher(authorization: str = Header(...)):
     if not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Invalid authorization header")
     token = authorization[7:]
-    payload = auth_service.verify_access_token(token)
-    if not payload:
-        raise HTTPException(status_code=401, detail="Invalid or expired token")
-
     conn = get_db()
-    cursor = conn.execute("SELECT id, name, email, role FROM users WHERE id = ?", (payload["user_id"],))
-    user = cursor.fetchone()
-    conn.close()
-    if not user:
-        raise HTTPException(status_code=401, detail="User not found")
-    if user["role"] not in ("TEACHER", "ADMIN"):
-        raise HTTPException(status_code=403, detail="Teacher access required")
-    return dict(user)
+    try:
+        payload = auth_service.verify_access_token(token, conn=conn)
+        if not payload:
+            conn.close()
+            raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+        cursor = conn.execute("SELECT id, name, email, role FROM users WHERE id = ?", (payload["user_id"],))
+        user = cursor.fetchone()
+        conn.close()
+        if not user:
+            raise HTTPException(status_code=401, detail="User not found")
+        if user["role"] not in ("TEACHER", "ADMIN"):
+            raise HTTPException(status_code=403, detail="Teacher access required")
+        return dict(user)
+    except Exception as e:
+        if conn:
+            try: conn.close()
+            except: pass
+        if isinstance(e, HTTPException): raise e
+        print(f"[TEACHER AUTH ERROR] {e}")
+        raise HTTPException(status_code=500, detail="Database connection error during authentication")
 
 
 # ===================== STATS =====================
