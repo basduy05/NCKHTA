@@ -225,7 +225,7 @@ export default function Home() {
           <div className="flex flex-col lg:flex-row items-center gap-16">
             <div className="flex-1 space-y-8 text-center lg:text-left">
               <div className="inline-flex items-center bg-blue-50 border border-blue-100 rounded-full px-4 py-2 text-sm text-blue-700 font-medium animate-fade-in delay-100">
-                <Sparkles size={16} className="mr-2 animate-spin" style={{ animationDuration: "3s" }} /> Nghiên cứu Khoa học Công nghệ Ứng dụng 2025
+                <Sparkles size={16} className="mr-2 animate-spin" style={{ animationDuration: "3s" }} /> Dự án phát triển ứng dụng phục vụ nghiên cứu khoa học - 2025
               </div>
               <h1 className="text-5xl lg:text-6xl font-extrabold text-gray-900 leading-tight tracking-tight animate-fade-in-up delay-200">
                 Học tiếng Anh <br />
@@ -470,7 +470,7 @@ export default function Home() {
           <div className="absolute bottom-10 right-10 w-80 h-80 bg-cyan-300 rounded-full blur-3xl animate-pulse-soft delay-300" />
         </div>
         <div data-reveal className="opacity-0 translate-y-8 relative max-w-4xl mx-auto px-6 py-20 text-center text-white">
-          <h2 className="text-4xl font-extrabold mb-4">Sẵn sàng học tập thông minh?</h2>
+          <h2 className="text-4xl font-extrabold mb-4">Bạn đã sẵn sàng cho một hành trình học tập thông minh?</h2>
           <p className="text-blue-100 mb-10 text-xl max-w-2xl mx-auto">
             Tham gia iEdu ngay hôm nay và trải nghiệm phương pháp học tiếng Anh hoàn toàn mới với AI
           </p>
@@ -510,6 +510,7 @@ export default function Home() {
                 <li><Link href="/login" className="hover:text-white transition">Đăng nhập</Link></li>
                 <li><Link href="/register" className="hover:text-white transition">Đăng ký</Link></li>
                 <li><Link href="/about" className="hover:text-white transition">Giới thiệu</Link></li>
+                <li><a href="https://www.facebook.com/basduy05" target="_blank" rel="noopener noreferrer" className="hover:text-white transition">Facebook</a></li>
               </ul>
             </div>
             <div>
@@ -519,11 +520,12 @@ export default function Home() {
                 <li>FastAPI + Python</li>
                 <li>Neo4j Graph Database</li>
                 <li>Google Gemini AI</li>
+                <li>Cohere Rerank</li>
               </ul>
             </div>
           </div>
           <div className="border-t border-gray-800 mt-12 pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
-            <p className="text-sm">&copy; 2025 iEdu - Nghiên cứu Khoa học Công nghệ Ứng dụng</p>
+            <p className="text-sm">&copy; 2025 iEdu - Dự án phát triển ứng dụng phục vụ nghiên cứu khoa học</p>
             <div className="flex items-center gap-2 text-sm">
               <Globe size={16} /> <span>Deployed on Vercel &amp; Render</span>
             </div>

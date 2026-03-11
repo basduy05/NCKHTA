@@ -53,6 +53,15 @@ class TextRequest(BaseModel):
 # ─── LIFESPAN: warm up connections at startup ─────────────────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Startup: Initialize Database
+    print("[STARTUP] Initializing database...")
+    from .database import init_db
+    try:
+        init_db()
+    except Exception as e:
+        print(f"[STARTUP ERROR] Database initialization failed: {e}")
+        traceback.print_exc()
+
     # Startup: pre-warm Neo4j connection
     print("[STARTUP] Pre-warming Neo4j connection...")
     if graph_service:

@@ -7,20 +7,26 @@ security = HTTPBearer()
 
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
     token = credentials.credentials
-    payload = auth_service.verify_access_token(token)
-    if not payload:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired token",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    
-    user_id = payload.get("user_id")
     conn = get_db()
-    cursor = conn.cursor()
-    cursor.execute("SELECT id, name, email, role, is_active FROM users WHERE id = ?", (user_id,))
-    user = cursor.fetchone()
-    conn.close()
+    try:
+        payload = auth_service.verify_access_token(token, conn=conn)
+        if not payload:
+            conn.close()
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid or expired token",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        
+        user_id = payload.get("user_id")
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, name, email, role, is_active FROM users WHERE id = ?", (user_id,))
+        user = cursor.fetchone()
+        conn.close()
+    except Exception as e:
+        if conn: conn.close()
+        if isinstance(e, HTTPException): raise e
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
     
     if not user:
         raise HTTPException(status_code=404, detail="User not found")

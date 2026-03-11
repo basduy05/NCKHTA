@@ -121,12 +121,12 @@ def generate_access_token(user_id: int, email: str):
     }
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
-def verify_access_token(token: str):
-    """Verify JWT and return user_id, email. Checks against blacklist."""
+def verify_access_token(token: str, conn=None):
+    """Verify JWT and return user_id, email. Checks against blacklist. Optionally reuse conn."""
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         jti = payload.get("jti")
-        if jti and is_token_revoked(jti):
+        if jti and is_token_revoked(jti, conn=conn):
             print(f"[AUTH] Blocked revoked token: {jti}")
             return None
             
@@ -149,16 +149,28 @@ def blacklist_token(jti: str, expires_at: int):
     except Exception as e:
         print(f"[AUTH] Blacklist error: {e}")
 
-def is_token_revoked(jti: str) -> bool:
-    """Check if token ID is in the revoked list."""
+def is_token_revoked(jti: str, conn=None) -> bool:
+    """Check if token ID is in the revoked list. Optionally reuse existing conn."""
+    close_at_end = False
     try:
-        conn = get_db()
+        if conn is None:
+            from ..database import get_db
+            conn = get_db()
+            close_at_end = True
+            
         cursor = conn.cursor()
         cursor.execute("SELECT jti FROM revoked_tokens WHERE jti = ?", (jti,))
         row = cursor.fetchone()
-        conn.close()
+        
+        if close_at_end:
+            conn.close()
+            
         return row is not None
-    except Exception:
+    except Exception as e:
+        print(f"[AUTH] is_token_revoked error: {e}")
+        if conn and close_at_end:
+            try: conn.close()
+            except: pass
         return False
 
 def generate_reset_token():

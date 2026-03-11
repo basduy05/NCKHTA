@@ -239,12 +239,16 @@ def init_db():
         print("Migration error:", e)
 
     # --- MIGRATION: JWT Blacklist (Session Revocation) ---
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS revoked_tokens (
-            jti TEXT PRIMARY KEY,
-            expires_at INTEGER NOT NULL
-        )
-    """)
+    try:
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS revoked_tokens (
+                jti TEXT PRIMARY KEY,
+                expires_at INTEGER NOT NULL
+            )
+        """)
+        conn.commit()
+    except Exception as e:
+        print(f"[DB MIGRATION] revoked_tokens error: {e}")
 
     # -----------------------------------
 
@@ -483,11 +487,8 @@ def init_db():
     conn.close()
     print("[DB] Database initialized OK")
 
-try:
-    init_db()
-except Exception as e:
-    print(f"[DB ERROR] init_db failed: {e}")
-    traceback.print_exc()
+# REMOVED: Eager init_db() call to prevent circular imports during service loading.
+# Initialization now happens in main.py lifespan.
 
 import threading
 _thread_local = threading.local()
