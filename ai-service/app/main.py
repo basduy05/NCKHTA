@@ -1,3 +1,18 @@
+import sys
+import io
+
+# Force UTF-8 encoding for stdout and stderr to prevent UnicodeEncodeError in Windows/Render
+if hasattr(sys.stdout, "buffer"):
+    try:
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+    except (AttributeError, Exception):
+        pass
+if hasattr(sys.stderr, "buffer"):
+    try:
+        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+    except (AttributeError, Exception):
+        pass
+
 from fastapi import FastAPI, UploadFile, File, Body, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -14,9 +29,9 @@ import time
 import pathlib
 env_path = pathlib.Path(__file__).parent.parent / ".env"
 load_dotenv(dotenv_path=env_path)
-print(f"[STARTUP] Loading .env from: {env_path}")
+print(f"[STARTUP] Loading .env from: {env_path}", flush=True)
 
-print("[STARTUP] Loading services...")
+print("[STARTUP] Loading services...", flush=True)
 try:
     from .services import graph_service, llm_service  # Import internal services
     print("[STARTUP] Services loaded OK")
@@ -26,16 +41,17 @@ except Exception as e:
     graph_service = None
     llm_service = None
 
-print("[STARTUP] Loading routers...")
+print("[STARTUP] Loading routers...", flush=True)
 try:
     from .routers import admin  # Import routers
     from .routers import auth  # Import Auth Router
     from .routers import teacher  # Import Teacher Router
     from .routers import student  # Import Student Router
-    print("[STARTUP] Routers loaded OK")
+    print("[STARTUP] Routers loaded OK", flush=True)
 except Exception as e:
-    print(f"[STARTUP ERROR] Failed to load routers: {e}")
-    traceback.print_exc()
+    import traceback
+    print(f"[STARTUP ERROR] Failed to load routers: {e}", flush=True)
+    print(traceback.format_exc(), flush=True)
     admin = None
     auth = None
     teacher = None
@@ -184,10 +200,20 @@ async def rate_limit_middleware(request: Request, call_next):
 
     return await call_next(request)
 
-app.include_router(admin.router, dependencies=[Depends(get_admin_user)]) if admin else None
-app.include_router(auth.router) if auth else None
-app.include_router(teacher.router, dependencies=[Depends(get_teacher_user)]) if teacher else None
-app.include_router(student.router, dependencies=[Depends(get_current_user)]) if student else None
+if admin:
+    print("[STARTUP] Including admin router...", flush=True)
+    app.include_router(admin.router, dependencies=[Depends(get_admin_user)])
+else:
+    print("[STARTUP WARNING] Admin router NOT included", flush=True)
+
+if auth:
+    app.include_router(auth.router)
+
+if teacher:
+    app.include_router(teacher.router, dependencies=[Depends(get_teacher_user)])
+
+if student:
+    app.include_router(student.router, dependencies=[Depends(get_current_user)])
 
 
 @app.get("/")
@@ -196,6 +222,18 @@ def read_root():
         "status": "AI Service Running", 
         "message": "Welcome to EAM Project"
     }
+
+@app.get("/debug/db")
+def debug_db():
+    from .database import get_db
+    try:
+        conn = get_db()
+        cursor = conn.execute("SELECT COUNT(*) FROM users")
+        count = cursor.fetchone()[0]
+        conn.close()
+        return {"db_status": "ok", "user_count": count}
+    except Exception as e:
+        return {"db_status": "error", "detail": str(e)}
 
 @app.get("/health")
 def health_check():

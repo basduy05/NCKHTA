@@ -13,8 +13,28 @@ from typing import Dict, Optional
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
 
+@router.get("/health-public")
+def admin_health_public():
+    """Unauthenticated health check for Admin router."""
+    print("[ADMIN DEBUG] Public health check hit", flush=True)
+    return {"status": "ok", "message": "Admin router is reachable"}
+
+@router.get("/health-db")
+def admin_health_db():
+    """Check DB connectivity from Admin router."""
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM users")
+        count = cursor.fetchone()[0]
+        conn.close()
+        return {"status": "ok", "user_count": count}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
 @router.get("/stats")
 async def get_admin_stats():
+    print("[ADMIN DEBUG] get_admin_stats called", flush=True)
     conn = get_db()
     try:
         cursor = conn.cursor()
@@ -53,8 +73,8 @@ async def get_admin_stats():
         if conn:
             try: conn.close()
             except: pass
-        print(f"[ADMIN STATS ERROR] {e}")
-        raise HTTPException(status_code=500, detail=f"Lỗi truy vấn dữ liệu Admin: {str(e)}")
+        print(f"[ADMIN STATS ERROR] {e}", flush=True)
+        raise HTTPException(status_code=500, detail=f"Admin stats retrieval error: {str(e)}")
 
 # --- USERS CRUD ---
 

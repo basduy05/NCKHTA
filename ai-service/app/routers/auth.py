@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends, status, BackgroundTasks
+from fastapi import APIRouter, HTTPException, Depends, status, BackgroundTasks, Header
 from pydantic import BaseModel, EmailStr
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import sqlite3
