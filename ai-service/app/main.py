@@ -41,6 +41,8 @@ except Exception as e:
     graph_service = None
     llm_service = None
 
+router_load_error = None
+
 print("[STARTUP] Loading routers...", flush=True)
 try:
     from .routers import admin  # Import routers
@@ -50,6 +52,7 @@ try:
     print("[STARTUP] Routers loaded OK", flush=True)
 except Exception as e:
     import traceback
+    router_load_error = str(e)
     print(f"[STARTUP ERROR] Failed to load routers: {e}", flush=True)
     print(traceback.format_exc(), flush=True)
     admin = None
@@ -196,6 +199,12 @@ def debug_db():
         return {"db_status": "ok", "user_count": count}
     except Exception as e:
         return {"db_status": "error", "detail": str(e)}
+
+@app.get("/debug/startup-error")
+def debug_startup_error():
+    if router_load_error:
+        return {"error": router_load_error}
+    return {"message": "Small success: Routers loaded but something else might be wrong."}
 
 @app.get("/health")
 def health_check():

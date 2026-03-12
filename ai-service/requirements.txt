@@ -2,11 +2,15 @@ fastapi
 uvicorn
 neo4j
 python-dotenv
+langchain
+langchain-community
 langchain-core
 langchain-neo4j
 langchain-openai
 langchain-google-genai
 langchain-cohere
+google-generativeai
+openai
 pydantic
 requests
 httpx
@@ -20,3 +24,4 @@ json-repair
 bleach
 libsql-experimental
 cohere
+typing-extensions
