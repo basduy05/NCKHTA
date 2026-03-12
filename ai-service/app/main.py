@@ -101,19 +101,6 @@ app = FastAPI(
 # uvicorn, fastapi, python-multipart, python-dotenv, neo4j, langchain
 # langchain-community, google-generativeai, openai
 
-# CORS: Allow specific origins (restrict wildcard for security)
-_raw_origins = os.getenv("ALLOWED_ORIGINS", "https://nckhta-1wfu.vercel.app,http://localhost:3000")
-origins = [o.strip() for o in _raw_origins.split(",") if o.strip()]
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "Accept"],
-)
-
-
 # ─── SECURITY HEADERS MIDDLEWARE ─────────────────────────────────────────────
 @app.middleware("http")
 async def security_headers_middleware(request: Request, call_next):
@@ -125,86 +112,42 @@ async def security_headers_middleware(request: Request, call_next):
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
-    
-    # Content-Security-Policy: Prevent scripts from being executed from unauthorized sources
-    # 'self' allows resources from the same origin
-    # https://fonts.googleapis.com etc. might be needed if frontend was served here, 
-    # but since this is an API, we can be very strict.
     response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self'; object-src 'none';"
-    
     return response
 
-
-# ─── GLOBAL EXCEPTION HANDLER: prevent crashes from bubbling up ──────────────
+# ─── GLOBAL EXCEPTION HANDLER ────────────────────────────────────────────────
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    """Catch any unhandled exception so the server never crashes."""
     print(f"[UNHANDLED ERROR] {request.method} {request.url.path}: {type(exc).__name__}: {exc}")
     traceback.print_exc()
-    return JSONResponse(
-        status_code=500,
-        content={"detail": "Internal server error. Please try again later."},
-    )
-
+    return JSONResponse(status_code=500, content={"detail": "Internal server error"})
 
 # ─── REQUEST TIMEOUT MIDDLEWARE ───────────────────────────────────────────────
-REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", "120"))  # seconds
-
+REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", "120"))
 @app.middleware("http")
 async def timeout_middleware(request: Request, call_next):
-    """Kill requests that take too long (protects against LLM hangs)."""
     try:
-        response = await asyncio.wait_for(
-            call_next(request),
-            timeout=REQUEST_TIMEOUT,
-        )
-        return response
+        return await asyncio.wait_for(call_next(request), timeout=REQUEST_TIMEOUT)
     except asyncio.TimeoutError:
-        print(f"[TIMEOUT] {request.method} {request.url.path} exceeded {REQUEST_TIMEOUT}s")
-        return JSONResponse(
-            status_code=504,
-            content={"detail": f"Request timed out after {REQUEST_TIMEOUT}s"},
-        )
-    except Exception as e:
-        print(f"[MIDDLEWARE ERROR] {request.method} {request.url.path}: {e}")
-        return JSONResponse(
-            status_code=500,
-            content={"detail": "Internal server error"},
-        )
+        return JSONResponse(status_code=504, content={"detail": "Request timed out"})
 
-
-# ─── SIMPLE RATE LIMITER (in-memory, per-IP) ─────────────────────────────────
-_rate_store: dict = {}  # ip -> [timestamps]
-RATE_LIMIT = int(os.getenv("RATE_LIMIT", "30"))       # max requests
-RATE_WINDOW = int(os.getenv("RATE_WINDOW", "60"))      # per N seconds
-
+# ─── SIMPLE RATE LIMITER ─────────────────────────────────────────────────────
+_rate_store: dict = {}
+RATE_LIMIT = int(os.getenv("RATE_LIMIT", "30"))
+RATE_WINDOW = int(os.getenv("RATE_WINDOW", "60"))
 @app.middleware("http")
 async def rate_limit_middleware(request: Request, call_next):
-    """Simple per-IP rate limiting for AI-heavy endpoints."""
     path = request.url.path
-    # Only rate-limit expensive AI endpoints
     if any(p in path for p in ["/dictionary/", "/analyze-text", "/generate-quiz", "/generate-vocab", "/flashcard/", "/vocabulary/extract", "/quiz/generate"]):
-        client_ip = request.client.host if request.client else "unknown"
+        client_ip = (request.client.host if request.client else "unknown")
         now = time.time()
         window_start = now - RATE_WINDOW
-
         timestamps = _rate_store.get(client_ip, [])
         timestamps = [t for t in timestamps if t > window_start]
-
         if len(timestamps) >= RATE_LIMIT:
-            return JSONResponse(
-                status_code=429,
-                content={"detail": f"Too many requests. Max {RATE_LIMIT} per {RATE_WINDOW}s. Try again later."},
-            )
-
+            return JSONResponse(status_code=429, content={"detail": "Too many requests"})
         timestamps.append(now)
         _rate_store[client_ip] = timestamps
-
-        # Cleanup old IPs periodically (every 100 requests)
-        if len(_rate_store) > 500:
-            cutoff = now - RATE_WINDOW * 2
-            _rate_store.clear()
-
     return await call_next(request)
 
 if admin:
@@ -221,6 +164,18 @@ if teacher:
 
 if student:
     app.include_router(student.router, dependencies=[Depends(get_current_user)])
+
+# CORS: Allow specific origins
+# MUST BE ADDED LAST TO BE OUTERMOST IN FASTAPI (wraps all other middlewares)
+_raw_origins = os.getenv("ALLOWED_ORIGINS", "https://nckhta-1wfu.vercel.app,http://localhost:3000")
+origins = [o.strip() for o in _raw_origins.split(",") if o.strip()]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.get("/")

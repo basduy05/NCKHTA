@@ -21,17 +21,5 @@ public class EamBackendApplication {
         return "EAM Backend is running on Render!";
     }
 
-    // CORS Configuration to allow requests from Vercel frontend
-    @Bean
-    public WebMvcConfigurer corsConfigurer() {
-        return new WebMvcConfigurer() {
-            @Override
-            public void addCorsMappings(CorsRegistry registry) {
-                // Allow all origins for development, restrict in production
-                registry.addMapping("/**")
-                        .allowedOrigins("*") 
-                        .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS");
-            }
-        };
-    }
+
 }

@@ -585,9 +585,38 @@ function AIToolsTab({ token }: { token: string | null }) {
           headers: { Authorization: `Bearer ${token}` }, // FormData does not need Content-Type header
           body: formData,
         });
+        
         if (!res.ok) throw new Error("API error");
-        const json = await res.json();
-        data = json.result || json;
+
+        const reader = res.body?.getReader();
+        const decoder = new TextDecoder();
+        let done = false;
+        let buffer = "";
+        let finalData: any = { vocabulary: [], quiz: [] };
+
+        while (reader && !done) {
+          const { value, done: readerDone } = await reader.read();
+          done = readerDone;
+          if (value) {
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || "";
+
+            for (const line of lines) {
+              let rawJson = line.trim();
+              if (rawJson.startsWith("data: ")) rawJson = rawJson.replace("data: ", "");
+              if (rawJson === "[DONE]" || !rawJson) continue;
+
+              try {
+                const chunkData = JSON.parse(rawJson);
+                if (chunkData.status === "success" || !chunkData.status) {
+                  finalData = { ...finalData, ...chunkData };
+                }
+              } catch (e) { }
+            }
+          }
+        }
+        data = finalData;
       }
 
       const words = Array.isArray(data.vocabulary) ? data.vocabulary.map((w: any) => ({
@@ -1749,8 +1778,38 @@ function IpaTab({ token }: { token: string | null }) {
         headers: getAuthHeader(token),
         body: JSON.stringify({ focus })
       });
+      
       if (!res.ok) throw new Error("API Error");
-      setLesson(await res.json());
+
+      const reader = res.body?.getReader();
+      const decoder = new TextDecoder();
+      let done = false;
+      let buffer = "";
+      let finalData: any = {};
+
+      while (reader && !done) {
+        const { value, done: readerDone } = await reader.read();
+        done = readerDone;
+        if (value) {
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || "";
+
+          for (const line of lines) {
+            let rawJson = line.trim();
+            if (rawJson.startsWith("data: ")) rawJson = rawJson.replace("data: ", "");
+            if (rawJson === "[DONE]" || !rawJson) continue;
+
+            try {
+              const chunkData = JSON.parse(rawJson);
+              if (chunkData.status === "success" || !chunkData.status) {
+                finalData = { ...finalData, ...chunkData };
+              }
+            } catch (e) { }
+          }
+        }
+      }
+      setLesson(finalData);
     } catch (e) {
       alert("Lỗi khi tạo bài học IPA");
     } finally {
@@ -1986,7 +2045,7 @@ function PracticeTab({ token }: { token: string | null }) {
 
   const generatePractice = async () => {
     setLoading(true);
-    setPractice(null);
+    setPractice({ status: "generating", questions: [] });
     setAnswers({});
     setSubmitted(false);
     setScore(0);
@@ -2012,8 +2071,53 @@ function PracticeTab({ token }: { token: string | null }) {
         headers: getAuthHeader(token),
         body: JSON.stringify(body)
       });
+      
       if (!res.ok) throw new Error("API Error");
-      setPractice(await res.json());
+
+      const reader = res.body?.getReader();
+      const decoder = new TextDecoder();
+      let done = false;
+      let buffer = "";
+      let finalData: any = { questions: [] };
+
+      while (reader && !done) {
+        const { value, done: readerDone } = await reader.read();
+        done = readerDone;
+        if (value) {
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || "";
+
+          for (const line of lines) {
+            let rawJson = line.trim();
+            if (rawJson.startsWith("data: ")) rawJson = rawJson.replace("data: ", "");
+            if (rawJson === "[DONE]" || !rawJson) continue;
+
+            try {
+              const chunkData = JSON.parse(rawJson);
+              if (chunkData.status === "success" || !chunkData.status) {
+                finalData = { ...finalData, ...chunkData };
+              } else if (chunkData.chunk) {
+                // Partial update for visual feedback if needed
+              }
+            } catch (e) { }
+          }
+        }
+      }
+      
+      // Handle the last bit of buffer
+      if (buffer.trim()) {
+          try {
+              let rawJson = buffer.trim();
+              if (rawJson.startsWith("data: ")) rawJson = rawJson.replace("data: ", "");
+              if (rawJson !== "[DONE]") {
+                  const chunkData = JSON.parse(rawJson);
+                  finalData = { ...finalData, ...chunkData };
+              }
+          } catch (e) {}
+      }
+
+      setPractice(finalData);
     } catch (e) {
       alert("Lỗi khi tạo bài luyện tập");
     } finally {
