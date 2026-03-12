@@ -421,3 +421,66 @@ def create_vocab_node(word_data: Dict):
     return save_word_to_graph(word_data)
 
 
+def save_grammar_to_graph(name: str, description: str):
+    """Save a grammar rule as a node in Neo4j."""
+    g = get_graph()
+    if not g:
+        return {"status": "skipped", "message": "Graph DB not connected"}
+    
+    query = """
+    MERGE (g:GrammarRule {name: $name})
+    SET g.description = $description,
+        g.updated_at = datetime()
+    RETURN g
+    """
+    try:
+        _safe_query(query, {"name": name, "description": description})
+        return {"status": "success"}
+    except Exception as e:
+        print(f"save_grammar_to_graph error: {e}")
+        return {"status": "error", "message": str(e)}
+
+def delete_grammar_from_graph(name: str):
+    """Delete a grammar rule node from Neo4j."""
+    g = get_graph()
+    if not g:
+        return
+    try:
+        _safe_query("MATCH (g:GrammarRule {name: $name}) DETACH DELETE g", {"name": name})
+    except Exception as e:
+        print(f"delete_grammar_from_graph error: {e}")
+
+def link_word_to_grammar(word: str, grammar_name: str):
+    """Create a relationship between a word and a grammar rule."""
+    g = get_graph()
+    if not g:
+        return
+    query = """
+    MATCH (w:Word {text: $word})
+    MATCH (g:GrammarRule {name: $grammar_name})
+    MERGE (w)-[:USES_GRAMMAR]->(g)
+    """
+    try:
+        _safe_query(query, {"word": word.lower().strip(), "grammar_name": grammar_name})
+    except Exception as e:
+        print(f"link_word_to_grammar error: {e}")
+
+def get_relevant_grammar_rules(text: str) -> List[Dict]:
+    """Find grammar rules mentioned or relevant to the given text."""
+    g = get_graph()
+    if not g:
+        return []
+    # Simple keyword match in graph for now
+    try:
+        results = _safe_query("""
+            MATCH (g:GrammarRule)
+            WHERE toLower($text) CONTAINS toLower(g.name)
+            RETURN g.name as name, g.description as description
+            LIMIT 5
+        """, {"text": text})
+        return results if results else []
+    except Exception as e:
+        print(f"get_relevant_grammar_rules error: {e}")
+        return []
+
+

@@ -213,6 +213,11 @@ def init_db():
         cursor.execute("ALTER TABLE users ADD COLUMN password_reset_expires INTEGER")
     except SQLITE_OP_ERROR: pass
 
+    # --- MIGRATION: AI Credits for users ---
+    try:
+        cursor.execute("ALTER TABLE users ADD COLUMN credits_ai INTEGER DEFAULT 50")
+    except SQLITE_OP_ERROR: pass
+
     # --- MIGRATION: Phone number for user ---
     try:
         cursor.execute("ALTER TABLE users ADD COLUMN phone TEXT")

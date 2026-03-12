@@ -98,10 +98,11 @@ def create_user(user: UserCreate):
         # If admin doesn't provide a password, generate a default one like '123456'
         raw_password = user.password if user.password else "123456"
         hashed_password = auth_service.get_password_hash(raw_password)
+        credits = getattr(user, 'credits_ai', 50)
         
         cursor.execute(
-            "INSERT INTO users (name, email, role, is_active, password_hash, is_verified) VALUES (?, ?, ?, ?, ?, ?)",
-            (user.name, user.email, user.role.upper(), 1, hashed_password, 1)
+            "INSERT INTO users (name, email, role, is_active, password_hash, is_verified, credits_ai) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (user.name, user.email, user.role.upper(), 1, hashed_password, 1, credits)
         )
         conn.commit()
     except sqlite3.IntegrityError:
@@ -120,11 +121,23 @@ def create_user(user: UserCreate):
     return {"message": "User created successfully"}
 
 @router.put("/users/{user_id}")
-def update_user(user_id: int, user: UserCreate):
+def update_user(user_id: int, user_data: dict):
     conn = get_db()
-    cursor = conn.cursor()
+    # Build dynamic update query
+    fields = []
+    values = []
+    for k, v in user_data.items():
+        if k in ["name", "email", "role", "credits_ai"]:
+            fields.append(f"{k} = ?")
+            values.append(v.upper() if k == "role" else v)
+    
+    if not fields:
+        conn.close()
+        return {"message": "No fields to update"}
+        
+    values.append(user_id)
     try:
-        cursor.execute("UPDATE users SET name = ?, email = ?, role = ? WHERE id = ?", (user.name, user.email, user.role, user_id))
+        conn.execute(f"UPDATE users SET {', '.join(fields)} WHERE id = ?", tuple(values))
         conn.commit()
     except sqlite3.IntegrityError:
         conn.close()
@@ -467,6 +480,14 @@ async def create_grammar_rule(
                    (name, description, file_name, file_data))
     conn.commit()
     conn.close()
+    
+    # Sync to Neo4j
+    try:
+        from ..services import graph_service
+        graph_service.save_grammar_to_graph(name, description)
+    except Exception as e:
+        print(f"Grammar sync error: {e}")
+        
     return {"message": "Grammar rule created"}
 
 @router.get("/grammar/{rule_id}/file")
@@ -483,9 +504,22 @@ def get_grammar_file(rule_id: int):
 @router.delete("/grammar/{rule_id}")
 def delete_grammar_rule(rule_id: int):
     conn = get_db()
+    # Get name for Neo4j
+    cursor = conn.execute("SELECT name FROM grammar_rules WHERE id = ?", (rule_id,))
+    row = cursor.fetchone()
+    name = row['name'] if row else None
+    
     conn.execute("DELETE FROM grammar_rules WHERE id = ?", (rule_id,))
     conn.commit()
     conn.close()
+    
+    if name:
+        try:
+            from ..services import graph_service
+            graph_service.delete_grammar_from_graph(name)
+        except Exception as e:
+            print(f"Grammar delete sync error: {e}")
+            
     return {"message": "Grammar rule deleted"}
 
 @router.put("/grammar/{rule_id}")
@@ -509,6 +543,14 @@ async def update_grammar_rule(
                        (name, description, rule_id))
     conn.commit()
     conn.close()
+    
+    # Sync to Neo4j
+    try:
+        from ..services import graph_service
+        graph_service.save_grammar_to_graph(name, description)
+    except Exception as e:
+        print(f"Grammar update sync error: {e}")
+        
     return {"message": "Grammar rule updated"}
 
 

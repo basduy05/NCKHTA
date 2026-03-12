@@ -1642,6 +1642,14 @@ function VocabularyTab({ token }: { token: string | null }) {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <button
+              onClick={generatePracticeExercises}
+              disabled={generatingPractice || words.length === 0}
+              className="bg-indigo-600 text-white px-4 py-2 rounded-xl font-bold text-sm flex items-center gap-2 hover:bg-indigo-700 disabled:opacity-50 transition shadow-sm mr-2"
+            >
+              {generatingPractice ? <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" /> : <PlayCircle size={18} />}
+              Luyện tập {words.length > 0 && `(${words.length})`}
+            </button>
             <div className="relative">
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
               <input
@@ -1709,6 +1717,135 @@ function VocabularyTab({ token }: { token: string | null }) {
         </div>
       )}
 
+      {/* Practice Exercise UI Overlay */}
+      {practiceExercises.length > 0 && currentExercise && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="bg-blue-600 p-4 text-white flex justify-between items-center">
+              <h3 className="font-bold flex items-center gap-2">
+                <Brain size={20} /> Luyện tập từ vựng ({practiceExercises.indexOf(currentExercise) + 1}/{practiceExercises.length})
+              </h3>
+              <button onClick={() => setPracticeExercises([])} className="hover:bg-white/20 p-1 rounded-lg transition"><X size={20} /></button>
+            </div>
+            
+            <div className="p-8">
+              <div className="mb-6">
+                <p className="text-gray-500 text-sm mb-1 uppercase font-bold tracking-wider">{currentExercise.instruction || "Câu hỏi"}</p>
+                {currentExercise.type === 'multiple_choice' && <h4 className="text-xl font-bold text-gray-900">{currentExercise.question}</h4>}
+                {currentExercise.type === 'spelling' && <h4 className="text-2xl font-extrabold text-blue-700">{currentExercise.hint}</h4>}
+                {currentExercise.type === 'fill_blank' && (
+                  <div className="text-lg font-medium text-gray-800 bg-gray-50 p-4 rounded-xl border border-gray-100">
+                    <p className="italic">"{currentExercise.sentence}"</p>
+                    <p className="text-sm text-gray-500 mt-2">Nghĩa: {currentExercise.meaning}</p>
+                  </div>
+                )}
+                {currentExercise.type === 'matching' && <h4 className="text-lg font-bold text-gray-900">Nối từ với định nghĩa đúng:</h4>}
+              </div>
+
+              {/* Interaction logic */}
+              <div className="space-y-4">
+                {(currentExercise.type === 'spelling' || currentExercise.type === 'fill_blank') && (
+                  <input
+                    autoFocus
+                    type="text"
+                    value={exerciseAnswers[currentExercise.id] || ""}
+                    onChange={e => setExerciseAnswers({ ...exerciseAnswers, [currentExercise.id]: e.target.value })}
+                    onKeyDown={e => { if (e.key === 'Enter' && !exerciseSubmitted) submitExercise(); }}
+                    placeholder="Gõ câu trả lời..."
+                    className={`w-full text-xl p-4 border-2 rounded-xl outline-none transition-all ${exerciseSubmitted ? (exerciseAnswers[currentExercise.id]?.toLowerCase().trim() === currentExercise.correct_answer.toLowerCase() ? "border-green-500 bg-green-50" : "border-red-500 bg-red-50") : "border-gray-200 focus:border-blue-500"}`}
+                    disabled={exerciseSubmitted}
+                  />
+                )}
+
+                {currentExercise.type === 'multiple_choice' && (
+                  <div className="grid grid-cols-1 gap-2">
+                    {currentExercise.options.map((opt: string, i: number) => {
+                      const isSelected = exerciseAnswers[currentExercise.id] === opt;
+                      const isCorrect = opt === currentExercise.correct_answer;
+                      let cls = "border-gray-100 hover:border-blue-300 hover:bg-gray-50";
+                      if (exerciseSubmitted) {
+                        if (isCorrect) cls = "border-green-500 bg-green-50 text-green-700 font-bold";
+                        else if (isSelected) cls = "border-red-500 bg-red-50 text-red-700";
+                        else cls = "opacity-50 border-gray-100";
+                      } else if (isSelected) {
+                        cls = "border-blue-500 bg-blue-50 text-blue-700 font-bold shadow-sm";
+                      }
+
+                      return (
+                        <button
+                          key={i}
+                          disabled={exerciseSubmitted}
+                          onClick={() => setExerciseAnswers({ ...exerciseAnswers, [currentExercise.id]: opt })}
+                          className={`p-4 rounded-xl border-2 text-left transition ${cls}`}
+                        >
+                          {opt}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {currentExercise.type === 'matching' && (
+                  <div className="space-y-3">
+                    {currentExercise.words.map((w: string, i: number) => (
+                      <div key={i} className="flex items-center gap-3">
+                        <div className="w-1/3 bg-gray-100 p-3 rounded-lg font-bold text-gray-700">{w}</div>
+                        <select
+                          disabled={exerciseSubmitted}
+                          className={`flex-1 p-3 border-2 rounded-lg outline-none transition ${exerciseSubmitted ? (exerciseAnswers[`${currentExercise.id}_${w}`] === currentExercise.correct_matches[w] ? "border-green-500 bg-green-50" : "border-red-500 bg-red-50") : "border-gray-200 focus:border-blue-500"}`}
+                          value={exerciseAnswers[`${currentExercise.id}_${w}`] || ""}
+                          onChange={e => setExerciseAnswers({ ...exerciseAnswers, [`${currentExercise.id}_${w}`]: e.target.value })}
+                        >
+                          <option value="">Chọn định nghĩa...</option>
+                          {currentExercise.definitions.map((d: string, j: number) => <option key={j} value={d}>{d}</option>)}
+                        </select>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {exerciseSubmitted && (
+                <div className={`mt-6 p-4 rounded-xl flex items-center gap-3 ${
+                  (currentExercise.type === 'matching' ? 
+                    Object.keys(currentExercise.correct_matches).every(w => exerciseAnswers[`${currentExercise.id}_${w}`] === currentExercise.correct_matches[w]) :
+                    exerciseAnswers[currentExercise.id]?.toLowerCase().trim() === currentExercise.correct_answer.toLowerCase()) 
+                  ? "bg-green-50 text-green-700 border border-green-200" 
+                  : "bg-red-50 text-red-700 border border-red-200"
+                }`}>
+                  { (currentExercise.type === 'matching' ? 
+                    Object.keys(currentExercise.correct_matches).every(w => exerciseAnswers[`${currentExercise.id}_${w}`] === currentExercise.correct_matches[w]) :
+                    exerciseAnswers[currentExercise.id]?.toLowerCase().trim() === currentExercise.correct_answer.toLowerCase())
+                    ? <CheckCircle2 size={24} /> : <XCircle size={24} /> }
+                  <div>
+                    <p className="font-bold">
+                      {(currentExercise.type === 'matching' ? 
+                        Object.keys(currentExercise.correct_matches).every(w => exerciseAnswers[`${currentExercise.id}_${w}`] === currentExercise.correct_matches[w]) :
+                        exerciseAnswers[currentExercise.id]?.toLowerCase().trim() === currentExercise.correct_answer.toLowerCase())
+                        ? "Chính xác!" : `Sai rồi. Đáp án đúng là: ${currentExercise.correct_answer}`}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              <div className="mt-8 flex justify-end gap-3">
+                {!exerciseSubmitted ? (
+                  <button onClick={submitExercise} className="btn-primary px-8 py-3 rounded-xl font-bold shadow-lg hover:shadow-xl transition transform active:scale-95">Kiểm tra</button>
+                ) : (
+                  practiceExercises.indexOf(currentExercise) < practiceExercises.length - 1 ? (
+                    <button onClick={nextExercise} className="bg-blue-600 text-white px-8 py-3 rounded-xl font-bold flex items-center gap-2 hover:bg-blue-700 transition shadow-lg">Tiếp theo <ArrowRight size={18} /></button>
+                  ) : (
+                    <button onClick={() => {
+                      alert(`Chúc mừng! Bạn đã hoàn thành bài tập với số điểm: ${exerciseScore}/${practiceExercises.length}`);
+                      setPracticeExercises([]);
+                    }} className="bg-green-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-green-700 transition shadow-lg">Hoàn thành</button>
+                  )
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

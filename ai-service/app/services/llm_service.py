@@ -1166,6 +1166,38 @@ def generate_ipa_lesson(words: list = None, focus: str = "vowels"):
         return {"error": str(e)}
 
 
+async def generate_ipa_lesson_stream(text: str):
+    """Streaming version of generate_ipa_lesson."""
+    llm = get_llm()
+    if not llm:
+        yield json.dumps({"error": "LLM not configured"})
+        return
+
+    prompt = PromptTemplate.from_template(
+        "You are an English phonetics (IPA) expert.\n"
+        "Generate an IPA lesson based on this text:\n{text}\n\n"
+        "Return a JSON object with:\n"
+        '"title": lesson title\n'
+        '"vocabulary": array of objects with "word", "ipa", "meaning_vn", "audio_link"\n'
+        '"practice_sentences": array of sentences with their IPA\n'
+        '"tips": 3 pronunciation tips in Vietnamese\n\n'
+        "Return ONLY valid JSON. No markdown."
+    )
+    chain = prompt | llm
+    
+    full_content = ""
+    async for chunk in chain.astream({"text": text}):
+        full_content += chunk.content
+        yield json.dumps({"status": "generating", "chunk": chunk.content}, ensure_ascii=False)
+    
+    try:
+        result = parse_json_response(full_content)
+        result["status"] = "success"
+        yield json.dumps(result, ensure_ascii=False)
+    except:
+        yield json.dumps({"error": "Failed to parse AI response"}, ensure_ascii=False)
+
+
 def generate_exercises_from_text(text: str, exercise_type: str = "mixed", num_questions: int = 10):
     """Generate exercises from extracted file text. Supports: quiz, fill-blanks, matching, mixed."""
     llm = get_llm()
@@ -1230,6 +1262,64 @@ def generate_exercises_from_text(text: str, exercise_type: str = "mixed", num_qu
         return {"error": str(e)}
 
 
+async def generate_exercises_from_text_stream(text: str, exercise_type: str = "mixed", num_questions: int = 10):
+    """Streaming version of generate_exercises_from_text."""
+    llm = get_llm()
+    if not llm:
+        yield json.dumps({"error": "LLM not configured"})
+        return
+
+    text_truncated = text[:3000] if len(text) > 3000 else text
+    
+    # Try to get grammar context from Neo4j
+    from . import graph_service
+    relevant_rules = graph_service.get_relevant_grammar_rules(text_truncated)
+    
+    grammar_context = ""
+    if relevant_rules:
+        grammar_context = "\n\nRelevant Grammar Rules from Knowledge Graph:\n"
+        for r in relevant_rules:
+            grammar_context += f"- {r['name']}: {r['description']}\n"
+    else:
+        # Fallback to general SQL lookup if graph fails/empty
+        try:
+            from ..database import get_db
+            conn = get_db()
+            cursor = conn.execute("SELECT name, description FROM grammar_rules ORDER BY id DESC LIMIT 3")
+            rules = cursor.fetchall()
+            conn.close()
+            if rules:
+                grammar_context = "\n\nFocus Grammar Rules:\n"
+                for r in rules:
+                    grammar_context += f"- {r['name']}: {r['description']}\n"
+        except: pass
+
+    prompt = PromptTemplate.from_template(
+        "You are an English teacher.\nTEXT:\n{text}\n\n{grammar_context}\n"
+        "Create {num} {exercise_type} exercises.\n"
+        "Return JSON with title, difficulty, vocabulary (word, meaning_vn, pos), exercises (type, question, options, correct_answer, explanation), summary_vn.\n"
+        "Return ONLY valid JSON."
+    )
+    chain = prompt | llm
+    
+    full_content = ""
+    async for chunk in chain.astream({
+        "text": text_truncated,
+        "exercise_type": exercise_type,
+        "num": num_questions,
+        "grammar_context": grammar_context
+    }):
+        full_content += chunk.content
+        yield json.dumps({"status": "generating", "chunk": chunk.content}, ensure_ascii=False)
+        
+    try:
+        result = parse_json_response(full_content)
+        result["status"] = "success"
+        yield json.dumps(result, ensure_ascii=False)
+    except:
+        yield json.dumps({"error": "Failed to parse AI response"}, ensure_ascii=False)
+
+
 def generate_practice_test(test_type: str = "TOEIC", skill: str = "reading", part: str = ""):
     """Generate TOEIC/IELTS practice test questions."""
     llm = get_llm()
@@ -1272,6 +1362,38 @@ def generate_practice_test(test_type: str = "TOEIC", skill: str = "reading", par
         return {"error": str(e)}
 
 
+async def generate_practice_test_stream(test_type: str = "TOEIC", skill: str = "reading", part: str = ""):
+    """Streaming version of generate_practice_test."""
+    llm = get_llm()
+    if not llm:
+        yield json.dumps({"error": "LLM not configured"})
+        return
+
+    prompt = PromptTemplate.from_template(
+        "You are an expert {test_type} exam preparation tutor.\n"
+        "Generate a practice section for: {test_type} - {skill} {part}\n\n"
+        "Return a JSON object with passage, questions (number, question, type, options, correct_answer, explanation), tips.\n"
+        "Return ONLY valid JSON."
+    )
+    chain = prompt | llm
+    
+    full_content = ""
+    async for chunk in chain.astream({
+        "test_type": test_type,
+        "skill": skill,
+        "part": part or "general",
+    }):
+        full_content += chunk.content
+        yield json.dumps({"status": "generating", "chunk": chunk.content}, ensure_ascii=False)
+        
+    try:
+        result = parse_json_response(full_content)
+        result["status"] = "success"
+        yield json.dumps(result, ensure_ascii=False)
+    except:
+        yield json.dumps({"error": "Failed to parse AI response"}, ensure_ascii=False)
+
+
 def generate_reading_passage(topic: str = "", level: str = "B1"):
     """Generate a reading passage with comprehension questions."""
     llm = get_llm()
@@ -1311,6 +1433,37 @@ def generate_reading_passage(topic: str = "", level: str = "B1"):
     except Exception as e:
         print(f"generate_reading_passage error: {e}")
         return {"error": str(e)}
+
+
+async def generate_reading_passage_stream(topic: str = "", level: str = "B1"):
+    """Streaming version of generate_reading_passage."""
+    llm = get_llm()
+    if not llm:
+        yield json.dumps({"error": "LLM not configured"})
+        return
+
+    prompt = PromptTemplate.from_template(
+        "Generate an English reading comprehension exercise at CEFR level {level}.\n"
+        "Topic: {topic}\n\n"
+        "Return JSON with title, passage, word_count, key_vocabulary, questions, summary_vn.\n"
+        "Return ONLY valid JSON."
+    )
+    chain = prompt | llm
+    
+    full_content = ""
+    async for chunk in chain.astream({
+        "level": level,
+        "topic": topic or "an interesting general topic",
+    }):
+        full_content += chunk.content
+        yield json.dumps({"status": "generating", "chunk": chunk.content}, ensure_ascii=False)
+        
+    try:
+        result = parse_json_response(full_content)
+        result["status"] = "success"
+        yield json.dumps(result, ensure_ascii=False)
+    except:
+        yield json.dumps({"error": "Failed to parse AI response"}, ensure_ascii=False)
 
 
 def evaluate_writing(text: str, task_type: str = "essay", target_test: str = "IELTS"):
@@ -1356,6 +1509,39 @@ def evaluate_writing(text: str, task_type: str = "essay", target_test: str = "IE
         return {"error": str(e)}
 
 
+async def evaluate_writing_stream(text: str, task_type: str = "essay", target_test: str = "IELTS"):
+    """Streaming version of evaluate_writing."""
+    llm = get_llm()
+    if not llm:
+        yield json.dumps({"error": "LLM not configured"})
+        return
+
+    prompt = PromptTemplate.from_template(
+        "You are an expert {target_test} writing examiner.\n"
+        "Evaluate the following {task_type} writing:\n\n"
+        "STUDENT'S WRITING:\n{text}\n\n"
+        "Evaluate based on detailed criteria and return JSON with overall_band, word_count, criteria details, strengths, weaknesses, and improved_version.\n"
+        "Return ONLY valid JSON."
+    )
+    chain = prompt | llm
+    
+    full_content = ""
+    async for chunk in chain.astream({
+        "target_test": target_test,
+        "task_type": task_type,
+        "text": text,
+    }):
+        full_content += chunk.content
+        yield json.dumps({"status": "generating", "chunk": chunk.content}, ensure_ascii=False)
+        
+    try:
+        result = parse_json_response(full_content)
+        result["status"] = "success"
+        yield json.dumps(result, ensure_ascii=False)
+    except:
+        yield json.dumps({"error": "Failed to parse AI response"}, ensure_ascii=False)
+
+
 def generate_speaking_topic(level: str = "B1", topic_type: str = "general"):
     """Generate speaking practice topics with model answers."""
     llm = get_llm()
@@ -1391,6 +1577,37 @@ def generate_speaking_topic(level: str = "B1", topic_type: str = "general"):
     except Exception as e:
         print(f"generate_speaking_topic error: {e}")
         return {"error": str(e)}
+
+
+async def generate_speaking_topic_stream(level: str = "B1", topic_type: str = "general"):
+    """Streaming version of generate_speaking_topic."""
+    llm = get_llm()
+    if not llm:
+        yield json.dumps({"error": "LLM not configured"})
+        return
+
+    prompt = PromptTemplate.from_template(
+        "You are an English speaking coach.\n"
+        "Generate a speaking practice session at level {level} (Type: {topic_type}).\n\n"
+        "Return JSON with title, prompt, sub_questions (array), model_answer, and key_phrases (word, meaning_vn).\n"
+        "Return ONLY valid JSON."
+    )
+    chain = prompt | llm
+    
+    full_content = ""
+    async for chunk in chain.astream({
+        "level": level,
+        "topic_type": topic_type,
+    }):
+        full_content += chunk.content
+        yield json.dumps({"status": "generating", "chunk": chunk.content}, ensure_ascii=False)
+        
+    try:
+        result = parse_json_response(full_content)
+        result["status"] = "success"
+        yield json.dumps(result, ensure_ascii=False)
+    except:
+        yield json.dumps({"error": "Failed to parse AI response"}, ensure_ascii=False)
     finally:
         if 'start_time' in locals():
              print(f"[LATENCY] lookup_dictionary_full_ai for '{word}' took {time.time() - start_time:.2f}s")

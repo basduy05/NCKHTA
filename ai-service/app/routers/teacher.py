@@ -435,24 +435,40 @@ def get_assignment_scores(assignment_id: int, authorization: str = Header(...)):
 # ===================== AI TOOLS =====================
 
 @router.post("/generate-quiz")
-def generate_quiz_for_class(authorization: str = Header(...), text: str = Form(...), num_questions: int = Form(5)):
-    """Use AI to generate quiz from text for teacher to assign."""
-    _get_current_teacher(authorization)
-    llm = llm_service.get_llm()
-    if not llm:
-        raise HTTPException(status_code=503, detail="LLM service not available — configure API key in Admin settings")
-    result = llm_service.generate_quiz_from_text(text, num_questions)
-    return result
+async def generate_quiz_for_class(authorization: str = Header(...), text: str = Form(...), num_questions: int = Form(5)):
+    """Use AI to generate quiz from text for teacher to assign (Streaming)."""
+    user = _get_current_teacher(authorization)
+    
+    # Deduct credit
+    conn = get_db()
+    conn.execute("UPDATE users SET credits_ai = MAX(0, credits_ai - 1) WHERE id = ?", (user["id"],))
+    conn.commit()
+    conn.close()
+
+    async def gen():
+        async for chunk in llm_service.generate_exercises_from_text_stream(text, "quiz", num_questions):
+            yield f"data: {chunk}\n\n"
+        yield "data: [DONE]\n\n"
+
+    return StreamingResponse(gen(), media_type="text/event-stream")
 
 @router.post("/generate-vocab")
-def generate_vocab_for_class(authorization: str = Header(...), text: str = Form(...)):
-    """Use AI to extract vocabulary from text."""
-    _get_current_teacher(authorization)
-    llm = llm_service.get_llm()
-    if not llm:
-        raise HTTPException(status_code=503, detail="LLM service not available — configure API key in Admin settings")
-    result = llm_service.extract_vocabulary_from_text(text)
-    return result
+async def generate_vocab_for_class(authorization: str = Header(...), text: str = Form(...)):
+    """Use AI to extract vocabulary from text (Streaming)."""
+    user = _get_current_teacher(authorization)
+    
+    # Deduct credit
+    conn = get_db()
+    conn.execute("UPDATE users SET credits_ai = MAX(0, credits_ai - 1) WHERE id = ?", (user["id"],))
+    conn.commit()
+    conn.close()
+
+    async def gen():
+        async for chunk in llm_service.extract_vocabulary_from_text_stream(text):
+            yield f"data: {chunk}\n\n"
+        yield "data: [DONE]\n\n"
+
+    return StreamingResponse(gen(), media_type="text/event-stream")
 
 
 class TeacherDictRequest(BaseModel):
@@ -675,22 +691,28 @@ async def teacher_generate_assignment_from_file(
     authorization: str = Header(...)
 ):
     """
-    Upload a document (PDF, DOCX, TXT), extract text, and automatically generate an assignment/quiz.
+    Upload a document, extract text, and automatically generate an assignment/quiz (Streaming).
     """
-    _get_current_teacher(authorization)
+    user = _get_current_teacher(authorization)
     
-    try:
-        content = await file.read()
-        text = file_service.extract_text_from_file(content, file.filename)
-        
-        if not text or len(text.strip()) == 0 or text.startswith("("):
-            raise HTTPException(status_code=400, detail=f"Could not extract valid text from {file.filename}")
-            
-        result = llm_service.generate_exercises_from_text(text, exercise_type, num_questions)
-        return {"filename": file.filename, "extracted_text_snippet": text[:200], "result": result}
-    except Exception as e:
-        print(f"Teacher file upload error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    # Deduct credits
+    conn = get_db()
+    conn.execute("UPDATE users SET credits_ai = MAX(0, credits_ai - 2) WHERE id = ?", (user["id"],))
+    conn.commit()
+    conn.close()
+
+    content = await file.read()
+    text = file_service.extract_text_from_file(content, file.filename)
+    
+    if not text or len(text.strip()) == 0:
+        raise HTTPException(status_code=400, detail="Could not extract text from file")
+
+    async def gen():
+        async for chunk in llm_service.generate_exercises_from_text_stream(text, exercise_type, num_questions):
+            yield f"data: {chunk}\n\n"
+        yield "data: [DONE]\n\n"
+
+    return StreamingResponse(gen(), media_type="text/event-stream")
 
 
 # ─── GRAMMAR ────────────────────────────────────────────────────────────────

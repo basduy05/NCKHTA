@@ -717,11 +717,26 @@ class IpaRequest(BaseModel):
     focus: str = "vowels"
 
 @router.post("/ipa/generate")
-def generate_ipa(req: IpaRequest, authorization: str = Header(...)):
+async def generate_ipa(req: IpaRequest, authorization: str = Header(...)):
+    from fastapi.responses import StreamingResponse
     user = _get_current_student(authorization)
+    
+    # Check for legacy limit OR new credits
+    # In a real app we'd migrate fully to credits, but for now we'll check both
     _check_usage_limit(user["id"], "ipa")
-    _get_current_student(authorization)
-    return llm_service.generate_ipa_lesson(req.words, req.focus)
+    
+    # Deduct credit
+    conn = get_db()
+    conn.execute("UPDATE users SET credits_ai = MAX(0, credits_ai - 1) WHERE id = ?", (user["id"],))
+    conn.commit()
+    conn.close()
+
+    async def gen():
+        async for chunk in llm_service.generate_ipa_lesson_stream(req.words):
+            yield f"data: {chunk}\n\n"
+        yield "data: [DONE]\n\n"
+
+    return StreamingResponse(gen(), media_type="text/event-stream")
 
 class PracticeRequest(BaseModel):
     test_type: str = "TOEIC"
@@ -729,19 +744,46 @@ class PracticeRequest(BaseModel):
     part: str = ""
 
 @router.post("/practice/generate")
-def generate_practice(req: PracticeRequest, authorization: str = Header(...)):
+async def generate_practice(req: PracticeRequest, authorization: str = Header(...)):
+    from fastapi.responses import StreamingResponse
     user = _get_current_student(authorization)
     _check_usage_limit(user["id"], f"practice_{req.test_type}")
-    return llm_service.generate_practice_test(req.test_type, req.skill, req.part)
+    
+    # Deduct credit (cost 2 for complex tests)
+    conn = get_db()
+    conn.execute("UPDATE users SET credits_ai = MAX(0, credits_ai - 2) WHERE id = ?", (user["id"],))
+    conn.commit()
+    conn.close()
+
+    async def gen():
+        async for chunk in llm_service.generate_practice_test_stream(req.test_type, req.skill, req.part):
+            yield f"data: {chunk}\n\n"
+        yield "data: [DONE]\n\n"
+
+    return StreamingResponse(gen(), media_type="text/event-stream")
 
 class ReadingRequest(BaseModel):
     topic: str = ""
     level: str = "B1"
 
 @router.post("/reading/generate")
-def generate_reading(req: ReadingRequest, authorization: str = Header(...)):
-    _get_current_student(authorization)
-    return llm_service.generate_reading_passage(req.topic, req.level)
+async def generate_reading(req: ReadingRequest, authorization: str = Header(...)):
+    from fastapi.responses import StreamingResponse
+    user = _get_current_student(authorization)
+    _check_usage_limit(user["id"], "reading")
+    
+    # Deduct credit
+    conn = get_db()
+    conn.execute("UPDATE users SET credits_ai = MAX(0, credits_ai - 1) WHERE id = ?", (user["id"],))
+    conn.commit()
+    conn.close()
+
+    async def gen():
+        async for chunk in llm_service.generate_reading_passage_stream(req.topic, req.level):
+            yield f"data: {chunk}\n\n"
+        yield "data: [DONE]\n\n"
+
+    return StreamingResponse(gen(), media_type="text/event-stream")
 
 class WritingRequest(BaseModel):
     text: str
@@ -749,18 +791,44 @@ class WritingRequest(BaseModel):
     target_test: str = "IELTS"
 
 @router.post("/writing/evaluate")
-def evaluate_writing(req: WritingRequest, authorization: str = Header(...)):
-    _get_current_student(authorization)
-    return llm_service.evaluate_writing(req.text, req.task_type, req.target_test)
+async def evaluate_writing(req: WritingRequest, authorization: str = Header(...)):
+    from fastapi.responses import StreamingResponse
+    user = _get_current_student(authorization)
+    
+    # Deduct credit (cost 2)
+    conn = get_db()
+    conn.execute("UPDATE users SET credits_ai = MAX(0, credits_ai - 2) WHERE id = ?", (user["id"],))
+    conn.commit()
+    conn.close()
+
+    async def gen():
+        async for chunk in llm_service.evaluate_writing_stream(req.text, req.task_type, req.target_test):
+            yield f"data: {chunk}\n\n"
+        yield "data: [DONE]\n\n"
+
+    return StreamingResponse(gen(), media_type="text/event-stream")
 
 class SpeakingRequest(BaseModel):
     level: str = "B1"
     topic_type: str = "general"
 
 @router.post("/speaking/topic")
-def generate_speaking(req: SpeakingRequest, authorization: str = Header(...)):
-    _get_current_student(authorization)
-    return llm_service.generate_speaking_topic(req.level, req.topic_type)
+async def generate_speaking(req: SpeakingRequest, authorization: str = Header(...)):
+    from fastapi.responses import StreamingResponse
+    user = _get_current_student(authorization)
+    
+    # Deduct credit
+    conn = get_db()
+    conn.execute("UPDATE users SET credits_ai = MAX(0, credits_ai - 1) WHERE id = ?", (user["id"],))
+    conn.commit()
+    conn.close()
+
+    async def gen():
+        async for chunk in llm_service.generate_speaking_topic_stream(req.level, req.topic_type):
+            yield f"data: {chunk}\n\n"
+        yield "data: [DONE]\n\n"
+
+    return StreamingResponse(gen(), media_type="text/event-stream")
 
 
 @router.post("/file/upload-analyze")
@@ -770,27 +838,30 @@ async def student_upload_analyze(
     num_questions: int = Form(5),
     authorization: str = Header(...)
 ):
-    """
-    Extracts text from an uploaded file and generates exercises automatically.
-    Supported types: TXT, PDF, DOCX
-    """
-    _get_current_student(authorization)
+    from fastapi.responses import StreamingResponse
+    user = _get_current_student(authorization)
 
     if hasattr(file, 'size') and file.size > 10 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="File too large. Maximum size is 10MB.")
 
-    try:
-        content = await file.read()
-        text = file_service.extract_text_from_file(content, file.filename)
-        
-        if not text or len(text.strip()) == 0 or text.startswith("("):
-            raise HTTPException(status_code=400, detail=f"Could not extract valid text from {file.filename}")
-            
-        result = llm_service.generate_exercises_from_text(text, exercise_type, num_questions)
-        return {"filename": file.filename, "extracted_text_snippet": text[:200], "result": result}
-    except Exception as e:
-        print(f"File upload error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    # Deduct credits
+    conn = get_db()
+    conn.execute("UPDATE users SET credits_ai = MAX(0, credits_ai - 3) WHERE id = ?", (user["id"],))
+    conn.commit()
+    conn.close()
+
+    content = await file.read()
+    text = file_service.extract_text_from_file(content, file.filename)
+    
+    if not text or len(text.strip()) == 0:
+        raise HTTPException(status_code=400, detail="Could not extract text from file")
+
+    async def gen():
+        async for chunk in llm_service.generate_exercises_from_text_stream(text, exercise_type, num_questions):
+            yield f"data: {chunk}\n\n"
+        yield "data: [DONE]\n\n"
+
+    return StreamingResponse(gen(), media_type="text/event-stream")
 
 
 # ─── GRAMMAR ────────────────────────────────────────────────────────────────
@@ -800,8 +871,7 @@ def get_grammar_rules(authorization: str = Header(...)):
     _get_current_student(authorization)
     conn = get_db()
     cursor = conn.execute("SELECT id, name, description, file_name, created_at FROM grammar_rules ORDER BY id DESC")
-    columns = [column[0] for column in cursor.description]
-    results = [dict(zip(columns, row)) for row in cursor.fetchall()]
+    results = cursor.fetchall()
     conn.close()
     return results
 
