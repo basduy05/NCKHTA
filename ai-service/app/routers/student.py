@@ -175,16 +175,36 @@ async def start_vocab_practice(req: VocabPracticeReq, authorization: str = Heade
         conn.commit()
         
         # Fetch words from database
-        placeholders = ', '.join(['?'] * len(req.word_ids))
-        cursor = conn.execute(
-            f"SELECT word, meaning_en, meaning_vn FROM saved_vocabulary WHERE user_id = ? AND id IN ({placeholders})",
-            (student["id"], *req.word_ids)
-        )
+        if not req.word_ids:
+            # SR-based: select words never reviewed OR reviewed > 24h ago, limit 10
+            cursor = conn.execute(
+                """SELECT id, word, meaning_en, meaning_vn FROM saved_vocabulary 
+                   WHERE user_id = ? AND (last_reviewed_at IS NULL OR datetime(last_reviewed_at, '+1 day') < CURRENT_TIMESTAMP)
+                   ORDER BY last_reviewed_at ASC LIMIT 10""",
+                (student["id"],)
+            )
+        else:
+            placeholders = ', '.join(['?'] * len(req.word_ids))
+            cursor = conn.execute(
+                f"SELECT id, word, meaning_en, meaning_vn FROM saved_vocabulary WHERE user_id = ? AND id IN ({placeholders})",
+                (student["id"], *req.word_ids)
+            )
+        
         words = [dict(row) for row in cursor.fetchall()]
         conn.close()
         
         if not words:
-            raise HTTPException(status_code=404, detail="No words found")
+            # Fallback: if no words need review, just take the 10 oldest ones
+            conn = get_db()
+            cursor = conn.execute(
+                "SELECT id, word, meaning_en, meaning_vn FROM saved_vocabulary WHERE user_id = ? ORDER BY last_reviewed_at ASC LIMIT 10",
+                (student["id"],)
+            )
+            words = [dict(row) for row in cursor.fetchall()]
+            conn.close()
+
+        if not words:
+            raise HTTPException(status_code=404, detail="No words found. Save some vocabulary first!")
             
         # Generate rich practice using AI
         questions = await llm_service.generate_vocab_practice_rich(words)

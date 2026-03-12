@@ -24,6 +24,7 @@ type AuthContextType = {
   forgotPassword: (email: string) => Promise<boolean>;
   resetPassword: (email: string, token: string, newPassword: string) => Promise<boolean>;
   updateUser: (userData: Partial<User>) => void;
+  refreshUser: () => Promise<void>;
   isLoading: boolean;
   isInitialized: boolean;
 };
@@ -242,6 +243,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const refreshUser = async () => {
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_URL}/auth/me`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const userData = await res.json();
+        setUser(userData);
+        localStorage.setItem('eam_user', JSON.stringify(userData));
+      }
+    } catch (error) {
+      console.error('Refresh user error:', error);
+    }
+  };
+
   const updateUser = (userData: Partial<User>) => {
     if (!user) return;
     const updatedUser = { ...user, ...userData };
@@ -250,7 +267,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, register, verifyOTP, login, loginSendOTP, loginVerifyOTP, logout, forgotPassword, resetPassword, updateUser, isLoading, isInitialized }}>
+    <AuthContext.Provider value={{ user, token, register, verifyOTP, login, loginSendOTP, loginVerifyOTP, logout, forgotPassword, resetPassword, updateUser, refreshUser, isLoading, isInitialized }}>
       {children}
     </AuthContext.Provider>
   );

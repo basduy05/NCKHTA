@@ -18,7 +18,7 @@ function getAuthHeader(token: string | null) {
 function TeacherDashboardContent() {
   const searchParams = useSearchParams();
   const activeTab = searchParams.get("tab") || "overview";
-  const { user, token, isInitialized } = useAuth();
+  const { user, token, isInitialized, refreshUser } = useAuth();
   const router = useRouter();
 
   // Auth check
@@ -572,6 +572,7 @@ function LessonsTab({ token }: { token: string | null }) {
 
 // ==================== ASSIGNMENTS TAB ====================
 function AssignmentsTab({ token }: { token: string | null }) {
+  const { refreshUser } = useAuth();
   const [classes, setClasses] = useState<any[]>([]);
   const [selectedClass, setSelectedClass] = useState<number | null>(null);
   const [assignments, setAssignments] = useState<any[]>([]);
@@ -622,6 +623,7 @@ function AssignmentsTab({ token }: { token: string | null }) {
       });
       if (res.ok) {
         const data = await res.json();
+        refreshUser();
         setGeneratedQuiz(Array.isArray(data) ? data : []);
       }
     } catch (e) { console.error(e); alert("Lỗi khi tạo quiz"); }
@@ -822,6 +824,7 @@ function AssignmentsTab({ token }: { token: string | null }) {
 
 // ==================== AI TOOLS TAB ====================
 function AIToolsTab({ token }: { token: string | null }) {
+  const { refreshUser } = useAuth();
   const [text, setText] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [inputMode, setInputMode] = useState<"text" | "file">("text");

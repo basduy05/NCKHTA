@@ -18,7 +18,7 @@ function getAuthHeader(token: string | null) {
 function StudentDashboardContent() {
   const searchParams = useSearchParams();
   const activeTab = searchParams.get("tab") || "overview";
-  const { user, token, isInitialized } = useAuth();
+  const { user, token, isInitialized, refreshUser } = useAuth();
   const router = useRouter();
 
   // Auth check
@@ -544,6 +544,7 @@ function AssignmentsTab({ token }: { token: string | null }) {
 
 // ==================== AI TOOLS TAB ====================
 function AIToolsTab({ token }: { token: string | null }) {
+  const { refreshUser } = useAuth();
   const [text, setText] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [inputMode, setInputMode] = useState<"text" | "file">("text");
@@ -573,6 +574,7 @@ function AIToolsTab({ token }: { token: string | null }) {
         });
         if (!res.ok) throw new Error("API error");
         data = await res.json();
+        refreshUser();
       } else {
         const formData = new FormData();
         // @ts-ignore
@@ -616,6 +618,7 @@ function AIToolsTab({ token }: { token: string | null }) {
             }
           }
         }
+        refreshUser();
         data = finalData;
       }
 
@@ -1334,6 +1337,7 @@ function DictionaryTab({ token }: { token: string | null }) {
 const VOCAB_CACHE_KEY = "iedu_vocab_cache";
 
 function VocabularyTab({ token }: { token: string | null }) {
+  const { refreshUser } = useAuth();
   const [words, setWords] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -1413,8 +1417,14 @@ function VocabularyTab({ token }: { token: string | null }) {
         setPracticeAnswers({});
         setExerciseSubmitted(false);
         setShowHint(false);
+        refreshUser();
+      } else {
+        const errorData = await res.json();
+        alert(errorData.detail || "Lỗi khi chuẩn bị bài tập");
       }
-    } catch (e) { alert("Lỗi khi chuẩn bị bài tập"); }
+    } catch (e) { 
+        alert("Lỗi kết nối. Vui lòng kiểm tra lại dịch vụ AI."); 
+    }
     finally { setGeneratingPractice(false); }
   };
 
@@ -1435,11 +1445,12 @@ function VocabularyTab({ token }: { token: string | null }) {
     } else {
       // Completed!
       try {
-        await fetch(`${API_URL}/student/vocabulary/practice-completion`, {
+        await fetch(`${API_URL}/student/vocabulary/practice/complete`, {
           method: "POST",
           headers: getAuthHeader(token),
           body: JSON.stringify({ results: practiceResults })
         });
+        refreshUser();
         alert(`Hoàn thành! Bạn đúng ${practiceResults.filter(r => r.correct).length}/${practiceExercises.length}.`);
         setPracticeExercises([]);
         fetchWords(); // Refresh SR metadata
@@ -1759,6 +1770,7 @@ const IPA_DATA = {
 };
 
 function IpaTab({ token }: { token: string | null }) {
+  const { refreshUser } = useAuth();
   const [focus, setFocus] = useState("vowels");
   const [loading, setLoading] = useState(false);
   const [lesson, setLesson] = useState<any>(null);
@@ -1809,6 +1821,7 @@ function IpaTab({ token }: { token: string | null }) {
           }
         }
       }
+      refreshUser();
       setLesson(finalData);
     } catch (e) {
       alert("Lỗi khi tạo bài học IPA");
@@ -2035,6 +2048,7 @@ function IpaTab({ token }: { token: string | null }) {
 
 // ==================== NEW: PRACTICE TAB ====================
 function PracticeTab({ token }: { token: string | null }) {
+  const { refreshUser } = useAuth();
   const [testType, setTestType] = useState("TOEIC");
   const [skill, setSkill] = useState("reading");
   const [loading, setLoading] = useState(false);
@@ -2104,6 +2118,7 @@ function PracticeTab({ token }: { token: string | null }) {
           }
         }
       }
+      refreshUser();
       
       // Handle the last bit of buffer
       if (buffer.trim()) {
@@ -2286,6 +2301,7 @@ function PracticeTab({ token }: { token: string | null }) {
 
 // ==================== GRAMMAR TAB ====================
 function GrammarTab({ token }: { token: string | null }) {
+  const { refreshUser } = useAuth();
   const [rules, setRules] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -2326,6 +2342,7 @@ function GrammarTab({ token }: { token: string | null }) {
       });
       if (res.ok) {
         const data = await res.json();
+        refreshUser();
         setQuestions(data.questions || []);
       }
     } catch (e) { console.error(e); }
