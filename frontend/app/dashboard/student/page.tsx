@@ -2154,195 +2154,127 @@ function PracticeTab({ token }: { token: string | null }) {
         </div>
       </div>
 
-      {/* AI Practice Section */}
+      {/* Practice Test Selector */}
       <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-              <Brain className="text-purple-500" /> Bài tập AI từ từ vựng đã lưu
+            <h2 className="text-xl font-bold text-gray-900 mb-1 flex items-center gap-2">
+              <Award className="text-purple-500" /> Tự luyện thi
             </h2>
-            <p className="text-sm text-gray-600">Tạo bài tập thông minh dựa trên spaced repetition</p>
+            <p className="text-gray-500 text-sm">chọn chứng chỉ và kỹ năng để hệ thống sinh đề thi mẫu cho bạn</p>
           </div>
-          <button
-            onClick={generatePracticeExercises}
-            disabled={generatingPractice || words.length === 0}
-            className="btn-primary px-6 py-2 rounded-lg flex items-center gap-2 disabled:opacity-50"
-          >
-            {generatingPractice ? (
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                Tạo bài tập...
+          <div className="flex items-center gap-3">
+            <select value={testType} onChange={e => setTestType(e.target.value)} className="border border-gray-200 rounded-lg px-3 py-2 outline-none bg-gray-50">
+              <option value="TOEIC">TOEIC</option>
+              <option value="IELTS">IELTS</option>
+              <option value="GENERAL">Tiếng Anh Giao tiếp</option>
+            </select>
+            <select value={skill} onChange={e => setSkill(e.target.value)} className="border border-gray-200 rounded-lg px-3 py-2 outline-none bg-gray-50">
+              <option value="reading">Reading</option>
+              <option value="listening">Listening</option>
+              <option value="writing">Writing</option>
+              <option value="speaking">Speaking</option>
+            </select>
+            <button onClick={generatePractice} disabled={loading} className="btn-primary px-5 py-2 rounded-lg disabled:opacity-50">
+              {loading ? "Đang tạo..." : "Tạo bài"}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {practice && skill === "reading" && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+          <h3 className="text-xl font-bold mb-4">{practice.title || "Bài đọc hiểu"}</h3>
+          <div className="bg-gray-50 p-4 rounded-lg mb-6 whitespace-pre-wrap leading-relaxed">
+            {practice.passage}
+          </div>
+
+          <h4 className="font-bold text-lg mb-4">Câu hỏi:</h4>
+          <div className="space-y-6">
+            {practice.questions?.map((q: any, idx: number) => (
+              <div key={idx} className="border border-gray-100 rounded-lg p-4">
+                <p className="font-bold mb-3">{idx + 1}. {q.question || q.q}</p>
+                <div className="space-y-2 pl-4">
+                  {q.options?.map((opt: string, oIdx: number) => (
+                    <div key={oIdx} className="flex items-center gap-2">
+                      <input
+                        type="radio"
+                        name={`q-${idx}`}
+                        id={`q-${idx}-${oIdx}`}
+                        checked={answers[idx] === oIdx}
+                        onChange={() => setAnswers({...answers, [idx]: oIdx})}
+                        disabled={submitted}
+                        className="w-4 h-4 text-blue-600"
+                      />
+                      <label htmlFor={`q-${idx}-${oIdx}`} className={submitted ? (oIdx === q.correct_answer || oIdx === q.ans ? "text-green-700 font-medium" : answers[idx] === oIdx ? "text-red-700" : "") : ""}>
+                        {opt}
+                      </label>
+                    </div>
+                  ))}
+                </div>
               </div>
-            ) : (
-              <>
-                <Sparkles size={16} /> Tạo bài tập AI
-              </>
-            )}
+            ))}
+          </div>
+        </div>
+      )}
+
+      {practice && skill === "speaking" && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 text-center">
+          <div className="inline-block p-4 bg-purple-100 text-purple-700 rounded-full mb-4">
+            <Mic size={48} />
+          </div>
+          <h3 className="font-bold text-2xl mb-2">{practice.topic || practice.title || "Chủ đề Speaking"}</h3>
+          <p className="text-gray-600 mb-6 max-w-2xl mx-auto">{practice.description || practice.instructions || "Hãy nói về chủ đề này trong vòng 2 phút."}</p>
+
+          <div className="bg-gray-50 p-4 rounded-xl max-w-2xl mx-auto text-left mb-6">
+            <h4 className="font-bold text-gray-800 mb-2">Gợi ý trả lời:</h4>
+            <ul className="list-disc pl-5 space-y-2 text-gray-600">
+              {practice.prompts?.map((p: string, i: number) => <li key={i}>{p}</li>)}
+            </ul>
+          </div>
+
+          <button className="bg-red-50 text-red-600 border border-red-200 px-6 py-3 rounded-full font-bold flex items-center justify-center gap-2 mx-auto hover:bg-red-100 transition">
+            <Mic size={20} /> Bắt đầu ghi âm (Giả lập)
           </button>
         </div>
+      )}
 
-        {/* Current Exercise */}
-        {currentExercise && (
-          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-xl border border-blue-200">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <div className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-sm font-medium">
-                  Bài {practiceExercises.findIndex(ex => ex.id === currentExercise.id) + 1}/{practiceExercises.length}
-                </div>
-                <div className="bg-purple-100 text-purple-700 px-3 py-1 rounded-full text-sm font-medium capitalize">
-                  {currentExercise.type === 'spelling' ? 'Đánh vần' :
-                   currentExercise.type === 'fill_blank' ? 'Điền khuyết' :
-                   currentExercise.type === 'multiple_choice' ? 'Trắc nghiệm' : 'Nối từ'}
-                </div>
-              </div>
-              <div className="text-sm text-gray-600">
-                Điểm: {exerciseScore}/{practiceExercises.filter(ex => ex.id === currentExercise.id ? exerciseSubmitted : true).length}
-              </div>
-            </div>
+      {practice && (skill === "listening" || skill === "writing" || !["reading", "speaking"].includes(skill)) && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 text-center text-gray-500">
+          Yêu cầu tính năng {skill} đã được mô phỏng. Dữ liệu mock: {JSON.stringify(practice).substring(0, 100)}...
+        </div>
+      )}
 
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold text-gray-900">{currentExercise.instruction}</h3>
+      {!practice && !loading && (
+        <div className="bg-white rounded-xl p-12 border border-gray-100 text-center">
+          <Award size={48} className="mx-auto text-gray-300 mb-4" />
+          <h3 className="text-lg font-bold text-gray-700 mb-2">Chọn loại bài luyện tập</h3>
+          <p className="text-gray-500">Chọn chứng chỉ và kỹ năng ở trên để bắt đầu luyện tập.</p>
+        </div>
+      )}
 
-              {currentExercise.type === 'spelling' && (
-                <div className="space-y-3">
-                  <input
-                    type="text"
-                    value={exerciseAnswers[currentExercise.id] || ''}
-                    onChange={(e) => setExerciseAnswers(prev => ({ ...prev, [currentExercise.id]: e.target.value }))}
-                    placeholder="Gõ từ chính xác..."
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    disabled={exerciseSubmitted}
-                  />
-                  {currentExercise.hint && (
-                    <p className="text-sm text-gray-500">Gợi ý: {currentExercise.hint}</p>
-                  )}
-                </div>
-              )}
+      {submitted && (
+        <div className="bg-green-50 border border-green-200 rounded-xl p-6 text-center">
+          <Trophy size={48} className="mx-auto text-green-500 mb-4" />
+          <h3 className="text-xl font-bold text-green-800 mb-2">Kết quả: {score}/{practice?.questions?.length || 0}</h3>
+          <p className="text-green-600 mb-4">
+            {score === (practice?.questions?.length || 0) ? "Xuất sắc! 🎉" :
+             score >= (practice?.questions?.length || 0) * 0.8 ? "Tốt! 👍" :
+             score >= (practice?.questions?.length || 0) * 0.6 ? "Khá! 👌" : "Cần luyện tập thêm! 💪"}
+          </p>
+          <button onClick={() => { setPractice(null); setAnswers({}); setSubmitted(false); setScore(0); }} className="btn-primary px-6 py-2 rounded-lg">
+            Làm bài khác
+          </button>
+        </div>
+      )}
 
-              {currentExercise.type === 'fill_blank' && (
-                <div className="space-y-3">
-                  <p className="text-gray-800 text-lg">{currentExercise.sentence}</p>
-                  <input
-                    type="text"
-                    value={exerciseAnswers[currentExercise.id] || ''}
-                    onChange={(e) => setExerciseAnswers(prev => ({ ...prev, [currentExercise.id]: e.target.value }))}
-                    placeholder="Điền từ vào chỗ trống..."
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    disabled={exerciseSubmitted}
-                  />
-                  <p className="text-sm text-blue-600">Ý nghĩa: {currentExercise.meaning}</p>
-                </div>
-              )}
-
-              {currentExercise.type === 'multiple_choice' && (
-                <div className="space-y-3">
-                  <div className="grid grid-cols-1 gap-2">
-                    {currentExercise.options.map((option: string, idx: number) => (
-                      <button
-                        key={idx}
-                        onClick={() => !exerciseSubmitted && setExerciseAnswers(prev => ({ ...prev, [currentExercise.id]: option }))}
-                        className={`p-3 text-left rounded-lg border-2 transition ${
-                          exerciseAnswers[currentExercise.id] === option
-                            ? 'border-blue-500 bg-blue-50 text-blue-700'
-                            : 'border-gray-200 hover:border-gray-300'
-                        } ${exerciseSubmitted ? 'cursor-not-allowed opacity-75' : ''}`}
-                        disabled={exerciseSubmitted}
-                      >
-                        <span className="font-medium mr-2">{String.fromCharCode(65 + idx)}.</span>
-                        {option}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {currentExercise.type === 'matching' && (
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <h4 className="font-medium text-gray-700 mb-2">Từ vựng</h4>
-                      <div className="space-y-2">
-                        {currentExercise.words.map((word: string, idx: number) => (
-                          <div key={idx} className="p-2 bg-white rounded border text-center">
-                            {word}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                    <div>
-                      <h4 className="font-medium text-gray-700 mb-2">Định nghĩa</h4>
-                      <div className="space-y-2">
-                        {Object.values(currentExercise.correct_matches).map((meaning: string, idx: number) => (
-                          <div key={idx} className="p-2 bg-white rounded border text-center text-sm">
-                            {meaning}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="text-center text-sm text-gray-500">
-                    Kéo thả hoặc chọn để nối từ với định nghĩa đúng
-                  </div>
-                </div>
-              )}
-
-              {/* Submit/Next Button */}
-              <div className="flex justify-center pt-4">
-                {!exerciseSubmitted ? (
-                  <button
-                    onClick={submitExercise}
-                    disabled={!exerciseAnswers[currentExercise.id]?.trim()}
-                    className="btn-primary px-8 py-2 rounded-lg disabled:opacity-50"
-                  >
-                    Nộp bài
-                  </button>
-                ) : (
-                  <div className="text-center space-y-2">
-                    <div className={`text-lg font-bold ${exerciseAnswers[currentExercise.id] === currentExercise.correct_answer || (currentExercise.type === 'matching' && Object.keys(currentExercise.correct_matches).every(word => exerciseAnswers[`${currentExercise.id}_${word}`] === currentExercise.correct_matches[word])) ? 'text-green-600' : 'text-red-600'}`}>
-                      {exerciseAnswers[currentExercise.id] === currentExercise.correct_answer || (currentExercise.type === 'matching' && Object.keys(currentExercise.correct_matches).every(word => exerciseAnswers[`${currentExercise.id}_${word}`] === currentExercise.correct_matches[word])) ? '✅ Đúng!' : '❌ Sai!'}
-                    </div>
-                    {(currentExercise.type === 'spelling' || currentExercise.type === 'fill_blank' || currentExercise.type === 'multiple_choice') && (
-                      <p className="text-sm text-gray-600">
-                        Đáp án đúng: <span className="font-bold text-green-600">{currentExercise.correct_answer}</span>
-                      </p>
-                    )}
-                    {practiceExercises.findIndex(ex => ex.id === currentExercise.id) < practiceExercises.length - 1 ? (
-                      <button onClick={nextExercise} className="btn-primary px-6 py-2 rounded-lg mt-3">
-                        Bài tiếp theo
-                      </button>
-                    ) : (
-                      <div className="mt-3">
-                        <p className="text-lg font-bold text-purple-600 mb-2">
-                          Hoàn thành! Điểm: {exerciseScore}/{practiceExercises.length}
-                        </p>
-                        <button
-                          onClick={() => {
-                            setPracticeExercises([]);
-                            setCurrentExercise(null);
-                            setExerciseAnswers({});
-                            setExerciseSubmitted(false);
-                            setExerciseScore(0);
-                          }}
-                          className="btn-primary px-6 py-2 rounded-lg"
-                        >
-                          Làm lại
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {words.length === 0 && (
-          <div className="text-center py-8 text-gray-500">
-            <BookMarked size={48} className="mx-auto mb-4 opacity-50" />
-            <p>Lưu từ vựng trước khi tạo bài tập AI</p>
-          </div>
-        )}
-      </div>
+      {!submitted && practice && skill === "reading" && practice.questions?.length > 0 && (
+        <div className="text-center pt-4">
+          <button onClick={submitAnswers} disabled={Object.keys(answers).length === 0} className="btn-primary px-8 py-3 rounded-lg text-lg disabled:opacity-50">
+            Nộp bài & Xem kết quả
+          </button>
+        </div>
+      )}
     </div>
   );
 }
