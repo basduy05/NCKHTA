@@ -1,4 +1,5 @@
 --- DB: c:/Users/basdu/Downloads/NCKHTA/ai-service/app/app.db ---
-Tables: 
+Tables: users, sqlite_sequence, classes, lessons, settings, grammar_rules, enrollments, assignments, student_scores, saved_vocabulary, dictionary_cache, revoked_tokens
+accomplish row: not found
 --- DB: c:/Users/basdu/Downloads/NCKHTA/ai-service/app.db ---
 Tables: 

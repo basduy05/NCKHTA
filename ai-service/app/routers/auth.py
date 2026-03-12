@@ -5,9 +5,8 @@ import sqlite3
 import time
 from ..database import get_db, UserCreate
 from ..services import auth_service
-from ..dependencies import get_admin_user, get_current_user
 from ..services.auth_service import (
-    LoginOTPRequest, VerifyLoginOTP
+    LoginOTPRequest, VerifyLoginOTP, UserRegister, OTPVerify, UserLogin, OTP_EXPIRE_MINUTES
 )
 from ..services import security_service
 
@@ -299,12 +298,7 @@ async def login_verify_otp(data: VerifyLoginOTP):
     }
 
 
-@router.post("/logout")
-def logout():
-    """Logout endpoint — frontend should clear token from localStorage."""
-    # Server-side blacklisting would require a token store (Redis etc.)
-    # For now, clients must clear the token; JTI-based blacklisting can be added later.
-    return {"message": "Logged out successfully"}
+
 
 
 # --- Profile endpoints ---
@@ -406,33 +400,11 @@ async def update_profile(data: UpdateProfileRequest, credentials: HTTPAuthorizat
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/logout")
-def logout(authorization: str = Header(...)):
-    """Invalidate the current access token."""
-    if not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Invalid authorization header")
-    token = authorization[7:]
-    
-    try:
-        from jose import jwt
-        payload = jwt.decode(token, auth_service.SECRET_KEY, algorithms=[auth_service.ALGORITHM])
-        jti = payload.get("jti")
-        exp = payload.get("exp")
-        if jti:
-            auth_service.blacklist_token(jti, exp)
-            return {"message": "Logged out successfully"}
-    except Exception:
-        pass
-        
-    return {"message": "Logged out successfully (session ended)"}
+
 
 
 @router.post("/change-password")
 async def change_password(data: ChangePasswordRequest, credentials: HTTPAuthorizationCredentials = Depends(security)):
-    """Change user password"""
-    token = credentials.credentials
-@router.post("/change-password")
-async def change_password(data: ResetPasswordRequest, credentials: HTTPAuthorizationCredentials = Depends(security)):
     """Allow logged-in user to change their password. Revokes current token."""
     token = credentials.credentials
     conn = get_db()
@@ -447,9 +419,8 @@ async def change_password(data: ResetPasswordRequest, credentials: HTTPAuthoriza
         
         # Verify old password
         cursor.execute("SELECT password_hash FROM users WHERE id = ?", (user_id,))
-        user = cursor.fetchone()
-        if not user or not auth_service.verify_password(data.reset_token, user["password_hash"]):
-            # Note: Using reset_token field as old_password to reuse ResetPasswordRequest model
+        user_row = cursor.fetchone()
+        if not user_row or not auth_service.verify_password(data.current_password, user_row["password_hash"]):
             conn.close()
             raise HTTPException(status_code=400, detail="Mật khẩu cũ không chính xác")
 

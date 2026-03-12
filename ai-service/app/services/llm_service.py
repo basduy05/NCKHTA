@@ -203,13 +203,12 @@ def parse_json_response(text):
         # Try to find JSON block using regex if there's surrounding text
         text_str = str(text).strip()
         
-        # Fix possible escaped unicode strings before parsing
-        if "\\u" in text_str:
-            try:
-                # This unescapes \uXXXX to actual characters
-                text_str = text_str.encode('utf-8').decode('unicode-escape')
-            except:
-                pass
+        # Remove markdown code blocks if present (common LLM behavior)
+        if text_str.startswith("```"):
+            lines = text_str.splitlines()
+            if len(lines) > 2:
+                # Remove first line (```json) and last line (```)
+                text_str = "\n".join(lines[1:-1]).strip()
 
         match = re.search(r'\{.*\}|\[.*\]', text_str, re.DOTALL)
         if match:
@@ -235,15 +234,15 @@ def get_llm(provider=None):
     cohere_key = _get_setting("COHERE_API_KEY")
     if cohere_key and provider in (None, "cohere"):
         os.environ["COHERE_API_KEY"] = cohere_key
-        # Use command-r-plus-08-2024 (Best for performance/reasoning)
-        return ChatCohere(model="command-r-plus-08-2024")
+        # Use command-r-plus-08-2024 with temperature 0 for stability
+        return ChatCohere(model="command-r-plus-08-2024", temperature=0)
 
     if provider != "cohere" and provider != "openai":
         google_key = _get_setting("GOOGLE_API_KEY")
         if google_key and provider in (None, "google"):
             os.environ["GOOGLE_API_KEY"] = google_key
-            # Use gemini-2.0-flash (Newest/Fastest)
-            return ChatGoogleGenerativeAI(model="gemini-2.0-flash", timeout=30)
+            # Use gemini-2.0-flash with temperature 0 for stability
+            return ChatGoogleGenerativeAI(model="gemini-2.0-flash", timeout=30, temperature=0)
 
     if provider != "google" and provider != "cohere":
         openai_key = _get_setting("OPENAI_API_KEY")
@@ -753,11 +752,9 @@ async def translate_meanings_with_ai_stream(word: str, meanings: list, free_data
         async with ai_semaphore:
             async for content in _safe_stream_invoke(chain, {"word": word, "definitions": definitions_text}):
                 if content:
-                    # Unescape Unicode characters if present (prevents \u00f4 issues)
-                    if "\\" in content:
-                        try:
-                            content = content.encode('utf-8').decode('unicode_escape')
-                        except: pass
+                    # Vietnamese font fix: DO NOT use encode('utf-8').decode('unicode_escape')
+                    # It corrupts raw UTF-8 characters. 
+                    # LLMs today output raw UTF-8 by default.
                     
                     accumulated_text += content
                     elapsed = time.time() - start_time
@@ -953,11 +950,7 @@ async def lookup_dictionary_full_ai_stream(word: str):
         async with ai_semaphore:
             async for content in _safe_stream_invoke(chain, {"word": word}):
                 if content:
-                    # Unescape Unicode characters
-                    if "\\" in content:
-                        try:
-                            content = content.encode('utf-8').decode('unicode_escape')
-                        except: pass
+                    # Vietnamese font fix: DO NOT use encode('utf-8').decode('unicode_escape')
                     
                     accumulated_text += content
                     elapsed = time.time() - start_time
