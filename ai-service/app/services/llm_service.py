@@ -1,3 +1,4 @@
+print("[LLM] Starting llm_service imports...")
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_openai import ChatOpenAI
 from langchain_cohere import ChatCohere
@@ -12,9 +13,12 @@ from dotenv import load_dotenv
 import re
 import json_repair
 import cohere
+print("[LLM] Core imports done, loading database...")
 from ..database import get_db, get_cached_dictionary, set_cached_dictionary
 
+print("[LLM] Loading dotenv...")
 load_dotenv()
+print("[LLM] Dotenv loaded.")
 
 # ─── IN-MEMORY CACHE for dictionary lookups ──────────────────────────────────
 _dict_cache: dict = {}      # word -> {"data": ..., "ts": timestamp}
@@ -100,7 +104,9 @@ def is_data_complete(data: dict) -> bool:
 
 # Limit concurrent AI requests to 7 as requested by user
 # Limit concurrent AI requests to 3 to prevent OOM on Render free tier (512MB)
+print("[LLM] Initializing semaphore...")
 ai_semaphore = asyncio.Semaphore(3)
+print("[LLM] Semaphore initialized.")
 
 def get_queue_status():
     """Returns the current number of active and waiting requests."""
