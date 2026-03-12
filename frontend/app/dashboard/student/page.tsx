@@ -1708,6 +1708,7 @@ function VocabularyTab({ token }: { token: string | null }) {
           })}
         </div>
       )}
+
     </div>
   );
 }
@@ -2342,94 +2343,6 @@ function PracticeTab({ token }: { token: string | null }) {
           </div>
         )}
       </div>
-
-      <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm flex flex-col md:flex-row gap-4 justify-between items-center">
-        <div>
-          <h2 className="text-xl font-bold text-gray-900 mb-1 flex items-center gap-2">
-            <Award className="text-purple-500" /> Tự luyện thi
-          </h2>
-          <p className="text-gray-500 text-sm">chọn chứng chỉ và kỹ năng để hệ thống sinh đề thi mẫu cho bạn</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <select value={testType} onChange={e => setTestType(e.target.value)} className="border border-gray-200 rounded-lg px-3 py-2 outline-none bg-gray-50">
-            <option value="TOEIC">TOEIC</option>
-            <option value="IELTS">IELTS</option>
-            <option value="GENERAL">Tiếng Anh Giao tiếp</option>
-          </select>
-          <select value={skill} onChange={e => setSkill(e.target.value)} className="border border-gray-200 rounded-lg px-3 py-2 outline-none bg-gray-50">
-            <option value="reading">Reading</option>
-            <option value="listening">Listening</option>
-            <option value="writing">Writing</option>
-            <option value="speaking">Speaking</option>
-          </select>
-          <button onClick={generatePractice} disabled={loading} className="btn-primary px-5 py-2 rounded-lg disabled:opacity-50">
-            {loading ? "Đang tạo..." : "Tạo bài"}
-          </button>
-        </div>
-      </div>
-
-      {practice && skill === "reading" && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-          <h3 className="text-xl font-bold mb-4">{practice.title || "Bài đọc hiểu"}</h3>
-          <div className="bg-gray-50 p-4 rounded-lg mb-6 whitespace-pre-wrap leading-relaxed">
-            {practice.passage}
-          </div>
-
-          <h4 className="font-bold text-lg mb-4">Câu hỏi:</h4>
-          <div className="space-y-6">
-            {practice.questions?.map((q: any, idx: number) => (
-              <div key={idx} className="border border-gray-100 rounded-lg p-4">
-                <p className="font-bold mb-3">{idx + 1}. {q.question || q.q}</p>
-                <div className="space-y-2 pl-4">
-                  {q.options?.map((opt: string, oIdx: number) => (
-                    <div key={oIdx} className="flex items-center gap-2">
-                      <input
-                        type="radio"
-                        name={`q-${idx}`}
-                        id={`q-${idx}-${oIdx}`}
-                        checked={answers[idx] === oIdx}
-                        onChange={() => setAnswers({...answers, [idx]: oIdx})}
-                        disabled={submitted}
-                        className="w-4 h-4 text-blue-600"
-                      />
-                      <label htmlFor={`q-${idx}-${oIdx}`} className={submitted ? (oIdx === q.correct_answer || oIdx === q.ans ? "text-green-700 font-medium" : answers[idx] === oIdx ? "text-red-700" : "") : ""}>
-                        {opt}
-                      </label>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {practice && skill === "speaking" && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 text-center">
-          <div className="inline-block p-4 bg-purple-100 text-purple-700 rounded-full mb-4">
-            <Mic size={48} />
-          </div>
-          <h3 className="font-bold text-2xl mb-2">{practice.topic || practice.title || "Chủ đề Speaking"}</h3>
-          <p className="text-gray-600 mb-6 max-w-2xl mx-auto">{practice.description || practice.instructions || "Hãy nói về chủ đề này trong vòng 2 phút."}</p>
-
-          <div className="bg-gray-50 p-4 rounded-xl max-w-2xl mx-auto text-left mb-6">
-            <h4 className="font-bold text-gray-800 mb-2">Gợi ý trả lời:</h4>
-            <ul className="list-disc pl-5 space-y-2 text-gray-600">
-              {practice.prompts?.map((p: string, i: number) => <li key={i}>{p}</li>)}
-            </ul>
-          </div>
-
-          <button className="bg-red-50 text-red-600 border border-red-200 px-6 py-3 rounded-full font-bold flex items-center justify-center gap-2 mx-auto hover:bg-red-100 transition">
-            <Mic size={20} /> Bắt đầu ghi âm (Giả lập)
-          </button>
-        </div>
-      )}
-
-      {practice && (skill === "listening" || skill === "writing" || !["reading", "speaking"].includes(skill)) && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 text-center text-gray-500">
-          Yêu cầu tính năng {skill} đã được mô phỏng. Dữ liệu mock: {JSON.stringify(practice).substring(0, 100)}...
-        </div>
-      )}
     </div>
   );
 }
