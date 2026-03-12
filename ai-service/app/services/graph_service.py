@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from ..database import get_setting
+from ..utils.resilience import retry
 
 # Read settings from DB (via database.py handles Turso/SQLite) first, then env vars
 def _get_setting(key, default=None):
@@ -56,8 +57,9 @@ def get_graph():
         print(f"[Neo4j ERROR] Connection failed: {e}", flush=True)
         return None
 
+@retry(tries=3, delay=1.0)
 def _safe_query(query: str, params: dict = None):
-    """Execute a Cypher query with auto-reconnect on connection loss."""
+    """Execute a Cypher query with auto-reconnect and retry logic."""
     global graph
     g = get_graph()
     if not g:

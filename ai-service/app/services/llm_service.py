@@ -15,6 +15,7 @@ import json_repair
 import cohere
 print("[LLM] Core imports done, loading database...")
 from ..database import get_db, get_cached_dictionary, set_cached_dictionary
+from ..utils.resilience import retry
 
 print("[LLM] Loading dotenv...")
 load_dotenv()
@@ -607,22 +608,16 @@ def translate_meanings_with_ai(word: str, meanings: list, estimate_level: bool =
     )
     
     chain = prompt | llm
-    try:
-        try:
-            response = _safe_invoke(chain, {"word": word, "definitions": definitions_text})
-        except Exception as e:
-            error_str = str(e).lower()
-            if any(k in error_str for k in ["quota", "rate_limit", "resource_exhausted", "429", "too many requests"]):
-                print(f"[LLM QUOTA] Primary LLM quota exceeded. Retrying with Cohere in translate_meanings...")
-                fallback_llm = get_llm(provider="cohere")
-                if fallback_llm:
-                    chain = prompt | fallback_llm
-                    response = _safe_invoke(chain, {"word": word, "definitions": definitions_text})
-                else:
-                    raise e
-            else:
-                raise e
 
+    @retry(tries=2, delay=2.0)
+    def _invoke_with_retry():
+        try:
+            return _safe_invoke(chain, {"word": word, "definitions": definitions_text})
+        except Exception as e:
+            raise e
+
+    try:
+        response = _invoke_with_retry()
         result = parse_json_response(response.content)
         
         if isinstance(result, dict) and "meanings" in result:

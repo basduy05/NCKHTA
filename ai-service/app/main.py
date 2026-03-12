@@ -244,23 +244,46 @@ def debug_db():
 
 @app.get("/health")
 def health_check():
-    """Quick health check for uptime monitors."""
-    return {"status": "ok"}
+    """Detailed health check for all service dependencies."""
+    health_status = {"status": "ok", "timestamp": time.time(), "dependencies": {}}
+    
+    # 1. Check SQL Database (Postgres/Turso)
+    try:
+        from .database import get_db
+        with get_db() as conn:
+            conn.execute("SELECT 1")
+        health_status["dependencies"]["database"] = "ok"
+    except Exception as e:
+        health_status["status"] = "error"
+        health_status["dependencies"]["database"] = f"error: {str(e)}"
+    
+    # 2. Check Graph Database (Neo4j)
+    if graph_service:
+        try:
+            g = graph_service.get_graph()
+            if g:
+                # Simple query to verify connection is alive
+                graph_service._safe_query("MATCH (n) RETURN count(n) LIMIT 1")
+                health_status["dependencies"]["graph"] = "ok"
+            else:
+                health_status["status"] = "degraded"
+                health_status["dependencies"]["graph"] = "disconnected"
+        except Exception as e:
+            health_status["status"] = "degraded"
+            health_status["dependencies"]["graph"] = f"error: {str(e)}"
+    else:
+        health_status["dependencies"]["graph"] = "not_loaded"
+
+    return health_status
 
 @app.get("/health/graph")
 def health_graph():
-    if not graph_service:
-        return {"graph_connected": False, "error": "graph_service not loaded"}
-    try:
-        g = graph_service.get_graph()
-        is_connected = g is not None
-        error_msg = getattr(graph_service, "last_error", None)
-        return {
-            "graph_connected": is_connected,
-            "error": error_msg if not is_connected else None
-        }
-    except Exception as e:
-        return {"graph_connected": False, "error": str(e)}
+    # Keep legacy endpoint but use the internal logic
+    status = health_check()
+    return {
+        "graph_connected": status["dependencies"].get("graph") == "ok",
+        "error": status["dependencies"].get("graph") if status["dependencies"].get("graph") != "ok" else None
+    }
 
 @app.post("/analyze-text")
 def analyze_text(request: TextRequest):
