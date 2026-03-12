@@ -29,7 +29,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 # Import database modules
 try:
-    from app.database import get_db_connection, test_db_connection
+    from app.database import get_db
     from app.services.graph_service import get_graph
     DB_AVAILABLE = True
 except ImportError as e:
@@ -85,9 +85,9 @@ class HealthMonitor:
         optional_vars = ["GOOGLE_API_KEY", "COHERE_API_KEY"]
         for var in optional_vars:
             if os.getenv(var):
-                self.log(f"✓ {var} configured")
+                self.log(f"OK: {var} configured")
             else:
-                self.log(f"⚠ {var} not configured (optional)")
+                self.log(f"WARNING: {var} not configured (optional)")
 
     def check_database_connectivity(self):
         """Check database connections"""
@@ -100,13 +100,16 @@ class HealthMonitor:
 
         # Check Turso connection
         try:
-            conn = get_db_connection()
-            if test_db_connection(conn):
+            conn = get_db()
+            cursor = conn.cursor()
+            cursor.execute("SELECT 1")
+            result = cursor.fetchone()
+            if result:
                 self.results["turso_db"] = True
-                self.log("✓ Turso database connection OK")
+                self.log("OK: Turso database connection OK")
             else:
                 self.results["turso_db"] = False
-                self.errors.append("Turso database connection failed")
+                self.errors.append("Turso database test query failed")
         except Exception as e:
             self.results["turso_db"] = False
             self.errors.append(f"Turso database error: {e}")
@@ -115,10 +118,10 @@ class HealthMonitor:
         try:
             graph = get_graph()
             # Simple test query
-            result = graph.run("RETURN 1 as test").data()
+            result = graph.query("RETURN 1 as test")
             if result and result[0]["test"] == 1:
                 self.results["neo4j_db"] = True
-                self.log("✓ Neo4j database connection OK")
+                self.log("OK: Neo4j database connection OK")
             else:
                 self.results["neo4j_db"] = False
                 self.errors.append("Neo4j database test query failed")
@@ -143,9 +146,9 @@ class HealthMonitor:
             try:
                 response = requests.get(f"{base_url}{endpoint}", timeout=10)
                 if response.status_code == 200:
-                    self.log(f"✓ {endpoint} OK ({response.status_code})")
+                    self.log(f"OK: {endpoint} OK ({response.status_code})")
                 else:
-                    self.log(f"⚠ {endpoint} returned {response.status_code}")
+                    self.log(f"WARNING: {endpoint} returned {response.status_code}")
                     api_ok = False
             except Exception as e:
                 self.errors.append(f"API endpoint {endpoint} failed: {e}")
@@ -169,7 +172,7 @@ class HealthMonitor:
             models = genai.list_models()
             if models:
                 self.results["llm_services"] = True
-                self.log("✓ Google Gemini API accessible")
+                self.log("OK: Google Gemini API accessible")
             else:
                 self.results["llm_services"] = False
                 self.errors.append("Google Gemini API returned no models")
