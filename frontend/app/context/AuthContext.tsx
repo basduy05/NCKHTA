@@ -8,6 +8,8 @@ type User = {
   role: 'student' | 'teacher' | 'admin';
   name: string;
   phone?: string;
+  points?: number;
+  credits_ai?: number;
 };
 
 type AuthContextType = {
