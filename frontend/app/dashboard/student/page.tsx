@@ -1304,6 +1304,14 @@ function VocabularyTab({ token }: { token: string | null }) {
   const [syncing, setSyncing] = useState(false);
   const [debouncedSearch, setDebouncedSearch] = useState("");
 
+  // AI Practice states
+  const [generatingPractice, setGeneratingPractice] = useState(false);
+  const [practiceExercises, setPracticeExercises] = useState<any[]>([]);
+  const [currentExercise, setCurrentExercise] = useState<any>(null);
+  const [exerciseAnswers, setExerciseAnswers] = useState<Record<string, string>>({});
+  const [exerciseSubmitted, setExerciseSubmitted] = useState(false);
+  const [exerciseScore, setExerciseScore] = useState(0);
+
   // Debounce search input to prevent excessive API calls
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -1437,10 +1445,185 @@ function VocabularyTab({ token }: { token: string | null }) {
 
   const levels = ["A1", "A2", "B1", "B2", "C1", "C2"];
 
+  // Generate AI practice exercises from saved vocabulary
+  const generatePracticeExercises = async () => {
+    if (words.length === 0) {
+      alert("Bạn cần lưu ít nhất một từ vựng trước khi tạo bài tập!");
+      return;
+    }
+
+    setGeneratingPractice(true);
+    try {
+      // Select words based on spaced repetition (prioritize words that need review)
+      const now = Date.now();
+      const eligibleWords = words.filter(w => {
+        const daysSinceLastReview = w.last_reviewed_at ?
+          (now - new Date(w.last_reviewed_at).getTime()) / (1000 * 60 * 60 * 24) : 30;
+        const reviewInterval = w.review_count || 0;
+        return daysSinceLastReview >= Math.min(reviewInterval + 1, 7); // Max 7 days
+      });
+
+      // If no words need review, use recent words
+      const selectedWords = eligibleWords.length >= 5 ? eligibleWords.slice(0, 10) :
+                           words.slice(0, Math.min(10, words.length));
+
+      const exercises = [];
+      const usedWords = new Set();
+
+      // Generate different types of exercises
+      for (let i = 0; i < Math.min(5, selectedWords.length); i++) {
+        const word = selectedWords[i];
+        if (usedWords.has(word.word)) continue;
+        usedWords.add(word.word);
+
+        // Random exercise type
+        const exerciseTypes = ['spelling', 'fill_blank', 'multiple_choice', 'matching'];
+        const exerciseType = exerciseTypes[Math.floor(Math.random() * exerciseTypes.length)];
+
+        let exercise;
+        switch (exerciseType) {
+          case 'spelling':
+            exercise = {
+              id: `ex_${i}`,
+              type: 'spelling',
+              word: word.word,
+              instruction: `Gõ chính xác từ: "${word.meaning_vn}"`,
+              correct_answer: word.word.toLowerCase(),
+              hint: word.phonetic || ''
+            };
+            break;
+
+          case 'fill_blank':
+            const sentence = word.example || `${word.word} is a ${word.pos || 'noun'}.`;
+            const blankSentence = sentence.replace(new RegExp(word.word, 'gi'), '_____');
+            exercise = {
+              id: `ex_${i}`,
+              type: 'fill_blank',
+              sentence: blankSentence,
+              instruction: 'Điền từ thích hợp vào chỗ trống',
+              correct_answer: word.word.toLowerCase(),
+              meaning: word.meaning_vn
+            };
+            break;
+
+          case 'multiple_choice':
+            // Generate 3 wrong options
+            const wrongOptions = [];
+            const otherWords = words.filter(w => w.id !== word.id);
+            for (let j = 0; j < 3 && j < otherWords.length; j++) {
+              wrongOptions.push(otherWords[j].word);
+            }
+            const options = [word.word, ...wrongOptions].sort(() => Math.random() - 0.5);
+
+            exercise = {
+              id: `ex_${i}`,
+              type: 'multiple_choice',
+              question: `Từ nào có nghĩa là: "${word.meaning_vn}"?`,
+              options: options,
+              correct_answer: word.word
+            };
+            break;
+
+          case 'matching':
+            // Create matching pairs
+            const matchWords = selectedWords.slice(i, i + 4);
+            const definitions = matchWords.map(w => w.meaning_vn);
+            const shuffledWords = [...matchWords].sort(() => Math.random() - 0.5);
+
+            exercise = {
+              id: `ex_${i}`,
+              type: 'matching',
+              instruction: 'Nối từ với định nghĩa đúng',
+              words: shuffledWords.map(w => w.word),
+              definitions: definitions,
+              correct_matches: matchWords.reduce((acc, w, idx) => {
+                acc[w.word] = w.meaning_vn;
+                return acc;
+              }, {} as Record<string, string>)
+            };
+            break;
+        }
+
+        exercises.push(exercise);
+      }
+
+      setPracticeExercises(exercises);
+      setCurrentExercise(exercises[0]);
+      setExerciseAnswers({});
+      setExerciseSubmitted(false);
+      setExerciseScore(0);
+
+    } catch (error) {
+      console.error('Error generating practice exercises:', error);
+      alert('Lỗi khi tạo bài tập. Vui lòng thử lại!');
+    } finally {
+      setGeneratingPractice(false);
+    }
+  };
+
+  const submitExercise = () => {
+    if (!currentExercise) return;
+
+    let isCorrect = false;
+    const userAnswer = exerciseAnswers[currentExercise.id] || '';
+
+    switch (currentExercise.type) {
+      case 'spelling':
+      case 'fill_blank':
+        isCorrect = userAnswer.toLowerCase().trim() === currentExercise.correct_answer.toLowerCase();
+        break;
+      case 'multiple_choice':
+        isCorrect = userAnswer === currentExercise.correct_answer;
+        break;
+      case 'matching':
+        // Check if all matches are correct
+        const correctMatches = currentExercise.correct_matches;
+        isCorrect = Object.keys(correctMatches).every(word =>
+          exerciseAnswers[`${currentExercise.id}_${word}`] === correctMatches[word]
+        );
+        break;
+    }
+
+    if (isCorrect) {
+      setExerciseScore(prev => prev + 1);
+    }
+
+    setExerciseSubmitted(true);
+  };
+
+  const nextExercise = () => {
+    const currentIndex = practiceExercises.findIndex(ex => ex.id === currentExercise.id);
+    if (currentIndex < practiceExercises.length - 1) {
+      const nextEx = practiceExercises[currentIndex + 1];
+      setCurrentExercise(nextEx);
+      setExerciseAnswers({});
+      setExerciseSubmitted(false);
+    }
+  };
+
   if (loading) return <div className="flex justify-center py-20"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" /></div>;
 
   return (
     <div className="space-y-6">
+      {/* Credit Display */}
+      <div className="bg-gradient-to-r from-amber-50 to-orange-50 p-4 rounded-xl border border-amber-200 shadow-sm">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center">
+              <Star size={20} className="text-amber-600" />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-amber-800">Credits AI</p>
+              <p className="text-xs text-amber-600">Số credits còn lại để sử dụng AI</p>
+            </div>
+          </div>
+          <div className="text-right">
+            <p className="text-2xl font-bold text-amber-800">∞</p>
+            <p className="text-xs text-amber-600">Không giới hạn</p>
+          </div>
+        </div>
+      </div>
+
       {/* Stats + filters */}
       <div className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm">
         <div className="flex items-center justify-between flex-wrap gap-3">
@@ -1968,6 +2151,196 @@ function PracticeTab({ token }: { token: string | null }) {
             <p className="text-xs text-amber-600">Không giới hạn</p>
           </div>
         </div>
+      </div>
+
+      {/* AI Practice Section */}
+      <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+              <Brain className="text-purple-500" /> Bài tập AI từ từ vựng đã lưu
+            </h2>
+            <p className="text-sm text-gray-600">Tạo bài tập thông minh dựa trên spaced repetition</p>
+          </div>
+          <button
+            onClick={generatePracticeExercises}
+            disabled={generatingPractice || words.length === 0}
+            className="btn-primary px-6 py-2 rounded-lg flex items-center gap-2 disabled:opacity-50"
+          >
+            {generatingPractice ? (
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                Tạo bài tập...
+              </div>
+            ) : (
+              <>
+                <Sparkles size={16} /> Tạo bài tập AI
+              </>
+            )}
+          </button>
+        </div>
+
+        {/* Current Exercise */}
+        {currentExercise && (
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-xl border border-blue-200">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <div className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-sm font-medium">
+                  Bài {practiceExercises.findIndex(ex => ex.id === currentExercise.id) + 1}/{practiceExercises.length}
+                </div>
+                <div className="bg-purple-100 text-purple-700 px-3 py-1 rounded-full text-sm font-medium capitalize">
+                  {currentExercise.type === 'spelling' ? 'Đánh vần' :
+                   currentExercise.type === 'fill_blank' ? 'Điền khuyết' :
+                   currentExercise.type === 'multiple_choice' ? 'Trắc nghiệm' : 'Nối từ'}
+                </div>
+              </div>
+              <div className="text-sm text-gray-600">
+                Điểm: {exerciseScore}/{practiceExercises.filter(ex => ex.id === currentExercise.id ? exerciseSubmitted : true).length}
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold text-gray-900">{currentExercise.instruction}</h3>
+
+              {currentExercise.type === 'spelling' && (
+                <div className="space-y-3">
+                  <input
+                    type="text"
+                    value={exerciseAnswers[currentExercise.id] || ''}
+                    onChange={(e) => setExerciseAnswers(prev => ({ ...prev, [currentExercise.id]: e.target.value }))}
+                    placeholder="Gõ từ chính xác..."
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    disabled={exerciseSubmitted}
+                  />
+                  {currentExercise.hint && (
+                    <p className="text-sm text-gray-500">Gợi ý: {currentExercise.hint}</p>
+                  )}
+                </div>
+              )}
+
+              {currentExercise.type === 'fill_blank' && (
+                <div className="space-y-3">
+                  <p className="text-gray-800 text-lg">{currentExercise.sentence}</p>
+                  <input
+                    type="text"
+                    value={exerciseAnswers[currentExercise.id] || ''}
+                    onChange={(e) => setExerciseAnswers(prev => ({ ...prev, [currentExercise.id]: e.target.value }))}
+                    placeholder="Điền từ vào chỗ trống..."
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    disabled={exerciseSubmitted}
+                  />
+                  <p className="text-sm text-blue-600">Ý nghĩa: {currentExercise.meaning}</p>
+                </div>
+              )}
+
+              {currentExercise.type === 'multiple_choice' && (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-1 gap-2">
+                    {currentExercise.options.map((option: string, idx: number) => (
+                      <button
+                        key={idx}
+                        onClick={() => !exerciseSubmitted && setExerciseAnswers(prev => ({ ...prev, [currentExercise.id]: option }))}
+                        className={`p-3 text-left rounded-lg border-2 transition ${
+                          exerciseAnswers[currentExercise.id] === option
+                            ? 'border-blue-500 bg-blue-50 text-blue-700'
+                            : 'border-gray-200 hover:border-gray-300'
+                        } ${exerciseSubmitted ? 'cursor-not-allowed opacity-75' : ''}`}
+                        disabled={exerciseSubmitted}
+                      >
+                        <span className="font-medium mr-2">{String.fromCharCode(65 + idx)}.</span>
+                        {option}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {currentExercise.type === 'matching' && (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <h4 className="font-medium text-gray-700 mb-2">Từ vựng</h4>
+                      <div className="space-y-2">
+                        {currentExercise.words.map((word: string, idx: number) => (
+                          <div key={idx} className="p-2 bg-white rounded border text-center">
+                            {word}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <h4 className="font-medium text-gray-700 mb-2">Định nghĩa</h4>
+                      <div className="space-y-2">
+                        {Object.values(currentExercise.correct_matches).map((meaning: string, idx: number) => (
+                          <div key={idx} className="p-2 bg-white rounded border text-center text-sm">
+                            {meaning}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-center text-sm text-gray-500">
+                    Kéo thả hoặc chọn để nối từ với định nghĩa đúng
+                  </div>
+                </div>
+              )}
+
+              {/* Submit/Next Button */}
+              <div className="flex justify-center pt-4">
+                {!exerciseSubmitted ? (
+                  <button
+                    onClick={submitExercise}
+                    disabled={!exerciseAnswers[currentExercise.id]?.trim()}
+                    className="btn-primary px-8 py-2 rounded-lg disabled:opacity-50"
+                  >
+                    Nộp bài
+                  </button>
+                ) : (
+                  <div className="text-center space-y-2">
+                    <div className={`text-lg font-bold ${exerciseAnswers[currentExercise.id] === currentExercise.correct_answer || (currentExercise.type === 'matching' && Object.keys(currentExercise.correct_matches).every(word => exerciseAnswers[`${currentExercise.id}_${word}`] === currentExercise.correct_matches[word])) ? 'text-green-600' : 'text-red-600'}`}>
+                      {exerciseAnswers[currentExercise.id] === currentExercise.correct_answer || (currentExercise.type === 'matching' && Object.keys(currentExercise.correct_matches).every(word => exerciseAnswers[`${currentExercise.id}_${word}`] === currentExercise.correct_matches[word])) ? '✅ Đúng!' : '❌ Sai!'}
+                    </div>
+                    {(currentExercise.type === 'spelling' || currentExercise.type === 'fill_blank' || currentExercise.type === 'multiple_choice') && (
+                      <p className="text-sm text-gray-600">
+                        Đáp án đúng: <span className="font-bold text-green-600">{currentExercise.correct_answer}</span>
+                      </p>
+                    )}
+                    {practiceExercises.findIndex(ex => ex.id === currentExercise.id) < practiceExercises.length - 1 ? (
+                      <button onClick={nextExercise} className="btn-primary px-6 py-2 rounded-lg mt-3">
+                        Bài tiếp theo
+                      </button>
+                    ) : (
+                      <div className="mt-3">
+                        <p className="text-lg font-bold text-purple-600 mb-2">
+                          Hoàn thành! Điểm: {exerciseScore}/{practiceExercises.length}
+                        </p>
+                        <button
+                          onClick={() => {
+                            setPracticeExercises([]);
+                            setCurrentExercise(null);
+                            setExerciseAnswers({});
+                            setExerciseSubmitted(false);
+                            setExerciseScore(0);
+                          }}
+                          className="btn-primary px-6 py-2 rounded-lg"
+                        >
+                          Làm lại
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {words.length === 0 && (
+          <div className="text-center py-8 text-gray-500">
+            <BookMarked size={48} className="mx-auto mb-4 opacity-50" />
+            <p>Lưu từ vựng trước khi tạo bài tập AI</p>
+          </div>
+        )}
       </div>
 
       <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm flex flex-col md:flex-row gap-4 justify-between items-center">
