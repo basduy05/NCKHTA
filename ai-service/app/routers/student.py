@@ -28,6 +28,47 @@ def _get_current_student(authorization: str = Header(...)):
     return dict(user)
 
 
+def _check_usage_limit(user_id: int, feature: str, limit: int = 5):
+    """Check if user has exceeded usage limit for a feature. Returns remaining uses."""
+    conn = get_db()
+    try:
+        # Create table if not exists
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS user_usage (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                feature VARCHAR(50) NOT NULL,
+                count INTEGER DEFAULT 0,
+                reset_date DATE DEFAULT CURRENT_DATE,
+                UNIQUE(user_id, feature)
+            )
+        """)
+        # Reset daily
+        conn.execute("UPDATE user_usage SET count = 0 WHERE reset_date < CURRENT_DATE")
+        # Get current count
+        cursor = conn.execute("SELECT count FROM user_usage WHERE user_id = ? AND feature = ?", (user_id, feature))
+        row = cursor.fetchone()
+        current_count = row["count"] if row else 0
+        if current_count >= limit:
+            conn.close()
+            raise HTTPException(status_code=429, detail=f"Usage limit exceeded for {feature}. Limit: {limit} per day.")
+        # Increment count
+        conn.execute("""
+            INSERT OR REPLACE INTO user_usage (user_id, feature, count, reset_date)
+            VALUES (?, ?, ?, CURRENT_DATE)
+        """, (user_id, feature, current_count + 1))
+        conn.commit()
+        conn.close()
+        return limit - current_count - 1
+    except Exception as e:
+        if conn:
+            try: conn.close()
+            except: pass
+        if isinstance(e, HTTPException):
+            raise
+        raise HTTPException(status_code=500, detail="Usage check error")
+
+
 # ─── STATS ────────────────────────────────────────────────────────────────────
 
 @router.get("/stats")
@@ -128,7 +169,7 @@ def my_assignments(authorization: str = Header(...)):
     student = _get_current_student(authorization)
     conn = get_db()
     rows = conn.execute(
-        """SELECT a.id, a.title, a.description, a.due_date, a.created_at,
+        """SELECT a.id, a.title, a.description, a.type, a.due_date, a.created_at,
                   c.name as class_name,
                   ss.score, ss.max_score, ss.submitted_at
            FROM assignments a
@@ -149,7 +190,7 @@ def get_assignment_detail(assignment_id: int, authorization: str = Header(...)):
     conn = get_db()
 
     row = conn.execute(
-        """SELECT a.id, a.title, a.description, a.quiz_data, a.due_date, a.created_at,
+        """SELECT a.id, a.title, a.description, a.type, a.quiz_data, a.due_date, a.created_at,
                   c.name as class_name
            FROM assignments a
            JOIN enrollments e ON a.class_id = e.class_id
@@ -179,18 +220,23 @@ def get_assignment_detail(assignment_id: int, authorization: str = Header(...)):
     return result
 
 
+from typing import Union
+
 class QuizSubmission(BaseModel):
-    answers: dict  # {question_index: selected_answer}
+    answers: Optional[dict] = None  # {question_index: selected_answer}
+
+class TextSubmission(BaseModel):
+    text: Optional[str] = None
 
 
 @router.post("/assignments/{assignment_id}/submit")
-def submit_assignment(assignment_id: int, submission: QuizSubmission, authorization: str = Header(...)):
+def submit_assignment(assignment_id: int, submission: Union[QuizSubmission, TextSubmission], authorization: str = Header(...)):
     student = _get_current_student(authorization)
     conn = get_db()
 
     # Get assignment with enrollment check
     row = conn.execute(
-        """SELECT a.id, a.quiz_data
+        """SELECT a.id, a.type, a.quiz_data
            FROM assignments a
            JOIN enrollments e ON a.class_id = e.class_id
            WHERE a.id = ? AND e.student_id = ?""",
@@ -199,6 +245,8 @@ def submit_assignment(assignment_id: int, submission: QuizSubmission, authorizat
     if not row:
         conn.close()
         raise HTTPException(status_code=404, detail="Assignment not found")
+
+    assignment_type = row["type"]
 
     # Check if already submitted
     existing = conn.execute(
@@ -209,38 +257,57 @@ def submit_assignment(assignment_id: int, submission: QuizSubmission, authorizat
         conn.close()
         raise HTTPException(status_code=400, detail="Already submitted")
 
-    # Grade the quiz
-    quiz_data = json.loads(row["quiz_data"]) if row["quiz_data"] else []
-    score = 0
-    max_score = len(quiz_data)
-    details = []
+    if assignment_type == "quiz":
+        # Grade the quiz
+        if not submission.answers:
+            conn.close()
+            raise HTTPException(status_code=400, detail="Answers required for quiz")
+        quiz_data = json.loads(row["quiz_data"]) if row["quiz_data"] else []
+        score = 0
+        max_score = len(quiz_data)
+        details = []
 
-    for i, q in enumerate(quiz_data):
-        student_answer = submission.answers.get(str(i))
-        correct = q.get("correct_answer") or q.get("answer")
-        is_correct = student_answer == correct
-        if is_correct:
-            score += 1
-        details.append({
-            "question": q.get("question", ""),
-            "student_answer": student_answer,
-            "correct_answer": correct,
-            "is_correct": is_correct,
-        })
+        for i, q in enumerate(quiz_data):
+            student_answer = submission.answers.get(str(i))
+            correct = q.get("correct_answer") or q.get("answer")
+            is_correct = student_answer == correct
+            if is_correct:
+                score += 1
+            details.append({
+                "question": q.get("question", ""),
+                "student_answer": student_answer,
+                "correct_answer": correct,
+                "is_correct": is_correct,
+            })
 
-    conn.execute(
-        "INSERT INTO student_scores (student_id, assignment_id, score, max_score) VALUES (?, ?, ?, ?)",
-        (student["id"], assignment_id, score, max_score)
-    )
-    conn.commit()
-    conn.close()
+        conn.execute(
+            "INSERT INTO student_scores (student_id, assignment_id, score, max_score, submission_text) VALUES (?, ?, ?, ?, ?)",
+            (student["id"], assignment_id, score, max_score, None)
+        )
+        conn.commit()
+        conn.close()
 
-    return {
-        "score": score,
-        "max_score": max_score,
-        "percent": round(score / max_score * 100, 1) if max_score > 0 else 0,
-        "details": details,
-    }
+        return {
+            "score": score,
+            "max_score": max_score,
+            "percent": round(score / max_score * 100, 1) if max_score > 0 else 0,
+            "details": details,
+        }
+    elif assignment_type == "writing":
+        # For writing, just save the text, no grading yet
+        if not submission.text:
+            conn.close()
+            raise HTTPException(status_code=400, detail="Text required for writing assignment")
+        conn.execute(
+            "INSERT INTO student_scores (student_id, assignment_id, score, max_score, submission_text) VALUES (?, ?, ?, ?, ?)",
+            (student["id"], assignment_id, 0, 0, submission.text)
+        )
+        conn.commit()
+        conn.close()
+        return {"message": "Writing submitted successfully"}
+    else:
+        conn.close()
+        raise HTTPException(status_code=400, detail="Unsupported assignment type")
 
 
 # ─── SCORES ───────────────────────────────────────────────────────────────────
@@ -272,7 +339,8 @@ class TextAnalysisRequest(BaseModel):
 
 @router.post("/analyze-text")
 def analyze_text(req: TextAnalysisRequest, authorization: str = Header(...)):
-    _get_current_student(authorization)
+    user = _get_current_student(authorization)
+    _check_usage_limit(user["id"], "ai-tools")
     llm = llm_service.get_llm()
     if not llm:
         raise HTTPException(status_code=503, detail="LLM service unavailable — configure API key in Admin settings")
@@ -650,6 +718,8 @@ class IpaRequest(BaseModel):
 
 @router.post("/ipa/generate")
 def generate_ipa(req: IpaRequest, authorization: str = Header(...)):
+    user = _get_current_student(authorization)
+    _check_usage_limit(user["id"], "ipa")
     _get_current_student(authorization)
     return llm_service.generate_ipa_lesson(req.words, req.focus)
 
@@ -660,7 +730,8 @@ class PracticeRequest(BaseModel):
 
 @router.post("/practice/generate")
 def generate_practice(req: PracticeRequest, authorization: str = Header(...)):
-    _get_current_student(authorization)
+    user = _get_current_student(authorization)
+    _check_usage_limit(user["id"], f"practice_{req.test_type}")
     return llm_service.generate_practice_test(req.test_type, req.skill, req.part)
 
 class ReadingRequest(BaseModel):
@@ -704,7 +775,10 @@ async def student_upload_analyze(
     Supported types: TXT, PDF, DOCX
     """
     _get_current_student(authorization)
-    
+
+    if hasattr(file, 'size') and file.size > 10 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="File too large. Maximum size is 10MB.")
+
     try:
         content = await file.read()
         text = file_service.extract_text_from_file(content, file.filename)

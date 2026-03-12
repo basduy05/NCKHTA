@@ -631,6 +631,7 @@ class AssignmentCreate(BaseModel):
     class_id: int
     title: str
     description: str = ""
+    type: str = "quiz"
     quiz_data: str = ""
     due_date: str = ""
 

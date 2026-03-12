@@ -262,6 +262,10 @@ async def create_class_lesson(
     file_name = None
     file_data = None
     if file and file.filename:
+        # Check file size limit (e.g., 10MB)
+        if hasattr(file, 'size') and file.size > 10 * 1024 * 1024:
+            conn.close()
+            raise HTTPException(status_code=413, detail="File too large. Maximum size is 10MB.")
         file_name = file.filename
         file_data = await file.read()
 
@@ -291,6 +295,9 @@ async def update_teacher_lesson(
         raise HTTPException(status_code=403, detail="Bạn không có quyền sửa bài này")
 
     if file and file.filename:
+        if hasattr(file, 'size') and file.size > 10 * 1024 * 1024:
+            conn.close()
+            raise HTTPException(status_code=413, detail="File too large. Maximum size is 10MB.")
         file_name = file.filename
         file_data = await file.read()
         conn.execute("UPDATE lessons SET title=?, content=?, file_name=?, file_data=? WHERE id=?",
@@ -343,7 +350,7 @@ def get_class_assignments(class_id: int, authorization: str = Header(...)):
         raise HTTPException(status_code=403, detail="Bạn không có quyền")
 
     cursor = conn.execute("""
-        SELECT a.id, a.class_id, a.title, a.description, a.quiz_data, a.due_date, a.created_at,
+        SELECT a.id, a.class_id, a.title, a.description, a.type, a.quiz_data, a.due_date, a.created_at,
                c.name as class_name,
                (SELECT COUNT(*) FROM student_scores s WHERE s.assignment_id = a.id) as submissions
         FROM assignments a JOIN classes c ON a.class_id = c.id
@@ -359,7 +366,7 @@ def get_all_my_assignments(authorization: str = Header(...)):
     teacher = _get_current_teacher(authorization)
     conn = get_db()
     cursor = conn.execute("""
-        SELECT a.id, a.class_id, a.title, a.description, a.quiz_data, a.due_date, a.created_at,
+        SELECT a.id, a.class_id, a.title, a.description, a.type, a.quiz_data, a.due_date, a.created_at,
                c.name as class_name,
                (SELECT COUNT(*) FROM student_scores s WHERE s.assignment_id = a.id) as submissions
         FROM assignments a JOIN classes c ON a.class_id = c.id
@@ -381,8 +388,8 @@ def create_assignment(data: AssignmentCreate, authorization: str = Header(...)):
         conn.close()
         raise HTTPException(status_code=403, detail="Bạn không có quyền tạo bài tập cho lớp này")
     conn.execute(
-        "INSERT INTO assignments (class_id, teacher_id, title, description, quiz_data, due_date) VALUES (?, ?, ?, ?, ?, ?)",
-        (data.class_id, teacher["id"], data.title, data.description, data.quiz_data, data.due_date)
+        "INSERT INTO assignments (class_id, teacher_id, title, description, type, quiz_data, due_date) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (data.class_id, teacher["id"], data.title, data.description, data.type, data.quiz_data, data.due_date)
     )
     conn.commit()
     conn.close()

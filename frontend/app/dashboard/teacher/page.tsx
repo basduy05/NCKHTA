@@ -132,20 +132,46 @@ function ClassesTab({ token }: { token: string | null }) {
   useEffect(() => { fetchClasses(); }, [token]);
 
   const handleSave = async () => {
+    console.log("[DEBUG] Starting save operation");
+    const startTime = Date.now();
     if (!formName.trim()) return alert("Vui lòng nhập tên lớp");
     const formData = new FormData();
     formData.append("name", formName);
     const url = editId ? `${API_URL}/teacher/my-classes/${editId}` : `${API_URL}/teacher/my-classes`;
     const method = editId ? "PUT" : "POST";
-    await fetch(url, { method, headers: getAuthHeader(token), body: formData });
-    setShowForm(false); setEditId(null); setFormName("");
-    fetchClasses();
+    try {
+      const res = await fetch(url, { method, headers: getAuthHeader(token), body: formData });
+      if (res.ok) {
+        console.log(`[DEBUG] Save successful in ${Date.now() - startTime}ms`);
+        setShowForm(false); setEditId(null); setFormName("");
+        fetchClasses();
+      } else {
+        console.error(`[DEBUG] Save failed with status ${res.status}: ${await res.text()}`);
+        alert("Lỗi khi lưu lớp học");
+      }
+    } catch (e) {
+      console.error(`[DEBUG] Save error in ${Date.now() - startTime}ms:`, e);
+      alert("Lỗi kết nối khi lưu lớp học");
+    }
   };
 
   const handleDelete = async (id: number) => {
     if (!confirm("Xoá lớp này sẽ xoá toàn bộ bài học, bài tập và danh sách học sinh!")) return;
-    await fetch(`${API_URL}/teacher/my-classes/${id}`, { method: "DELETE", headers: getAuthHeader(token) });
-    fetchClasses();
+    console.log("[DEBUG] Starting delete operation");
+    const startTime = Date.now();
+    try {
+      const res = await fetch(`${API_URL}/teacher/my-classes/${id}`, { method: "DELETE", headers: getAuthHeader(token) });
+      if (res.ok) {
+        console.log(`[DEBUG] Delete successful in ${Date.now() - startTime}ms`);
+        fetchClasses();
+      } else {
+        console.error(`[DEBUG] Delete failed with status ${res.status}: ${await res.text()}`);
+        alert("Lỗi khi xoá lớp học");
+      }
+    } catch (e) {
+      console.error(`[DEBUG] Delete error in ${Date.now() - startTime}ms:`, e);
+      alert("Lỗi kết nối khi xoá lớp học");
+    }
   };
 
   return (
@@ -246,21 +272,47 @@ function StudentsTab({ token }: { token: string | null }) {
 
   const handleEnroll = async (studentId: number) => {
     if (!selectedClass) return;
+    console.log("[DEBUG] Starting enroll student operation");
+    const startTime = Date.now();
     const formData = new FormData();
     formData.append("student_id", String(studentId));
-    await fetch(`${API_URL}/teacher/my-classes/${selectedClass}/enroll`, {
-      method: "POST", headers: getAuthHeader(token), body: formData
-    });
-    fetchStudents(selectedClass);
-    fetchAvailable(selectedClass);
+    try {
+      const res = await fetch(`${API_URL}/teacher/my-classes/${selectedClass}/enroll`, {
+        method: "POST", headers: getAuthHeader(token), body: formData
+      });
+      if (res.ok) {
+        console.log(`[DEBUG] Enroll successful in ${Date.now() - startTime}ms`);
+        fetchStudents(selectedClass);
+        fetchAvailable(selectedClass);
+      } else {
+        console.error(`[DEBUG] Enroll failed with status ${res.status}: ${await res.text()}`);
+        alert("Lỗi khi thêm học sinh");
+      }
+    } catch (e) {
+      console.error(`[DEBUG] Enroll error in ${Date.now() - startTime}ms:`, e);
+      alert("Lỗi kết nối khi thêm học sinh");
+    }
   };
 
   const handleRemove = async (studentId: number) => {
     if (!selectedClass || !confirm("Xoá học sinh khỏi lớp?")) return;
-    await fetch(`${API_URL}/teacher/my-classes/${selectedClass}/students/${studentId}`, {
-      method: "DELETE", headers: getAuthHeader(token)
-    });
-    fetchStudents(selectedClass);
+    console.log("[DEBUG] Starting remove student operation");
+    const startTime = Date.now();
+    try {
+      const res = await fetch(`${API_URL}/teacher/my-classes/${selectedClass}/students/${studentId}`, {
+        method: "DELETE", headers: getAuthHeader(token)
+      });
+      if (res.ok) {
+        console.log(`[DEBUG] Remove successful in ${Date.now() - startTime}ms`);
+        fetchStudents(selectedClass);
+      } else {
+        console.error(`[DEBUG] Remove failed with status ${res.status}: ${await res.text()}`);
+        alert("Lỗi khi xoá học sinh");
+      }
+    } catch (e) {
+      console.error(`[DEBUG] Remove error in ${Date.now() - startTime}ms:`, e);
+      alert("Lỗi kết nối khi xoá học sinh");
+    }
   };
 
   const openEnrollModal = () => {
@@ -390,6 +442,8 @@ function LessonsTab({ token }: { token: string | null }) {
   }, [selectedClass, token]);
 
   const handleSave = async () => {
+    console.log("[DEBUG] Starting lesson save operation");
+    const startTime = Date.now();
     if (!formTitle.trim() || !selectedClass) return alert("Vui lòng nhập tiêu đề");
     const formData = new FormData();
     formData.append("title", formTitle);
@@ -399,15 +453,39 @@ function LessonsTab({ token }: { token: string | null }) {
     const url = editId
       ? `${API_URL}/teacher/lessons/${editId}`
       : `${API_URL}/teacher/my-classes/${selectedClass}/lessons`;
-    await fetch(url, { method: editId ? "PUT" : "POST", headers: getAuthHeader(token), body: formData });
-    resetForm();
-    fetchLessons(selectedClass!);
+    try {
+      const res = await fetch(url, { method: editId ? "PUT" : "POST", headers: getAuthHeader(token), body: formData });
+      if (res.ok) {
+        console.log(`[DEBUG] Lesson save successful in ${Date.now() - startTime}ms`);
+        resetForm();
+        fetchLessons(selectedClass!);
+      } else {
+        console.error(`[DEBUG] Lesson save failed with status ${res.status}: ${await res.text()}`);
+        alert("Lỗi khi lưu bài học");
+      }
+    } catch (e) {
+      console.error(`[DEBUG] Lesson save error in ${Date.now() - startTime}ms:`, e);
+      alert("Lỗi kết nối khi lưu bài học");
+    }
   };
 
   const handleDelete = async (id: number) => {
     if (!confirm("Xoá bài học này?")) return;
-    await fetch(`${API_URL}/teacher/lessons/${id}`, { method: "DELETE", headers: getAuthHeader(token) });
-    if (selectedClass) fetchLessons(selectedClass);
+    console.log("[DEBUG] Starting lesson delete operation");
+    const startTime = Date.now();
+    try {
+      const res = await fetch(`${API_URL}/teacher/lessons/${id}`, { method: "DELETE", headers: getAuthHeader(token) });
+      if (res.ok) {
+        console.log(`[DEBUG] Lesson delete successful in ${Date.now() - startTime}ms`);
+        if (selectedClass) fetchLessons(selectedClass);
+      } else {
+        console.error(`[DEBUG] Lesson delete failed with status ${res.status}: ${await res.text()}`);
+        alert("Lỗi khi xoá bài học");
+      }
+    } catch (e) {
+      console.error(`[DEBUG] Lesson delete error in ${Date.now() - startTime}ms:`, e);
+      alert("Lỗi kết nối khi xoá bài học");
+    }
   };
 
   const resetForm = () => {
@@ -501,6 +579,7 @@ function AssignmentsTab({ token }: { token: string | null }) {
   const [formTitle, setFormTitle] = useState("");
   const [formDesc, setFormDesc] = useState("");
   const [formDue, setFormDue] = useState("");
+  const [formType, setFormType] = useState("quiz");
   const [formQuizText, setFormQuizText] = useState("");
   const [generatedQuiz, setGeneratedQuiz] = useState<any[]>([]);
   const [generating, setGenerating] = useState(false);
@@ -551,26 +630,53 @@ function AssignmentsTab({ token }: { token: string | null }) {
 
   const handleSaveAssignment = async () => {
     if (!formTitle.trim() || !selectedClass) return alert("Vui lòng nhập tiêu đề");
+    console.log("[DEBUG] Starting save assignment operation");
+    const startTime = Date.now();
     const body = {
       class_id: selectedClass,
       title: formTitle,
       description: formDesc,
-      quiz_data: generatedQuiz.length > 0 ? JSON.stringify(generatedQuiz) : "",
+      type: formType,
+      quiz_data: formType === "quiz" && generatedQuiz.length > 0 ? JSON.stringify(generatedQuiz) : "",
       due_date: formDue
     };
-    await fetch(`${API_URL}/teacher/assignments`, {
-      method: "POST",
-      headers: { ...getAuthHeader(token), "Content-Type": "application/json" },
-      body: JSON.stringify(body)
-    });
-    setShowForm(false); setFormTitle(""); setFormDesc(""); setFormDue(""); setFormQuizText(""); setGeneratedQuiz([]);
-    fetchAssignments(selectedClass!);
+    try {
+      const res = await fetch(`${API_URL}/teacher/assignments`, {
+        method: "POST",
+        headers: { ...getAuthHeader(token), "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+      });
+      if (res.ok) {
+        console.log(`[DEBUG] Assignment save successful in ${Date.now() - startTime}ms`);
+        setShowForm(false); setFormTitle(""); setFormDesc(""); setFormDue(""); setFormType("quiz"); setFormQuizText(""); setGeneratedQuiz([]);
+        fetchAssignments(selectedClass!);
+      } else {
+        console.error(`[DEBUG] Assignment save failed with status ${res.status}: ${await res.text()}`);
+        alert("Lỗi khi lưu bài tập");
+      }
+    } catch (e) {
+      console.error(`[DEBUG] Assignment save error in ${Date.now() - startTime}ms:`, e);
+      alert("Lỗi kết nối khi lưu bài tập");
+    }
   };
 
   const handleDelete = async (id: number) => {
     if (!confirm("Xoá bài tập này?")) return;
-    await fetch(`${API_URL}/teacher/assignments/${id}`, { method: "DELETE", headers: getAuthHeader(token) });
-    if (selectedClass) fetchAssignments(selectedClass);
+    console.log("[DEBUG] Starting delete assignment operation");
+    const startTime = Date.now();
+    try {
+      const res = await fetch(`${API_URL}/teacher/assignments/${id}`, { method: "DELETE", headers: getAuthHeader(token) });
+      if (res.ok) {
+        console.log(`[DEBUG] Assignment delete successful in ${Date.now() - startTime}ms`);
+        if (selectedClass) fetchAssignments(selectedClass);
+      } else {
+        console.error(`[DEBUG] Assignment delete failed with status ${res.status}: ${await res.text()}`);
+        alert("Lỗi khi xoá bài tập");
+      }
+    } catch (e) {
+      console.error(`[DEBUG] Assignment delete error in ${Date.now() - startTime}ms:`, e);
+      alert("Lỗi kết nối khi xoá bài tập");
+    }
   };
 
   const toggleScores = async (assignmentId: number) => {
@@ -590,7 +696,7 @@ function AssignmentsTab({ token }: { token: string | null }) {
           className="border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none min-w-[200px]">
           {classes.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
-        <button onClick={() => { setShowForm(true); setFormTitle(""); setFormDesc(""); setFormDue(""); setFormQuizText(""); setGeneratedQuiz([]); }}
+        <button onClick={() => { setShowForm(true); setFormTitle(""); setFormDesc(""); setFormDue(""); setFormType("quiz"); setFormQuizText(""); setGeneratedQuiz([]); }}
           className="ml-auto flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700">
           <Plus size={18} /> Tạo bài tập
         </button>
@@ -608,7 +714,14 @@ function AssignmentsTab({ token }: { token: string | null }) {
             className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none resize-none" />
           <input type="date" value={formDue} onChange={e => setFormDue(e.target.value)}
             className="border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none" />
+          <select value={formType} onChange={e => setFormType(e.target.value)}
+            className="border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none">
+            <option value="quiz">Quiz (Trắc nghiệm)</option>
+            <option value="writing">Writing (Viết bài)</option>
+            <option value="speaking">Speaking (Nói)</option>
+          </select>
 
+          {formType === "quiz" && (
           {/* AI Quiz Generator */}
           <div className="bg-gradient-to-r from-purple-50 to-indigo-50 p-4 rounded-xl border border-indigo-100">
             <h4 className="font-bold text-indigo-700 mb-2 flex items-center gap-2"><Sparkles size={18} /> Tạo Quiz bằng AI</h4>
@@ -637,6 +750,7 @@ function AssignmentsTab({ token }: { token: string | null }) {
               </div>
             )}
           </div>
+          )}
 
           <button onClick={handleSaveAssignment}
             className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2">

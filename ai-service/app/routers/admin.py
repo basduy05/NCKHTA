@@ -209,6 +209,8 @@ async def create_lesson(
     file_name = None
     file_data = None
     if file and file.filename:
+        if hasattr(file, 'size') and file.size > 10 * 1024 * 1024:
+            raise HTTPException(status_code=413, detail="File too large. Maximum size is 10MB.")
         file_name = file.filename
         file_data = await file.read()
     cursor.execute("INSERT INTO lessons (class_id, title, content, file_name, file_data) VALUES (?, ?, ?, ?, ?)",
@@ -251,6 +253,8 @@ async def update_lesson(
     conn = get_db()
     cursor = conn.cursor()
     if file and file.filename:
+        if hasattr(file, 'size') and file.size > 10 * 1024 * 1024:
+            raise HTTPException(status_code=413, detail="File too large. Maximum size is 10MB.")
         file_name = file.filename
         file_data = await file.read()
         cursor.execute("UPDATE lessons SET class_id=?, title=?, content=?, file_name=?, file_data=? WHERE id=?",
@@ -266,6 +270,8 @@ async def update_lesson(
 async def import_vocab(file: UploadFile = File(...)):
     if not file.filename.endswith('.csv'):
         raise HTTPException(status_code=400, detail="Only CSV files are allowed")
+    if hasattr(file, 'size') and file.size > 5 * 1024 * 1024:  # 5MB for CSV
+        raise HTTPException(status_code=413, detail="File too large. Maximum size is 5MB.")
 
     content = await file.read()
     try:
@@ -453,6 +459,8 @@ async def create_grammar_rule(
     file_name = None
     file_data = None
     if file and file.filename:
+        if hasattr(file, 'size') and file.size > 10 * 1024 * 1024:
+            raise HTTPException(status_code=413, detail="File too large. Maximum size is 10MB.")
         file_name = file.filename
         file_data = await file.read()
     cursor.execute("INSERT INTO grammar_rules (name, description, file_name, file_data) VALUES (?, ?, ?, ?)",
@@ -490,6 +498,8 @@ async def update_grammar_rule(
     conn = get_db()
     cursor = conn.cursor()
     if file and file.filename:
+        if hasattr(file, 'size') and file.size > 10 * 1024 * 1024:
+            raise HTTPException(status_code=413, detail="File too large. Maximum size is 10MB.")
         file_name = file.filename
         file_data = await file.read()
         cursor.execute("UPDATE grammar_rules SET name=?, description=?, file_name=?, file_data=? WHERE id=?",

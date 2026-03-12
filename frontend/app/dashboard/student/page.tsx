@@ -51,7 +51,7 @@ function StudentDashboardContent() {
           {activeTab === "grammar" && "Kho Ngữ Pháp"}
           {activeTab === "scores" && "Kết quả học tập"}
           {activeTab === "ipa" && "Luyện phát âm IPA"}
-          {activeTab === "practice" && "Luyện thi & Kỹ năng"}
+          {activeTab === "practice" && "Luyện thi"}
         </h1>
         <p className="text-sm text-gray-500">Xin chào, <span className="font-semibold text-blue-600">{user?.name}</span></p>
       </div>
@@ -285,31 +285,99 @@ function AssignmentsTab({ token }: { token: string | null }) {
     } catch (e) { console.error(e); }
   };
 
-  const submitQuiz = async () => {
+  const submitAssignment = async () => {
     if (!takingQuiz) return;
+    console.log("[DEBUG] Starting submit assignment operation");
+    const startTime = Date.now();
     setSubmitting(true);
     try {
+      const assignmentType = takingQuiz.type || "quiz";
+      let body;
+      if (assignmentType === "quiz") {
+        body = { answers: quizAnswers };
+      } else if (assignmentType === "writing") {
+        body = { text: quizAnswers["text"] || "" };
+      } else {
+        alert("Unsupported assignment type");
+        setSubmitting(false);
+        return;
+      }
       const res = await fetch(`${API_URL}/student/assignments/${takingQuiz.id}/submit`, {
         method: "POST",
         headers: getAuthHeader(token),
-        body: JSON.stringify({ answers: quizAnswers }),
+        body: JSON.stringify(body),
       });
       if (res.ok) {
+        console.log(`[DEBUG] Submit assignment successful in ${Date.now() - startTime}ms`);
         const result = await res.json();
         setQuizResult(result);
         fetchAssignments();
       } else {
         const err = await res.json();
+        console.error(`[DEBUG] Submit assignment failed with status ${res.status}: ${JSON.stringify(err)}`);
         alert(err.detail || "Lỗi khi nộp bài");
       }
-    } catch (e) { console.error(e); alert("Lỗi kết nối"); }
+    } catch (e) {
+      console.error(`[DEBUG] Submit assignment error in ${Date.now() - startTime}ms:`, e);
+      alert("Lỗi kết nối");
+    }
     finally { setSubmitting(false); }
   };
 
   if (loading) return <div className="flex justify-center py-20"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" /></div>;
 
-  // Quiz-taking view
+  // Assignment-taking view
   if (takingQuiz) {
+    const assignmentType = takingQuiz.type || "quiz";
+
+    if (assignmentType === "writing") {
+      // Writing assignment
+      return (
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-bold text-gray-900">{takingQuiz.title}</h2>
+              <p className="text-sm text-gray-500">{takingQuiz.class_name}</p>
+              {takingQuiz.description && <p className="text-sm text-gray-600 mt-2">{takingQuiz.description}</p>}
+            </div>
+            <button onClick={() => setTakingQuiz(null)} className="text-sm text-gray-500 hover:text-red-600 transition">Hủy bỏ</button>
+          </div>
+
+          {takingQuiz.submitted ? (
+            <div className="bg-green-50 border border-green-200 rounded-xl p-6 text-center">
+              <CheckCircle2 size={40} className="mx-auto text-green-500 mb-3" />
+              <p className="font-bold text-green-800">Bạn đã nộp bài viết rồi!</p>
+              <p className="text-green-600 text-lg font-semibold mt-1">Nộp: {new Date(takingQuiz.submitted_at).toLocaleDateString("vi-VN")}</p>
+              <button onClick={() => setTakingQuiz(null)} className="mt-4 text-sm text-blue-600 hover:underline">Quay lại</button>
+            </div>
+          ) : (
+            <>
+              <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
+                <h3 className="font-bold text-gray-900 mb-4">Viết bài của bạn</h3>
+                <textarea
+                  value={quizAnswers["text"] || ""}
+                  onChange={e => setQuizAnswers(prev => ({ ...prev, text: e.target.value }))}
+                  placeholder="Nhập bài viết của bạn ở đây..."
+                  rows={10}
+                  className="w-full border rounded-lg p-3 focus:ring-2 focus:ring-blue-500 outline-none resize-none"
+                />
+              </div>
+              <div className="text-center pt-4">
+                <button
+                  onClick={() => submitAssignment()}
+                  disabled={!quizAnswers["text"]?.trim()}
+                  className="btn-primary px-10 py-3 rounded-xl text-lg shadow-md hover:shadow-lg disabled:opacity-50 transition"
+                >
+                  Nộp bài viết
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      );
+    }
+
+    // Quiz assignment
     const questions = takingQuiz.quiz_data || [];
 
     // Show result
@@ -393,7 +461,7 @@ function AssignmentsTab({ token }: { token: string | null }) {
             </div>
             <div className="text-center pt-4">
               <button
-                onClick={submitQuiz}
+                onClick={submitAssignment}
                 disabled={submitting || Object.keys(quizAnswers).length === 0}
                 className="btn-primary px-10 py-3 rounded-xl text-lg shadow-md hover:shadow-lg disabled:opacity-50 transition"
               >
@@ -1309,17 +1377,26 @@ function VocabularyTab({ token }: { token: string | null }) {
 
   const deleteWord = async (id: number) => {
     if (!confirm("Xóa từ này khỏi kho từ vựng?")) return;
+    console.log("[DEBUG] Starting delete word operation");
+    const startTime = Date.now();
     setDeleting(id);
     try {
       const res = await fetch(`${API_URL}/student/vocabulary/${id}`, {
         method: "DELETE", headers: getAuthHeader(token)
       });
       if (res.ok) {
+        console.log(`[DEBUG] Delete word successful in ${Date.now() - startTime}ms`);
         const updated = words.filter(w => w.id !== id);
         setWords(updated);
         cacheToLocal(updated);
+      } else {
+        console.error(`[DEBUG] Delete word failed with status ${res.status}: ${await res.text()}`);
+        alert("Lỗi khi xóa từ");
       }
-    } catch { }
+    } catch (e) {
+      console.error(`[DEBUG] Delete word error in ${Date.now() - startTime}ms:`, e);
+      alert("Lỗi kết nối khi xóa từ");
+    }
     finally { setDeleting(null); }
   };
 

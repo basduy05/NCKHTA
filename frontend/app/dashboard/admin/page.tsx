@@ -592,11 +592,21 @@ function VocabTab() {
 
   const handleDeleteWord = async (word: string) => {
     if (!confirm(`Xoá từ "${word}"?`)) return;
+    console.log("[DEBUG] Starting delete word operation");
+    const startTime = Date.now();
     try {
       const res = await fetch(`${API_URL}/admin/vocab/${encodeURIComponent(word)}`, { method: 'DELETE', headers: getAuthHeader(token) });
-      if (res.ok) fetchWords();
-      else alert('Lỗi xoá từ');
-    } catch { alert('Lỗi kết nối'); }
+      if (res.ok) {
+        console.log(`[DEBUG] Delete word successful in ${Date.now() - startTime}ms`);
+        fetchWords();
+      } else {
+        console.error(`[DEBUG] Delete word failed with status ${res.status}: ${await res.text()}`);
+        alert('Lỗi xoá từ');
+      }
+    } catch (e) {
+      console.error(`[DEBUG] Delete word error in ${Date.now() - startTime}ms:`, e);
+      alert('Lỗi kết nối');
+    }
   };
 
   const handleFilterChange = (level: string) => {
@@ -626,6 +636,8 @@ function VocabTab() {
   };
 
   const handleSaveWord = async () => {
+    console.log("[DEBUG] Starting save word operation");
+    const startTime = Date.now();
     if (!formWord.word) return alert("Nhập từ vựng!");
     setSavingWord(true);
     try {
@@ -633,11 +645,19 @@ function VocabTab() {
       const url = isNew ? `${API_URL}/admin/vocab` : `${API_URL}/admin/vocab/${encodeURIComponent(editingWord!)}`;
       const method = isNew ? 'POST' : 'PUT';
       const res = await fetch(url, { method, headers: { ...getAuthHeader(token), 'Content-Type': 'application/json' }, body: JSON.stringify(formWord) });
-      if (!res.ok) { const e = await res.json(); throw new Error(e.detail || 'Error'); }
+      if (!res.ok) {
+        const e = await res.json();
+        console.error(`[DEBUG] Save word failed with status ${res.status}: ${JSON.stringify(e)}`);
+        throw new Error(e.detail || 'Error');
+      }
+      console.log(`[DEBUG] Save word successful in ${Date.now() - startTime}ms`);
       setEditingWord(null);
       setFormWord({ word: '', pronunciation: '', meaning: '', level: 'A1', type: 'noun', example: '' });
       fetchWords();
-    } catch (err: any) { alert(err.message); }
+    } catch (err: any) {
+      console.error(`[DEBUG] Save word error in ${Date.now() - startTime}ms:`, err);
+      alert(err.message);
+    }
     finally { setSavingWord(false); }
   };
 
