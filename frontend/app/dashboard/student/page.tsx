@@ -1696,6 +1696,25 @@ function IpaTab({ token }: { token: string | null }) {
 
   return (
     <div className="space-y-8">
+      {/* Credit Display */}
+      <div className="bg-gradient-to-r from-amber-50 to-orange-50 p-4 rounded-xl border border-amber-200 shadow-sm">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center">
+              <Star size={20} className="text-amber-600" />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-amber-800">Credits AI</p>
+              <p className="text-xs text-amber-600">Số credits còn lại để sử dụng AI</p>
+            </div>
+          </div>
+          <div className="text-right">
+            <p className="text-2xl font-bold text-amber-800">∞</p>
+            <p className="text-xs text-amber-600">Không giới hạn</p>
+          </div>
+        </div>
+      </div>
+
       {/* SECTION 1: STATIC IPA FLASHCARDS */}
       <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
         <h2 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
@@ -1932,6 +1951,25 @@ function PracticeTab({ token }: { token: string | null }) {
 
   return (
     <div className="space-y-6">
+      {/* Credit Display */}
+      <div className="bg-gradient-to-r from-amber-50 to-orange-50 p-4 rounded-xl border border-amber-200 shadow-sm">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center">
+              <Star size={20} className="text-amber-600" />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-amber-800">Credits AI</p>
+              <p className="text-xs text-amber-600">Số credits còn lại để sử dụng AI</p>
+            </div>
+          </div>
+          <div className="text-right">
+            <p className="text-2xl font-bold text-amber-800">∞</p>
+            <p className="text-xs text-amber-600">Không giới hạn</p>
+          </div>
+        </div>
+      </div>
+
       <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm flex flex-col md:flex-row gap-4 justify-between items-center">
         <div>
           <h2 className="text-xl font-bold text-gray-900 mb-1 flex items-center gap-2">
