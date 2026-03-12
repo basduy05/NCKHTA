@@ -722,7 +722,6 @@ function AssignmentsTab({ token }: { token: string | null }) {
           </select>
 
           {formType === "quiz" && (
-          {/* AI Quiz Generator */}
           <div className="bg-gradient-to-r from-purple-50 to-indigo-50 p-4 rounded-xl border border-indigo-100">
             <h4 className="font-bold text-indigo-700 mb-2 flex items-center gap-2"><Sparkles size={18} /> Tạo Quiz bằng AI</h4>
             <textarea value={formQuizText} onChange={e => setFormQuizText(e.target.value)}
