@@ -9,6 +9,7 @@ from ..services.auth_service import (
     LoginOTPRequest, VerifyLoginOTP, UserRegister, OTPVerify, UserLogin, OTP_EXPIRE_MINUTES
 )
 from ..services import security_service
+from ..dependencies import get_admin_user
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 security = HTTPBearer()
