@@ -7,9 +7,9 @@ from ..database import get_db, UserCreate
 from ..services import auth_service
 from ..dependencies import get_admin_user, get_current_user
 from ..services.auth_service import (
-    UserRegister, UserLogin, OTPVerify, OTP_EXPIRE_MINUTES,
     LoginOTPRequest, VerifyLoginOTP
 )
+from ..services import security_service
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 security = HTTPBearer()
@@ -315,12 +315,7 @@ class UpdateProfileRequest(BaseModel):
     @field_validator('name', 'phone')
     @classmethod
     def validate_fields(cls, v: str | None) -> str | None:
-        if v:
-            import re
-            cleaned = re.sub(r'<script.*?>.*?</script>', '', v, flags=re.DOTALL | re.IGNORECASE)
-            cleaned = re.sub(r'<[^>]*>', '', cleaned)
-            return cleaned.strip()
-        return v
+        return security_service.clean_html(v) if v else v
 
 class ChangePasswordRequest(BaseModel):
     current_password: str
