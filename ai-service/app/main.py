@@ -125,6 +125,13 @@ async def security_headers_middleware(request: Request, call_next):
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+    
+    # Content-Security-Policy: Prevent scripts from being executed from unauthorized sources
+    # 'self' allows resources from the same origin
+    # https://fonts.googleapis.com etc. might be needed if frontend was served here, 
+    # but since this is an API, we can be very strict.
+    response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self'; object-src 'none';"
+    
     return response
 
 
