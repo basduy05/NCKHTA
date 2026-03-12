@@ -45,7 +45,7 @@ function DashboardSidebar({ user, logout }: { user: any, logout: any }) {
       { name: "Tra từ điển", href: "/dashboard/student?tab=dictionary", icon: Search, id: "dictionary" },
       { name: "Từ vựng đã lưu", href: "/dashboard/student?tab=vocabulary", icon: BookMarked, id: "vocabulary" },
       { name: "Luyện phát âm IPA", href: "/dashboard/student?tab=ipa", icon: Mic, id: "ipa" },
-      { name: "Luyện thi & Kỹ năng", href: "/dashboard/student?tab=practice", icon: Award, id: "practice" },
+      { name: "Luyện thi", href: "/dashboard/student?tab=practice", icon: Award, id: "practice" },
       { name: "Học với AI", href: "/dashboard/student?tab=ai-tools", icon: Sparkles, id: "ai-tools" },
       { name: "Kho Ngữ Pháp", href: "/dashboard/student?tab=grammar", icon: BookText, id: "grammar" },
       { name: "Kết quả học tập", href: "/dashboard/student?tab=scores", icon: Component, id: "scores" },

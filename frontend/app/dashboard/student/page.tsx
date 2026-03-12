@@ -619,6 +619,25 @@ function AIToolsTab({ token }: { token: string | null }) {
 
   return (
     <div className="space-y-6">
+      {/* Credit Display */}
+      <div className="bg-gradient-to-r from-amber-50 to-orange-50 p-4 rounded-xl border border-amber-200 shadow-sm">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center">
+              <Star size={20} className="text-amber-600" />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-amber-800">Credits AI</p>
+              <p className="text-xs text-amber-600">Số credits còn lại để sử dụng AI</p>
+            </div>
+          </div>
+          <div className="text-right">
+            <p className="text-2xl font-bold text-amber-800">∞</p>
+            <p className="text-xs text-amber-600">Không giới hạn</p>
+          </div>
+        </div>
+      </div>
+
       <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
         <h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
           <Sparkles size={20} className="text-blue-600" /> Phân tích văn bản với AI
@@ -974,6 +993,7 @@ function DictionaryTab({ token }: { token: string | null }) {
     }
   };
 
+
   return (
     <div className="space-y-6">
       {/* Search bar */}
@@ -1185,6 +1205,19 @@ function DictionaryTab({ token }: { token: string | null }) {
                       <button key={i} onClick={() => setWord(w)} className="bg-white text-purple-700 text-sm px-2.5 py-1 rounded-lg border border-purple-200 hover:bg-purple-100 transition">{w}</button>
                     ))}
                   </div>
+
+                  {submitted && (
+                    <div className="mt-6 bg-gradient-to-r from-green-50 to-blue-50 p-4 rounded-xl border border-green-200 text-center">
+                      <div className="text-2xl font-bold text-green-700 mb-2">
+                        Điểm: {score}/{practice.questions?.length || 0}
+                      </div>
+                      <p className="text-green-600">
+                        {score === practice.questions?.length ? "Xuất sắc! 🎉" :
+                         score >= (practice.questions?.length || 0) * 0.8 ? "Tốt! 👍" :
+                         score >= (practice.questions?.length || 0) * 0.6 ? "Khá! 👌" : "Cần cố gắng hơn! 💪"}
+                      </p>
+                    </div>
+                  )}
                 </div>
               )}
               {Array.isArray(result.collocations) && result.collocations.length > 0 && (
@@ -1628,10 +1661,16 @@ function IpaTab({ token }: { token: string | null }) {
   const [focus, setFocus] = useState("vowels");
   const [loading, setLoading] = useState(false);
   const [lesson, setLesson] = useState<any>(null);
+  const [quizAnswers, setQuizAnswers] = useState<Record<number, number>>({});
+  const [quizSubmitted, setQuizSubmitted] = useState(false);
+  const [quizScore, setQuizScore] = useState(0);
 
   const generateLesson = async () => {
     setLoading(true);
     setLesson(null);
+    setQuizAnswers({});
+    setQuizSubmitted(false);
+    setQuizScore(0);
     try {
       const res = await fetch(`${API_URL}/student/ipa/generate`, {
         method: "POST",
@@ -1653,6 +1692,19 @@ function IpaTab({ token }: { token: string | null }) {
       u.lang = "en-US";
       window.speechSynthesis.speak(u);
     }
+  };
+
+  const submitQuiz = () => {
+    if (Object.keys(quizAnswers).length === 0) {
+      alert("Vui lòng trả lời ít nhất một câu hỏi!");
+      return;
+    }
+    let correct = 0;
+    lesson.quiz?.forEach((q: any, idx: number) => {
+      if (quizAnswers[idx] === q.correct_answer || quizAnswers[idx] === q.ans) correct++;
+    });
+    setQuizScore(correct);
+    setQuizSubmitted(true);
   };
 
   return (
@@ -1781,13 +1833,47 @@ function IpaTab({ token }: { token: string | null }) {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       {q.options.map((opt: string, oIdx: number) => (
                         <div key={oIdx} className="flex items-center gap-2 bg-white p-3 rounded-lg border border-gray-200">
-                          <input type="radio" name={`quiz-${idx}`} id={`q-${idx}-${oIdx}`} className="w-4 h-4 text-purple-600" />
-                          <label htmlFor={`q-${idx}-${oIdx}`} className="text-sm font-medium">{opt}</label>
+                          <input
+                            type="radio"
+                            name={`quiz-${idx}`}
+                            id={`q-${idx}-${oIdx}`}
+                            checked={quizAnswers[idx] === oIdx}
+                            onChange={() => setQuizAnswers({...quizAnswers, [idx]: oIdx})}
+                            disabled={quizSubmitted}
+                            className="w-4 h-4 text-purple-600"
+                          />
+                          <label htmlFor={`q-${idx}-${oIdx}`} className={quizSubmitted ? (oIdx === q.correct_answer || oIdx === q.ans ? "text-green-700 font-medium" : quizAnswers[idx] === oIdx ? "text-red-700" : "") : "text-sm font-medium"}>
+                            {opt}
+                          </label>
                         </div>
                       ))}
                     </div>
                   </div>
                 ))}
+
+                {!quizSubmitted && (
+                  <div className="mt-6 text-center">
+                    <button
+                      onClick={submitQuiz}
+                      className="bg-purple-600 text-white px-8 py-3 rounded-lg font-bold hover:bg-purple-700 transition flex items-center gap-2 mx-auto"
+                    >
+                      <CheckCircle2 size={20} /> Nộp bài kiểm tra
+                    </button>
+                  </div>
+                )}
+
+                {quizSubmitted && (
+                  <div className="mt-6 bg-gradient-to-r from-green-50 to-blue-50 p-4 rounded-xl border border-green-200 text-center">
+                    <div className="text-2xl font-bold text-green-700 mb-2">
+                      Điểm: {quizScore}/{lesson.quiz?.length || 0}
+                    </div>
+                    <p className="text-green-600">
+                      {quizScore === lesson.quiz?.length ? "Xuất sắc! 🎉" :
+                        quizScore >= (lesson.quiz?.length || 0) * 0.8 ? "Tốt! 👍" :
+                        quizScore >= (lesson.quiz?.length || 0) * 0.6 ? "Khá! 👌" : "Cần luyện tập thêm! 💪"}
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -1803,10 +1889,16 @@ function PracticeTab({ token }: { token: string | null }) {
   const [skill, setSkill] = useState("reading");
   const [loading, setLoading] = useState(false);
   const [practice, setPractice] = useState<any>(null);
+  const [answers, setAnswers] = useState<Record<number, number>>({});
+  const [submitted, setSubmitted] = useState(false);
+  const [score, setScore] = useState(0);
 
   const generatePractice = async () => {
     setLoading(true);
     setPractice(null);
+    setAnswers({});
+    setSubmitted(false);
+    setScore(0);
     try {
       const endpoint =
         skill === "reading" ? "/student/reading/generate" :
@@ -1836,6 +1928,19 @@ function PracticeTab({ token }: { token: string | null }) {
     } finally {
       setLoading(false);
     }
+  };
+
+  const submitAnswers = () => {
+    if (Object.keys(answers).length === 0) {
+      alert("Vui lòng trả lời ít nhất một câu hỏi!");
+      return;
+    }
+    let correct = 0;
+    practice.questions?.forEach((q: any, idx: number) => {
+      if (answers[idx] === q.correct_answer || answers[idx] === q.ans) correct++;
+    });
+    setScore(correct);
+    setSubmitted(true);
   };
 
   return (
@@ -1880,8 +1985,18 @@ function PracticeTab({ token }: { token: string | null }) {
                 <div className="space-y-2 pl-4">
                   {q.options?.map((opt: string, oIdx: number) => (
                     <div key={oIdx} className="flex items-center gap-2">
-                      <input type="radio" name={`q-${idx}`} id={`q-${idx}-${oIdx}`} className="w-4 h-4 text-blue-600" />
-                      <label htmlFor={`q-${idx}-${oIdx}`}>{opt}</label>
+                      <input
+                        type="radio"
+                        name={`q-${idx}`}
+                        id={`q-${idx}-${oIdx}`}
+                        checked={answers[idx] === oIdx}
+                        onChange={() => setAnswers({...answers, [idx]: oIdx})}
+                        disabled={submitted}
+                        className="w-4 h-4 text-blue-600"
+                      />
+                      <label htmlFor={`q-${idx}-${oIdx}`} className={submitted ? (oIdx === q.correct_answer || oIdx === q.ans ? "text-green-700 font-medium" : answers[idx] === oIdx ? "text-red-700" : "") : ""}>
+                        {opt}
+                      </label>
                     </div>
                   ))}
                 </div>
