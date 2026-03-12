@@ -301,6 +301,22 @@ def init_db():
         """)
         conn.commit()
 
+    # --- GENERATED EXAMS TABLE ---
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS generated_exams (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            test_type TEXT,
+            title TEXT,
+            exam_data TEXT,
+            score INTEGER,
+            max_score INTEGER,
+            completed BOOLEAN DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id)
+        )
+    """)
+
     # --- GRAMMAR RULES TABLE ---
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS grammar_rules (
@@ -391,6 +407,20 @@ def init_db():
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
+    conn.commit()
+
+    # --- MIGRATION: Vocabulary SR & User Points ---
+    try:
+        cursor.execute("ALTER TABLE users ADD COLUMN points INTEGER DEFAULT 0")
+    except SQLITE_OP_ERROR: pass
+
+    try:
+        cursor.execute("ALTER TABLE saved_vocabulary ADD COLUMN last_reviewed_at TIMESTAMP")
+    except SQLITE_OP_ERROR: pass
+
+    try:
+        cursor.execute("ALTER TABLE saved_vocabulary ADD COLUMN review_count INTEGER DEFAULT 0")
+    except SQLITE_OP_ERROR: pass
 
     # --- MIGRATION: Add file columns to lessons ---
     try:

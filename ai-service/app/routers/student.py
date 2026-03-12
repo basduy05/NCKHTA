@@ -3,7 +3,23 @@ from ..database import get_db
 from ..services import auth_service, llm_service, graph_service, file_service
 from pydantic import BaseModel
 from typing import Optional, List
-import json
+class VocabPracticeReq(BaseModel):
+    word_ids: List[int]
+
+class VocabPracticeComplete(BaseModel):
+    results: List[dict] # {word_id, correct}
+
+class GrammarPracticeReq(BaseModel):
+    rule_ids: List[int]
+    difficulty: str = "Medium"
+
+class ExamSaveReq(BaseModel):
+    test_type: str
+    title: str
+    exam_data: dict
+    score: Optional[int] = 0
+    max_score: Optional[int] = 0
+    completed: bool = False
 
 router = APIRouter(prefix="/student", tags=["Student"])
 
@@ -18,7 +34,7 @@ def _get_current_student(authorization: str = Header(...)):
         raise HTTPException(status_code=401, detail="Invalid or expired token")
 
     conn = get_db()
-    cursor = conn.execute("SELECT id, name, email, role FROM users WHERE id = ?", (payload["user_id"],))
+    cursor = conn.execute("SELECT id, name, email, role, credits_ai, points FROM users WHERE id = ?", (payload["user_id"],))
     user = cursor.fetchone()
     conn.close()
     if not user:
@@ -100,8 +116,19 @@ def student_stats(authorization: str = Header(...)):
     total_max = scores_row[2]
     avg_percent = round(total_score / total_max * 100, 1) if total_max > 0 else 0
 
-    # Pending (not yet submitted)
-    pending = assignments_total - submitted_count
+    # Vocabulary & Spaced Repetition
+    vocab_row = conn.execute(
+        "SELECT COUNT(*) FROM saved_vocabulary WHERE user_id = ?", (student["id"],)
+    ).fetchone()
+    vocab_count = vocab_row[0] if vocab_row else 0
+    
+    # Review needed: last_reviewed_at is null OR more than 24h ago
+    review_needed_row = conn.execute(
+        """SELECT COUNT(*) FROM saved_vocabulary 
+           WHERE user_id = ? AND (last_reviewed_at IS NULL OR datetime(last_reviewed_at, '+1 day') < CURRENT_TIMESTAMP)""",
+        (student["id"],)
+    ).fetchone()
+    review_needed_count = review_needed_row[0] if review_needed_row else 0
 
     conn.close()
     return {
@@ -112,7 +139,144 @@ def student_stats(authorization: str = Header(...)):
         "total_score": total_score,
         "total_max_score": total_max,
         "average_percent": avg_percent,
+        "vocab_count": vocab_count,
+        "review_needed": review_needed_count,
+        "points": student.get("points", 0),
+        "credits_ai": student.get("credits_ai", 0)
     }
+
+@router.get("/ranking")
+def get_ranking(authorization: str = Header(...)):
+    """Get global student leaderboard."""
+    _get_current_student(authorization) # Ensure auth
+    conn = get_db()
+    try:
+        cursor = conn.execute(
+            "SELECT name, points FROM users WHERE role = 'STUDENT' ORDER BY points DESC LIMIT 100"
+        )
+        ranking = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        return ranking
+    except Exception as e:
+        if conn: conn.close()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/vocabulary/practice")
+async def start_vocab_practice(req: VocabPracticeReq, authorization: str = Header(...)):
+    student = _get_current_student(authorization)
+    conn = get_db()
+    try:
+        # Fetch words from database
+        placeholders = ', '.join(['?'] * len(req.word_ids))
+        cursor = conn.execute(
+            f"SELECT word, meaning_en, meaning_vn FROM saved_vocabulary WHERE user_id = ? AND id IN ({placeholders})",
+            (student["id"], *req.word_ids)
+        )
+        words = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        
+        if not words:
+            raise HTTPException(status_code=404, detail="No words found")
+            
+        # Generate rich practice using AI
+        questions = await llm_service.generate_vocab_practice_rich(words)
+        return {"questions": questions}
+    except Exception as e:
+        if conn: conn.close()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/vocabulary/practice/complete")
+async def complete_vocab_practice(req: VocabPracticeComplete, authorization: str = Header(...)):
+    student = _get_current_student(authorization)
+    conn = get_db()
+    try:
+        points_earned = 0
+        for res in req.results:
+            word_id = res.get("word_id")
+            correct = res.get("correct", False)
+            if word_id:
+                # Update SR metadata
+                if correct:
+                    conn.execute(
+                        "UPDATE saved_vocabulary SET last_reviewed_at = CURRENT_TIMESTAMP, review_count = review_count + 1 WHERE id = ?",
+                        (word_id,)
+                    )
+                    points_earned += 10
+                else:
+                    # Reset or decay review count on failure? For now just update time
+                    conn.execute(
+                        "UPDATE saved_vocabulary SET last_reviewed_at = CURRENT_TIMESTAMP WHERE id = ?",
+                        (word_id,)
+                    )
+        
+        # Award points
+        conn.execute("UPDATE users SET points = points + ? WHERE id = ?", (points_earned, student["id"]))
+        conn.commit()
+        conn.close()
+        return {"message": "Practice results saved", "points_earned": points_earned}
+    except Exception as e:
+        if conn: conn.close()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/grammar/practice")
+async def start_grammar_practice(req: GrammarPracticeReq, authorization: str = Header(...)):
+    student = _get_current_student(authorization)
+    conn = get_db()
+    try:
+        placeholders = ', '.join(['?'] * len(req.rule_ids))
+        cursor = conn.execute(
+            f"SELECT name FROM grammar_rules WHERE id IN ({placeholders})",
+            tuple(req.rule_ids)
+        )
+        rule_names = [row["name"] for row in cursor.fetchall()]
+        conn.close()
+        
+        if not rule_names:
+            raise HTTPException(status_code=404, detail="Rules not found")
+            
+        questions = await llm_service.generate_grammar_practice(rule_names, req.difficulty)
+        return {"questions": questions}
+    except Exception as e:
+        if conn: conn.close()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/exams/save")
+def save_exam(req: ExamSaveReq, authorization: str = Header(...)):
+    student = _get_current_student(authorization)
+    conn = get_db()
+    try:
+        exam_data_json = json.dumps(req.exam_data)
+        conn.execute(
+            """INSERT INTO generated_exams (user_id, test_type, title, exam_data, score, max_score, completed)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (student["id"], req.test_type, req.title, exam_data_json, req.score, req.max_score, 1 if req.completed else 0)
+        )
+        # Award points for finishing an exam
+        if req.completed:
+            conn.execute("UPDATE users SET points = points + 50 WHERE id = ?", (student["id"],))
+            
+        conn.commit()
+        conn.close()
+        return {"message": "Exam saved successfully"}
+    except Exception as e:
+        if conn: conn.close()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/exams")
+def list_exams(authorization: str = Header(...)):
+    student = _get_current_student(authorization)
+    conn = get_db()
+    try:
+        cursor = conn.execute(
+            "SELECT id, test_type, title, score, max_score, completed, created_at FROM generated_exams WHERE user_id = ? ORDER BY created_at DESC",
+            (student["id"],)
+        )
+        exams = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        return exams
+    except Exception as e:
+        if conn: conn.close()
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ─── MY CLASSES ───────────────────────────────────────────────────────────────

@@ -6,7 +6,7 @@ import {
   BookOpen, Sparkles, BrainCircuit, Trophy, PlayCircle, CheckCircle2, XCircle,
   GraduationCap, ClipboardList, BarChart3, FileText, ChevronRight, Clock,
   Award, TrendingUp, Layers, Search, BookMarked, Volume2, Save, Trash2,
-  ExternalLink, Star, Filter, X, ArrowRight, Bookmark, Network, Mic, Upload, Brain, Headphones, Edit3, Terminal, AlertCircle, BookText
+  ExternalLink, Star, Filter, X, ArrowRight, Bookmark, Network, Mic, Upload, Brain, Headphones, Edit3, Terminal, AlertCircle, BookText, Lightbulb
 } from "lucide-react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://iedu-ksk7.onrender.com";
@@ -52,8 +52,17 @@ function StudentDashboardContent() {
           {activeTab === "scores" && "Kết quả học tập"}
           {activeTab === "ipa" && "Luyện phát âm IPA"}
           {activeTab === "practice" && "Luyện thi"}
+          {activeTab === "ranking" && "Bảng xếp hạng toàn cầu"}
         </h1>
-        <p className="text-sm text-gray-500">Xin chào, <span className="font-semibold text-blue-600">{user?.name}</span></p>
+        <div className="flex items-center gap-4">
+          <div className="hidden md:flex items-center gap-1.5 bg-yellow-50 text-yellow-700 px-3 py-1 rounded-full border border-yellow-100 font-bold text-sm">
+             <Trophy size={14} className="text-yellow-500" /> {user?.points || 0} pts
+          </div>
+          <div className="hidden md:flex items-center gap-1.5 bg-indigo-50 text-indigo-700 px-3 py-1 rounded-full border border-indigo-100 font-bold text-sm">
+             <Sparkles size={14} className="text-indigo-500" /> {user?.credits_ai || 0} credits
+          </div>
+          <p className="text-sm text-gray-500">Xin chào, <span className="font-semibold text-blue-600">{user?.name}</span></p>
+        </div>
       </div>
 
       {activeTab === "overview" && <OverviewTab token={token} user={user} />}
@@ -66,6 +75,7 @@ function StudentDashboardContent() {
       {activeTab === "scores" && <ScoresTab token={token} />}
       {activeTab === "ipa" && <IpaTab token={token} />}
       {activeTab === "practice" && <PracticeTab token={token} />}
+      {activeTab === "ranking" && <RankingTab token={token} />}
     </div>
   );
 }
@@ -96,10 +106,10 @@ function OverviewTab({ token, user }: { token: string | null; user: any }) {
   if (loading) return <div className="flex justify-center py-20"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" /></div>;
 
   const cards = [
-    { label: "Lớp đã tham gia", value: stats?.classes_enrolled ?? 0, icon: GraduationCap, color: "blue" },
-    { label: "Bài tập đã giao", value: stats?.assignments_total ?? 0, icon: ClipboardList, color: "purple" },
-    { label: "Đã nộp bài", value: stats?.assignments_submitted ?? 0, icon: CheckCircle2, color: "green" },
-    { label: "Chưa làm", value: stats?.assignments_pending ?? 0, icon: Clock, color: "orange" },
+    { label: "Lớp học", value: stats?.classes_enrolled ?? 0, icon: GraduationCap, color: "blue" },
+    { label: "Bài cần làm", value: stats?.assignments_pending ?? 0, icon: Clock, color: "orange" },
+    { label: "Từ vựng", value: stats?.vocab_count ?? 0, icon: BookMarked, color: "indigo" },
+    { label: "Cần ôn tập", value: stats?.review_needed ?? 0, icon: Layers, color: "purple" },
   ];
 
   return (
@@ -1292,7 +1302,6 @@ function DictionaryTab({ token }: { token: string | null }) {
   );
 }
 
-// ==================== VOCABULARY TAB ====================
 const VOCAB_CACHE_KEY = "iedu_vocab_cache";
 
 function VocabularyTab({ token }: { token: string | null }) {
@@ -1307,72 +1316,16 @@ function VocabularyTab({ token }: { token: string | null }) {
   // AI Practice states
   const [generatingPractice, setGeneratingPractice] = useState(false);
   const [practiceExercises, setPracticeExercises] = useState<any[]>([]);
-  const [currentExercise, setCurrentExercise] = useState<any>(null);
-  const [exerciseAnswers, setExerciseAnswers] = useState<Record<string, string>>({});
+  const [currentExerciseIdx, setCurrentExerciseIdx] = useState(0);
+  const [practiceResults, setPracticeResults] = useState<any[]>([]);
+  const [practiceAnswers, setPracticeAnswers] = useState<Record<number, string>>({});
   const [exerciseSubmitted, setExerciseSubmitted] = useState(false);
-  const [exerciseScore, setExerciseScore] = useState(0);
+  const [showHint, setShowHint] = useState(false);
 
-  // Debounce search input to prevent excessive API calls
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedSearch(search);
-    }, 300);
+    const timer = setTimeout(() => setDebouncedSearch(search), 300);
     return () => clearTimeout(timer);
   }, [search]);
-
-  // Save words to localStorage as backup
-  const cacheToLocal = (data: any[]) => {
-    try {
-      if (typeof window !== "undefined" && data.length > 0) {
-        localStorage.setItem(VOCAB_CACHE_KEY, JSON.stringify(data));
-      }
-    } catch { }
-  };
-
-  // Get cached words from localStorage
-  const getLocalCache = (): any[] => {
-    try {
-      if (typeof window !== "undefined") {
-        const cached = localStorage.getItem(VOCAB_CACHE_KEY);
-        if (cached) return JSON.parse(cached);
-      }
-    } catch { }
-    return [];
-  };
-
-  // Sync localStorage words back to server
-  const syncToServer = async (cachedWords: any[]) => {
-    if (!token || cachedWords.length === 0) return;
-    setSyncing(true);
-    try {
-      const payload = cachedWords.map((w: any) => ({
-        word: w.word,
-        phonetic: w.phonetic || "",
-        audio_url: w.audio_url || "",
-        pos: w.pos || "",
-        meaning_en: w.meaning_en || "",
-        meaning_vn: w.meaning_vn || "",
-        example: w.example || "",
-        level: w.level || "B1",
-        source: w.source || "dictionary",
-      }));
-      const res = await fetch(`${API_URL}/student/vocabulary/sync`, {
-        method: "POST",
-        headers: getAuthHeader(token),
-        body: JSON.stringify({ words: payload }),
-      });
-      if (res.ok) {
-        // Re-fetch to get server IDs
-        const res2 = await fetch(`${API_URL}/student/vocabulary`, { headers: getAuthHeader(token) });
-        if (res2.ok) {
-          const serverWords = await res2.json();
-          setWords(serverWords);
-          cacheToLocal(serverWords);
-        }
-      }
-    } catch (e) { console.error("[SYNC]", e); }
-    finally { setSyncing(false); }
-  };
 
   const fetchWords = useCallback(async () => {
     if (!token) return;
@@ -1383,19 +1336,7 @@ function VocabularyTab({ token }: { token: string | null }) {
       const res = await fetch(`${API_URL}/student/vocabulary?${params}`, { headers: getAuthHeader(token) });
       if (res.ok) {
         const serverWords = await res.json();
-        if (serverWords.length > 0) {
-          setWords(serverWords);
-          // Only cache full list (no filters)
-          if (!debouncedSearch && !levelFilter) cacheToLocal(serverWords);
-        } else if (!debouncedSearch && !levelFilter) {
-          // Server is empty — check localStorage backup
-          const cached = getLocalCache();
-          if (cached.length > 0) {
-            setWords(cached);
-            // Auto-sync cached words back to server
-            syncToServer(cached);
-          }
-        }
+        setWords(serverWords);
       }
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
@@ -1405,312 +1346,159 @@ function VocabularyTab({ token }: { token: string | null }) {
 
   const deleteWord = async (id: number) => {
     if (!confirm("Xóa từ này khỏi kho từ vựng?")) return;
-    console.log("[DEBUG] Starting delete word operation");
-    const startTime = Date.now();
     setDeleting(id);
     try {
-      const res = await fetch(`${API_URL}/student/vocabulary/${id}`, {
-        method: "DELETE", headers: getAuthHeader(token)
-      });
-      if (res.ok) {
-        console.log(`[DEBUG] Delete word successful in ${Date.now() - startTime}ms`);
-        const updated = words.filter(w => w.id !== id);
-        setWords(updated);
-        cacheToLocal(updated);
-      } else {
-        console.error(`[DEBUG] Delete word failed with status ${res.status}: ${await res.text()}`);
-        alert("Lỗi khi xóa từ");
-      }
-    } catch (e) {
-      console.error(`[DEBUG] Delete word error in ${Date.now() - startTime}ms:`, e);
-      alert("Lỗi kết nối khi xóa từ");
-    }
+      const res = await fetch(`${API_URL}/student/vocabulary/${id}`, { method: "DELETE", headers: getAuthHeader(token) });
+      if (res.ok) setWords(words.filter(w => w.id !== id));
+    } catch (e) { console.error(e); }
     finally { setDeleting(null); }
   };
 
   const speak = (text: string, audio_url?: string) => {
     if (audio_url) {
-      const audio = new Audio(audio_url);
-      audio.play().catch(e => console.error("Audio playback error:", e));
+      new Audio(audio_url).play().catch(() => {});
       return;
     }
     if (typeof window !== "undefined" && window.speechSynthesis) {
-      window.speechSynthesis.cancel();
-      const u = new SpeechSynthesisUtterance(text);
-      u.lang = "en-US";
-      u.rate = 0.85;
-      window.speechSynthesis.speak(u);
+        window.speechSynthesis.cancel();
+        const u = new SpeechSynthesisUtterance(text);
+        u.lang = "en-US";
+        u.rate = 0.85;
+        window.speechSynthesis.speak(u);
+    }
+  };
+
+  const startRichPractice = async () => {
+    setGeneratingPractice(true);
+    try {
+      const res = await fetch(`${API_URL}/student/vocabulary/practice`, {
+        method: "POST",
+        headers: getAuthHeader(token),
+        body: JSON.stringify({ word_ids: [] }) // Empty means SR-based
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setPracticeExercises(data.questions || []);
+        setCurrentExerciseIdx(0);
+        setPracticeResults([]);
+        setPracticeAnswers({});
+        setExerciseSubmitted(false);
+        setShowHint(false);
+      }
+    } catch (e) { alert("Lỗi khi chuẩn bị bài tập"); }
+    finally { setGeneratingPractice(false); }
+  };
+
+  const submitCurrentExercise = () => {
+    const ex = practiceExercises[currentExerciseIdx];
+    const ans = practiceAnswers[currentExerciseIdx] || "";
+    const isCorrect = ans.toLowerCase().trim() === ex.answer.toLowerCase().trim();
+    
+    setPracticeResults(prev => [...prev, { word_id: ex.word_id, correct: isCorrect }]);
+    setExerciseSubmitted(true);
+  };
+
+  const nextExercise = async () => {
+    if (currentExerciseIdx < practiceExercises.length - 1) {
+      setCurrentExerciseIdx(prev => prev + 1);
+      setExerciseSubmitted(false);
+      setShowHint(false);
+    } else {
+      // Completed!
+      try {
+        await fetch(`${API_URL}/student/vocabulary/practice-completion`, {
+          method: "POST",
+          headers: getAuthHeader(token),
+          body: JSON.stringify({ results: practiceResults })
+        });
+        alert(`Hoàn thành! Bạn đúng ${practiceResults.filter(r => r.correct).length}/${practiceExercises.length}.`);
+        setPracticeExercises([]);
+        fetchWords(); // Refresh SR metadata
+      } catch (e) { alert("Lỗi khi lưu kết quả"); }
     }
   };
 
   const levels = ["A1", "A2", "B1", "B2", "C1", "C2"];
-
-  // Generate AI practice exercises from saved vocabulary
-  const generatePracticeExercises = async () => {
-    if (words.length === 0) {
-      alert("Bạn cần lưu ít nhất một từ vựng trước khi tạo bài tập!");
-      return;
-    }
-
-    setGeneratingPractice(true);
-    try {
-      // Select words based on spaced repetition (prioritize words that need review)
-      const now = Date.now();
-      const eligibleWords = words.filter(w => {
-        const daysSinceLastReview = w.last_reviewed_at ?
-          (now - new Date(w.last_reviewed_at).getTime()) / (1000 * 60 * 60 * 24) : 30;
-        const reviewInterval = w.review_count || 0;
-        return daysSinceLastReview >= Math.min(reviewInterval + 1, 7); // Max 7 days
-      });
-
-      // If no words need review, use recent words
-      const selectedWords = eligibleWords.length >= 5 ? eligibleWords.slice(0, 10) :
-                           words.slice(0, Math.min(10, words.length));
-
-      const exercises = [];
-      const usedWords = new Set();
-
-      // Generate different types of exercises
-      for (let i = 0; i < Math.min(5, selectedWords.length); i++) {
-        const word = selectedWords[i];
-        if (usedWords.has(word.word)) continue;
-        usedWords.add(word.word);
-
-        // Random exercise type
-        const exerciseTypes = ['spelling', 'fill_blank', 'multiple_choice', 'matching'];
-        const exerciseType = exerciseTypes[Math.floor(Math.random() * exerciseTypes.length)];
-
-        let exercise;
-        switch (exerciseType) {
-          case 'spelling':
-            exercise = {
-              id: `ex_${i}`,
-              type: 'spelling',
-              word: word.word,
-              instruction: `Gõ chính xác từ: "${word.meaning_vn}"`,
-              correct_answer: word.word.toLowerCase(),
-              hint: word.phonetic || ''
-            };
-            break;
-
-          case 'fill_blank':
-            const sentence = word.example || `${word.word} is a ${word.pos || 'noun'}.`;
-            const blankSentence = sentence.replace(new RegExp(word.word, 'gi'), '_____');
-            exercise = {
-              id: `ex_${i}`,
-              type: 'fill_blank',
-              sentence: blankSentence,
-              instruction: 'Điền từ thích hợp vào chỗ trống',
-              correct_answer: word.word.toLowerCase(),
-              meaning: word.meaning_vn
-            };
-            break;
-
-          case 'multiple_choice':
-            // Generate 3 wrong options
-            const wrongOptions = [];
-            const otherWords = words.filter(w => w.id !== word.id);
-            for (let j = 0; j < 3 && j < otherWords.length; j++) {
-              wrongOptions.push(otherWords[j].word);
-            }
-            const options = [word.word, ...wrongOptions].sort(() => Math.random() - 0.5);
-
-            exercise = {
-              id: `ex_${i}`,
-              type: 'multiple_choice',
-              question: `Từ nào có nghĩa là: "${word.meaning_vn}"?`,
-              options: options,
-              correct_answer: word.word
-            };
-            break;
-
-          case 'matching':
-            // Create matching pairs
-            const matchWords = selectedWords.slice(i, i + 4);
-            const definitions = matchWords.map(w => w.meaning_vn);
-            const shuffledWords = [...matchWords].sort(() => Math.random() - 0.5);
-
-            exercise = {
-              id: `ex_${i}`,
-              type: 'matching',
-              instruction: 'Nối từ với định nghĩa đúng',
-              words: shuffledWords.map(w => w.word),
-              definitions: definitions,
-              correct_matches: matchWords.reduce((acc, w, idx) => {
-                acc[w.word] = w.meaning_vn;
-                return acc;
-              }, {} as Record<string, string>)
-            };
-            break;
-        }
-
-        exercises.push(exercise);
-      }
-
-      setPracticeExercises(exercises);
-      setCurrentExercise(exercises[0]);
-      setExerciseAnswers({});
-      setExerciseSubmitted(false);
-      setExerciseScore(0);
-
-    } catch (error) {
-      console.error('Error generating practice exercises:', error);
-      alert('Lỗi khi tạo bài tập. Vui lòng thử lại!');
-    } finally {
-      setGeneratingPractice(false);
-    }
-  };
-
-  const submitExercise = () => {
-    if (!currentExercise) return;
-
-    let isCorrect = false;
-    const userAnswer = exerciseAnswers[currentExercise.id] || '';
-
-    switch (currentExercise.type) {
-      case 'spelling':
-      case 'fill_blank':
-        isCorrect = userAnswer.toLowerCase().trim() === currentExercise.correct_answer.toLowerCase();
-        break;
-      case 'multiple_choice':
-        isCorrect = userAnswer === currentExercise.correct_answer;
-        break;
-      case 'matching':
-        // Check if all matches are correct
-        const correctMatches = currentExercise.correct_matches;
-        isCorrect = Object.keys(correctMatches).every(word =>
-          exerciseAnswers[`${currentExercise.id}_${word}`] === correctMatches[word]
-        );
-        break;
-    }
-
-    if (isCorrect) {
-      setExerciseScore(prev => prev + 1);
-    }
-
-    setExerciseSubmitted(true);
-  };
-
-  const nextExercise = () => {
-    const currentIndex = practiceExercises.findIndex(ex => ex.id === currentExercise.id);
-    if (currentIndex < practiceExercises.length - 1) {
-      const nextEx = practiceExercises[currentIndex + 1];
-      setCurrentExercise(nextEx);
-      setExerciseAnswers({});
-      setExerciseSubmitted(false);
-    }
-  };
+  const currentEx = practiceExercises[currentExerciseIdx];
 
   if (loading) return <div className="flex justify-center py-20"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" /></div>;
 
   return (
-    <div className="space-y-6">
-      {/* Credit Display */}
-      <div className="bg-gradient-to-r from-amber-50 to-orange-50 p-4 rounded-xl border border-amber-200 shadow-sm">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center">
-              <Star size={20} className="text-amber-600" />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-amber-800">Credits AI</p>
-              <p className="text-xs text-amber-600">Số credits còn lại để sử dụng AI</p>
-            </div>
-          </div>
-          <div className="text-right">
-            <p className="text-2xl font-bold text-amber-800">∞</p>
-            <p className="text-xs text-amber-600">Không giới hạn</p>
-          </div>
-        </div>
-      </div>
-
+    <div className="space-y-6 animate-in fade-in duration-300">
       {/* Stats + filters */}
-      <div className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm">
-        <div className="flex items-center justify-between flex-wrap gap-3">
-          <div className="flex items-center gap-4">
-            <div className="bg-blue-50 text-blue-600 px-4 py-2 rounded-xl font-bold">
-              <BookMarked size={18} className="inline mr-1" /> {words.length} từ đã lưu
+      <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex flex-col md:flex-row justify-between items-center gap-4">
+        <div className="flex items-center gap-4">
+            <div className="bg-blue-50 text-blue-600 px-4 py-2 rounded-xl font-bold flex items-center gap-2">
+              <BookMarked size={18} /> {words.length} từ đã lưu
             </div>
-            {/* Level distribution */}
-            <div className="hidden md:flex items-center gap-1">
+            <div className="hidden lg:flex items-center gap-1">
               {levels.map(l => {
                 const count = words.filter(w => w.level === l).length;
                 if (count === 0) return null;
-                const colors: Record<string, string> = { A1: "bg-green-100 text-green-700", A2: "bg-green-100 text-green-700", B1: "bg-blue-100 text-blue-700", B2: "bg-blue-100 text-blue-700", C1: "bg-purple-100 text-purple-700", C2: "bg-purple-100 text-purple-700" };
-                return <span key={l} className={`text-xs px-2 py-0.5 rounded-full font-bold ${colors[l]}`}>{l}: {count}</span>;
+                return <span key={l} className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-gray-100 text-gray-600">{l}:{count}</span>;
               })}
             </div>
+        </div>
+        
+        <div className="flex items-center gap-3 w-full md:w-auto">
+          <div className="relative flex-1">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              type="text" placeholder="Tìm từ vựng..."
+              className="pl-9 pr-3 py-2 border border-gray-200 rounded-xl text-sm outline-none w-full md:w-48 focus:ring-2 focus:ring-blue-500/20"
+              value={search} onChange={(e) => setSearch(e.target.value)}
+            />
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={generatePracticeExercises}
-              disabled={generatingPractice || words.length === 0}
-              className="bg-indigo-600 text-white px-4 py-2 rounded-xl font-bold text-sm flex items-center gap-2 hover:bg-indigo-700 disabled:opacity-50 transition shadow-sm mr-2"
-            >
-              {generatingPractice ? <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" /> : <PlayCircle size={18} />}
-              Luyện tập {words.length > 0 && `(${words.length})`}
-            </button>
-            <div className="relative">
-              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Tìm từ vựng..."
-                className="pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 outline-none w-48"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-            </div>
-            <select
-              value={levelFilter}
-              onChange={(e) => setLevelFilter(e.target.value)}
-              className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 outline-none"
-            >
-              <option value="">Tất cả level</option>
-              {levels.map(l => <option key={l} value={l}>{l}</option>)}
-            </select>
-          </div>
+          <button
+            onClick={startRichPractice}
+            disabled={generatingPractice || words.length === 0}
+            className="btn-primary py-2 px-6 rounded-xl font-bold text-sm flex items-center gap-2 shadow-sm whitespace-nowrap disabled:opacity-50"
+          >
+            {generatingPractice ? <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" /> : <PlayCircle size={18} />}
+            Luyện tập SR
+          </button>
         </div>
       </div>
 
-      {/* Word list */}
+      {/* Word list with SR Badges */}
       {words.length === 0 ? (
-        <div className="bg-white rounded-xl p-12 border border-gray-100 text-center">
-          <BookMarked size={48} className="mx-auto text-gray-300 mb-4" />
-          <h3 className="text-lg font-bold text-gray-700 mb-2">{search || levelFilter ? "Không tìm thấy từ phù hợp" : "Chưa lưu từ vựng nào"}</h3>
-          <p className="text-gray-500">Tra từ điển hoặc phân tích văn bản để lưu từ mới.</p>
+        <div className="bg-white rounded-2xl p-12 border border-gray-100 text-center">
+          <BookMarked size={48} className="mx-auto text-gray-200 mb-4" />
+          <h3 className="text-lg font-bold text-gray-700">Chưa có từ vựng nào</h3>
+          <p className="text-gray-500 text-sm">Tra từ điển để lưu từ mới vào kho.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {words.map((w) => {
-            const levelColors: Record<string, string> = { A1: "bg-green-100 text-green-700", A2: "bg-green-50 text-green-600", B1: "bg-blue-100 text-blue-700", B2: "bg-blue-50 text-blue-600", C1: "bg-purple-100 text-purple-700", C2: "bg-purple-50 text-purple-600" };
+            const isDue = w.next_review ? new Date(w.next_review) <= new Date() : true;
             return (
-              <div key={w.id} className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 hover:shadow-md transition group">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <h3 className="text-lg font-extrabold text-blue-700">{w.word}</h3>
-                      <button onClick={() => speak(w.word, w.audio_url)} className="text-gray-400 hover:text-blue-600 transition"><Volume2 size={16} /></button>
-                      {w.pos && <span className="text-xs text-purple-600 bg-purple-50 px-2 py-0.5 rounded">{w.pos}</span>}
-                      <span className={`text-xs px-2 py-0.5 rounded font-bold ${levelColors[w.level] || "bg-gray-100 text-gray-600"}`}>{w.level}</span>
+              <div key={w.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 hover:shadow-md transition group relative overflow-hidden">
+                {isDue && <div className="absolute top-0 right-0 bg-orange-500 text-white text-[10px] px-2 py-0.5 font-bold rounded-bl-lg">CẦN ÔN TẬP</div>}
+                <div className="flex items-start justify-between mb-3">
+                  <div>
+                    <h3 className="text-lg font-extrabold text-blue-800">{w.word}</h3>
+                    <div className="flex items-center gap-2 mt-1">
+                        <span className="text-[10px] px-2 py-0.5 rounded-md bg-purple-50 text-purple-600 font-bold uppercase">{w.pos || 'N/A'}</span>
+                        <span className="text-[10px] px-2 py-0.5 rounded-md bg-blue-50 text-blue-600 font-bold">{w.level || 'B1'}</span>
                     </div>
-                    {w.phonetic && <p className="text-gray-400 text-sm font-mono mb-1">{w.phonetic}</p>}
-                    {w.meaning_vn && <p className="text-gray-800 font-medium">{w.meaning_vn}</p>}
-                    {w.meaning_en && <p className="text-gray-500 text-sm mt-0.5">{w.meaning_en}</p>}
-                    {w.example && <p className="text-gray-400 text-sm italic mt-1.5 border-l-2 border-gray-200 pl-2">{w.example}</p>}
                   </div>
-                  <div className="flex flex-col items-end gap-2 ml-3">
-                    <span className="text-xs text-gray-400">{w.source}</span>
-                    <button
-                      onClick={() => deleteWord(w.id)}
-                      disabled={deleting === w.id}
-                      className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-600 transition p-1 rounded"
-                      title="Xóa từ"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
+                  <button onClick={() => speak(w.word, w.audio_url)} className="p-2 rounded-full hover:bg-blue-50 text-gray-400 hover:text-blue-600 transition"><Volume2 size={18} /></button>
                 </div>
-                <div className="text-xs text-gray-300 mt-2">{new Date(w.created_at).toLocaleDateString("vi-VN")}</div>
+                
+                <p className="text-gray-800 font-medium line-clamp-2 mb-2">{w.meaning_vn}</p>
+                {w.example && <p className="text-gray-500 text-xs italic line-clamp-2 border-l-2 border-gray-200 pl-2">{w.example}</p>}
+                
+                <div className="mt-4 pt-4 border-t border-gray-50 flex justify-between items-center text-[10px] text-gray-400">
+                    <div className="flex gap-2">
+                        <span>Đã thuộc: {Math.min(w.review_count || 0, 5)}/5</span>
+                        <div className="flex gap-0.5 items-center">
+                            {[1,2,3,4,5].map(step => (
+                                <div key={step} className={`w-1.5 h-1.5 rounded-full ${step <= (w.review_count || 0) ? 'bg-green-500' : 'bg-gray-200'}`} />
+                            ))}
+                        </div>
+                    </div>
+                    <button onClick={() => deleteWord(w.id)} className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 transition"><Trash2 size={14} /></button>
+                </div>
               </div>
             );
           })}
@@ -1718,128 +1506,104 @@ function VocabularyTab({ token }: { token: string | null }) {
       )}
 
       {/* Practice Exercise UI Overlay */}
-      {practiceExercises.length > 0 && currentExercise && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in zoom-in-95 duration-200">
-            <div className="bg-blue-600 p-4 text-white flex justify-between items-center">
-              <h3 className="font-bold flex items-center gap-2">
-                <Brain size={20} /> Luyện tập từ vựng ({practiceExercises.indexOf(currentExercise) + 1}/{practiceExercises.length})
-              </h3>
-              <button onClick={() => setPracticeExercises([])} className="hover:bg-white/20 p-1 rounded-lg transition"><X size={20} /></button>
+      {practiceExercises.length > 0 && currentEx && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/80 backdrop-blur-md p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in zoom-in-95 duration-200 my-auto">
+            <div className="bg-gradient-to-r from-blue-600 to-indigo-700 p-6 text-white flex justify-between items-center">
+              <div>
+                <p className="text-xs opacity-80 font-bold uppercase tracking-widest mb-1">Cấp độ: {currentEx.level || 'B1'}</p>
+                <h3 className="font-extrabold text-xl flex items-center gap-2 underline decoration-blue-400 underline-offset-4 decoration-2">
+                  <Brain size={24} /> Câu hỏi {currentExerciseIdx + 1}/{practiceExercises.length}
+                </h3>
+              </div>
+              <button onClick={() => setPracticeExercises([])} className="bg-white/10 hover:bg-white/20 p-2 rounded-xl transition"><X size={24} /></button>
             </div>
             
             <div className="p-8">
-              <div className="mb-6">
-                <p className="text-gray-500 text-sm mb-1 uppercase font-bold tracking-wider">{currentExercise.instruction || "Câu hỏi"}</p>
-                {currentExercise.type === 'multiple_choice' && <h4 className="text-xl font-bold text-gray-900">{currentExercise.question}</h4>}
-                {currentExercise.type === 'spelling' && <h4 className="text-2xl font-extrabold text-blue-700">{currentExercise.hint}</h4>}
-                {currentExercise.type === 'fill_blank' && (
-                  <div className="text-lg font-medium text-gray-800 bg-gray-50 p-4 rounded-xl border border-gray-100">
-                    <p className="italic">"{currentExercise.sentence}"</p>
-                    <p className="text-sm text-gray-500 mt-2">Nghĩa: {currentExercise.meaning}</p>
+              <div className="mb-8">
+                <p className="text-gray-400 text-sm font-bold uppercase mb-3 flex items-center gap-2">
+                    <Sparkles size={16} className="text-yellow-500" /> AI Instruction
+                </p>
+                <h4 className="text-2xl font-black text-gray-900 leading-tight mb-4">{currentEx.question}</h4>
+                
+                {currentEx.type === 'fill_blank' && (
+                  <div className="bg-gray-50 p-5 rounded-2xl border border-gray-100 italic text-gray-700 border-l-4 border-l-blue-500">
+                    "{currentEx.context}"
                   </div>
                 )}
-                {currentExercise.type === 'matching' && <h4 className="text-lg font-bold text-gray-900">Nối từ với định nghĩa đúng:</h4>}
               </div>
 
-              {/* Interaction logic */}
               <div className="space-y-4">
-                {(currentExercise.type === 'spelling' || currentExercise.type === 'fill_blank') && (
-                  <input
-                    autoFocus
-                    type="text"
-                    value={exerciseAnswers[currentExercise.id] || ""}
-                    onChange={e => setExerciseAnswers({ ...exerciseAnswers, [currentExercise.id]: e.target.value })}
-                    onKeyDown={e => { if (e.key === 'Enter' && !exerciseSubmitted) submitExercise(); }}
-                    placeholder="Gõ câu trả lời..."
-                    className={`w-full text-xl p-4 border-2 rounded-xl outline-none transition-all ${exerciseSubmitted ? (exerciseAnswers[currentExercise.id]?.toLowerCase().trim() === currentExercise.correct_answer.toLowerCase() ? "border-green-500 bg-green-50" : "border-red-500 bg-red-50") : "border-gray-200 focus:border-blue-500"}`}
-                    disabled={exerciseSubmitted}
-                  />
-                )}
-
-                {currentExercise.type === 'multiple_choice' && (
-                  <div className="grid grid-cols-1 gap-2">
-                    {currentExercise.options.map((opt: string, i: number) => {
-                      const isSelected = exerciseAnswers[currentExercise.id] === opt;
-                      const isCorrect = opt === currentExercise.correct_answer;
-                      let cls = "border-gray-100 hover:border-blue-300 hover:bg-gray-50";
+                {currentEx.options ? (
+                  <div className="grid grid-cols-1 gap-3">
+                    {currentEx.options.map((opt: string, i: number) => {
+                      const isSelected = practiceAnswers[currentExerciseIdx] === opt;
+                      const isCorrect = opt === currentEx.answer;
+                      let cls = "border-gray-100 bg-gray-50 hover:border-blue-300 hover:shadow-md";
                       if (exerciseSubmitted) {
-                        if (isCorrect) cls = "border-green-500 bg-green-50 text-green-700 font-bold";
+                        if (isCorrect) cls = "border-green-500 bg-green-50 text-green-700 ring-4 ring-green-500/10";
                         else if (isSelected) cls = "border-red-500 bg-red-50 text-red-700";
-                        else cls = "opacity-50 border-gray-100";
-                      } else if (isSelected) {
-                        cls = "border-blue-500 bg-blue-50 text-blue-700 font-bold shadow-sm";
-                      }
+                        else cls = "opacity-40 grayscale";
+                      } else if (isSelected) cls = "border-blue-600 bg-blue-50 text-blue-700 ring-4 ring-blue-500/10";
 
                       return (
-                        <button
-                          key={i}
-                          disabled={exerciseSubmitted}
-                          onClick={() => setExerciseAnswers({ ...exerciseAnswers, [currentExercise.id]: opt })}
-                          className={`p-4 rounded-xl border-2 text-left transition ${cls}`}
+                        <button key={i} disabled={exerciseSubmitted}
+                          onClick={() => setPracticeAnswers({ ...practiceAnswers, [currentExerciseIdx]: opt })}
+                          className={`p-5 rounded-2xl border-2 text-left transition-all duration-300 font-bold text-lg ${cls}`}
                         >
                           {opt}
                         </button>
                       );
                     })}
                   </div>
+                ) : (
+                  <div className="relative">
+                    <input
+                      autoFocus type="text"
+                      value={practiceAnswers[currentExerciseIdx] || ""}
+                      onChange={e => setPracticeAnswers({ ...practiceAnswers, [currentExerciseIdx]: e.target.value })}
+                      onKeyDown={e => { if (e.key === 'Enter' && !exerciseSubmitted) submitCurrentExercise(); }}
+                      placeholder="Gõ đáp án của bạn..."
+                      className={`w-full text-2xl p-6 border-2 rounded-2xl outline-none transition-all font-bold ${exerciseSubmitted ? (practiceAnswers[currentExerciseIdx]?.toLowerCase().trim() === currentEx.answer.toLowerCase() ? "border-green-500 bg-green-50 text-green-700" : "border-red-500 bg-red-50 text-red-700") : "border-gray-100 bg-gray-50 focus:border-blue-500 focus:bg-white focus:shadow-xl"}`}
+                      disabled={exerciseSubmitted}
+                    />
+                  </div>
                 )}
 
-                {currentExercise.type === 'matching' && (
-                  <div className="space-y-3">
-                    {currentExercise.words.map((w: string, i: number) => (
-                      <div key={i} className="flex items-center gap-3">
-                        <div className="w-1/3 bg-gray-100 p-3 rounded-lg font-bold text-gray-700">{w}</div>
-                        <select
-                          disabled={exerciseSubmitted}
-                          className={`flex-1 p-3 border-2 rounded-lg outline-none transition ${exerciseSubmitted ? (exerciseAnswers[`${currentExercise.id}_${w}`] === currentExercise.correct_matches[w] ? "border-green-500 bg-green-50" : "border-red-500 bg-red-50") : "border-gray-200 focus:border-blue-500"}`}
-                          value={exerciseAnswers[`${currentExercise.id}_${w}`] || ""}
-                          onChange={e => setExerciseAnswers({ ...exerciseAnswers, [`${currentExercise.id}_${w}`]: e.target.value })}
-                        >
-                          <option value="">Chọn định nghĩa...</option>
-                          {currentExercise.definitions.map((d: string, j: number) => <option key={j} value={d}>{d}</option>)}
-                        </select>
-                      </div>
-                    ))}
-                  </div>
+                {showHint && !exerciseSubmitted && (
+                    <div className="bg-yellow-50 p-4 rounded-xl border border-yellow-200 text-yellow-800 text-sm animate-in slide-in-from-top-2">
+                        <strong>Gợi ý từ AI:</strong> {currentEx.hint_vn || "Hãy nghĩ về nghĩa tiếng Việt của từ này."}
+                    </div>
                 )}
               </div>
 
               {exerciseSubmitted && (
-                <div className={`mt-6 p-4 rounded-xl flex items-center gap-3 ${
-                  (currentExercise.type === 'matching' ? 
-                    Object.keys(currentExercise.correct_matches).every(w => exerciseAnswers[`${currentExercise.id}_${w}`] === currentExercise.correct_matches[w]) :
-                    exerciseAnswers[currentExercise.id]?.toLowerCase().trim() === currentExercise.correct_answer.toLowerCase()) 
-                  ? "bg-green-50 text-green-700 border border-green-200" 
-                  : "bg-red-50 text-red-700 border border-red-200"
-                }`}>
-                  { (currentExercise.type === 'matching' ? 
-                    Object.keys(currentExercise.correct_matches).every(w => exerciseAnswers[`${currentExercise.id}_${w}`] === currentExercise.correct_matches[w]) :
-                    exerciseAnswers[currentExercise.id]?.toLowerCase().trim() === currentExercise.correct_answer.toLowerCase())
-                    ? <CheckCircle2 size={24} /> : <XCircle size={24} /> }
+                <div className={`mt-8 p-5 rounded-2xl flex items-center gap-4 animate-in slide-in-from-bottom-4 ${practiceAnswers[currentExerciseIdx]?.toLowerCase().trim() === currentEx.answer.toLowerCase() ? "bg-green-50 text-green-700 border border-green-200" : "bg-red-50 text-red-700 border border-red-200"}`}>
+                  <div className={`p-3 rounded-full ${practiceAnswers[currentExerciseIdx]?.toLowerCase().trim() === currentEx.answer.toLowerCase() ? 'bg-green-500' : 'bg-red-500'} text-white`}>
+                    {practiceAnswers[currentExerciseIdx]?.toLowerCase().trim() === currentEx.answer.toLowerCase() ? <CheckCircle2 size={32} /> : <X size={32} />}
+                  </div>
                   <div>
-                    <p className="font-bold">
-                      {(currentExercise.type === 'matching' ? 
-                        Object.keys(currentExercise.correct_matches).every(w => exerciseAnswers[`${currentExercise.id}_${w}`] === currentExercise.correct_matches[w]) :
-                        exerciseAnswers[currentExercise.id]?.toLowerCase().trim() === currentExercise.correct_answer.toLowerCase())
-                        ? "Chính xác!" : `Sai rồi. Đáp án đúng là: ${currentExercise.correct_answer}`}
-                    </p>
+                    <h5 className="font-black text-lg">{practiceAnswers[currentExerciseIdx]?.toLowerCase().trim() === currentEx.answer.toLowerCase() ? "Tuyệt vời!" : "Chưa chính xác!"}</h5>
+                    <p className="font-medium">Đáp án đúng: <span className="underline decoration-2">{currentEx.answer}</span></p>
+                    {currentEx.explanation_vn && <p className="text-sm mt-1 opacity-80">{currentEx.explanation_vn}</p>}
                   </div>
                 </div>
               )}
 
-              <div className="mt-8 flex justify-end gap-3">
+              <div className="mt-10 flex justify-between items-center">
                 {!exerciseSubmitted ? (
-                  <button onClick={submitExercise} className="btn-primary px-8 py-3 rounded-xl font-bold shadow-lg hover:shadow-xl transition transform active:scale-95">Kiểm tra</button>
+                    <>
+                        <button onClick={() => setShowHint(!showHint)} className="text-gray-400 hover:text-yellow-600 font-bold flex items-center gap-1 transition">
+                            <Lightbulb size={18} /> {showHint ? "Ẩn gợi ý" : "Xem gợi ý"}
+                        </button>
+                        <button onClick={submitCurrentExercise} disabled={!practiceAnswers[currentExerciseIdx]} className="btn-primary px-10 py-4 rounded-2xl font-black text-lg shadow-xl hover:shadow-2xl transition transform active:scale-95 disabled:opacity-50">
+                            KIỂM TRA
+                        </button>
+                    </>
                 ) : (
-                  practiceExercises.indexOf(currentExercise) < practiceExercises.length - 1 ? (
-                    <button onClick={nextExercise} className="bg-blue-600 text-white px-8 py-3 rounded-xl font-bold flex items-center gap-2 hover:bg-blue-700 transition shadow-lg">Tiếp theo <ArrowRight size={18} /></button>
-                  ) : (
-                    <button onClick={() => {
-                      alert(`Chúc mừng! Bạn đã hoàn thành bài tập với số điểm: ${exerciseScore}/${practiceExercises.length}`);
-                      setPracticeExercises([]);
-                    }} className="bg-green-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-green-700 transition shadow-lg">Hoàn thành</button>
-                  )
+                  <button onClick={nextExercise} className="ml-auto bg-gray-900 text-white px-10 py-4 rounded-2xl font-black text-lg flex items-center gap-2 hover:bg-black transition shadow-xl transform active:scale-95">
+                    {currentExerciseIdx < practiceExercises.length - 1 ? "TIẾP THEO" : "HOÀN THÀNH"} <ArrowRight size={24} />
+                  </button>
                 )}
               </div>
             </div>
@@ -2433,36 +2197,151 @@ function GrammarTab({ token }: { token: string | null }) {
     finally { setLoading(false); }
   };
 
+  const [selectedRules, setSelectedRules] = useState<number[]>([]);
+  const [difficulty, setDifficulty] = useState("Medium");
+  const [practicing, setPracticing] = useState(false);
+  const [questions, setQuestions] = useState<any[]>([]);
+  const [answers, setAnswers] = useState<Record<number, string>>({});
+  const [submitted, setSubmitted] = useState(false);
+  const [score, setScore] = useState(0);
+
+  const toggleRule = (id: number) => {
+    setSelectedRules(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  };
+
+  const startPractice = async () => {
+    if (selectedRules.length === 0) return alert("Chọn ít nhất 1 cấu trúc!");
+    setPracticing(true);
+    setSubmitted(false);
+    setAnswers({});
+    try {
+      const res = await fetch(`${API_URL}/student/grammar/practice`, {
+        method: "POST",
+        headers: getAuthHeader(token),
+        body: JSON.stringify({ rule_ids: selectedRules, difficulty })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setQuestions(data.questions || []);
+      }
+    } catch (e) { console.error(e); }
+  };
+
+  const submitPractice = () => {
+    let s = 0;
+    questions.forEach((q, i) => {
+        if (answers[i] === q.answer) s++;
+    });
+    setScore(s);
+    setSubmitted(true);
+  };
+
   useEffect(() => { fetchRules(); }, []);
+
+  if (practicing) {
+    return (
+      <div className="space-y-6 animate-in fade-in duration-300">
+        <div className="flex justify-between items-center">
+          <h2 className="text-xl font-bold">Luyện tập Ngữ pháp</h2>
+          <button onClick={() => setPracticing(false)} className="text-gray-500 hover:text-red-600">Thoát</button>
+        </div>
+        {questions.length === 0 ? <p className="text-center py-10">Đang chuẩn bị bài tập với AI...</p> : (
+            <div className="space-y-6">
+                {questions.map((q, i) => (
+                    <div key={i} className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
+                        <p className="font-bold mb-4">Câu {i+1}: {q.question}</p>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            {q.options?.map((opt, idx) => (
+                                <button key={idx} 
+                                    onClick={() => !submitted && setAnswers({...answers, [i]: opt})}
+                                    className={`p-3 rounded-lg border text-left transition ${answers[i] === opt ? 'bg-blue-50 border-blue-400' : 'bg-white hover:bg-gray-50'}`}
+                                >
+                                    {opt}
+                                </button>
+                            ))}
+                        </div>
+                        {submitted && (
+                            <div className={`mt-4 p-3 rounded-lg ${answers[i] === q.answer ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+                                <p className="font-bold">{answers[i] === q.answer ? 'Chính xác!' : `Sai rồi! Đáp án đúng: ${q.answer}`}</p>
+                                <p className="text-sm mt-1">{q.explanation_vn}</p>
+                            </div>
+                        )}
+                    </div>
+                ))}
+                {!submitted ? (
+                    <button onClick={submitPractice} className="w-full btn-primary py-3 rounded-xl font-bold">Nộp bài</button>
+                ) : (
+                    <div className="bg-blue-600 text-white p-8 rounded-2xl text-center shadow-lg">
+                        <Trophy size={48} className="mx-auto mb-4 text-yellow-300" />
+                        <h3 className="text-3xl font-extrabold mb-2">Kết quả: {score}/{questions.length}</h3>
+                        <p className="mb-6 opacity-90">Bạn đã hoàn thành bài luyện tập ngữ pháp với AI!</p>
+                        <button onClick={() => setPracticing(false)} className="bg-white text-blue-600 px-8 py-3 rounded-xl font-bold hover:bg-blue-50 transition">Quay lại Kho ngữ pháp</button>
+                    </div>
+                )}
+            </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="animate-in fade-in duration-300">
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 mb-6">
-        <h2 className="text-lg font-bold text-gray-900 mb-2 flex items-center"><BookText className="mr-2 text-teal-600" /> Kho Ngữ Pháp (Grammar Rules)</h2>
-        <p className="text-gray-500 text-sm">Học các cấu trúc ngữ pháp và xem các tài liệu do giáo viên chia sẻ.</p>
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 mb-6 flex flex-col md:flex-row justify-between items-center gap-4">
+        <div>
+            <h2 className="text-lg font-bold text-gray-900 mb-1 flex items-center"><BookText className="mr-2 text-teal-600" /> Kho Ngữ Pháp</h2>
+            <p className="text-gray-500 text-sm">Chọn cấu trúc để bắt đầu luyện tập thông minh với AI.</p>
+        </div>
+        <div className="flex items-center gap-3">
+            <select value={difficulty} onChange={e => setDifficulty(e.target.value)} className="bg-white border rounded-lg px-3 py-2 outline-none">
+                <option value="Easy">Dễ (A1-A2)</option>
+                <option value="Medium">Trung bình (B1-B2)</option>
+                <option value="Hard">Khó (C1-C2)</option>
+            </select>
+            <button 
+                onClick={startPractice}
+                disabled={selectedRules.length === 0}
+                className="btn-primary py-2 px-6 rounded-lg flex items-center gap-2 shadow-md hover:shadow-lg disabled:opacity-50 transition"
+            >
+                <Sparkles size={18} /> Học với AI
+            </button>
+        </div>
       </div>
 
       <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
-        <h3 className="font-bold mb-4">Danh sách Ngữ pháp</h3>
+        <h3 className="font-bold mb-4 flex justify-between items-center">
+            Danh sách Ngữ pháp
+            <span className="text-xs text-gray-400 font-normal">Đã chọn: {selectedRules.length}</span>
+        </h3>
         {loading ? <p className="text-gray-400 text-sm">Đang tải...</p> : rules.length === 0 ? <p className="text-gray-400 text-sm">Chưa có tài liệu ngữ pháp nào.</p> : (
-          <ul className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <ul className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {rules.map((r: any) => {
               const prefix = typeof window !== "undefined" && window.location.href.includes("/teacher") ? "teacher" : "student";
+              const isSelected = selectedRules.includes(r.id);
               return (
-                <li key={r.id} className="p-4 bg-gray-50 rounded-xl border border-gray-200 shadow-sm">
+                <li key={r.id} 
+                    onClick={() => toggleRule(r.id)}
+                    className={`p-5 rounded-2xl border cursor-pointer transition-all duration-300 ${isSelected ? 'border-teal-500 bg-teal-50 shadow-md ring-2 ring-teal-500/20 translate-y-[-2px]' : 'border-gray-100 bg-gray-50 hover:bg-white hover:shadow-sm'}`}
+                >
                   <div className="flex flex-col h-full justify-between">
                     <div>
-                      <h4 className="font-bold text-lg text-teal-700">{r.name}</h4>
-                      {r.description && <p className="text-sm text-gray-600 mt-2 whitespace-pre-wrap">{r.description}</p>}
+                      <div className="flex justify-between items-start mb-2">
+                          <h4 className={`font-bold text-lg ${isSelected ? 'text-teal-700' : 'text-gray-800'}`}>{r.name}</h4>
+                          <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${isSelected ? 'border-teal-500 bg-teal-500 text-white' : 'border-gray-300'}`}>
+                              {isSelected && <CheckCircle2 size={12} />}
+                          </div>
+                      </div>
+                      {r.description && <p className={`text-sm mt-2 line-clamp-3 ${isSelected ? 'text-teal-600' : 'text-gray-500'}`}>{r.description}</p>}
                     </div>
                     {r.file_name && (
-                      <div className="mt-4 pt-3 border-t border-gray-200">
+                      <div className="mt-4 pt-4 border-t border-gray-200/50 flex justify-between items-center">
                         <a href={`${API_URL}/${prefix}/grammar/${r.id}/file`} target="_blank" rel="noopener noreferrer"
-                          className="inline-flex items-center text-sm font-medium text-indigo-600 hover:text-indigo-800 bg-indigo-50 px-3 py-1.5 rounded-lg transition"
+                          onClick={(e) => e.stopPropagation()}
+                          className="inline-flex items-center text-sm font-medium text-indigo-600 hover:text-indigo-800 bg-white px-3 py-1.5 rounded-lg border border-indigo-100 transition"
                         >
-                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /><polyline points="10 9 9 9 8 9" /></svg>
+                          <FileText size={14} className="mr-2" />
                           {r.file_name}
                         </a>
+                        <ChevronRight size={16} className={isSelected ? 'text-teal-500' : 'text-gray-300'} />
                       </div>
                     )}
                   </div>
@@ -2473,5 +2352,42 @@ function GrammarTab({ token }: { token: string | null }) {
         )}
       </div>
     </div>
-  )
+  );
+}
+
+// ==================== RANKING TAB ====================
+function RankingTab({ token }: { token: string | null }) {
+  const [ranking, setRanking] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch(`${API_URL}/student/ranking`, { headers: getAuthHeader(token) });
+        if (res.ok) setRanking(await res.json());
+      } catch (e) { console.error(e); }
+      finally { setLoading(false); }
+    })();
+  }, [token]);
+
+  if (loading) return <div className="flex justify-center py-20"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" /></div>;
+
+  return (
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 animate-in fade-in zoom-in-95 duration-300">
+      <h2 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2"><Trophy className="text-yellow-500" /> Bảng xếp hạng toàn cầu</h2>
+      <div className="space-y-3">
+        {ranking.map((r, i) => (
+          <div key={i} className={`flex items-center justify-between p-4 rounded-xl border ${i === 0 ? 'bg-yellow-50 border-yellow-200' : i === 1 ? 'bg-gray-50 border-gray-200' : i === 2 ? 'bg-orange-50 border-orange-200' : 'bg-white border-gray-50'}`}>
+            <div className="flex items-center gap-4">
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${i === 0 ? 'bg-yellow-400 text-white' : i === 1 ? 'bg-gray-300 text-white' : i === 2 ? 'bg-orange-400 text-white' : 'bg-gray-100 text-gray-500'}`}>
+                {i + 1}
+              </div>
+              <p className="font-bold text-gray-800">{r.name}</p>
+            </div>
+            <p className="font-extrabold text-blue-600">{r.points} pts</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }

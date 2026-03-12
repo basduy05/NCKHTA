@@ -125,7 +125,7 @@ function UsersTab() {
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState<number | null>(null);
-  const [formUser, setFormUser] = useState({ name: "", email: "", role: "STUDENT", password: "" });
+  const [formUser, setFormUser] = useState({ name: "", email: "", role: "STUDENT", password: "", credits_ai: 50, points: 0 });
 
   const fetchUsers = async () => {
     if (!token) return;
@@ -138,6 +138,32 @@ function UsersTab() {
       console.error(err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const [bulkCredits, setBulkCredits] = useState(50);
+  const [bulkRole, setBulkRole] = useState("STUDENT");
+  const [bulkLoading, setBulkLoading] = useState(false);
+
+  const handleBulkUpdate = async () => {
+    if (!token) return;
+    if (!confirm(`Cập nhật ${bulkCredits} AI Credits cho TẤT CẢ ${bulkRole}?`)) return;
+    setBulkLoading(true);
+    try {
+      const res = await authFetch(`${API_URL}/admin/bulk-update-credits`, {
+        method: "POST",
+        body: JSON.stringify({ credits: bulkCredits, role: bulkRole })
+      }, token);
+      if (res.ok) {
+        alert("Cập nhật hàng loạt thành công!");
+        fetchUsers();
+      } else {
+        alert("Lỗi khi cập nhật hàng loạt");
+      }
+    } catch (err) {
+      alert("Lỗi kết nối");
+    } finally {
+      setBulkLoading(false);
     }
   };
 
@@ -182,12 +208,12 @@ function UsersTab() {
 
   const handleEditClick = (u) => {
     setIsEditing(u.id);
-    setFormUser({ name: u.name, email: u.email, role: u.role, password: '' });
+    setFormUser({ name: u.name, email: u.email, role: u.role, password: '', credits_ai: u.credits_ai || 0, points: u.points || 0 });
   }
 
   const resetForm = () => {
     setIsEditing(null);
-    setFormUser({ name: '', email: '', role: 'STUDENT', password: '' });
+    setFormUser({ name: '', email: '', role: 'STUDENT', password: '', credits_ai: 50, points: 0 });
   }
 
   return (
@@ -202,7 +228,9 @@ function UsersTab() {
                   <th className="pb-3 font-medium">Họ Tên</th>
                   <th className="pb-3 font-medium">Email</th>
                   <th className="pb-3 font-medium">Vai trò</th>
-                  <th className="pb-3 font-medium">Hành động</th>
+                  <th className="pb-3 font-medium">AI Credits</th>
+                  <th className="pb-3 font-medium">Điểm (Points)</th>
+                  <th className="pb-3 font-medium text-right">Hành động</th>
                 </tr>
               </thead>
               <tbody className="text-sm">
@@ -215,7 +243,9 @@ function UsersTab() {
                         {u.role === 'TEACHER' ? 'Giáo viên' : u.role === 'ADMIN' ? 'Quản trị' : 'Học sinh'}
                       </span>
                     </td>
-                    <td className="py-4 flex gap-2">
+                    <td className="py-4 text-gray-700 font-bold">{u.credits_ai || 0}</td>
+                    <td className="py-4 text-indigo-600 font-bold">{u.points || 0}</td>
+                    <td className="py-4 flex gap-2 justify-end">
                       <button onClick={() => handleEditClick(u)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded"><Edit size={16} /></button>
                       <button onClick={() => handleDeleteUser(u.id)} className="p-1.5 text-red-600 hover:bg-red-50 rounded"><Trash2 size={16} /></button>
                     </td>
@@ -255,10 +285,43 @@ function UsersTab() {
               <option value="ADMIN">Admin</option>
             </select>
           </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium mb-1">AI Credits</label>
+              <input type="number" value={formUser.credits_ai} onChange={e => setFormUser({ ...formUser, credits_ai: parseInt(e.target.value) || 0 })} className="w-full border rounded-lg p-2 focus:ring-2 outline-none" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Points</label>
+              <input type="number" value={formUser.points} onChange={e => setFormUser({ ...formUser, points: parseInt(e.target.value) || 0 })} className="w-full border rounded-lg p-2 focus:ring-2 outline-none" />
+            </div>
+          </div>
           <button type="button" onClick={handleSaveUser} className="w-full py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition flex justify-center items-center">
             {isEditing ? <><Check size={18} className="mr-2" /> Lưu thay đổi</> : 'Tạo tài khoản'}
           </button>
         </form>
+      </div>
+
+      {/* Bulk Update Section */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 h-fit h-auto">
+        <h2 className="text-lg font-bold text-gray-900 flex items-center mb-4"><RefreshCw className="mr-2 text-blue-600" /> Cập nhật hàng loạt</h2>
+        <div className="space-y-4">
+          <div className="flex gap-4">
+            <div className="flex-1">
+              <label className="block text-sm font-medium mb-1">AI Credits mới</label>
+              <input type="number" value={bulkCredits} onChange={e => setBulkCredits(parseInt(e.target.value) || 0)} className="w-full border rounded-lg p-2 outline-none" />
+            </div>
+            <div className="flex-1">
+              <label className="block text-sm font-medium mb-1">Vai trò áp dụng</label>
+              <select value={bulkRole} onChange={e => setBulkRole(e.target.value)} className="w-full border rounded-lg p-2 bg-white outline-none">
+                <option value="STUDENT">Tất cả Học sinh</option>
+                <option value="TEACHER">Tất cả Giáo viên</option>
+              </select>
+            </div>
+          </div>
+          <button onClick={handleBulkUpdate} disabled={bulkLoading} className="w-full py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex justify-center items-center">
+            {bulkLoading ? 'Đang cập nhật...' : <><RefreshCw size={18} className="mr-2" /> Áp dụng ngay</>}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -799,6 +862,26 @@ function GrammarTab() {
     finally { setLoading(false); }
   };
 
+  const [generatingAI, setGeneratingAI] = useState(false);
+
+  const handleAIGenerate = async () => {
+    if (!name) return alert("Nhập tên cấu trúc ngữ pháp trước!");
+    setGeneratingAI(true);
+    try {
+      const res = await authFetch(`${API_URL}/admin/grammar/ai-generate`, {
+        method: "POST",
+        body: JSON.stringify({ topic: name })
+      }, token);
+      if (!res.ok) throw new Error("AI failed");
+      const data = await res.json();
+      setDescription(data.description || "");
+    } catch (err) {
+      alert("AI không thể tạo mô tả ngay bây giờ.");
+    } finally {
+      setGeneratingAI(false);
+    }
+  };
+
   useEffect(() => { fetchRules(); }, []);
 
   const handleSave = async () => {
@@ -853,8 +936,19 @@ function GrammarTab() {
             {isEditing && <button onClick={resetForm} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>}
           </div>
           <div className="space-y-4">
-            <input value={name} onChange={e => setName(e.target.value)} className="w-full border p-2 rounded-lg focus:ring-2 outline-none" placeholder="Tên cấu trúc (VD: Present Perfect)" />
-            <textarea value={description} onChange={e => setDescription(e.target.value)} className="w-full border p-2 rounded-lg h-24 focus:ring-2 outline-none" placeholder="Mô tả / Công thức..." />
+             <div>
+              <label className="block text-sm font-medium mb-1">Tên cấu trúc (VD: Hiện tại đơn)</label>
+              <div className="flex gap-2">
+                <input type="text" value={name} onChange={e => setName(e.target.value)} className="flex-1 border rounded-lg p-2 outline-none focus:ring-2" placeholder="Tên cấu trúc..." />
+                <button onClick={handleAIGenerate} disabled={generatingAI} className="px-3 py-2 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 flex items-center whitespace-nowrap">
+                   {generatingAI ? <RefreshCw className="animate-spin" size={16} /> : <Sparkles size={16} className="mr-1" />} AI Tạo
+                </button>
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Mô tả cấu trúc (Markdown support)</label>
+              <textarea value={description} onChange={e => setDescription(e.target.value)} className="w-full border p-2 rounded-lg h-48 focus:ring-2 outline-none font-mono text-sm" placeholder="Mô tả / Công thức..." />
+            </div>
             <div className="border-2 border-dashed rounded-xl p-4 text-center hover:border-teal-400 hover:bg-teal-50 transition">
               <input type="file" className="hidden" id="grammar-file" onChange={e => { if (e.target.files) setFile(e.target.files[0]); }} />
               <label htmlFor="grammar-file" className="cursor-pointer text-gray-500 flex flex-col items-center text-sm">

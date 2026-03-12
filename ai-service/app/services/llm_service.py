@@ -302,6 +302,36 @@ def _safe_invoke(chain, params: dict, retries: int = MAX_RETRIES):
                 print(f"[LLM RETRY] Attempt {attempt + 1} failed: {e}. Retrying in {RETRY_DELAY}s...")
                 time.sleep(RETRY_DELAY)
                 
+async def _safe_invoke_async(chain, params: dict, retries: int = MAX_RETRIES):
+    """Async version of _safe_invoke."""
+    last_error = None
+    for attempt in range(retries + 1):
+        try:
+            if hasattr(chain, 'ainvoke'):
+                response = await chain.ainvoke(params)
+            else:
+                response = await asyncio.to_thread(chain.invoke, params)
+            return response
+        except Exception as e:
+            last_error = e
+            error_str = str(e).lower()
+            if any(k in error_str for k in ["quota", "rate_limit", "resource_exhausted", "429", "too many requests", "503"]):
+                print(f"[LLM QUOTA] Primary LLM quota exceeded: {e}. Falling back to Cohere...")
+                fallback_llm = get_llm(provider="cohere")
+                if fallback_llm and hasattr(chain, 'first'):
+                    fallback_chain = chain.first | fallback_llm
+                    try:
+                        if hasattr(fallback_chain, 'ainvoke'):
+                            return await fallback_chain.ainvoke(params)
+                        return await asyncio.to_thread(fallback_chain.invoke, params)
+                    except Exception as fallback_error:
+                        print(f"[LLM FALLBACK FAILED] Cohere also failed: {fallback_error}")
+                        last_error = fallback_error
+                        raise fallback_error
+            if any(k in error_str for k in ["api_key", "unauthorized", "forbidden", "invalid"]):
+                raise
+            if attempt < retries:
+                await asyncio.sleep(RETRY_DELAY * (attempt + 1))
     raise last_error
 
 
@@ -1609,5 +1639,84 @@ async def generate_speaking_topic_stream(level: str = "B1", topic_type: str = "g
     except:
         yield json.dumps({"error": "Failed to parse AI response"}, ensure_ascii=False)
     finally:
-        if 'start_time' in locals():
-             print(f"[LATENCY] lookup_dictionary_full_ai for '{word}' took {time.time() - start_time:.2f}s")
+        pass
+
+async def generate_grammar_rule_description(topic: str):
+    """Generate a high-quality grammar rule explanation for Admins."""
+    llm = get_llm()
+    if not llm:
+        return {"name": topic, "description": "LLM not configured"}
+    
+    prompt = PromptTemplate.from_template(
+        "You are an expert English teacher. Topic: '{topic}'.\n"
+        "Generate a comprehensive explanation including:\n"
+        "1. Clear definition and usage\n"
+        "2. Structure/Formula (e.g. S + V3)\n"
+        "3. 3-5 examples with Vietnamese translations (format: Example | Dịch)\n"
+        "4. Common mistakes/Exceptions\n\n"
+        "Return as JSON: {{\"name\": \"...\", \"description\": \"...markdown...\"}}"
+    )
+    chain = prompt | llm
+    try:
+        response = await _safe_invoke_async(chain, {"topic": topic})
+        return parse_json_response(response.content)
+    except Exception as e:
+        return {"name": topic, "description": f"Failed to generate for '{topic}': {e}"}
+
+async def generate_vocab_practice_rich(words: List[dict]):
+    """Generate professional vocabulary exercises with hints and diverse types."""
+    llm = get_llm()
+    if not llm: return []
+    
+    words_info = "\n".join([f"- {w['word']} ({w['meaning_en']})" for w in words])
+    
+    prompt = PromptTemplate.from_template(
+        "Create a premium vocabulary practice set for these words:\n{words}\n\n"
+        "Question Types: Multiple Choice, Synonym Match, Contextual Fill-in, Scrambled Sentences.\n"
+        "Include for EACH question:\n"
+        "- 'question': the prompt\n"
+        "- 'hint': a helpful clue (can be audio-friendly or context)\n"
+        "- 'options': if multiple choice (4 options)\n"
+        "- 'answer': the correct string\n"
+        "- 'explanation': why this answer is correct (bilingual)\n\n"
+        "Return a JSON array of 10-15 questions."
+    )
+    chain = prompt | llm
+    try:
+        response = await _safe_invoke_async(chain, {"words": words_info})
+        return parse_json_response(response.content)
+    except: return []
+
+async def generate_grammar_practice(rules: List[str], difficulty: str = "Medium"):
+    """Generate tailored grammar practice based on specific rules."""
+    llm = get_llm()
+    if not llm: return []
+    
+    prompt = PromptTemplate.from_template(
+        "Create a {difficulty} level grammar practice for these rules: {rules}.\n"
+        "Include variety: Structure completion, Error correction, and Transformation.\n"
+        "Return a JSON array of 10 objects {{question, options, answer, explanation_vn}}."
+    )
+    chain = prompt | llm
+    try:
+        response = await _safe_invoke_async(chain, {"difficulty": difficulty, "rules": ", ".join(rules)})
+        return parse_json_response(response.content)
+    except: return []
+
+async def generate_exam_content(test_type: str, part: Optional[str] = None):
+    """Generate realistic TOEIC/IELTS content (full or specific parts)."""
+    llm = get_llm()
+    if not llm: return {"id": "error", "error": "LLM not configured"}
+    
+    part_context = f"specifically for {part}" if part else "full-length"
+    prompt = PromptTemplate.from_template(
+        "You are an ETS/British Council exam writer. Generate a realistic {test_type} practice section, {part_context}.\n"
+        "Ensure professional formatting. For TOEIC, parts 1-7. For IELTS, sections 1-4.\n"
+        "Include realistic questions, options, and correct answers.\n"
+        "Return a structured JSON object."
+    )
+    chain = prompt | llm
+    try:
+        response = await _safe_invoke_async(chain, {"test_type": test_type, "part_context": part_context})
+        return parse_json_response(response.content)
+    except: return {"id": "error"}

@@ -9,9 +9,20 @@ import io
 import base64
 import asyncio
 from pydantic import BaseModel
-from typing import Dict, Optional
+from typing import Dict, Optional, List
+
+class BulkCreditUpdate(BaseModel):
+    credits: int
+    role: str = "STUDENT"
+
+class GrammarAIGen(BaseModel):
+    topic: str
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
+
+class BulkCreditUpdate(BaseModel):
+    credits: int
+    role: str = "STUDENT"
 
 @router.get("/health-public")
 def admin_health_public():
@@ -82,7 +93,7 @@ async def get_admin_stats():
 def get_users():
     conn = get_db()
     try:
-        cursor = conn.execute("SELECT id, name, email, role FROM users ORDER BY id DESC")
+        cursor = conn.execute("SELECT id, name, email, role, credits_ai, points FROM users ORDER BY id DESC")
         users = [dict(row) for row in cursor.fetchall()]
         conn.close()
         return users
@@ -127,7 +138,7 @@ def update_user(user_id: int, user_data: dict):
     fields = []
     values = []
     for k, v in user_data.items():
-        if k in ["name", "email", "role", "credits_ai"]:
+        if k in ["name", "email", "role", "credits_ai", "points"]:
             fields.append(f"{k} = ?")
             values.append(v.upper() if k == "role" else v)
     
@@ -144,6 +155,18 @@ def update_user(user_id: int, user_data: dict):
         raise HTTPException(status_code=400, detail="Email already exists")
     conn.close()
     return {"message": "User updated successfully"}
+
+@router.post("/bulk-update-credits")
+def bulk_update_credits(data: BulkCreditUpdate):
+    conn = get_db()
+    try:
+        conn.execute("UPDATE users SET credits_ai = ? WHERE role = ?", (data.credits, data.role.upper()))
+        conn.commit()
+        conn.close()
+        return {"message": f"Updated credits for all {data.role}s to {data.credits}"}
+    except Exception as e:
+        if conn: conn.close()
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.delete("/users/{user_id}")
 def delete_user(user_id: int):
@@ -452,6 +475,16 @@ def delete_vocab(word: str):
 
 
 # --- GRAMMAR RULES CRUD ---
+
+@router.post("/grammar/ai-generate")
+async def ai_generate_grammar_rule(data: GrammarAIGen):
+    """Generate a grammar rule name and description using AI."""
+    try:
+        topic = data.topic
+        result = await llm_service.generate_grammar_rule_description(topic)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"AI generation failed: {str(e)}")
 
 @router.get("/grammar")
 def get_grammar_rules():
