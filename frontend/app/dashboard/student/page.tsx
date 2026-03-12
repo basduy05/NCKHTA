@@ -1205,19 +1205,6 @@ function DictionaryTab({ token }: { token: string | null }) {
                       <button key={i} onClick={() => setWord(w)} className="bg-white text-purple-700 text-sm px-2.5 py-1 rounded-lg border border-purple-200 hover:bg-purple-100 transition">{w}</button>
                     ))}
                   </div>
-
-                  {submitted && (
-                    <div className="mt-6 bg-gradient-to-r from-green-50 to-blue-50 p-4 rounded-xl border border-green-200 text-center">
-                      <div className="text-2xl font-bold text-green-700 mb-2">
-                        Điểm: {score}/{practice.questions?.length || 0}
-                      </div>
-                      <p className="text-green-600">
-                        {score === practice.questions?.length ? "Xuất sắc! 🎉" :
-                         score >= (practice.questions?.length || 0) * 0.8 ? "Tốt! 👍" :
-                         score >= (practice.questions?.length || 0) * 0.6 ? "Khá! 👌" : "Cần cố gắng hơn! 💪"}
-                      </p>
-                    </div>
-                  )}
                 </div>
               )}
               {Array.isArray(result.collocations) && result.collocations.length > 0 && (
