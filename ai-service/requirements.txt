@@ -19,3 +19,4 @@ PyPDF2
 json-repair
 bleach
 libsql-experimental
+cohere
