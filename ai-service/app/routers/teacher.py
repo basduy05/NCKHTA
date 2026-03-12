@@ -438,10 +438,12 @@ def get_assignment_scores(assignment_id: int, authorization: str = Header(...)):
 async def generate_quiz_for_class(authorization: str = Header(...), text: str = Form(...), num_questions: int = Form(5)):
     """Use AI to generate quiz from text for teacher to assign (Streaming)."""
     user = _get_current_teacher(authorization)
+    if user.get("credits_ai", 0) < 5:
+        raise HTTPException(status_code=402, detail="Insufficient AI credits (5 required)")
     
     # Deduct credit
     conn = get_db()
-    conn.execute("UPDATE users SET credits_ai = MAX(0, credits_ai - 1) WHERE id = ?", (user["id"],))
+    conn.execute("UPDATE users SET credits_ai = MAX(0, credits_ai - 5) WHERE id = ?", (user["id"],))
     conn.commit()
     conn.close()
 
@@ -456,10 +458,12 @@ async def generate_quiz_for_class(authorization: str = Header(...), text: str = 
 async def generate_vocab_for_class(authorization: str = Header(...), text: str = Form(...)):
     """Use AI to extract vocabulary from text (Streaming)."""
     user = _get_current_teacher(authorization)
+    if user.get("credits_ai", 0) < 5:
+        raise HTTPException(status_code=402, detail="Insufficient AI credits (5 required)")
     
     # Deduct credit
     conn = get_db()
-    conn.execute("UPDATE users SET credits_ai = MAX(0, credits_ai - 1) WHERE id = ?", (user["id"],))
+    conn.execute("UPDATE users SET credits_ai = MAX(0, credits_ai - 5) WHERE id = ?", (user["id"],))
     conn.commit()
     conn.close()
 
@@ -694,10 +698,12 @@ async def teacher_generate_assignment_from_file(
     Upload a document, extract text, and automatically generate an assignment/quiz (Streaming).
     """
     user = _get_current_teacher(authorization)
+    if user.get("credits_ai", 0) < 5:
+        raise HTTPException(status_code=402, detail="Insufficient AI credits (5 required)")
     
     # Deduct credits
     conn = get_db()
-    conn.execute("UPDATE users SET credits_ai = MAX(0, credits_ai - 2) WHERE id = ?", (user["id"],))
+    conn.execute("UPDATE users SET credits_ai = MAX(0, credits_ai - 5) WHERE id = ?", (user["id"],))
     conn.commit()
     conn.close()
 

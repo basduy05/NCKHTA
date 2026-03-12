@@ -148,8 +148,9 @@ def update_user(user_id: int, user_data: dict):
         
     values.append(user_id)
     try:
-        conn.execute(f"UPDATE users SET {', '.join(fields)} WHERE id = ?", tuple(values))
+        cursor = conn.execute(f"UPDATE users SET {', '.join(fields)} WHERE id = ?", tuple(values))
         conn.commit()
+        print(f"[ADMIN] User {user_id} updated. Rows affected: {cursor.rowcount}", flush=True)
     except sqlite3.IntegrityError:
         conn.close()
         raise HTTPException(status_code=400, detail="Email already exists")
@@ -160,8 +161,9 @@ def update_user(user_id: int, user_data: dict):
 def bulk_update_credits(data: BulkCreditUpdate):
     conn = get_db()
     try:
-        conn.execute("UPDATE users SET credits_ai = ? WHERE role = ?", (data.credits, data.role.upper()))
+        cursor = conn.execute("UPDATE users SET credits_ai = ? WHERE role = ?", (data.credits, data.role.upper()))
         conn.commit()
+        print(f"[ADMIN] Bulk credit update for {data.role} to {data.credits}. Rows affected: {cursor.rowcount}", flush=True)
         conn.close()
         return {"message": f"Updated credits for all {data.role}s to {data.credits}"}
     except Exception as e:

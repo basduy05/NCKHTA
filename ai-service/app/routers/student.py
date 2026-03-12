@@ -130,12 +130,13 @@ def student_stats(authorization: str = Header(...)):
     ).fetchone()
     review_needed_count = review_needed_row[0] if review_needed_row else 0
 
+    assignments_pending = assignments_total - submitted_count
     conn.close()
     return {
         "classes_enrolled": classes_count,
         "assignments_total": assignments_total,
         "assignments_submitted": submitted_count,
-        "assignments_pending": max(pending, 0),
+        "assignments_pending": max(assignments_pending, 0),
         "total_score": total_score,
         "total_max_score": total_max,
         "average_percent": avg_percent,
@@ -164,8 +165,15 @@ def get_ranking(authorization: str = Header(...)):
 @router.post("/vocabulary/practice")
 async def start_vocab_practice(req: VocabPracticeReq, authorization: str = Header(...)):
     student = _get_current_student(authorization)
+    if student.get("credits_ai", 0) < 5:
+        raise HTTPException(status_code=402, detail="Insufficient AI credits (5 required)")
+    
     conn = get_db()
     try:
+        # Deduct credits
+        conn.execute("UPDATE users SET credits_ai = credits_ai - 5 WHERE id = ?", (student["id"],))
+        conn.commit()
+        
         # Fetch words from database
         placeholders = ', '.join(['?'] * len(req.word_ids))
         cursor = conn.execute(
@@ -221,8 +229,15 @@ async def complete_vocab_practice(req: VocabPracticeComplete, authorization: str
 @router.post("/grammar/practice")
 async def start_grammar_practice(req: GrammarPracticeReq, authorization: str = Header(...)):
     student = _get_current_student(authorization)
+    if student.get("credits_ai", 0) < 5:
+        raise HTTPException(status_code=402, detail="Insufficient AI credits (5 required)")
+        
     conn = get_db()
     try:
+        # Deduct credits
+        conn.execute("UPDATE users SET credits_ai = credits_ai - 5 WHERE id = ?", (student["id"],))
+        conn.commit()
+        
         placeholders = ', '.join(['?'] * len(req.rule_ids))
         cursor = conn.execute(
             f"SELECT name FROM grammar_rules WHERE id IN ({placeholders})",
@@ -884,6 +899,8 @@ class IpaRequest(BaseModel):
 async def generate_ipa(req: IpaRequest, authorization: str = Header(...)):
     from fastapi.responses import StreamingResponse
     user = _get_current_student(authorization)
+    if user.get("credits_ai", 0) < 5:
+        raise HTTPException(status_code=402, detail="Insufficient AI credits (5 required)")
     
     # Check for legacy limit OR new credits
     # In a real app we'd migrate fully to credits, but for now we'll check both
@@ -891,7 +908,7 @@ async def generate_ipa(req: IpaRequest, authorization: str = Header(...)):
     
     # Deduct credit
     conn = get_db()
-    conn.execute("UPDATE users SET credits_ai = MAX(0, credits_ai - 1) WHERE id = ?", (user["id"],))
+    conn.execute("UPDATE users SET credits_ai = MAX(0, credits_ai - 5) WHERE id = ?", (user["id"],))
     conn.commit()
     conn.close()
 
@@ -911,11 +928,13 @@ class PracticeRequest(BaseModel):
 async def generate_practice(req: PracticeRequest, authorization: str = Header(...)):
     from fastapi.responses import StreamingResponse
     user = _get_current_student(authorization)
+    if user.get("credits_ai", 0) < 5:
+        raise HTTPException(status_code=402, detail="Insufficient AI credits (5 required)")
     _check_usage_limit(user["id"], f"practice_{req.test_type}")
     
-    # Deduct credit (cost 2 for complex tests)
+    # Deduct credit
     conn = get_db()
-    conn.execute("UPDATE users SET credits_ai = MAX(0, credits_ai - 2) WHERE id = ?", (user["id"],))
+    conn.execute("UPDATE users SET credits_ai = MAX(0, credits_ai - 5) WHERE id = ?", (user["id"],))
     conn.commit()
     conn.close()
 
@@ -934,11 +953,13 @@ class ReadingRequest(BaseModel):
 async def generate_reading(req: ReadingRequest, authorization: str = Header(...)):
     from fastapi.responses import StreamingResponse
     user = _get_current_student(authorization)
+    if user.get("credits_ai", 0) < 5:
+        raise HTTPException(status_code=402, detail="Insufficient AI credits (5 required)")
     _check_usage_limit(user["id"], "reading")
     
     # Deduct credit
     conn = get_db()
-    conn.execute("UPDATE users SET credits_ai = MAX(0, credits_ai - 1) WHERE id = ?", (user["id"],))
+    conn.execute("UPDATE users SET credits_ai = MAX(0, credits_ai - 5) WHERE id = ?", (user["id"],))
     conn.commit()
     conn.close()
 
@@ -958,10 +979,12 @@ class WritingRequest(BaseModel):
 async def evaluate_writing(req: WritingRequest, authorization: str = Header(...)):
     from fastapi.responses import StreamingResponse
     user = _get_current_student(authorization)
+    if user.get("credits_ai", 0) < 5:
+        raise HTTPException(status_code=402, detail="Insufficient AI credits (5 required)")
     
-    # Deduct credit (cost 2)
+    # Deduct credit
     conn = get_db()
-    conn.execute("UPDATE users SET credits_ai = MAX(0, credits_ai - 2) WHERE id = ?", (user["id"],))
+    conn.execute("UPDATE users SET credits_ai = MAX(0, credits_ai - 5) WHERE id = ?", (user["id"],))
     conn.commit()
     conn.close()
 
@@ -980,10 +1003,12 @@ class SpeakingRequest(BaseModel):
 async def generate_speaking(req: SpeakingRequest, authorization: str = Header(...)):
     from fastapi.responses import StreamingResponse
     user = _get_current_student(authorization)
+    if user.get("credits_ai", 0) < 5:
+        raise HTTPException(status_code=402, detail="Insufficient AI credits (5 required)")
     
     # Deduct credit
     conn = get_db()
-    conn.execute("UPDATE users SET credits_ai = MAX(0, credits_ai - 1) WHERE id = ?", (user["id"],))
+    conn.execute("UPDATE users SET credits_ai = MAX(0, credits_ai - 5) WHERE id = ?", (user["id"],))
     conn.commit()
     conn.close()
 
@@ -1004,13 +1029,15 @@ async def student_upload_analyze(
 ):
     from fastapi.responses import StreamingResponse
     user = _get_current_student(authorization)
+    if user.get("credits_ai", 0) < 5:
+        raise HTTPException(status_code=402, detail="Insufficient AI credits (5 required)")
 
     if hasattr(file, 'size') and file.size > 10 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="File too large. Maximum size is 10MB.")
 
     # Deduct credits
     conn = get_db()
-    conn.execute("UPDATE users SET credits_ai = MAX(0, credits_ai - 3) WHERE id = ?", (user["id"],))
+    conn.execute("UPDATE users SET credits_ai = MAX(0, credits_ai - 5) WHERE id = ?", (user["id"],))
     conn.commit()
     conn.close()
 

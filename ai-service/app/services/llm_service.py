@@ -1682,11 +1682,16 @@ async def generate_vocab_practice_rich(words: List[dict]):
         "- 'explanation': why this answer is correct (bilingual)\n\n"
         "Return a JSON array of 10-15 questions."
     )
+    print(f"[LLM VOCAB PRACTICE] Generating for {len(words)} words...", flush=True)
     chain = prompt | llm
     try:
         response = await _safe_invoke_async(chain, {"words": words_info})
-        return parse_json_response(response.content)
-    except: return []
+        result = parse_json_response(response.content)
+        print(f"[LLM VOCAB PRACTICE] Success: generated {len(result) if isinstance(result, list) else 0} questions", flush=True)
+        return result
+    except Exception as e:
+        print(f"[LLM VOCAB PRACTICE] ERROR: {e}", flush=True)
+        return []
 
 async def generate_grammar_practice(rules: List[str], difficulty: str = "Medium"):
     """Generate tailored grammar practice based on specific rules."""
@@ -1698,11 +1703,16 @@ async def generate_grammar_practice(rules: List[str], difficulty: str = "Medium"
         "Include variety: Structure completion, Error correction, and Transformation.\n"
         "Return a JSON array of 10 objects {{question, options, answer, explanation_vn}}."
     )
+    print(f"[LLM GRAMMAR PRACTICE] Generating for {len(rules)} rules (Difficulty: {difficulty})...", flush=True)
     chain = prompt | llm
     try:
         response = await _safe_invoke_async(chain, {"difficulty": difficulty, "rules": ", ".join(rules)})
-        return parse_json_response(response.content)
-    except: return []
+        result = parse_json_response(response.content)
+        print(f"[LLM GRAMMAR PRACTICE] Success: generated {len(result) if isinstance(result, list) else 0} questions", flush=True)
+        return result
+    except Exception as e:
+        print(f"[LLM GRAMMAR PRACTICE] ERROR: {e}", flush=True)
+        return []
 
 async def generate_exam_content(test_type: str, part: Optional[str] = None):
     """Generate realistic TOEIC/IELTS content (full or specific parts)."""
