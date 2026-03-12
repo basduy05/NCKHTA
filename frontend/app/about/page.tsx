@@ -278,7 +278,7 @@ export default function AboutPage() {
             <div className="lg:w-3/5 p-8 lg:p-12 flex flex-col justify-center space-y-6">
               <div>
                 <h3 className="text-3xl font-extrabold text-gray-900 mb-2">Nguyễn Bá Duy</h3>
-                <p className="text-blue-600 font-semibold text-lg">Full-stack Developer &amp; AI Enthusiast</p>
+                <p className="text-blue-600 font-semibold text-lg"> AI Enthusiast</p>
               </div>
 
               <div className="space-y-3 text-gray-600">
