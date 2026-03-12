@@ -99,7 +99,8 @@ def is_data_complete(data: dict) -> bool:
 # ─── REQUEST QUEUING (SEMAPHORE) ───────────────────────────────────────────
 
 # Limit concurrent AI requests to 7 as requested by user
-ai_semaphore = asyncio.Semaphore(7)
+# Limit concurrent AI requests to 3 to prevent OOM on Render free tier (512MB)
+ai_semaphore = asyncio.Semaphore(3)
 
 def get_queue_status():
     """Returns the current number of active and waiting requests."""

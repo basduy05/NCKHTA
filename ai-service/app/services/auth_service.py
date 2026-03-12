@@ -12,6 +12,7 @@ from jose import JWTError, jwt
 from datetime import datetime, timedelta, timezone
 from dotenv import load_dotenv
 import pathlib
+import bleach
 # Load .env with explicit path
 env_path = pathlib.Path(__file__).parent.parent.parent / ".env"
 load_dotenv(dotenv_path=env_path)
@@ -41,15 +42,32 @@ class UserRegister(BaseModel):
     password: str
     phone: str | None = None
     role: str = "STUDENT"
+
+    @field_validator('phone')
+    @classmethod
+    def validate_phone(cls, v: str | None) -> str | None:
+        if v:
+            import re
+            cleaned = re.sub(r'<script.*?>.*?</script>', '', v, flags=re.DOTALL | re.IGNORECASE)
+            cleaned = re.sub(r'<[^>]*>', '', cleaned)
+            return cleaned.strip()
+        return v
     
     @field_validator('name')
     @classmethod
     def validate_name(cls, v: str) -> str:
         if not v or not v.strip():
             raise ValueError('Name cannot be empty')
-        if len(v.strip()) < 2:
-            raise ValueError('Name must be at least 2 characters')
-        return v.strip()
+        # Sanitize name: remove <script> tags and content, and all other HTML tags
+        import re
+        # Remove script tags and their content
+        cleaned = re.sub(r'<script.*?>.*?</script>', '', v, flags=re.DOTALL | re.IGNORECASE)
+        # Remove all other HTML-like tags
+        cleaned = re.sub(r'<[^>]*>', '', cleaned)
+        cleaned = cleaned.strip()
+        if len(cleaned) < 2:
+            raise ValueError('Name must be at least 2 characters after cleaning')
+        return cleaned
     
     @field_validator('password')
     @classmethod

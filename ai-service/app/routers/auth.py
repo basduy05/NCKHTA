@@ -312,6 +312,16 @@ class UpdateProfileRequest(BaseModel):
     name: str | None = None
     phone: str | None = None
 
+    @field_validator('name', 'phone')
+    @classmethod
+    def validate_fields(cls, v: str | None) -> str | None:
+        if v:
+            import re
+            cleaned = re.sub(r'<script.*?>.*?</script>', '', v, flags=re.DOTALL | re.IGNORECASE)
+            cleaned = re.sub(r'<[^>]*>', '', cleaned)
+            return cleaned.strip()
+        return v
+
 class ChangePasswordRequest(BaseModel):
     current_password: str
     new_password: str
