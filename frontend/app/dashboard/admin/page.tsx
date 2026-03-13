@@ -257,71 +257,74 @@ function UsersTab() {
         )}
       </div>
 
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 h-fit">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-lg font-bold text-gray-900 flex"><Users className="mr-2 text-indigo-600" /> {isEditing ? 'Sửa Người Dùng' : 'Thêm Người Dùng'}</h2>
-          {isEditing && <button onClick={resetForm} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>}
-        </div>
-        <form className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium mb-1">Tên hiển thị</label>
-            <input type="text" value={formUser.name} onChange={e => setFormUser({ ...formUser, name: e.target.value })} className="w-full border rounded-lg p-2 focus:ring-2 outline-none" placeholder="VD: Nguyễn Văn A" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Email</label>
-            <input type="email" value={formUser.email} onChange={e => setFormUser({ ...formUser, email: e.target.value })} className="w-full border rounded-lg p-2 focus:ring-2 outline-none" placeholder="email@domain.com" />
-          </div>
-          {!isEditing && (
-            <div>
-              <label className="block text-sm font-medium mb-1">Mật khẩu (Mặc định: 123456)</label>
-              <input type="text" value={formUser.password || ''} onChange={e => setFormUser({ ...formUser, password: e.target.value })} className="w-full border rounded-lg p-2 focus:ring-2 outline-none" placeholder="123456" />
+        <div className="space-y-6">
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 h-fit">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-lg font-bold text-gray-900 flex"><Users className="mr-2 text-indigo-600" /> {isEditing ? 'Sửa Người Dùng' : 'Thêm Người Dùng'}</h2>
+              {isEditing && <button onClick={resetForm} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>}
             </div>
-          )}
-          <div>
-            <label className="block text-sm font-medium mb-1">Vai trò</label>
-            <select value={formUser.role} onChange={e => setFormUser({ ...formUser, role: e.target.value })} className="w-full border rounded-lg p-2 bg-white outline-none">
-              <option value="STUDENT">Học sinh</option>
-              <option value="TEACHER">Giáo viên</option>
-              <option value="ADMIN">Admin</option>
-            </select>
+            <form className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Tên hiển thị</label>
+                <input type="text" value={formUser.name} onChange={e => setFormUser({ ...formUser, name: e.target.value })} className="w-full border rounded-lg p-2 focus:ring-2 outline-none" placeholder="VD: Nguyễn Văn A" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Email</label>
+                <input type="email" value={formUser.email} onChange={e => setFormUser({ ...formUser, email: e.target.value })} className="w-full border rounded-lg p-2 focus:ring-2 outline-none" placeholder="email@domain.com" />
+              </div>
+              {!isEditing && (
+                <div>
+                  <label className="block text-sm font-medium mb-1">Mật khẩu (Mặc định: 123456)</label>
+                  <input type="text" value={formUser.password || ''} onChange={e => setFormUser({ ...formUser, password: e.target.value })} className="w-full border rounded-lg p-2 focus:ring-2 outline-none" placeholder="123456" />
+                </div>
+              )}
+              <div>
+                <label className="block text-sm font-medium mb-1">Vai trò</label>
+                <select value={formUser.role} onChange={e => setFormUser({ ...formUser, role: e.target.value })} className="w-full border rounded-lg p-2 bg-white outline-none">
+                  <option value="STUDENT">Học sinh</option>
+                  <option value="TEACHER">Giáo viên</option>
+                  <option value="ADMIN">Admin</option>
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1">AI Credits</label>
+                  <input type="number" value={formUser.credits_ai} onChange={e => setFormUser({ ...formUser, credits_ai: parseInt(e.target.value) || 0 })} className="w-full border rounded-lg p-2 focus:ring-2 outline-none" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Points</label>
+                  <input type="number" value={formUser.points} onChange={e => setFormUser({ ...formUser, points: parseInt(e.target.value) || 0 })} className="w-full border rounded-lg p-2 focus:ring-2 outline-none" />
+                </div>
+              </div>
+              <button type="button" onClick={handleSaveUser} className="w-full py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition flex justify-center items-center">
+                {isEditing ? <><Check size={18} className="mr-2" /> Lưu thay đổi</> : 'Tạo tài khoản'}
+              </button>
+            </form>
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium mb-1">AI Credits</label>
-              <input type="number" value={formUser.credits_ai} onChange={e => setFormUser({ ...formUser, credits_ai: parseInt(e.target.value) || 0 })} className="w-full border rounded-lg p-2 focus:ring-2 outline-none" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">Points</label>
-              <input type="number" value={formUser.points} onChange={e => setFormUser({ ...formUser, points: parseInt(e.target.value) || 0 })} className="w-full border rounded-lg p-2 focus:ring-2 outline-none" />
-            </div>
-          </div>
-          <button type="button" onClick={handleSaveUser} className="w-full py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition flex justify-center items-center">
-            {isEditing ? <><Check size={18} className="mr-2" /> Lưu thay đổi</> : 'Tạo tài khoản'}
-          </button>
-        </form>
 
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 h-fit h-auto">
-        <h2 className="text-lg font-bold text-gray-900 flex items-center mb-4"><RefreshCw className="mr-2 text-blue-600" /> Cập nhật hàng loạt</h2>
-        <div className="space-y-4">
-          <div className="flex gap-4">
-            <div className="flex-1">
-              <label className="block text-sm font-medium mb-1">AI Credits mới</label>
-              <input type="number" value={bulkCredits} onChange={e => setBulkCredits(parseInt(e.target.value) || 0)} className="w-full border rounded-lg p-2 outline-none" />
-            </div>
-            <div className="flex-1">
-              <label className="block text-sm font-medium mb-1">Vai trò áp dụng</label>
-              <select value={bulkRole} onChange={e => setBulkRole(e.target.value)} className="w-full border rounded-lg p-2 bg-white outline-none">
-                <option value="STUDENT">Tất cả Học sinh</option>
-                <option value="TEACHER">Tất cả Giáo viên</option>
-              </select>
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 h-fit h-auto">
+            <h2 className="text-lg font-bold text-gray-900 flex items-center mb-4"><RefreshCw className="mr-2 text-blue-600" /> Cập nhật hàng loạt</h2>
+            <div className="space-y-4">
+              <div className="flex gap-4">
+                <div className="flex-1">
+                  <label className="block text-sm font-medium mb-1">AI Credits mới</label>
+                  <input type="number" value={bulkCredits} onChange={e => setBulkCredits(parseInt(e.target.value) || 0)} className="w-full border rounded-lg p-2 outline-none" />
+                </div>
+                <div className="flex-1">
+                  <label className="block text-sm font-medium mb-1">Vai trò áp dụng</label>
+                  <select value={bulkRole} onChange={e => setBulkRole(e.target.value)} className="w-full border rounded-lg p-2 bg-white outline-none">
+                    <option value="STUDENT">Tất cả Học sinh</option>
+                    <option value="TEACHER">Tất cả Giáo viên</option>
+                  </select>
+                </div>
+              </div>
+              <button onClick={handleBulkUpdate} disabled={bulkLoading} className="w-full py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex justify-center items-center">
+                {bulkLoading ? 'Đang cập nhật...' : <><RefreshCw size={18} className="mr-2" /> Áp dụng ngay</>}
+              </button>
             </div>
           </div>
-          <button onClick={handleBulkUpdate} disabled={bulkLoading} className="w-full py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex justify-center items-center">
-            {bulkLoading ? 'Đang cập nhật...' : <><RefreshCw size={18} className="mr-2" /> Áp dụng ngay</>}
-          </button>
         </div>
-      </div>
-      </div>
+
     </div>
   );
 }
