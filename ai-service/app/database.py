@@ -110,10 +110,11 @@ def get_db(retries=3):
                 if HAS_LIBSQL_EXPERIMENTAL:
                     # libSQL experimental with Turso sync (Local Replica)
                     conn = libsql.connect(database=DB_PATH, sync_url=TURSO_URL, auth_token=TURSO_AUTH_TOKEN)
-                    try:
-                        conn.sync()
-                    except Exception as e:
-                        print(f"[DB] Turso sync failed: {e}")
+                    # Optimization: remove blocking sync on every connection
+                    # try:
+                    #     conn.sync()
+                    # except Exception as e:
+                    #     print(f"[DB] Turso sync failed: {e}")
                 else:
                     # libSQL (standard/new) - Using Direct Connection URL
                     try:

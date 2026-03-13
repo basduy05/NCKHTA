@@ -329,7 +329,7 @@ async def get_current_user_info(credentials: HTTPAuthorizationCredentials = Depe
     
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute("SELECT id, name, email, role, phone FROM users WHERE id = ?", (user_id,))
+    cursor.execute("SELECT id, name, email, role, phone, points, credits_ai FROM users WHERE id = ?", (user_id,))
     user = cursor.fetchone()
     conn.close()
     
@@ -341,7 +341,9 @@ async def get_current_user_info(credentials: HTTPAuthorizationCredentials = Depe
         "name": user['name'] or "Người dùng iEdu",
         "email": user['email'],
         "role": user['role'],
-        "phone": user.get('phone') or ""
+        "phone": user.get('phone') or "",
+        "credits_ai": user.get('credits_ai', 0),
+        "points": user.get('points', 0)
     }
 
 
@@ -581,22 +583,6 @@ def reset_password(data: ResetPasswordRequest):
     return {"message": "Password reset successfully. You can now login."}
 
 
-@router.get("/me")
-async def get_me(authorization: str = Header(...)):
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Invalid token")
-    token = authorization[7:]
-    payload = auth_service.verify_access_token(token)
-    if not payload:
-        raise HTTPException(status_code=401, detail="Invalid or expired token")
-        
-    conn = get_db()
-    cursor = conn.execute("SELECT id, name, email, role, credits_ai, points FROM users WHERE id = ?", (payload["user_id"],))
-    row = cursor.fetchone()
-    conn.close()
-    if not row:
-        raise HTTPException(status_code=404, detail="User not found")
-    return dict(row)
 
 @router.post("/notify")
 def send_notification(data: NotifyRequest, background_tasks: BackgroundTasks, admin: dict = Depends(get_admin_user)):

@@ -20,6 +20,17 @@ function StudentDashboardContent() {
   const activeTab = searchParams.get("tab") || "overview";
   const { user, token, isInitialized, refreshUser } = useAuth();
   const router = useRouter();
+  const [visitedTabs, setVisitedTabs] = useState<Set<string>>(new Set([activeTab]));
+
+  // Track visited tabs for caching
+  useEffect(() => {
+    setVisitedTabs(prev => new Set([...prev, activeTab]));
+    
+    // Proactively refresh user data when entering key tabs to ensure points/credits are up to date
+    if (activeTab === "overview" || activeTab === "ranking" || activeTab === "ai-tools") {
+      refreshUser();
+    }
+  }, [activeTab, refreshUser]);
 
   // Auth check
   useEffect(() => {
@@ -38,6 +49,29 @@ function StudentDashboardContent() {
     return <div className="flex justify-center items-center h-64"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600"></div></div>;
   }
 
+  const renderTab = (tabName: string) => {
+    if (!visitedTabs.has(tabName)) return null;
+    
+    const isHidden = activeTab !== tabName;
+    const style = isHidden ? { display: 'none' } : {};
+
+    return (
+      <div key={tabName} style={style} className="animate-in fade-in duration-300">
+        {tabName === "overview" && <OverviewTab token={token} user={user} />}
+        {tabName === "classes" && <ClassesTab token={token} />}
+        {tabName === "assignments" && <AssignmentsTab token={token} />}
+        {tabName === "dictionary" && <DictionaryTab token={token} />}
+        {tabName === "vocabulary" && <VocabularyTab token={token} />}
+        {tabName === "ai-tools" && <AIToolsTab token={token} />}
+        {tabName === "grammar" && <GrammarTab token={token} />}
+        {tabName === "scores" && <ScoresTab token={token} />}
+        {tabName === "ipa" && <IpaTab token={token} />}
+        {tabName === "practice" && <PracticeTab token={token} />}
+        {tabName === "ranking" && <RankingTab token={token} />}
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center mb-2">
@@ -55,9 +89,12 @@ function StudentDashboardContent() {
           {activeTab === "ranking" && "Bảng xếp hạng toàn cầu"}
         </h1>
         <div className="flex items-center gap-4">
-          <div className="hidden md:flex items-center gap-1.5 bg-yellow-50 text-yellow-700 px-3 py-1 rounded-full border border-yellow-100 font-bold text-sm">
+          <button 
+            onClick={() => refreshUser()}
+            className="hidden md:flex items-center gap-1.5 bg-yellow-50 text-yellow-700 px-3 py-1 rounded-full border border-yellow-100 font-bold text-sm hover:bg-yellow-100 transition"
+          >
              <Trophy size={14} className="text-yellow-500" /> {user?.points || 0} pts
-          </div>
+          </button>
           <div className="hidden md:flex items-center gap-1.5 bg-indigo-50 text-indigo-700 px-3 py-1 rounded-full border border-indigo-100 font-bold text-sm">
              <Sparkles size={14} className="text-indigo-500" /> {user?.credits_ai || 0} credits
           </div>
@@ -65,17 +102,7 @@ function StudentDashboardContent() {
         </div>
       </div>
 
-      {activeTab === "overview" && <OverviewTab token={token} user={user} />}
-      {activeTab === "classes" && <ClassesTab token={token} />}
-      {activeTab === "assignments" && <AssignmentsTab token={token} />}
-      {activeTab === "dictionary" && <DictionaryTab token={token} />}
-      {activeTab === "vocabulary" && <VocabularyTab token={token} />}
-      {activeTab === "ai-tools" && <AIToolsTab token={token} />}
-      {activeTab === "grammar" && <GrammarTab token={token} />}
-      {activeTab === "scores" && <ScoresTab token={token} />}
-      {activeTab === "ipa" && <IpaTab token={token} />}
-      {activeTab === "practice" && <PracticeTab token={token} />}
-      {activeTab === "ranking" && <RankingTab token={token} />}
+      {["overview", "classes", "assignments", "dictionary", "vocabulary", "ai-tools", "grammar", "scores", "ipa", "practice", "ranking"].map(tab => renderTab(tab))}
     </div>
   );
 }
