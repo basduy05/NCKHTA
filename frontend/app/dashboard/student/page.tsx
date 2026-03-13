@@ -687,6 +687,7 @@ function AIToolsTab({ token }: { token: string | null }) {
   };
 
   return (
+    <div className="space-y-6">
       <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
         <h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
           <Sparkles size={20} className="text-blue-600" /> Phân tích văn bản với AI
@@ -1860,7 +1861,6 @@ function IpaTab({ token }: { token: string | null }) {
 
   return (
     <div className="space-y-8">
-      {/* SECTION 1: STATIC IPA FLASHCARDS */}
       <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
         <h2 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
           <BookOpen className="text-blue-500" /> Bảng phiên âm quốc tế (44 âm IPA)
@@ -2143,7 +2143,6 @@ function PracticeTab({ token }: { token: string | null }) {
 
   return (
     <div className="space-y-6">
-      {/* Practice Test Selector */}
       <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
         <div className="flex items-center justify-between">
           <div>
