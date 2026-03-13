@@ -299,10 +299,8 @@ function UsersTab() {
             {isEditing ? <><Check size={18} className="mr-2" /> Lưu thay đổi</> : 'Tạo tài khoản'}
           </button>
         </form>
-      </div>
 
-      {/* Bulk Update Section */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 h-fit h-auto">
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 h-fit h-auto">
         <h2 className="text-lg font-bold text-gray-900 flex items-center mb-4"><RefreshCw className="mr-2 text-blue-600" /> Cập nhật hàng loạt</h2>
         <div className="space-y-4">
           <div className="flex gap-4">
@@ -322,6 +320,7 @@ function UsersTab() {
             {bulkLoading ? 'Đang cập nhật...' : <><RefreshCw size={18} className="mr-2" /> Áp dụng ngay</>}
           </button>
         </div>
+      </div>
       </div>
     </div>
   );
