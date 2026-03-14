@@ -987,7 +987,7 @@ function SettingsTab() {
   const [showPasswords, setShowPasswords] = useState<Record<string, boolean>>({});
   const [testingEmail, setTestingEmail] = useState(false);
   const [testingNeo4j, setTestingNeo4j] = useState(false);
-  const { token } = useAuth();
+  const { token, authFetch } = useAuth();
 
   const fetchSettings = async () => {
     try {
