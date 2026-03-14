@@ -11,14 +11,12 @@ import {
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://iedu-ksk7.onrender.com";
 
-function getAuthHeader(token: string | null) {
-  return { Authorization: `Bearer ${token}` };
-}
+// Local auth fetch helpers removed in favor of AuthContext.authFetch
 
 function TeacherDashboardContent() {
   const searchParams = useSearchParams();
   const activeTab = searchParams.get("tab") || "overview";
-  const { user, token, isInitialized, refreshUser } = useAuth();
+  const { user, token, isInitialized, refreshUser, authFetch } = useAuth();
   const router = useRouter();
 
   // Auth check
@@ -52,13 +50,13 @@ function TeacherDashboardContent() {
         </h1>
       </div>
 
-      {activeTab === "overview" && <OverviewTab token={token} />}
-      {activeTab === "classes" && <ClassesTab token={token} />}
-      {activeTab === "students" && <StudentsTab token={token} />}
-      {activeTab === "lessons" && <LessonsTab token={token} />}
-      {activeTab === "assignments" && <AssignmentsTab token={token} />}
-      {activeTab === "ai-tools" && <AIToolsTab token={token} />}
-      {activeTab === "grammar" && <GrammarTab token={token} />}
+      {activeTab === "overview" && <OverviewTab />}
+      {activeTab === "classes" && <ClassesTab />}
+      {activeTab === "students" && <StudentsTab />}
+      {activeTab === "lessons" && <LessonsTab />}
+      {activeTab === "assignments" && <AssignmentsTab />}
+      {activeTab === "ai-tools" && <AIToolsTab />}
+      {activeTab === "grammar" && <GrammarTab />}
     </div>
   );
 }
@@ -72,14 +70,15 @@ export default function TeacherDashboard() {
 }
 
 // ==================== OVERVIEW TAB ====================
-function OverviewTab({ token }: { token: string | null }) {
+function OverviewTab() {
+  const { authFetch, token } = useAuth();
   const [stats, setStats] = useState({ classes: 0, students: 0, lessons: 0, assignments: 0, teacher_name: "" });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch(`${API_URL}/teacher/stats`, { headers: getAuthHeader(token) });
+        const res = await authFetch(`${API_URL}/teacher/stats`);
         if (res.ok) setStats(await res.json());
       } catch (e) { console.error(e); }
       finally { setLoading(false); }
@@ -115,7 +114,8 @@ function OverviewTab({ token }: { token: string | null }) {
 }
 
 // ==================== CLASSES TAB ====================
-function ClassesTab({ token }: { token: string | null }) {
+function ClassesTab() {
+  const { authFetch, token } = useAuth();
   const [classes, setClasses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -124,12 +124,12 @@ function ClassesTab({ token }: { token: string | null }) {
 
   const fetchClasses = async () => {
     try {
-      const res = await fetch(`${API_URL}/teacher/my-classes`, { headers: getAuthHeader(token) });
+      const res = await authFetch(`${API_URL}/teacher/my-classes`);
       if (res.ok) setClasses(await res.json());
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
   };
-  useEffect(() => { fetchClasses(); }, [token]);
+  useEffect(() => { fetchClasses(); }, []);
 
   const handleSave = async () => {
     console.log("[DEBUG] Starting save operation");
@@ -140,7 +140,7 @@ function ClassesTab({ token }: { token: string | null }) {
     const url = editId ? `${API_URL}/teacher/my-classes/${editId}` : `${API_URL}/teacher/my-classes`;
     const method = editId ? "PUT" : "POST";
     try {
-      const res = await fetch(url, { method, headers: getAuthHeader(token), body: formData });
+      const res = await authFetch(url, { method, body: formData });
       if (res.ok) {
         console.log(`[DEBUG] Save successful in ${Date.now() - startTime}ms`);
         setShowForm(false); setEditId(null); setFormName("");
@@ -160,7 +160,7 @@ function ClassesTab({ token }: { token: string | null }) {
     console.log("[DEBUG] Starting delete operation");
     const startTime = Date.now();
     try {
-      const res = await fetch(`${API_URL}/teacher/my-classes/${id}`, { method: "DELETE", headers: getAuthHeader(token) });
+      const res = await authFetch(`${API_URL}/teacher/my-classes/${id}`, { method: "DELETE" });
       if (res.ok) {
         console.log(`[DEBUG] Delete successful in ${Date.now() - startTime}ms`);
         fetchClasses();
@@ -228,7 +228,8 @@ function ClassesTab({ token }: { token: string | null }) {
 }
 
 // ==================== STUDENTS TAB ====================
-function StudentsTab({ token }: { token: string | null }) {
+function StudentsTab() {
+  const { authFetch, token } = useAuth();
   const [classes, setClasses] = useState<any[]>([]);
   const [selectedClass, setSelectedClass] = useState<number | null>(null);
   const [students, setStudents] = useState<any[]>([]);
@@ -239,7 +240,7 @@ function StudentsTab({ token }: { token: string | null }) {
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch(`${API_URL}/teacher/my-classes`, { headers: getAuthHeader(token) });
+        const res = await authFetch(`${API_URL}/teacher/my-classes`);
         if (res.ok) {
           const data = await res.json();
           setClasses(data);
@@ -252,14 +253,14 @@ function StudentsTab({ token }: { token: string | null }) {
 
   const fetchStudents = async (classId: number) => {
     try {
-      const res = await fetch(`${API_URL}/teacher/my-classes/${classId}/students`, { headers: getAuthHeader(token) });
+      const res = await authFetch(`${API_URL}/teacher/my-classes/${classId}/students`);
       if (res.ok) setStudents(await res.json());
     } catch (e) { console.error(e); }
   };
 
   const fetchAvailable = async (classId: number) => {
     try {
-      const res = await fetch(`${API_URL}/teacher/available-students?class_id=${classId}`, { headers: getAuthHeader(token) });
+      const res = await authFetch(`${API_URL}/teacher/available-students?class_id=${classId}`);
       if (res.ok) setAvailableStudents(await res.json());
     } catch (e) { console.error(e); }
   };
@@ -268,7 +269,7 @@ function StudentsTab({ token }: { token: string | null }) {
     if (selectedClass) {
       fetchStudents(selectedClass);
     }
-  }, [selectedClass, token]);
+  }, [selectedClass]);
 
   const handleEnroll = async (studentId: number) => {
     if (!selectedClass) return;
@@ -277,8 +278,8 @@ function StudentsTab({ token }: { token: string | null }) {
     const formData = new FormData();
     formData.append("student_id", String(studentId));
     try {
-      const res = await fetch(`${API_URL}/teacher/my-classes/${selectedClass}/enroll`, {
-        method: "POST", headers: getAuthHeader(token), body: formData
+      const res = await authFetch(`${API_URL}/teacher/my-classes/${selectedClass}/enroll`, {
+        method: "POST", body: formData
       });
       if (res.ok) {
         console.log(`[DEBUG] Enroll successful in ${Date.now() - startTime}ms`);
@@ -299,8 +300,8 @@ function StudentsTab({ token }: { token: string | null }) {
     console.log("[DEBUG] Starting remove student operation");
     const startTime = Date.now();
     try {
-      const res = await fetch(`${API_URL}/teacher/my-classes/${selectedClass}/students/${studentId}`, {
-        method: "DELETE", headers: getAuthHeader(token)
+      const res = await authFetch(`${API_URL}/teacher/my-classes/${selectedClass}/students/${studentId}`, {
+        method: "DELETE"
       });
       if (res.ok) {
         console.log(`[DEBUG] Remove successful in ${Date.now() - startTime}ms`);
@@ -405,7 +406,8 @@ function StudentsTab({ token }: { token: string | null }) {
 }
 
 // ==================== LESSONS TAB ====================
-function LessonsTab({ token }: { token: string | null }) {
+function LessonsTab() {
+  const { authFetch, token } = useAuth();
   const [classes, setClasses] = useState<any[]>([]);
   const [selectedClass, setSelectedClass] = useState<number | null>(null);
   const [lessons, setLessons] = useState<any[]>([]);
@@ -419,7 +421,7 @@ function LessonsTab({ token }: { token: string | null }) {
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch(`${API_URL}/teacher/my-classes`, { headers: getAuthHeader(token) });
+        const res = await authFetch(`${API_URL}/teacher/my-classes`);
         if (res.ok) {
           const data = await res.json();
           setClasses(data);
@@ -432,14 +434,14 @@ function LessonsTab({ token }: { token: string | null }) {
 
   const fetchLessons = async (classId: number) => {
     try {
-      const res = await fetch(`${API_URL}/teacher/my-classes/${classId}/lessons`, { headers: getAuthHeader(token) });
+      const res = await authFetch(`${API_URL}/teacher/my-classes/${classId}/lessons`);
       if (res.ok) setLessons(await res.json());
     } catch (e) { console.error(e); }
   };
 
   useEffect(() => {
     if (selectedClass) fetchLessons(selectedClass);
-  }, [selectedClass, token]);
+  }, [selectedClass]);
 
   const handleSave = async () => {
     console.log("[DEBUG] Starting lesson save operation");
@@ -454,7 +456,7 @@ function LessonsTab({ token }: { token: string | null }) {
       ? `${API_URL}/teacher/lessons/${editId}`
       : `${API_URL}/teacher/my-classes/${selectedClass}/lessons`;
     try {
-      const res = await fetch(url, { method: editId ? "PUT" : "POST", headers: getAuthHeader(token), body: formData });
+      const res = await authFetch(url, { method: editId ? "PUT" : "POST", body: formData });
       if (res.ok) {
         console.log(`[DEBUG] Lesson save successful in ${Date.now() - startTime}ms`);
         resetForm();
@@ -474,7 +476,7 @@ function LessonsTab({ token }: { token: string | null }) {
     console.log("[DEBUG] Starting lesson delete operation");
     const startTime = Date.now();
     try {
-      const res = await fetch(`${API_URL}/teacher/lessons/${id}`, { method: "DELETE", headers: getAuthHeader(token) });
+      const res = await authFetch(`${API_URL}/teacher/lessons/${id}`, { method: "DELETE" });
       if (res.ok) {
         console.log(`[DEBUG] Lesson delete successful in ${Date.now() - startTime}ms`);
         if (selectedClass) fetchLessons(selectedClass);
@@ -571,8 +573,8 @@ function LessonsTab({ token }: { token: string | null }) {
 }
 
 // ==================== ASSIGNMENTS TAB ====================
-function AssignmentsTab({ token }: { token: string | null }) {
-  const { refreshUser } = useAuth();
+function AssignmentsTab() {
+  const { refreshUser, authFetch, token } = useAuth();
   const [classes, setClasses] = useState<any[]>([]);
   const [selectedClass, setSelectedClass] = useState<number | null>(null);
   const [assignments, setAssignments] = useState<any[]>([]);
@@ -590,7 +592,7 @@ function AssignmentsTab({ token }: { token: string | null }) {
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch(`${API_URL}/teacher/my-classes`, { headers: getAuthHeader(token) });
+        const res = await authFetch(`${API_URL}/teacher/my-classes`);
         if (res.ok) {
           const data = await res.json();
           setClasses(data);
@@ -602,14 +604,14 @@ function AssignmentsTab({ token }: { token: string | null }) {
 
   const fetchAssignments = async (classId: number) => {
     try {
-      const res = await fetch(`${API_URL}/teacher/my-classes/${classId}/assignments`, { headers: getAuthHeader(token) });
+      const res = await authFetch(`${API_URL}/teacher/my-classes/${classId}/assignments`);
       if (res.ok) setAssignments(await res.json());
     } catch (e) { console.error(e); }
   };
 
   useEffect(() => {
     if (selectedClass) fetchAssignments(selectedClass);
-  }, [selectedClass, token]);
+  }, [selectedClass]);
 
   const handleGenerateQuiz = async () => {
     if (!formQuizText.trim()) return alert("Vui lòng nhập nội dung để AI tạo quiz");
@@ -618,8 +620,8 @@ function AssignmentsTab({ token }: { token: string | null }) {
       const formData = new FormData();
       formData.append("text", formQuizText);
       formData.append("num_questions", "5");
-      const res = await fetch(`${API_URL}/teacher/generate-quiz`, {
-        method: "POST", headers: getAuthHeader(token), body: formData
+      const res = await authFetch(`${API_URL}/teacher/generate-quiz`, {
+        method: "POST", body: formData
       });
       if (res.ok) {
         const data = await res.json();
@@ -643,9 +645,8 @@ function AssignmentsTab({ token }: { token: string | null }) {
       due_date: formDue
     };
     try {
-      const res = await fetch(`${API_URL}/teacher/assignments`, {
+      const res = await authFetch(`${API_URL}/teacher/assignments`, {
         method: "POST",
-        headers: { ...getAuthHeader(token), "Content-Type": "application/json" },
         body: JSON.stringify(body)
       });
       if (res.ok) {
@@ -667,7 +668,7 @@ function AssignmentsTab({ token }: { token: string | null }) {
     console.log("[DEBUG] Starting delete assignment operation");
     const startTime = Date.now();
     try {
-      const res = await fetch(`${API_URL}/teacher/assignments/${id}`, { method: "DELETE", headers: getAuthHeader(token) });
+      const res = await authFetch(`${API_URL}/teacher/assignments/${id}`, { method: "DELETE" });
       if (res.ok) {
         console.log(`[DEBUG] Assignment delete successful in ${Date.now() - startTime}ms`);
         if (selectedClass) fetchAssignments(selectedClass);
@@ -684,7 +685,7 @@ function AssignmentsTab({ token }: { token: string | null }) {
   const toggleScores = async (assignmentId: number) => {
     if (expandedScores === assignmentId) { setExpandedScores(null); return; }
     try {
-      const res = await fetch(`${API_URL}/teacher/assignments/${assignmentId}/scores`, { headers: getAuthHeader(token) });
+      const res = await authFetch(`${API_URL}/teacher/assignments/${assignmentId}/scores`);
       if (res.ok) setScores(await res.json());
     } catch (e) { console.error(e); }
     setExpandedScores(assignmentId);
@@ -823,8 +824,8 @@ function AssignmentsTab({ token }: { token: string | null }) {
 }
 
 // ==================== AI TOOLS TAB ====================
-function AIToolsTab({ token }: { token: string | null }) {
-  const { refreshUser } = useAuth();
+function AIToolsTab() {
+  const { refreshUser, authFetch, token } = useAuth();
   const [text, setText] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [inputMode, setInputMode] = useState<"text" | "file">("text");
@@ -1483,7 +1484,8 @@ function AIToolsTab({ token }: { token: string | null }) {
 }
 
 // ==================== GRAMMAR TAB ====================
-function GrammarTab({ token }: { token: string | null }) {
+function GrammarTab() {
+  const { authFetch, token } = useAuth();
   const [rules, setRules] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 

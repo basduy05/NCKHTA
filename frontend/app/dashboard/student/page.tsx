@@ -11,14 +11,12 @@ import {
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://iedu-ksk7.onrender.com";
 
-function getAuthHeader(token: string | null) {
-  return { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
-}
+// Local auth fetch helpers removed in favor of AuthContext.authFetch
 
 function StudentDashboardContent() {
   const searchParams = useSearchParams();
   const activeTab = searchParams.get("tab") || "overview";
-  const { user, token, isInitialized, refreshUser } = useAuth();
+  const { user, token, isInitialized, refreshUser, authFetch } = useAuth();
   const router = useRouter();
   const [visitedTabs, setVisitedTabs] = useState<Set<string>>(new Set([activeTab]));
 
@@ -57,17 +55,17 @@ function StudentDashboardContent() {
 
     return (
       <div key={tabName} style={style} className="animate-in fade-in duration-300">
-        {tabName === "overview" && <OverviewTab token={token} user={user} />}
-        {tabName === "classes" && <ClassesTab token={token} />}
-        {tabName === "assignments" && <AssignmentsTab token={token} />}
-        {tabName === "dictionary" && <DictionaryTab token={token} />}
-        {tabName === "vocabulary" && <VocabularyTab token={token} />}
-        {tabName === "ai-tools" && <AIToolsTab token={token} />}
-        {tabName === "grammar" && <GrammarTab token={token} />}
-        {tabName === "scores" && <ScoresTab token={token} />}
-        {tabName === "ipa" && <IpaTab token={token} />}
-        {tabName === "practice" && <PracticeTab token={token} />}
-        {tabName === "ranking" && <RankingTab token={token} />}
+        {tabName === "overview" && <OverviewTab />}
+        {tabName === "classes" && <ClassesTab />}
+        {tabName === "assignments" && <AssignmentsTab />}
+        {tabName === "dictionary" && <DictionaryTab />}
+        {tabName === "vocabulary" && <VocabularyTab />}
+        {tabName === "ai-tools" && <AIToolsTab />}
+        {tabName === "grammar" && <GrammarTab />}
+        {tabName === "scores" && <ScoresTab />}
+        {tabName === "ipa" && <IpaTab />}
+        {tabName === "practice" && <PracticeTab />}
+        {tabName === "ranking" && <RankingTab />}
       </div>
     );
   };
@@ -116,14 +114,15 @@ export default function StudentDashboard() {
 }
 
 // ==================== OVERVIEW TAB ====================
-function OverviewTab({ token, user }: { token: string | null; user: any }) {
+function OverviewTab() {
+  const { token, user, authFetch } = useAuth();
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch(`${API_URL}/student/stats`, { headers: getAuthHeader(token) });
+        const res = await authFetch(`${API_URL}/student/stats`);
         if (res.ok) setStats(await res.json());
       } catch (e) { console.error(e); }
       finally { setLoading(false); }
@@ -199,7 +198,8 @@ function OverviewTab({ token, user }: { token: string | null; user: any }) {
 }
 
 // ==================== CLASSES TAB ====================
-function ClassesTab({ token }: { token: string | null }) {
+function ClassesTab() {
+  const { token, authFetch } = useAuth();
   const [classes, setClasses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedClass, setSelectedClass] = useState<number | null>(null);
@@ -209,7 +209,7 @@ function ClassesTab({ token }: { token: string | null }) {
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch(`${API_URL}/student/my-classes`, { headers: getAuthHeader(token) });
+        const res = await authFetch(`${API_URL}/student/my-classes`);
         if (res.ok) setClasses(await res.json());
       } catch (e) { console.error(e); }
       finally { setLoading(false); }
@@ -221,7 +221,7 @@ function ClassesTab({ token }: { token: string | null }) {
     setSelectedClass(classId);
     setLessonsLoading(true);
     try {
-      const res = await fetch(`${API_URL}/student/my-classes/${classId}/lessons`, { headers: getAuthHeader(token) });
+      const res = await authFetch(`${API_URL}/student/my-classes/${classId}/lessons`);
       if (res.ok) setLessons(await res.json());
     } catch (e) { console.error(e); }
     finally { setLessonsLoading(false); }
@@ -292,7 +292,8 @@ function ClassesTab({ token }: { token: string | null }) {
 }
 
 // ==================== ASSIGNMENTS TAB ====================
-function AssignmentsTab({ token }: { token: string | null }) {
+function AssignmentsTab() {
+  const { token, authFetch } = useAuth();
   const [assignments, setAssignments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [takingQuiz, setTakingQuiz] = useState<any>(null);
@@ -302,7 +303,7 @@ function AssignmentsTab({ token }: { token: string | null }) {
 
   const fetchAssignments = async () => {
     try {
-      const res = await fetch(`${API_URL}/student/assignments`, { headers: getAuthHeader(token) });
+      const res = await authFetch(`${API_URL}/student/assignments`);
       if (res.ok) setAssignments(await res.json());
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
@@ -312,7 +313,7 @@ function AssignmentsTab({ token }: { token: string | null }) {
 
   const startQuiz = async (id: number) => {
     try {
-      const res = await fetch(`${API_URL}/student/assignments/${id}`, { headers: getAuthHeader(token) });
+      const res = await authFetch(`${API_URL}/student/assignments/${id}`);
       if (res.ok) {
         const data = await res.json();
         setTakingQuiz(data);
@@ -339,9 +340,8 @@ function AssignmentsTab({ token }: { token: string | null }) {
         setSubmitting(false);
         return;
       }
-      const res = await fetch(`${API_URL}/student/assignments/${takingQuiz.id}/submit`, {
+      const res = await authFetch(`${API_URL}/student/assignments/${takingQuiz.id}/submit`, {
         method: "POST",
-        headers: getAuthHeader(token),
         body: JSON.stringify(body),
       });
       if (res.ok) {
@@ -570,8 +570,8 @@ function AssignmentsTab({ token }: { token: string | null }) {
 }
 
 // ==================== AI TOOLS TAB ====================
-function AIToolsTab({ token }: { token: string | null }) {
-  const { refreshUser } = useAuth();
+function AIToolsTab() {
+  const { token, authFetch, refreshUser } = useAuth();
   const [text, setText] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [inputMode, setInputMode] = useState<"text" | "file">("text");
@@ -594,9 +594,8 @@ function AIToolsTab({ token }: { token: string | null }) {
     try {
       let data;
       if (type === "text") {
-        const res = await fetch(`${API_URL}/student/analyze-text`, {
+        const res = await authFetch(`${API_URL}/student/analyze-text`, {
           method: "POST",
-          headers: getAuthHeader(token),
           body: JSON.stringify({ text, num_questions: 5 }),
         });
         if (!res.ok) throw new Error("API error");
@@ -609,9 +608,9 @@ function AIToolsTab({ token }: { token: string | null }) {
         formData.append("num_questions", "5");
         formData.append("exercise_type", "mixed");
 
-        const res = await fetch(`${API_URL}/student/file/upload-analyze`, {
+        const res = await authFetch(`${API_URL}/student/file/upload-analyze`, {
           method: "POST",
-          headers: { Authorization: `Bearer ${token}` }, // FormData does not need Content-Type header
+          // FormData does not need Content-Type header
           body: formData,
         });
         
@@ -775,8 +774,8 @@ function AIToolsTab({ token }: { token: string | null }) {
                       onClick={async (e) => {
                         e.stopPropagation();
                         try {
-                          const res = await fetch(`${API_URL}/student/vocabulary/save`, {
-                            method: "POST", headers: getAuthHeader(token),
+                          const res = await authFetch(`${API_URL}/student/vocabulary/save`, {
+                            method: "POST",
                             body: JSON.stringify({ word: w.word, phonetic: w.phon, pos: w.pos || "", meaning_en: w.meaning_en || "", meaning_vn: w.meaning, example: w.example, level: w.level, source: "ai-analysis" })
                           });
                           if (res.ok) alert(`Đã lưu "${w.word}" vào kho từ vựng!`);
@@ -856,7 +855,8 @@ function AIToolsTab({ token }: { token: string | null }) {
 }
 
 // ==================== DICTIONARY TAB ====================
-function DictionaryTab({ token }: { token: string | null }) {
+function DictionaryTab() {
+  const { token, authFetch } = useAuth();
   const [word, setWord] = useState("");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
@@ -903,9 +903,8 @@ function DictionaryTab({ token }: { token: string | null }) {
     abortControllerRef.current = controller;
 
     try {
-      const res = await fetch(`${API_URL}/student/dictionary/lookup`, {
+      const res = await authFetch(`${API_URL}/student/dictionary/lookup`, {
         method: "POST",
-        headers: getAuthHeader(token),
         body: JSON.stringify({ word: trimmedWord }),
         signal: controller.signal
       });
@@ -1007,9 +1006,8 @@ function DictionaryTab({ token }: { token: string | null }) {
     setSaving(true);
     try {
       const firstMeaning = result.meanings?.[0] || {};
-      const res = await fetch(`${API_URL}/student/vocabulary/save`, {
+      const res = await authFetch(`${API_URL}/student/vocabulary/save`, {
         method: "POST",
-        headers: getAuthHeader(token),
         body: JSON.stringify({
           word: result.word,
           phonetic: result.phonetic_uk || result.phonetic_us || "",
@@ -1344,8 +1342,8 @@ function DictionaryTab({ token }: { token: string | null }) {
 
 const VOCAB_CACHE_KEY = "iedu_vocab_cache";
 
-function VocabularyTab({ token }: { token: string | null }) {
-  const { refreshUser } = useAuth();
+function VocabularyTab() {
+  const { token, authFetch, refreshUser } = useAuth();
   const [words, setWords] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -1374,7 +1372,7 @@ function VocabularyTab({ token }: { token: string | null }) {
       const params = new URLSearchParams();
       if (debouncedSearch) params.set("search", debouncedSearch);
       if (levelFilter) params.set("level", levelFilter);
-      const res = await fetch(`${API_URL}/student/vocabulary?${params}`, { headers: getAuthHeader(token) });
+      const res = await authFetch(`${API_URL}/student/vocabulary?${params}`);
       if (res.ok) {
         const serverWords = await res.json();
         setWords(serverWords);
@@ -1389,7 +1387,7 @@ function VocabularyTab({ token }: { token: string | null }) {
     if (!confirm("Xóa từ này khỏi kho từ vựng?")) return;
     setDeleting(id);
     try {
-      const res = await fetch(`${API_URL}/student/vocabulary/${id}`, { method: "DELETE", headers: getAuthHeader(token) });
+      const res = await authFetch(`${API_URL}/student/vocabulary/${id}`, { method: "DELETE" });
       if (res.ok) setWords(words.filter(w => w.id !== id));
     } catch (e) { console.error(e); }
     finally { setDeleting(null); }
@@ -1412,9 +1410,8 @@ function VocabularyTab({ token }: { token: string | null }) {
   const startRichPractice = async () => {
     setGeneratingPractice(true);
     try {
-      const res = await fetch(`${API_URL}/student/vocabulary/practice`, {
+      const res = await authFetch(`${API_URL}/student/vocabulary/practice`, {
         method: "POST",
-        headers: getAuthHeader(token),
         body: JSON.stringify({ word_ids: [] }) // Empty means SR-based
       });
       if (res.ok) {
@@ -1453,9 +1450,8 @@ function VocabularyTab({ token }: { token: string | null }) {
     } else {
       // Completed!
       try {
-        await fetch(`${API_URL}/student/vocabulary/practice/complete`, {
+        await authFetch(`${API_URL}/student/vocabulary/practice/complete`, {
           method: "POST",
-          headers: getAuthHeader(token),
           body: JSON.stringify({ results: practiceResults })
         });
         refreshUser();
@@ -1663,14 +1659,15 @@ function VocabularyTab({ token }: { token: string | null }) {
 }
 
 // ==================== SCORES TAB ====================
-function ScoresTab({ token }: { token: string | null }) {
+function ScoresTab() {
+  const { token, authFetch } = useAuth();
   const [scores, setScores] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch(`${API_URL}/student/scores`, { headers: getAuthHeader(token) });
+        const res = await authFetch(`${API_URL}/student/scores`);
         if (res.ok) setScores(await res.json());
       } catch (e) { console.error(e); }
       finally { setLoading(false); }
@@ -1777,8 +1774,8 @@ const IPA_DATA = {
   ]
 };
 
-function IpaTab({ token }: { token: string | null }) {
-  const { refreshUser } = useAuth();
+function IpaTab() {
+  const { token, authFetch, refreshUser } = useAuth();
   const [focus, setFocus] = useState("vowels");
   const [loading, setLoading] = useState(false);
   const [lesson, setLesson] = useState<any>(null);
@@ -1793,9 +1790,8 @@ function IpaTab({ token }: { token: string | null }) {
     setQuizSubmitted(false);
     setQuizScore(0);
     try {
-      const res = await fetch(`${API_URL}/student/ipa/generate`, {
+      const res = await authFetch(`${API_URL}/student/ipa/generate`, {
         method: "POST",
-        headers: getAuthHeader(token),
         body: JSON.stringify({ focus })
       });
       
@@ -2035,8 +2031,8 @@ function IpaTab({ token }: { token: string | null }) {
 }
 
 // ==================== NEW: PRACTICE TAB ====================
-function PracticeTab({ token }: { token: string | null }) {
-  const { refreshUser } = useAuth();
+function PracticeTab() {
+  const { token, authFetch, refreshUser } = useAuth();
   const [testType, setTestType] = useState("TOEIC");
   const [skill, setSkill] = useState("reading");
   const [loading, setLoading] = useState(false);
@@ -2068,9 +2064,8 @@ function PracticeTab({ token }: { token: string | null }) {
         return;
       }
 
-      const res = await fetch(`${API_URL}${endpoint}`, {
+      const res = await authFetch(`${API_URL}${endpoint}`, {
         method: "POST",
-        headers: getAuthHeader(token),
         body: JSON.stringify(body)
       });
       
@@ -2268,8 +2263,8 @@ function PracticeTab({ token }: { token: string | null }) {
 }
 
 // ==================== GRAMMAR TAB ====================
-function GrammarTab({ token }: { token: string | null }) {
-  const { refreshUser } = useAuth();
+function GrammarTab() {
+  const { token, authFetch, refreshUser } = useAuth();
   const [rules, setRules] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -2277,7 +2272,7 @@ function GrammarTab({ token }: { token: string | null }) {
     setLoading(true);
     try {
       const prefix = typeof window !== "undefined" && window.location.href.includes("/teacher") ? "teacher" : "student";
-      const res = await fetch(`${API_URL}/${prefix}/grammar`, { headers: { Authorization: `Bearer ${token}` } });
+      const res = await authFetch(`${API_URL}/${prefix}/grammar`);
       if (!res.ok) throw new Error(`API error ${res.status}`);
       const data = await res.json();
       setRules(Array.isArray(data) ? data : []);
@@ -2303,9 +2298,8 @@ function GrammarTab({ token }: { token: string | null }) {
     setSubmitted(false);
     setAnswers({});
     try {
-      const res = await fetch(`${API_URL}/student/grammar/practice`, {
+      const res = await authFetch(`${API_URL}/student/grammar/practice`, {
         method: "POST",
-        headers: getAuthHeader(token),
         body: JSON.stringify({ rule_ids: selectedRules, difficulty })
       });
       if (res.ok) {
@@ -2445,14 +2439,15 @@ function GrammarTab({ token }: { token: string | null }) {
 }
 
 // ==================== RANKING TAB ====================
-function RankingTab({ token }: { token: string | null }) {
+function RankingTab() {
+  const { token, authFetch } = useAuth();
   const [ranking, setRanking] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch(`${API_URL}/student/ranking`, { headers: getAuthHeader(token) });
+        const res = await authFetch(`${API_URL}/student/ranking`);
         if (res.ok) setRanking(await res.json());
       } catch (e) { console.error(e); }
       finally { setLoading(false); }

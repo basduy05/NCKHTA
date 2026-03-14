@@ -6,25 +6,13 @@ import { useAuth } from "@/app/context/AuthContext";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://iedu-ksk7.onrender.com";
 
-async function authFetch(input: RequestInfo | URL, init: RequestInit = {}, token: string | null = null) {
-  const headers = new Headers(init.headers);
-  if (token) headers.set("Authorization", `Bearer ${token}`);
-  if (!headers.has("Content-Type") && !(init.body instanceof FormData)) {
-    headers.set("Content-Type", "application/json");
-  }
-  return fetch(input, { ...init, headers });
-}
-
-function getAuthHeader(token: string | null) {
-  if (!token) return {};
-  return { Authorization: `Bearer ${token}` };
-}
+// Local auth fetch helpers removed in favor of AuthContext.authFetch
 
 function AdminDashboardContent() {
   const searchParams = useSearchParams();
   const activeTab = searchParams.get("tab") || "overview";
   const router = useRouter();
-  const { token, user, isInitialized } = useAuth();
+  const { token, user, isInitialized, authFetch } = useAuth();
 
   useEffect(() => {
     if (!isInitialized) return;
@@ -80,7 +68,7 @@ export default function AdminDashboard() {
 }
 
 function OverviewTab() {
-  const { token, isInitialized } = useAuth();
+  const { token, isInitialized, authFetch } = useAuth();
   const [stats, setStats] = useState({ users: 0, vocab: 0, classes: 0, lessons: 0 });
   const [loading, setLoading] = useState(true);
 
@@ -89,7 +77,7 @@ function OverviewTab() {
 
     const fetchStats = async () => {
       try {
-        const res = await authFetch(`${API_URL}/admin/stats`, { signal: AbortSignal.timeout(5000) }, token);
+        const res = await authFetch(`${API_URL}/admin/stats`, { signal: AbortSignal.timeout(5000) });
         if (res.status === 401 || res.status === 403) throw new Error("Unauthorized");
         if (!res.ok) throw new Error("API failed");
         const data = await res.json();
@@ -121,7 +109,7 @@ function OverviewTab() {
 }
 
 function UsersTab() {
-  const { token, isInitialized } = useAuth();
+  const { token, isInitialized, authFetch } = useAuth();
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState<number | null>(null);
@@ -130,7 +118,7 @@ function UsersTab() {
   const fetchUsers = async () => {
     if (!token) return;
     try {
-      const res = await authFetch(`${API_URL}/admin/users`, {}, token);
+      const res = await authFetch(`${API_URL}/admin/users`);
       if (!res.ok) throw new Error(`API error ${res.status}`);
       const data = await res.json();
       setUsers(Array.isArray(data) ? data : []);
@@ -153,7 +141,7 @@ function UsersTab() {
       const res = await authFetch(`${API_URL}/admin/bulk-update-credits`, {
         method: "POST",
         body: JSON.stringify({ credits: bulkCredits, role: bulkRole })
-      }, token);
+      });
       if (res.ok) {
         alert("Cập nhật hàng loạt thành công!");
         fetchUsers();
@@ -179,14 +167,12 @@ function UsersTab() {
       if (isEditing !== null) {
         await authFetch(
           `${API_URL}/admin/users/${isEditing}`,
-          { method: "PUT", body: JSON.stringify(formUser) },
-          token
+          { method: "PUT", body: JSON.stringify(formUser) }
         );
       } else {
         const res = await authFetch(
           `${API_URL}/admin/users`,
-          { method: "POST", body: JSON.stringify(formUser) },
-          token
+          { method: "POST", body: JSON.stringify(formUser) }
         );
         const payload = await res.json();
         if (!res.ok) return alert(payload.detail || "Lỗi tạo người dùng");
@@ -201,7 +187,7 @@ function UsersTab() {
   const handleDeleteUser = async (id: number) => {
     if (!token) return;
     if (confirm("Bạn có chắc chắn xoá người dùng này?")) {
-      await authFetch(`${API_URL}/admin/users/${id}`, { method: "DELETE" }, token);
+      await authFetch(`${API_URL}/admin/users/${id}`, { method: "DELETE" });
       fetchUsers();
     }
   };
@@ -330,7 +316,7 @@ function UsersTab() {
 }
 
 function ClassesTab() {
-  const { token } = useAuth();
+  const { token, authFetch } = useAuth();
   const [classes, setClasses] = useState<any[]>([]);
   const [isEditing, setIsEditing] = useState<number | null>(null);
   const [formClass, setFormClass] = useState({ name: '', teacher_name: '', students_count: 0 });
@@ -338,7 +324,7 @@ function ClassesTab() {
   const fetchClasses = async () => {
     if (!token) return;
     try { 
-      const res = await fetch(`${API_URL}/admin/classes`, { headers: getAuthHeader(token) }); 
+      const res = await authFetch(`${API_URL}/admin/classes`); 
       if (!res.ok) {
         console.error('Fetch classes error:', res.status, await res.text());
         return;
@@ -358,9 +344,8 @@ function ClassesTab() {
     const url = isEditing ? `${API_URL}/admin/classes/${isEditing}` : `${API_URL}/admin/classes`;
     const method = isEditing ? 'PUT' : 'POST';
     try {
-      const res = await fetch(url, { 
+      const res = await authFetch(url, { 
         method, 
-        headers: { ...getAuthHeader(token), 'Content-Type': 'application/json' }, 
         body: JSON.stringify(formClass) 
       });
       if (!res.ok) {
@@ -385,7 +370,7 @@ function ClassesTab() {
     if (!token) return alert("Vui lòng đăng nhập lại!");
     if (!confirm("Xoá lớp này?")) return;
     try {
-      const res = await fetch(`${API_URL}/admin/classes/${id}`, { method: 'DELETE', headers: getAuthHeader(token) });
+      const res = await authFetch(`${API_URL}/admin/classes/${id}`, { method: 'DELETE' });
       if (!res.ok) {
         alert('Lỗi khi xóa');
         return;
@@ -438,7 +423,7 @@ function ClassesTab() {
 }
 
 function LessonsTab() {
-  const { token } = useAuth();
+  const { token, authFetch } = useAuth();
   const [lessons, setLessons] = useState<any[]>([]);
   const [classes, setClasses] = useState<any[]>([]);
   const [file, setFile] = useState<File | null>(null);
@@ -458,9 +443,8 @@ function LessonsTab() {
       fd.append("exercise_type", exerciseType);
       fd.append("num_questions", "5");
 
-      const res = await fetch(`${API_URL}/teacher/file/generate-assignment`, {
+      const res = await authFetch(`${API_URL}/teacher/file/generate-assignment`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
         body: fd
       });
       if (res.ok) {
@@ -490,10 +474,10 @@ function LessonsTab() {
   };
 
   const fetchLessons = async () => {
-    try { const res = await fetch(`${API_URL}/admin/lessons`, { headers: getAuthHeader(token) }); if (!res.ok) throw new Error(`API error ${res.status}`); const data = await res.json(); setLessons(Array.isArray(data) ? data : []); } catch { }
+    try { const res = await authFetch(`${API_URL}/admin/lessons`); if (!res.ok) throw new Error(`API error ${res.status}`); const data = await res.json(); setLessons(Array.isArray(data) ? data : []); } catch { }
   };
   const fetchClasses = async () => {
-    try { const res = await fetch(`${API_URL}/admin/classes`, { headers: getAuthHeader(token) }); if (!res.ok) throw new Error(`API error ${res.status}`); const data = await res.json(); setClasses(Array.isArray(data) ? data : []); } catch { }
+    try { const res = await authFetch(`${API_URL}/admin/classes`); if (!res.ok) throw new Error(`API error ${res.status}`); const data = await res.json(); setClasses(Array.isArray(data) ? data : []); } catch { }
   };
 
   useEffect(() => { fetchLessons(); fetchClasses(); }, []);
@@ -509,7 +493,7 @@ function LessonsTab() {
       if (file) fd.append("file", file);
       const url = isEditing ? `${API_URL}/admin/lessons/${isEditing}` : `${API_URL}/admin/lessons`;
       const method = isEditing ? 'PUT' : 'POST';
-      const res = await fetch(url, { method, headers: getAuthHeader(token), body: fd });
+      const res = await authFetch(url, { method, body: fd });
       if (!res.ok) { const e = await res.json(); throw new Error(e.detail || 'Error'); }
       resetForm();
       fetchLessons();
@@ -525,7 +509,7 @@ function LessonsTab() {
 
   const handleDelete = async (id: number) => {
     if (confirm("Xóa bài học này?")) {
-      await fetch(`${API_URL}/admin/lessons/${id}`, { method: 'DELETE', headers: getAuthHeader(token) });
+      await authFetch(`${API_URL}/admin/lessons/${id}`, { method: 'DELETE' });
       fetchLessons();
     }
   };
@@ -607,7 +591,7 @@ function LessonsTab() {
 }
 
 function VocabTab() {
-  const { token } = useAuth();
+  const { token, authFetch } = useAuth();
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [words, setWords] = useState<any[]>([]);
@@ -629,7 +613,7 @@ function VocabTab() {
       const params = new URLSearchParams({ limit: String(PAGE_SIZE), skip: String(skip) });
       if (level) params.set('level', level);
       if (searchQ) params.set('search', searchQ);
-      const res = await fetch(`${API_URL}/admin/vocab/list?${params}`, { headers: getAuthHeader(token) });
+      const res = await authFetch(`${API_URL}/admin/vocab/list?${params}`);
       const data = await res.json();
       setWords(data.words || []);
       setTotalWords(data.total || 0);
@@ -645,7 +629,7 @@ function VocabTab() {
     const formData = new FormData();
     formData.append("file", file);
     try {
-      const res = await fetch(`${API_URL}/admin/vocab/import`, { method: "POST", headers: getAuthHeader(token), body: formData });
+      const res = await authFetch(`${API_URL}/admin/vocab/import`, { method: "POST", body: formData });
       const result = await res.json();
       if (!res.ok) throw new Error(result.detail || "Upload failed");
       alert(result.message);
@@ -660,7 +644,7 @@ function VocabTab() {
     console.log("[DEBUG] Starting delete word operation");
     const startTime = Date.now();
     try {
-      const res = await fetch(`${API_URL}/admin/vocab/${encodeURIComponent(word)}`, { method: 'DELETE', headers: getAuthHeader(token) });
+      const res = await authFetch(`${API_URL}/admin/vocab/${encodeURIComponent(word)}`, { method: 'DELETE' });
       if (res.ok) {
         console.log(`[DEBUG] Delete word successful in ${Date.now() - startTime}ms`);
         fetchWords();
@@ -709,7 +693,7 @@ function VocabTab() {
       const isNew = editingWord === '';
       const url = isNew ? `${API_URL}/admin/vocab` : `${API_URL}/admin/vocab/${encodeURIComponent(editingWord!)}`;
       const method = isNew ? 'POST' : 'PUT';
-      const res = await fetch(url, { method, headers: { ...getAuthHeader(token), 'Content-Type': 'application/json' }, body: JSON.stringify(formWord) });
+      const res = await authFetch(url, { method, body: JSON.stringify(formWord) });
       if (!res.ok) {
         const e = await res.json();
         console.error(`[DEBUG] Save word failed with status ${res.status}: ${JSON.stringify(e)}`);
@@ -849,7 +833,7 @@ function VocabTab() {
 }
 
 function GrammarTab() {
-  const { token } = useAuth();
+  const { token, authFetch } = useAuth();
   const [rules, setRules] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [name, setName] = useState('');
@@ -860,7 +844,7 @@ function GrammarTab() {
 
   const fetchRules = async () => {
     setLoading(true);
-    try { const res = await fetch(`${API_URL}/admin/grammar`, { headers: getAuthHeader(token) }); if (!res.ok) throw new Error(`API error ${res.status}`); const data = await res.json(); setRules(Array.isArray(data) ? data : []); } catch { }
+    try { const res = await authFetch(`${API_URL}/admin/grammar`); if (!res.ok) throw new Error(`API error ${res.status}`); const data = await res.json(); setRules(Array.isArray(data) ? data : []); } catch { }
     finally { setLoading(false); }
   };
 
@@ -873,7 +857,7 @@ function GrammarTab() {
       const res = await authFetch(`${API_URL}/admin/grammar/ai-generate`, {
         method: "POST",
         body: JSON.stringify({ topic: name })
-      }, token);
+      });
       if (!res.ok) throw new Error("AI failed");
       const data = await res.json();
       setDescription(data.description || "");
@@ -896,7 +880,7 @@ function GrammarTab() {
       if (file) fd.append("file", file);
       const url = isEditing ? `${API_URL}/admin/grammar/${isEditing}` : `${API_URL}/admin/grammar`;
       const method = isEditing ? 'PUT' : 'POST';
-      const res = await fetch(url, { method, headers: getAuthHeader(token), body: fd });
+      const res = await authFetch(url, { method, body: fd });
       if (!res.ok) throw new Error((await res.json()).detail || 'Error');
       resetForm();
       fetchRules();
@@ -913,7 +897,7 @@ function GrammarTab() {
 
   const handleDelete = async (id: number) => {
     if (!confirm("Xoá cấu trúc ngữ pháp này?")) return;
-    await fetch(`${API_URL}/admin/grammar/${id}`, { method: 'DELETE', headers: getAuthHeader(token) });
+    await authFetch(`${API_URL}/admin/grammar/${id}`, { method: 'DELETE' });
     fetchRules();
   };
 
@@ -1008,7 +992,7 @@ function SettingsTab() {
   const fetchSettings = async () => {
     try {
       // FIXED: include Bearer token — admin routes require authentication
-      const res = await authFetch(`${API_URL}/admin/settings`, {}, token);
+      const res = await authFetch(`${API_URL}/admin/settings`);
       if (res.ok) {
         setSettings(await res.json());
       } else if (res.status === 401 || res.status === 403) {
@@ -1027,7 +1011,7 @@ function SettingsTab() {
       const res = await authFetch(`${API_URL}/admin/settings`, {
         method: 'PUT',
         body: JSON.stringify({ settings })
-      }, token);
+      });
       const data = await res.json();
       if (res.ok) {
         alert(`Đã lưu ${data.updated_keys?.length || 0} cài đặt. Neo4j: ${data.neo4j_status}`);
@@ -1043,7 +1027,7 @@ function SettingsTab() {
     setTestingEmail(true);
     try {
       // FIXED: include Bearer token
-      const res = await authFetch(`${API_URL}/admin/settings/test-email`, { method: 'POST' }, token);
+      const res = await authFetch(`${API_URL}/admin/settings/test-email`, { method: 'POST' });
       const data = await res.json();
       const steps = data.steps ? '\n' + data.steps.join('\n') : '';
       if (data.success) {
@@ -1059,7 +1043,7 @@ function SettingsTab() {
     setTestingNeo4j(true);
     try {
       // FIXED: include Bearer token
-      const res = await authFetch(`${API_URL}/admin/settings/test-neo4j`, { method: 'POST' }, token);
+      const res = await authFetch(`${API_URL}/admin/settings/test-neo4j`, { method: 'POST' });
       const data = await res.json();
       alert(res.ok ? data.message : (data.detail || 'Neo4j connection failed'));
     } catch { alert('Lỗi kết nối'); }

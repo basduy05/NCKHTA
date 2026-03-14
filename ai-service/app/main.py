@@ -83,6 +83,17 @@ async def lifespan(app: FastAPI):
 
     # Startup: pre-warm Neo4j connection
     print("[STARTUP] Pre-warming Neo4j connection...")
+
+    # Verification: Check for SECRET_KEY
+    if not os.getenv("SECRET_KEY"):
+        print("=" * 60)
+        print("⚠️  WARNING: SECRET_KEY is NOT set in environment variables!")
+        print("Sessions will NOT persist across server restarts.")
+        print("Please set SECRET_KEY in Render dashboard / environment.")
+        print("=" * 60)
+    else:
+        print("[STARTUP] SECRET_KEY verified OK")
+
     if graph_service:
         try:
             graph_service.get_graph()

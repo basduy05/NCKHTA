@@ -16,7 +16,7 @@ interface ProfileData {
 }
 
 export default function ProfilePage() {
-  const { user, token, logout, isInitialized, updateUser } = useAuth();
+  const { user, token, logout, isInitialized, updateUser, authFetch } = useAuth();
   const router = useRouter();
 
   const [profile, setProfile] = useState<ProfileData>({
@@ -54,9 +54,7 @@ export default function ProfilePage() {
     if (!token) return;
     setIsLoading(true);
     try {
-      const res = await fetch(`${API_URL}/auth/me`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const res = await authFetch(`${API_URL}/auth/me`);
       if (res.ok) {
         const data = await res.json();
         setProfile({
@@ -82,12 +80,8 @@ export default function ProfilePage() {
     setSuccess("");
 
     try {
-      const res = await fetch(`${API_URL}/auth/profile`, {
+      const res = await authFetch(`${API_URL}/auth/profile`, {
         method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
-        },
         body: JSON.stringify({
           name: profile.name,
           phone: profile.phone
@@ -127,12 +121,8 @@ export default function ProfilePage() {
 
     setIsSaving(true);
     try {
-      const res = await fetch(`${API_URL}/auth/change-password`, {
+      const res = await authFetch(`${API_URL}/auth/change-password`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
-        },
         body: JSON.stringify({
           current_password: currentPassword,
           new_password: newPassword

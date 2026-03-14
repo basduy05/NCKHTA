@@ -33,7 +33,7 @@ if not SECRET_KEY:
 else:
     print(f"[AUTH] SECRET_KEY loaded successfully: {SECRET_KEY[:20]}...")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 hours
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 30  # 30 days
 OTP_EXPIRE_MINUTES = 10  # OTP expires in 10 minutes
 
 # --- MODELS ---
