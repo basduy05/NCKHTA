@@ -861,8 +861,8 @@ function AIToolsTab() {
     try {
       const formData = new FormData();
       formData.append("text", text);
-      const res = await fetch(`${API_URL}/teacher/generate-vocab`, {
-        method: "POST", headers: getAuthHeader(token), body: formData
+      const res = await authFetch(`${API_URL}/teacher/generate-vocab`, {
+        method: "POST", body: formData
       });
       if (res.ok) {
         const data = await res.json();
@@ -879,8 +879,8 @@ function AIToolsTab() {
       const formData = new FormData();
       formData.append("text", text);
       formData.append("num_questions", "5");
-      const res = await fetch(`${API_URL}/teacher/generate-quiz`, {
-        method: "POST", headers: getAuthHeader(token), body: formData
+      const res = await authFetch(`${API_URL}/teacher/generate-quiz`, {
+        method: "POST", body: formData
       });
       if (res.ok) {
         const data = await res.json();
@@ -900,9 +900,8 @@ function AIToolsTab() {
       formData.append("num_questions", "5");
       formData.append("exercise_type", "mixed");
 
-      const res = await fetch(`${API_URL}/teacher/file/generate-assignment`, {
+      const res = await authFetch(`${API_URL}/teacher/file/generate-assignment`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}` }, // Form data, drop content type
         body: formData
       });
       if (res.ok) {
@@ -932,9 +931,8 @@ function AIToolsTab() {
     setDictResult({ status: "thinking", word: dictWord.trim(), meanings: [], elapsed: 0 });
 
     try {
-      const res = await fetch(`${API_URL}/teacher/dictionary/lookup`, {
+      const res = await authFetch(`${API_URL}/teacher/dictionary/lookup`, {
         method: "POST",
-        headers: { ...getAuthHeader(token), "Content-Type": "application/json" },
         body: JSON.stringify({ word: dictWord.trim() }),
         signal: controller.signal
       });
@@ -1005,9 +1003,7 @@ function AIToolsTab() {
   const handleLoadGraph = async () => {
     setGraphLoading(true); setGraphData(null);
     try {
-      const res = await fetch(`${API_URL}/teacher/knowledge-graph?topic=${encodeURIComponent(graphTopic)}`, {
-        headers: getAuthHeader(token)
-      });
+      const res = await authFetch(`${API_URL}/teacher/knowledge-graph?topic=${encodeURIComponent(graphTopic)}`);
       if (res.ok) setGraphData(await res.json());
     } catch (e) { console.error(e); }
     finally { setGraphLoading(false); }
@@ -1493,7 +1489,7 @@ function GrammarTab() {
     setLoading(true);
     try {
       const prefix = typeof window !== "undefined" && window.location.href.includes("/teacher") ? "teacher" : "student";
-      const res = await fetch(`${API_URL}/${prefix}/grammar`, { headers: { Authorization: `Bearer ${token}` } });
+      const res = await authFetch(`${API_URL}/${prefix}/grammar`);
       if (!res.ok) throw new Error(`API error ${res.status}`);
       const data = await res.json();
       setRules(Array.isArray(data) ? data : []);
