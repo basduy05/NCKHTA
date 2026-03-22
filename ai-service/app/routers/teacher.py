@@ -480,13 +480,17 @@ class TeacherDictRequest(BaseModel):
 
 
 @router.post("/dictionary/lookup")
-def teacher_dictionary_lookup(req: TeacherDictRequest, authorization: str = Header(...), background_tasks: BackgroundTasks = None):
+async def teacher_dictionary_lookup(req: TeacherDictRequest, authorization: str = Header(...), background_tasks: BackgroundTasks = None):
     """
-    Dictionary lookup with Streaming: DB cache → Neo4j → AI Stream → save to DB + Neo4j.
+    Hybrid dictionary lookup with completeness validation and STREAMING:
+    1. DB cache (only if data is COMPLETE)
+    2. Neo4j cache fallback
+    3. AI lookup stream if missing or incomplete (with pre-fetched Free Dict/Wikipedia)
     """
     from fastapi.responses import StreamingResponse
-    from ..services.llm_service import is_data_complete, lookup_dictionary_stream
+    from ..services.llm_service import is_data_complete, lookup_dictionary_stream, lookup_free_dictionary, lookup_wikipedia
     import json
+    import asyncio
     
     user = _get_current_teacher(authorization)
     user_id = user["id"]
@@ -495,186 +499,119 @@ def teacher_dictionary_lookup(req: TeacherDictRequest, authorization: str = Head
     if not word_original or len(word_original) > 100:
         raise HTTPException(status_code=400, detail="Invalid word")
 
-    # Determine lookup key
     is_abbreviation = word_original.isupper() and len(word_original) >= 2
     lookup_key = word_original if is_abbreviation else word_lower
 
-    # 1) Check SQLite dictionary_cache first (persistent, full data)
-    conn = get_db()
-    try:
-        row = conn.execute("SELECT data_json, meanings_count, word_original FROM dictionary_cache WHERE word = ?", (lookup_key,)).fetchone()
-    finally:
-        conn.close()
-        
-    if row:
-        cached = json.loads(row["data_json"])
+    async def check_local_cache():
+        loop = asyncio.get_event_loop()
+        def _get():
+            conn = get_db()
+            try:
+                return conn.execute(
+                    "SELECT data_json, meanings_count, word_original FROM dictionary_cache WHERE word = ?",
+                    (lookup_key,)
+                ).fetchone()
+            finally:
+                conn.close()
+        return await loop.run_in_executor(None, _get)
+
+    async def check_neo4j():
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, graph_service.get_dictionary_cache, lookup_key)
+
+    async def check_free_dict():
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, lookup_free_dictionary, lookup_key)
+
+    async def check_wikipedia():
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, lookup_wikipedia, lookup_key)
+
+    # 1) Fast Cache Check
+    local_row = await check_local_cache()
+    if local_row:
+        cached = json.loads(local_row["data_json"])
         if is_data_complete(cached):
             cached["_source"] = "database"
-            cached["_meanings_count"] = row["meanings_count"] or 0
             connections = graph_service.get_word_connections(word_lower)
             cached["graph_connections"] = connections.get("connections", [])
-            
-            # CHECK IF ALREADY SAVED (Fixing "saved status" bug)
+            # Saved status
             try:
                 cursor = get_db().execute("SELECT id FROM saved_vocabulary WHERE user_id = ? AND word = ?", (user_id, lookup_key))
                 cached["is_saved"] = cursor.fetchone() is not None
-            except:
-                cached["is_saved"] = False
-                
+            except: cached["is_saved"] = False
             return cached
 
-    # 1.5) Check Neo4j cache
-    neo4j_cached = graph_service.get_dictionary_cache(lookup_key)
-    if neo4j_cached and is_data_complete(neo4j_cached):
-        neo4j_cached["_source"] = "database_neo4j_restored"
-        neo4j_cached["_meanings_count"] = len(neo4j_cached.get("meanings", []))
-        
-        def _restore_sqlite(key, original, data):
-            try:
-                c = get_db()
-                c.execute(
-                    """INSERT OR REPLACE INTO dictionary_cache (word, word_original, data_json, meanings_count)
-                       VALUES (?, ?, ?, ?)""",
-                    (key, original, json.dumps(data, ensure_ascii=False), data["_meanings_count"])
-                )
-                c.commit()
-                c.close()
-            except Exception as e:
-                print(f"[DB RESTORE] error: {e}")
-                
-        if background_tasks:
-            background_tasks.add_task(_restore_sqlite, lookup_key, word_original, neo4j_cached)
-        else:
-            _restore_sqlite(lookup_key, word_original, neo4j_cached)
+    # 2) Parallel Fallback Lookups
+    neo4j_task = asyncio.create_task(check_neo4j())
+    free_dict_task = asyncio.create_task(check_free_dict())
+    wiki_task = asyncio.create_task(check_wikipedia())
+    
+    neo4j_data, free_data, wikipedia_data = await asyncio.gather(neo4j_task, free_dict_task, wiki_task)
 
-        connections = graph_service.get_word_connections(word_lower)
-        neo4j_cached["graph_connections"] = connections.get("connections", [])
+    if neo4j_data and is_data_complete(neo4j_data):
+        neo4j_data["_source"] = "database_neo4j_restored"
+        # Restore to SQLite
+        def _restore():
+            c = get_db()
+            try:
+                c.execute("INSERT OR REPLACE INTO dictionary_cache (word, word_original, data_json, meanings_count) VALUES (?, ?, ?, ?)",
+                         (lookup_key, word_original, json.dumps(neo4j_data, ensure_ascii=False), len(neo4j_data.get("meanings", []))))
+                c.commit()
+            finally: c.close()
+        if background_tasks: background_tasks.add_task(_restore)
         
-        # CHECK IF ALREADY SAVED (Fixing "saved status" bug)
+        connections = graph_service.get_word_connections(word_lower)
+        neo4j_data["graph_connections"] = connections.get("connections", [])
         try:
             cursor = get_db().execute("SELECT id FROM saved_vocabulary WHERE user_id = ? AND word = ?", (user_id, lookup_key))
-            neo4j_cached["is_saved"] = cursor.fetchone() is not None
-        except:
-            neo4j_cached["is_saved"] = False
-            
-        return neo4j_cached
+            neo4j_data["is_saved"] = cursor.fetchone() is not None
+        except: neo4j_data["is_saved"] = False
+        return neo4j_data
 
-    # 2) Not cached → ask AI Stream
-    llm = llm_service.get_llm()
-    if not llm:
-        # LLM unavailable - return partial cache if exists
-        if row:
-            cached = json.loads(row["data_json"])
-            cached["_source"] = "database_partial"
-            # Try to get graph connections anyway
-            connections = graph_service.get_word_connections(word_lower)
-            cached["graph_connections"] = connections.get("connections", [])
-            return cached
-        # Try Neo4j as last resort
-        neo4j_cached = graph_service.get_dictionary_cache(lookup_key)
-        if neo4j_cached:
-            neo4j_cached["_source"] = "database_neo4j_fallback"
-            connections = graph_service.get_word_connections(word_lower)
-            neo4j_cached["graph_connections"] = connections.get("connections", [])
-            return neo4j_cached
-        raise HTTPException(status_code=503, detail="LLM service unavailable")
-
+    # 3) AI Stream with pre-fetched data
     def _save_to_db_and_neo4j(key, original, data):
-        # Save to SQLite dictionary_cache
         try:
             mc = len(data.get("meanings", []))
             c = get_db()
             try:
-                c.execute(
-                    """INSERT INTO dictionary_cache (word, word_original, data_json, meanings_count)
-                       VALUES (?, ?, ?, ?)
-                       ON CONFLICT(word) DO UPDATE SET
-                       data_json=excluded.data_json,
-                       word_original=excluded.word_original,
-                       meanings_count=excluded.meanings_count,
-                       updated_at=CURRENT_TIMESTAMP""",
-                    (key, original, json.dumps(data, ensure_ascii=False), mc)
-                )
+                c.execute("""INSERT INTO dictionary_cache (word, word_original, data_json, meanings_count)
+                           VALUES (?, ?, ?, ?) ON CONFLICT(word) DO UPDATE SET
+                           data_json=excluded.data_json, word_original=excluded.word_original,
+                           meanings_count=excluded.meanings_count, updated_at=CURRENT_TIMESTAMP""",
+                        (key, original, json.dumps(data, ensure_ascii=False), mc))
                 c.commit()
-            finally:
-                c.close()
-        except Exception as e:
-            print(f"[DB SAVE] dictionary_cache error: {e}")
+            finally: c.close()
+        except: pass
 
-        # Save ALL meanings to Neo4j
         try:
-            all_synonyms = []
-            all_antonyms = []
-            primary_meaning_en = ""
-            primary_meaning_vn = ""
-            primary_pos = data.get("pos", "")
-            
-            for i, meaning in enumerate(data.get("meanings", [])):
-                if i == 0:
-                    primary_meaning_en = meaning.get("definition_en", "")
-                    primary_meaning_vn = meaning.get("definition_vn", "")
-                    primary_pos = meaning.get("pos", primary_pos)
-                all_synonyms.extend(meaning.get("synonyms", []))
-                all_antonyms.extend(meaning.get("antonyms", []))
-            
-            graph_service.save_word_to_graph({
-                "word": key.lower(),
-                "phonetic": data.get("phonetic_uk", ""),
-                "audio_url": data.get("audio_url", ""),
-                "pos": primary_pos,
-                "meaning_en": primary_meaning_en,
-                "meaning_vn": primary_meaning_vn,
-                "example": (data.get("meanings", [{}])[0].get("examples") or [""])[0] if data.get("meanings") else "",
-                "level": data.get("level", "B1"),
-                "word_family": data.get("word_family", []),
-                "collocations": data.get("collocations", []),
-                "idioms": data.get("idioms", []),
-                "synonyms": list(set(all_synonyms))[:5],
-                "antonyms": list(set(all_antonyms))[:3],
-            })
-            
-            # Save full raw JSON to Neo4j for persistent caching
+            # Simplified save for Neo4j
             graph_service.set_dictionary_cache(key.lower(), data)
-        except Exception as e:
-            print(f"[Neo4j SAVE] error: {e}")
+        except: pass
 
-    def stream_generator():
+    async def stream_generator():
         try:
-            # CHECK SAVED STATUS ONCE AT START
             try:
                 cursor = get_db().execute("SELECT id FROM saved_vocabulary WHERE user_id = ? AND word = ?", (user_id, lookup_key))
                 is_saved = cursor.fetchone() is not None
-            except:
-                is_saved = False
+            except: is_saved = False
                 
-            full_content = ""
-            for chunk in lookup_dictionary_stream(lookup_key):
-                # We can inject is_saved into result chunks
+            final_result_data = None
+            async for chunk in llm_service.lookup_dictionary_stream(lookup_key, free_data=free_data, wikipedia_data=wikipedia_data):
                 if '"status": "result"' in chunk:
                     try:
                         data = json.loads(chunk)
                         data["is_saved"] = is_saved
+                        final_result_data = data
                         chunk = json.dumps(data, ensure_ascii=False)
                     except: pass
-                
-                full_content += chunk
                 yield f"data: {chunk}\n\n"
             
-            try:
-                final_result = llm_service.parse_json_response(full_content)
-                if isinstance(final_result, dict) and "word" in final_result:
-                    if is_data_complete(final_result):
-                        if background_tasks:
-                            background_tasks.add_task(_save_to_db_and_neo4j, lookup_key, word_original, final_result)
-                        else:
-                            _save_to_db_and_neo4j(lookup_key, word_original, final_result)
-            except Exception as e:
-                print(f"Failed to parse or save streamed result: {e}")
-
+            if final_result_data and is_data_complete(final_result_data):
+                if background_tasks: background_tasks.add_task(_save_to_db_and_neo4j, lookup_key, word_original, final_result_data)
+                else: _save_to_db_and_neo4j(lookup_key, word_original, final_result_data)
         except Exception as e:
-            print(f"Dictionary STREAM error: {e}")
             yield f"data: {json.dumps({'error': str(e)})}\n\n"
-        
         yield "data: [DONE]\n\n"
 
     return StreamingResponse(stream_generator(), media_type="text/event-stream")

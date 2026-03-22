@@ -104,10 +104,9 @@ def is_data_complete(data: dict) -> bool:
 
 # ─── REQUEST QUEUING (SEMAPHORE) ───────────────────────────────────────────
 
-# Limit concurrent AI requests to 7 as requested by user
-# Limit concurrent AI requests to 3 to prevent OOM on Render free tier (512MB)
+# Limit concurrent AI requests to 5 to prevent OOM on Render free tier (512MB) while allowing some overlap
 print("[LLM] Initializing semaphore...")
-ai_semaphore = asyncio.Semaphore(3)
+ai_semaphore = asyncio.Semaphore(5)
 print("[LLM] Semaphore initialized.")
 
 def get_queue_status():
@@ -687,11 +686,26 @@ async def translate_meanings_with_ai_stream(word: str, meanings: list, free_data
         yield json.dumps({"error": "LLM not configured"})
         return
     
-    # Get phonetics from free_data if available
-    phonetic_uk = free_data.get("phonetic_uk", "") if free_data else ""
-    phonetic_us = free_data.get("phonetic_us", "") if free_data else ""
-    audio_url = free_data.get("audio_url", "") if free_data else ""
+    # Pre-populate phonetics and audio from free_data to enable fast first byte
+    phonetic_uk = ""
+    phonetic_us = ""
+    audio_url = ""
+    if free_data:
+        phonetic_uk = free_data.get("phonetic_uk", "")
+        phonetic_us = free_data.get("phonetic_us", "")
+        audio_url = free_data.get("audio_url", "")
     
+    # Fast first byte: yield initial structure if we have some data
+    if free_data:
+        yield json.dumps({
+            "status": "thinking",
+            "word": word,
+            "phonetic_uk": phonetic_uk,
+            "phonetic_us": phonetic_us,
+            "audio_url": audio_url,
+            "elapsed": 0.1
+        }, ensure_ascii=False) + "\n"
+
     definitions_text = "\n".join(
         f"{i+1}. [{m.get('pos', '')}] {m.get('definition_en', '')} (Examples: {m.get('examples', [])})"
         for i, m in enumerate(meanings[:20])
@@ -1073,15 +1087,13 @@ def lookup_dictionary(word: str):
     return result
 
 
-async def lookup_dictionary_stream(word: str):
+async def lookup_dictionary_stream(word: str, free_data: dict = None, wikipedia_data: dict = None):
     """
     Streaming version of hybrid dictionary lookup.
     Yields JSON chunks.
     1. Check cache -> yields full JSON if complete
-    2. Try Free Dictionary API
+    2. Use provided free_data/wikipedia_data OR fetch if missing
     3. Use AI stream for translation + enrichment
-    4. Fallback to full AI stream
-    5. Include Wikipedia data
     """
     import json
     from . import graph_service
@@ -1104,11 +1116,13 @@ async def lookup_dictionary_stream(word: str):
         yield json.dumps(cached, ensure_ascii=False)
         return
 
-    # Step 1: Try Free Dictionary API
-    free_data = lookup_free_dictionary(word)
+    # Step 1: Resolve Dependencies (Use provided or fetch)
+    if not free_data:
+        free_data = lookup_free_dictionary(word)
     
-    # Also try Wikipedia in parallel
-    wikipedia_data = lookup_wikipedia(word)
+    if not wikipedia_data:
+        # Also try Wikipedia in parallel
+        wikipedia_data = lookup_wikipedia(word)
     
     if free_data and len(free_data.get("meanings", [])) > 0:
         # Step 2: Use AI stream for translation + enrichment (pass full free_data to preserve phonetics)

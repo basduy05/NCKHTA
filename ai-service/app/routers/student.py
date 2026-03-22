@@ -743,7 +743,7 @@ async def dictionary_lookup(req: DictionaryRequest, authorization: str = Header(
             
             final_result_data = None
             
-            async for chunk in llm_service.lookup_dictionary_stream(lookup_key):
+            async for chunk in llm_service.lookup_dictionary_stream(lookup_key, free_data=free_data, wikipedia_data=wikipedia_data):
                 if not chunk: continue
                 # We can inject is_saved into result chunks
                 if '"status": "result"' in chunk:
