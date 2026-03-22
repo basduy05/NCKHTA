@@ -61,6 +61,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return res;
       } catch (err: any) {
         lastErr = err;
+        // If the request was aborted, don't retry - it was intentional
+        if (err.name === 'AbortError') throw err;
         if (i < maxRetries) await new Promise(r => setTimeout(r, 1500));
       }
     }
@@ -88,8 +90,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       
       return resp;
-    } catch (err) {
-      console.error("[AUTH] authFetch connection error:", err);
+    } catch (err: any) {
+      if (err.name !== 'AbortError') {
+        console.error("[AUTH] authFetch connection error:", err);
+      }
       throw err;
     }
   };
