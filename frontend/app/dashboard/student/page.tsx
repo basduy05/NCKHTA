@@ -8,7 +8,7 @@ import {
   Award, TrendingUp, Layers, Search, BookMarked, Volume2, Save, Trash2,
   ExternalLink, Star, Filter, X, ArrowRight, Bookmark, Network, Mic, Upload, Brain, Headphones, Edit3, Terminal, AlertCircle, BookText, Lightbulb
 } from "lucide-react";
-import { ALL_WORDS_DATABASE, simulateSyllabify } from "../../../components/DictionaryData";
+import { ALL_WORDS_DATABASE, simulateSyllabify } from "../../components/DictionaryData";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://iedu-ksk7.onrender.com";
 
