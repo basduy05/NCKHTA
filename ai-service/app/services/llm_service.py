@@ -243,8 +243,8 @@ def get_llm(provider=None):
         if google_key and provider in (None, "google"):
             # Set environment variable for langchain
             os.environ["GOOGLE_API_KEY"] = google_key
-            # Use gemini-1.5-flash as the fallback/standard model
-            return ChatGoogleGenerativeAI(model="gemini-1.5-flash", timeout=30, temperature=0)
+            # Use gemini-2.5-flash-lite as the fallback/standard model for 2026
+            return ChatGoogleGenerativeAI(model="gemini-2.5-flash-lite", timeout=30, temperature=0)
 
     if provider != "google" and provider != "cohere":
         openai_key = _get_setting("OPENAI_API_KEY")
