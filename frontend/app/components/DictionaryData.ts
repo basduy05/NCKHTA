@@ -251,19 +251,46 @@ export const ALL_WORDS_DATABASE: Record<string, WordDetail> = {
   "artificial": { word: "Artificial", phonetic: "/ˌɑːr.t̬əˈfɪʃ.əl/", type: "Adjective", translation: "Nhân tạo", example: "This is an artificial flower.", engMeaning: "Made by people, often as a copy of something natural.", level: "B1" },
   "intelligence": { word: "Intelligence", phonetic: "/ɪnˈtel.ə.dʒəns/", type: "Noun", translation: "Trí tuệ", example: "She is known for her high intelligence.", engMeaning: "The ability to learn, understand, and make judgments.", level: "B2" },
   "revolutionize": { word: "Revolutionize", phonetic: "/ˌrev.əˈluː.ʃən.aɪz/", type: "Verb", translation: "Cách mạng hóa", example: "The internet will revolutionize communication.", engMeaning: "Completely change something, especially an area of human activity.", level: "C1" },
-  "interact": { word: "Interact", phonetic: "/ˌɪn.t̬ɚˈækt/", type: "Verb", translation: "Tương tác", example: "Students should interact more in class.", engMeaning: "To communicate with or react to.", level: "B1" }
+  "interact": { word: "Interact", phonetic: "/ˌɪn.t̬ɚˈækt/", type: "Verb", translation: "Tương tác", example: "Students should interact more in class.", engMeaning: "To communicate with or react to.", level: "B1" },
+  "technology": { word: "Technology", phonetic: "/tekˈnɑː.lə.dʒi/", type: "Noun", translation: "Công nghệ", example: "Technology has changed our lives.", engMeaning: "The application of scientific knowledge for practical purposes.", level: "A2" },
+  "efficient": { word: "Efficient", phonetic: "/ɪˈfɪʃ.ənt/", type: "Adjective", translation: "Hiệu quả", example: "This machine is very efficient.", engMeaning: "Working or operating quickly and effectively.", level: "B2" },
+  "environment": { word: "Environment", phonetic: "/ɪnˈvaɪ.rən.mənt/", type: "Noun", translation: "Môi trường", example: "We must protect the environment.", engMeaning: "The surroundings or conditions in which a person, animal, or plant lives.", level: "B1" },
+  "experience": { word: "Experience", phonetic: "/ɪkˈspɪə.ri.əns/", type: "Noun/Verb", translation: "Kinh nghiệm / Trải nghiệm", example: "I have five years of experience.", engMeaning: "Practical contact with and observation of facts or events.", level: "B1" },
+  "future": { word: "Future", phonetic: "/ˈfjuː.tʃər/", type: "Noun/Adjective", translation: "Tương lai", example: "In the future, cars will fly.", engMeaning: "The time or a period of time following the moment of speaking or writing.", level: "A2" },
+  "health": { word: "Health", phonetic: "/helθ/", type: "Noun", translation: "Sức khỏe", example: "Health is more important than wealth.", engMeaning: "The state of being free from illness or injury.", level: "A2" },
+  "history": { word: "History", phonetic: "/ˈhɪs.tər.i/", type: "Noun", translation: "Lịch sử", example: "I love learning about world history.", engMeaning: "The study of past events.", level: "A2" },
+  "important": { word: "Important", phonetic: "/ɪmˈpɔː.tənt/", type: "Adjective", translation: "Quan trọng", example: "It is important to study hard.", engMeaning: "Of great value; significant.", level: "A2" },
+  "information": { word: "Information", phonetic: "/ˌɪn.fəˈmeɪ.ʃən/", type: "Noun", translation: "Thông tin", example: "I need more information about the course.", engMeaning: "Facts provided or learned about something or someone.", level: "A2" },
+  "knowledge": { word: "Knowledge", phonetic: "/ˈnɒl.ɪdʒ/", type: "Noun", translation: "Kiến thức", example: "He has a lot of knowledge about computers.", engMeaning: "Facts, information, and skills acquired by a person through experience or education.", level: "B1" },
+  "modern": { word: "Modern", phonetic: "/ˈmɒd.ən/", type: "Adjective", translation: "Hiện đại", example: "Modern technology is amazing.", engMeaning: "Relating to the present or recent times.", level: "A2" },
+  "opportunity": { word: "Opportunity", phonetic: "/ˌɒp.əˈtjuː.nɪ.ti/", type: "Noun", translation: "Cơ hội", example: "I had the opportunity to travel to Japan.", engMeaning: "A set of circumstances that makes it possible to do something.", level: "B1" },
+  "possible": { word: "Possible", phonetic: "/ˈpɒs.ə.bəl/", type: "Adjective", translation: "Có thể", example: "Is it possible to finish this today?", engMeaning: "Able to be done or achieved.", level: "A2" },
+  "problem": { word: "Problem", phonetic: "/ˈprɒb.ləm/", type: "Noun", translation: "Vấn đề", example: "I have a problem with my computer.", engMeaning: "A matter or situation regarded as unwelcome or harmful and needing to be dealt with.", level: "A1" },
+  "process": { word: "Process", phonetic: "/ˈprəʊ.ses/", type: "Noun/Verb", translation: "Quá trình / Xử lý", example: "It is a long process.", engMeaning: "A series of actions or steps taken in order to achieve a particular end.", level: "B1" },
+  "research": { word: "Research", phonetic: "/rɪˈsɜːtʃ/", type: "Noun/Verb", translation: "Nghiên cứu", example: "She is doing research into cancer.", engMeaning: "The systematic investigation into and study of materials and sources in order to establish facts.", level: "B1" },
+  "society": { word: "Society", phonetic: "/səˈsaɪ.ə.ti/", type: "Noun", translation: "Xã hội", example: "We live in a modern society.", engMeaning: "The aggregate of people living together in a more or less ordered community.", level: "B2" },
+  "solution": { word: "Solution", phonetic: "/səˈluː.ʃən/", type: "Noun", translation: "Giải pháp", example: "We found a solution to the problem.", engMeaning: "A means of solving a problem or dealing with a difficult situation.", level: "B1" },
+  "success": { word: "Success", phonetic: "/səkˈses/", type: "Noun", translation: "Thành công", example: "I wish you success in your new job.", engMeaning: "The accomplishment of an aim or purpose.", level: "B1" },
+  "system": { word: "System", phonetic: "/ˈsɪs.təm/", type: "Noun", translation: "Hệ thống", example: "The educational system needs to be updated.", engMeaning: "A set of things working together as parts of a mechanism or an interconnecting network.", level: "A2" },
+  "world": { word: "World", phonetic: "/wɜːld/", type: "Noun", translation: "Thế giới", example: "There are many beautiful places in the world.", engMeaning: "The earth, together with all of its countries, peoples, and natural features.", level: "A1" }
 };
 
 export function simulateSyllabify(word: string): string[] {
   if (!word) return ['N/A'];
   const lowerWord = word.toLowerCase();
   
-  // Hardcoded complex words from New.html
-  if (lowerWord === "artificial") return ["Ar", "ti", "fi", "cial"];
-  if (lowerWord === "intelligence") return ["In", "tel", "li", "gence"];
-  if (lowerWord === "revolutionizing") return ["Rev", "o", "lu", "tion", "iz", "ing"];
-  if (lowerWord === "revolutionize") return ["Rev", "o", "lu", "tion", "iz", "e"];
+  // Specific complex words from New.html & extra cases
+  const specificCases: Record<string, string[]> = {
+    "artificial": ["Ar", "ti", "fi", "cial"],
+    "intelligence": ["In", "tel", "li", "gence"],
+    "revolutionizing": ["Rev", "o", "lu", "tion", "iz", "ing"],
+    "revolutionize": ["Rev", "o", "lu", "tion", "iz", "e"],
+    "technology": ["Tech", "nol", "o", "gy"],
+    "efficient": ["Ef", "fi", "cient"],
+    "interact": ["In", "ter", "act"]
+  };
   
+  if (specificCases[lowerWord]) return specificCases[lowerWord];
   if (word.length <= 4) return [word];
   
   const vowels = "aeiouyAEIOUY";
@@ -274,7 +301,7 @@ export function simulateSyllabify(word: string): string[] {
     const char = word[i];
     currentSyllable += char;
     
-    // Simple vowel-based split rule
+    // Split on vowel transitions (simple rule)
     if (vowels.includes(char) && currentSyllable.length > 1) {
       if (syllables.length < 4) {
         syllables.push(currentSyllable);
@@ -293,3 +320,4 @@ export function simulateSyllabify(word: string): string[] {
   
   return syllables.length > 0 ? syllables : [word];
 }
+

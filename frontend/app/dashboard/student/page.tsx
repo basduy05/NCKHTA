@@ -690,6 +690,16 @@ function AIToolsTab() {
     setSubmitted(true);
   };
 
+  const speak = (text: string, lang: string = "en-US") => {
+    if (typeof window !== "undefined" && window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = lang;
+      u.rate = 0.85;
+      window.speechSynthesis.speak(u);
+    }
+  };
+
   const handleTextareaDoubleClick = (e: React.MouseEvent<HTMLTextAreaElement>) => {
     const textarea = e.currentTarget;
     const start = textarea.selectionStart;
@@ -704,13 +714,18 @@ function AIToolsTab() {
     const word = textVal.substring(left, right).toLowerCase();
     if (!word) return;
 
+    // Direct lookup + common variations as in New.html
     const localData = ALL_WORDS_DATABASE[word] || 
                       ALL_WORDS_DATABASE[word.replace(/s$/, '')] || 
-                      ALL_WORDS_DATABASE[word.replace(/es$/, '')];
+                      ALL_WORDS_DATABASE[word.replace(/es$/, '')] ||
+                      ALL_WORDS_DATABASE[word.replace(/ing$/, '')] ||
+                      ALL_WORDS_DATABASE[word.replace(/ed$/, '')];
 
     if (localData) {
       setSelectedWordInfo(localData);
-      alert(`Từ: ${localData.word}\nPhát âm: ${localData.phonetic}\nNghĩa: ${localData.translation}\n\n${localData.engMeaning}`);
+    } else {
+      // Show simple notification if word not found in local DB
+      alert(`Không tìm thấy từ "${word}" trong từ điển cục bộ. Đã xảy ra lỗi khi tải từ điển.`);
     }
   };
 
@@ -827,6 +842,45 @@ function AIToolsTab() {
           )}
 
           {result.words.length > 0 && (
+            <div className="bg-indigo-50/50 p-6 rounded-2xl border border-indigo-100">
+              <h3 className="text-lg font-bold text-indigo-900 mb-4 flex items-center gap-2">
+                <BookText size={20} className="text-indigo-600" /> Phân tách Âm Tiết & Định Nghĩa
+              </h3>
+              <div className="space-y-3">
+                {result.words.map((w: any, idx: number) => {
+                  const syllables = simulateSyllabify(w.word);
+                  return (
+                    <div key={idx} className="p-4 bg-white rounded-xl border border-indigo-100 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">{w.pos || "Vocabulary"}</span>
+                          <span className="px-2 py-0.5 bg-indigo-600 text-white text-[10px] font-bold rounded uppercase">{w.level || "B1"}</span>
+                        </div>
+                        <h4 className="text-xl font-black text-indigo-800 lowercase tracking-tight">{w.word}</h4>
+                        <div className="flex gap-1.5 mt-2">
+                          {syllables.map((s, i) => (
+                            <span key={i} className="px-2.5 py-1 bg-indigo-50 text-indigo-600 text-[10px] font-black rounded-lg border border-indigo-100">{s}</span>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="flex-[1.5] space-y-1">
+                        <p className="text-sm font-bold text-gray-700 leading-tight">
+                          <span className="text-indigo-500 mr-2">Nghĩa:</span>{w.meaning}
+                        </p>
+                        {w.meaning_en && (
+                          <p className="text-xs text-gray-500 italic leading-snug">
+                            <span className="text-indigo-400 font-bold not-italic mr-2">Định nghĩa:</span>{w.meaning_en}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {result.words.length > 0 && (
             <div className="bg-blue-50/50 p-6 rounded-2xl border border-blue-100 mt-8">
               <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
                 <div>
@@ -852,25 +906,25 @@ function AIToolsTab() {
                   {result.words.map((w: any, idx: number) => (
                     <div key={idx} className="bg-white p-4 rounded-xl border border-blue-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
                       <div className="flex-1">
-                        <span className="text-xs font-bold text-blue-400 uppercase tracking-wider">Từ vựng</span>
-                        <h4 className="text-xl font-black text-blue-800">{w.word}</h4>
+                        <span className="text-xs font-bold text-blue-400 uppercase tracking-wider">Nghĩa tiếng Việt</span>
+                        <h4 className="text-xl font-black text-blue-800">{w.meaning}</h4>
                       </div>
                       <div className="flex-[2]">
                         <input 
                           type="text"
-                          placeholder="Nhập nghĩa tiếng Việt..."
-                          disabled={recallSubmitted}
-                          className={`w-full px-4 py-2 rounded-lg border-2 outline-none transition ${
-                            recallSubmitted 
-                              ? (recallAnswers[idx]?.toLowerCase() === w.meaning.toLowerCase() ? "border-green-400 bg-green-50" : "border-red-400 bg-red-50")
-                              : "border-gray-100 focus:border-blue-400"
-                          }`}
-                          value={recallAnswers[idx] || ""}
-                          onChange={(e) => setRecallAnswers(prev => ({ ...prev, [idx]: e.target.value }))}
-                        />
-                        {recallSubmitted && recallAnswers[idx]?.toLowerCase() !== w.meaning.toLowerCase() && (
-                          <p className="text-[10px] text-green-600 font-bold mt-1">Đáp án đúng: {w.meaning}</p>
-                        )}
+                        className={`w-full px-4 py-2 rounded-lg border-2 outline-none transition font-bold ${
+                          recallSubmitted 
+                            ? (recallAnswers[idx]?.toLowerCase().trim() === w.word.toLowerCase().trim() ? "border-green-400 bg-green-50 text-green-700" : "border-red-400 bg-red-50 text-red-700")
+                            : "border-gray-100 focus:border-blue-400 text-gray-800"
+                        }`}
+                        value={recallAnswers[idx] || ""}
+                        onChange={(e) => setRecallAnswers(prev => ({ ...prev, [idx]: e.target.value }))}
+                      />
+                      {recallSubmitted && recallAnswers[idx]?.toLowerCase().trim() !== w.word.toLowerCase().trim() && (
+                        <p className="text-[10px] text-green-600 font-bold mt-1 inline-flex items-center gap-1">
+                          <CheckCircle2 size={10} /> Đáp án đúng: {w.word}
+                        </p>
+                      )}
                       </div>
                     </div>
                   ))}
@@ -929,11 +983,11 @@ function AIToolsTab() {
                               <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${isSelected ? "border-blue-600" : "border-gray-300"}`}>
                                 {isSelected && !submitted && <div className="w-2 h-2 bg-blue-600 rounded-full" />}
                               </div>
-                              <span className="text-sm font-medium text-gray-700">{opt}</span>
+                            <span className="text-sm font-medium text-gray-700">{opt}</span>
                             </div>
                             {icon}
                           </div>
-                        );
+                        )
                       })}
                     </div>
                   </div>
@@ -947,6 +1001,84 @@ function AIToolsTab() {
               )}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Word Lookup Modal */}
+      {selectedWordInfo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden border border-blue-100 transform animate-in zoom-in-95 duration-200">
+            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-6 text-white relative">
+              <button 
+                onClick={() => setSelectedWordInfo(null)}
+                className="absolute top-4 right-4 bg-white/20 hover:bg-white/30 p-1.5 rounded-full transition"
+              >
+                <X size={18} />
+              </button>
+              <h3 className="text-2xl font-black mb-1">{selectedWordInfo.word}</h3>
+              <div className="flex items-center gap-3 mt-2">
+                <button onClick={() => speak(selectedWordInfo.word)} className="flex items-center gap-1.5 bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-lg transition">
+                  <Volume2 size={16} /> <span className="font-mono text-sm">{selectedWordInfo.phonetic}</span>
+                </button>
+                <span className="bg-white/20 px-2.5 py-1 rounded-lg text-xs font-bold uppercase">{selectedWordInfo.level || 'A1'}</span>
+              </div>
+            </div>
+            
+            <div className="p-6 space-y-4">
+              <div>
+                <span className="text-xs font-bold text-blue-400 uppercase tracking-widest block mb-1">Loại từ & Nghĩa</span>
+                <p className="text-gray-900 font-bold text-lg leading-tight">
+                  <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-sm mr-2">{selectedWordInfo.type}</span> 
+                  {selectedWordInfo.translation}
+                </p>
+              </div>
+
+              <div>
+                <span className="text-xs font-bold text-blue-400 uppercase tracking-widest block mb-1">Định nghĩa tiếng Anh</span>
+                <p className="text-gray-700 text-sm italic leading-relaxed">"{selectedWordInfo.engMeaning}"</p>
+              </div>
+
+              <div>
+                <span className="text-xs font-bold text-blue-400 uppercase tracking-widest block mb-1">Ví dụ</span>
+                <p className="text-gray-700 text-sm leading-relaxed">{selectedWordInfo.example}</p>
+              </div>
+
+              <div className="pt-4 flex gap-3">
+                <button
+                  onClick={async () => {
+                    try {
+                      const res = await authFetch(`${API_URL}/student/vocabulary/save`, {
+                        method: "POST",
+                        body: JSON.stringify({ 
+                          word: selectedWordInfo.word, 
+                          phonetic: selectedWordInfo.phonetic, 
+                          pos: selectedWordInfo.type, 
+                          meaning_en: selectedWordInfo.engMeaning, 
+                          meaning_vn: selectedWordInfo.translation, 
+                          example: selectedWordInfo.example, 
+                          level: selectedWordInfo.level || 'A1', 
+                          source: "lookup-modal" 
+                        })
+                      });
+                      if (res.ok) {
+                        alert(`Đã thêm "${selectedWordInfo.word}" vào flashcards!`);
+                        setSelectedWordInfo(null);
+                      }
+                    } catch { }
+                  }}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-xl shadow-lg shadow-blue-200 transition flex items-center justify-center gap-2"
+                >
+                  <Bookmark size={18} /> Thêm vào Flashcards
+                </button>
+                <button
+                  onClick={() => setSelectedWordInfo(null)}
+                  className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-3 px-4 rounded-xl transition"
+                >
+                  Đóng
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>
