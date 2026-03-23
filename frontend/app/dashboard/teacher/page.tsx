@@ -3,12 +3,12 @@ import { useState, useEffect, Suspense, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useAuth } from "../../context/AuthContext";
 import {
-  Users, BookOpen, Plus, Edit, Trash2, GraduationCap, X, Check,
-  FileText, Upload, Download, ClipboardList, Sparkles, Brain,
-  BarChart3, UserPlus, UserMinus, ChevronDown, ChevronUp, Eye,
-  Search, Volume2, ArrowRight, Bookmark, Network, Terminal, AlertCircle, BookText, 
-  BrainCircuit, Headphones, Edit3, Lightbulb, Trophy, PlayCircle, Layers, CheckCircle2,
-  LayoutDashboard, Award, XCircle
+  AlertCircle, ArrowRight, Award, BarChart3, BookMarked, BookOpen, BookText, 
+  Bookmark, Brain, BrainCircuit, Check, CheckCircle2, ChevronDown, ChevronUp, 
+  ClipboardList, Download, Edit, Edit3, ExternalLink, Eye, FileText, Filter, 
+  GraduationCap, Headphones, LayoutDashboard, Layers, Lightbulb, Mic, Network, 
+  PlayCircle, Plus, Search, Sparkles, Star, Terminal, Trash2, Trophy, Upload, 
+  UserMinus, UserPlus, Users, Volume2, X, XCircle
 } from "lucide-react";
 import { ALL_WORDS_DATABASE, simulateSyllabify, WordDetail } from "../../components/DictionaryData";
 import { MOCK_PRACTICE_TESTS } from "../../components/MockPracticeData";
