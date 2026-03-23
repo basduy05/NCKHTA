@@ -8,7 +8,8 @@ import {
   Award, TrendingUp, Layers, Search, BookMarked, Volume2, Save, Trash2,
   ExternalLink, Star, Filter, X, ArrowRight, Bookmark, Network, Mic, Upload, Brain, Headphones, Edit3, Terminal, AlertCircle, BookText, Lightbulb
 } from "lucide-react";
-import { ALL_WORDS_DATABASE, simulateSyllabify } from "../../components/DictionaryData";
+import { ALL_WORDS_DATABASE, simulateSyllabify, WordDetail } from "../../components/DictionaryData";
+import { MOCK_PRACTICE_TESTS } from "../../components/MockPracticeData";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://iedu-ksk7.onrender.com";
 
@@ -20,6 +21,7 @@ function StudentDashboardContent() {
   const { user, token, isInitialized, refreshUser, authFetch } = useAuth();
   const router = useRouter();
   const [visitedTabs, setVisitedTabs] = useState<Set<string>>(new Set([activeTab]));
+  const [showCreditModal, setShowCreditModal] = useState(false);
 
   // Track visited tabs for caching
   useEffect(() => {
@@ -61,11 +63,11 @@ function StudentDashboardContent() {
         {tabName === "assignments" && <AssignmentsTab />}
         {tabName === "dictionary" && <DictionaryTab />}
         {tabName === "vocabulary" && <VocabularyTab />}
-        {tabName === "ai-tools" && <AIToolsTab />}
+        {tabName === "ai-tools" && <AIToolsTab setShowCreditModal={setShowCreditModal} />}
         {tabName === "grammar" && <GrammarTab />}
         {tabName === "scores" && <ScoresTab />}
         {tabName === "ipa" && <IpaTab />}
-        {tabName === "practice" && <PracticeTab />}
+        {tabName === "practice" && <PracticeTab setShowCreditModal={setShowCreditModal} />}
         {tabName === "ranking" && <RankingTab />}
       </div>
     );
@@ -100,6 +102,26 @@ function StudentDashboardContent() {
           <p className="text-sm text-gray-500">Xin chào, <span className="font-semibold text-blue-600">{user?.name}</span></p>
         </div>
       </div>
+
+      {showCreditModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-300">
+            <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
+              <AlertCircle size={40} className="text-red-500" />
+            </div>
+            <h3 className="text-2xl font-black text-gray-900 text-center mb-2">Hết lượt sử dụng AI!</h3>
+            <p className="text-gray-600 text-center mb-8">
+              Bạn đã sử dụng hết số credits AI trong ngày. Vui lòng quay lại vào ngày mai hoặc liên hệ quản trị viên để được cấp thêm.
+            </p>
+            <button 
+              onClick={() => setShowCreditModal(false)}
+              className="w-full bg-blue-600 text-white py-4 rounded-2xl font-bold text-lg shadow-xl shadow-blue-200 hover:bg-blue-700 transition"
+            >
+              Đã hiểu
+            </button>
+          </div>
+        </div>
+      )}
 
       {["overview", "classes", "assignments", "dictionary", "vocabulary", "ai-tools", "grammar", "scores", "ipa", "practice", "ranking"].map(tab => renderTab(tab))}
     </div>
@@ -571,8 +593,8 @@ function AssignmentsTab() {
 }
 
 // ==================== AI TOOLS TAB ====================
-function AIToolsTab() {
-  const { token, authFetch, refreshUser } = useAuth();
+function AIToolsTab({ setShowCreditModal }: { setShowCreditModal: (s: boolean) => void }) {
+  const { token, user, authFetch, refreshUser } = useAuth();
   const [text, setText] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [inputMode, setInputMode] = useState<"text" | "file">("text");
@@ -590,6 +612,11 @@ function AIToolsTab() {
   const analyze = async (type: "text" | "file") => {
     if (type === "text" && !text) return;
     if (type === "file" && !file) return;
+
+    if (user && user.credits_ai !== undefined && user.credits_ai <= 0) {
+      setShowCreditModal(true);
+      return;
+    }
 
     setLoading(true);
     setResult(null);
@@ -700,7 +727,7 @@ function AIToolsTab() {
     }
   };
 
-  const handleTextareaDoubleClick = (e: React.MouseEvent<HTMLTextAreaElement>) => {
+  const handleTextareaDoubleClick = async (e: React.MouseEvent<HTMLTextAreaElement>) => {
     const textarea = e.currentTarget;
     const start = textarea.selectionStart;
     const textVal = textarea.value;
@@ -715,17 +742,40 @@ function AIToolsTab() {
     if (!word) return;
 
     // Direct lookup + common variations as in New.html
-    const localData = ALL_WORDS_DATABASE[word] || 
-                      ALL_WORDS_DATABASE[word.replace(/s$/, '')] || 
-                      ALL_WORDS_DATABASE[word.replace(/es$/, '')] ||
-                      ALL_WORDS_DATABASE[word.replace(/ing$/, '')] ||
-                      ALL_WORDS_DATABASE[word.replace(/ed$/, '')];
+    let localData = ALL_WORDS_DATABASE[word] || 
+                    ALL_WORDS_DATABASE[word.replace(/s$/, '')] || 
+                    ALL_WORDS_DATABASE[word.replace(/es$/, '')] || 
+                    ALL_WORDS_DATABASE[word.replace(/ing$/, '')] || 
+                    ALL_WORDS_DATABASE[word.replace(/ed$/, '')];
 
     if (localData) {
       setSelectedWordInfo(localData);
     } else {
-      // Show simple notification if word not found in local DB
-      alert(`Không tìm thấy từ "${word}" trong từ điển cục bộ. Đã xảy ra lỗi khi tải từ điển.`);
+      // Fallback to Free Dictionary API
+      try {
+        const response = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${word}`);
+        if (response.ok) {
+          const apiDataList = await response.json();
+          const firstEntry = apiDataList[0];
+          const meaning = firstEntry.meanings[0];
+          const def = meaning.definitions[0];
+          
+          const formattedData: WordDetail = {
+            word: firstEntry.word,
+            phonetic: firstEntry.phonetics.find((p: any) => p.text)?.text || firstEntry.phonetic || "/.../",
+            type: meaning.partOfSpeech,
+            translation: "Đang tải bản dịch...", // We don't have VN translation in public API
+            example: def.example || "No example available.",
+            engMeaning: def.definition || "No definition found.",
+            level: "N/A"
+          };
+          setSelectedWordInfo(formattedData);
+        } else {
+          alert(`Không tìm thấy từ "${word}" trong từ điển.`);
+        }
+      } catch (err) {
+        alert(`Không tìm thấy từ "${word}" và lỗi kết nối API.`);
+      }
     }
   };
 
@@ -2290,8 +2340,8 @@ function IpaTab() {
 }
 
 // ==================== NEW: PRACTICE TAB ====================
-function PracticeTab() {
-  const { token, authFetch, refreshUser } = useAuth();
+function PracticeTab({ setShowCreditModal }: { setShowCreditModal: (s: boolean) => void }) {
+  const { token, user, authFetch, refreshUser } = useAuth();
   const [testType, setTestType] = useState("TOEIC");
   const [skill, setSkill] = useState("reading");
   const [loading, setLoading] = useState(false);
@@ -2299,8 +2349,28 @@ function PracticeTab() {
   const [answers, setAnswers] = useState<Record<number, number>>({});
   const [submitted, setSubmitted] = useState(false);
   const [score, setScore] = useState(0);
+  const [source, setSource] = useState<"ai" | "official">("ai");
 
   const generatePractice = async () => {
+    if (source === "official") {
+      // Use mock data
+      const filtered = MOCK_PRACTICE_TESTS.filter(t => t.test_type === testType && t.skill === skill);
+      if (filtered.length > 0) {
+        setPractice(filtered[0]);
+        setAnswers({});
+        setSubmitted(false);
+        setScore(0);
+      } else {
+        alert("Hiện chưa có bài thi mẫu cho sự kết hợp này. Vui lòng thử AI Generator.");
+      }
+      return;
+    }
+
+    if (user && user.credits_ai !== undefined && user.credits_ai <= 0) {
+      setShowCreditModal(true);
+      return;
+    }
+
     setLoading(true);
     setPractice({ status: "generating", questions: [] });
     setAnswers({});
@@ -2406,6 +2476,10 @@ function PracticeTab() {
             <p className="text-gray-500 text-sm">chọn chứng chỉ và kỹ năng để hệ thống sinh đề thi mẫu cho bạn</p>
           </div>
           <div className="flex items-center gap-3">
+            <select value={source} onChange={e => setSource(e.target.value as any)} className="border border-indigo-200 rounded-lg px-3 py-2 outline-none bg-indigo-50 text-indigo-700 font-bold">
+              <option value="ai">AI Generator ✨</option>
+              <option value="official">Bài thi mẫu 📚</option>
+            </select>
             <select value={testType} onChange={e => setTestType(e.target.value)} className="border border-gray-200 rounded-lg px-3 py-2 outline-none bg-gray-50">
               <option value="TOEIC">TOEIC</option>
               <option value="IELTS">IELTS</option>
@@ -2417,8 +2491,8 @@ function PracticeTab() {
               <option value="writing">Writing</option>
               <option value="speaking">Speaking</option>
             </select>
-            <button onClick={generatePractice} disabled={loading} className="btn-primary px-5 py-2 rounded-lg disabled:opacity-50">
-              {loading ? "Đang tạo..." : "Tạo bài"}
+            <button onClick={generatePractice} disabled={loading} className="bg-blue-600 text-white px-5 py-2 rounded-lg disabled:opacity-50 font-bold shadow-lg shadow-blue-100 hover:bg-blue-700 transition">
+              {loading ? "Đang tạo..." : (source === "official" ? "Xem bài thi" : "Tạo bài với AI")}
             </button>
           </div>
         </div>
