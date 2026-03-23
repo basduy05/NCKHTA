@@ -1708,6 +1708,7 @@ async def generate_vocab_practice_rich(words: List[dict]):
         "- 'options': if multiple choice (4 options)\n"
         "- 'answer': the correct string\n"
         "- 'explanation': why this answer is correct (bilingual)\n\n"
+        "IMPORTANT: The 'question', 'options', and 'answer' fields MUST be written entirely in English. Do not use Vietnamese in these fields. Only 'hint' and 'explanation' can contain Vietnamese.\n\n"
         "Return a JSON array of 10-15 questions."
     )
     print(f"[LLM VOCAB PRACTICE] Generating for {len(words)} words...", flush=True)
@@ -1759,3 +1760,84 @@ async def generate_exam_content(test_type: str, part: Optional[str] = None):
         response = await _safe_invoke_async(chain, {"test_type": test_type, "part_context": part_context})
         return parse_json_response(response.content)
     except: return {"id": "error"}
+
+async def generate_reading_comprehension(article_title: str, article_content: str, difficulty: str = "Medium", num_questions: int = 5):
+    """Generate a reading comprehension test from a news article."""
+    llm = get_llm()
+    if not llm: return {"error": "LLM not configured"}
+    
+    prompt = PromptTemplate.from_template(
+        "You are an expert English teacher. Create a reading comprehension test for the following article.\n\n"
+        "Title: {title}\n"
+        "Content: {content}\n\n"
+        "Difficulty Level: {difficulty}\n"
+        "Number of Questions: {num_questions}\n\n"
+        "Please generate {num_questions} questions. Include a mix of Multiple Choice, True/False/Not Given, and Vocabulary in Context questions. "
+        "Return the output as a JSON object with the following structure:\n"
+        "{{\n"
+        "  \"passage\": \"The provided article content or a slightly adapted version for the difficulty level\",\n"
+        "  \"questions\": [\n"
+        "    {{\n"
+        "      \"type\": \"multiple_choice|tfng|vocab\",\n"
+        "      \"question\": \"Question text\",\n"
+        "      \"options\": [\"A. ...\", \"B. ...\", \"C. ...\", \"D. ...\"], (only if multiple choice or vocab)\n"
+        "      \"correct_answer\": \"The exact correct option or True/False/Not Given\",\n"
+        "      \"explanation\": \"Why this is correct\"\n"
+        "    }}\n"
+        "  ]\n"
+        "}}\n"
+        "Ensure the JSON is perfectly formatted."
+    )
+    chain = prompt | llm
+    print(f"[LLM READING COMPREHENSION] Generating for article: {article_title}...", flush=True)
+    try:
+        response = await _safe_invoke_async(chain, {
+            "title": article_title, 
+            "content": article_content, 
+            "difficulty": difficulty,
+            "num_questions": num_questions
+        })
+        result = parse_json_response(response.content)
+        print(f"[LLM READING COMPREHENSION] Success", flush=True)
+        return result
+    except Exception as e:
+        print(f"[LLM READING COMPREHENSION] Error: {e}", flush=True)
+        return {"error": str(e)}
+
+async def grade_writing_assignment(prompt_text: str, student_answer: str, test_type: str = "IELTS"):
+    """Grade a writing assignment (IELTS or TOEIC) and return detailed feedback."""
+    llm = get_llm()
+    if not llm: return {"id": "error", "error": "LLM not configured"}
+    
+    prompt = PromptTemplate.from_template(
+        "You are an expert {test_type} Writing examiner. Evaluate the following student essay.\n\n"
+        "Prompt/Question: {prompt_text}\n\n"
+        "Student Answer:\n{student_answer}\n\n"
+        "Provide a detailed evaluation in perfectly formatted JSON. Use the following structure:\n"
+        "{{\n"
+        "  \"score\": 7.0, (Overall band score for IELTS, or a numerical score for TOEIC)\n"
+        "  \"feedback_summary\": \"A short paragraph summarizing the overall performance.\",\n"
+        "  \"criteria_scores\": {{\n"
+        "    \"Task Achievement / Response\": 7.0,\n"
+        "    \"Coherence and Cohesion\": 7.0,\n"
+        "    \"Lexical Resource\": 6.5,\n"
+        "    \"Grammatical Range and Accuracy\": 7.5\n"
+        "  }},\n"
+        "  \"detailed_feedback\": [\n"
+        "    {{\"category\": \"Strengths\", \"points\": [\"...\", \"...\"]}},\n"
+        "    {{\"category\": \"Weaknesses\", \"points\": [\"...\", \"...\"]}},\n"
+        "    {{\"category\": \"Suggestions for Improvement\", \"points\": [\"...\", \"...\"]}}\n"
+        "  ],\n"
+        "  \"corrected_version\": \"A grammatically corrected and slightly improved version of the student's essay (keep their original voice as much as possible, just fix errors and smooth out phrasing).\"\n"
+        "}}\n"
+    )
+    chain = prompt | llm
+    print(f"[LLM WRITING GRADING] Grading {test_type} essay...", flush=True)
+    try:
+        response = await _safe_invoke_async(chain, {"test_type": test_type, "prompt_text": prompt_text, "student_answer": student_answer})
+        result = parse_json_response(response.content)
+        print(f"[LLM WRITING GRADING] Success", flush=True)
+        return result
+    except Exception as e:
+        print(f"[LLM WRITING GRADING] Error: {e}", flush=True)
+        return {"error": str(e)}

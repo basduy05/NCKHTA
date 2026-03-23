@@ -23,6 +23,7 @@ function DashboardSidebar({ user, logout }: { user: any, logout: any }) {
       { name: "Người dùng & GV", href: "/dashboard/admin?tab=users", icon: Users, id: "users" },
       { name: "Quản lý Lớp học", href: "/dashboard/admin?tab=classes", icon: GraduationCap, id: "classes" },
       { name: "Quản lý Bài học", href: "/dashboard/admin?tab=lessons", icon: BookOpen, id: "lessons" },
+      { name: "Bài tập & Đề thi", href: "/dashboard/admin?tab=assignments", icon: ClipboardList, id: "assignments" },
       { name: "Kho Từ Vựng (Graph)", href: "/dashboard/admin?tab=vocab", icon: Database, id: "vocab" },
       { name: "Kho Ngữ Pháp (AI)", href: "/dashboard/admin?tab=grammar", icon: BookText, id: "grammar" },
       { name: "Cài đặt hệ thống", href: "/dashboard/admin?tab=settings", icon: Settings, id: "settings" },

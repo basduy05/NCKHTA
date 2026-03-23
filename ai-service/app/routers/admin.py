@@ -726,3 +726,61 @@ def test_neo4j():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# --- ASSIGNMENTS (TESTS & EXERCISES) CRUD ---
+
+class AdminAssignmentCreate(BaseModel):
+    class_id: int
+    title: str
+    description: str = ""
+    type: str = "quiz"
+    quiz_data: str = ""
+    due_date: str = "2099-12-31"
+    skill_type: Optional[str] = None
+    bloom_level: Optional[int] = None
+
+@router.get("/assignments")
+def get_admin_assignments():
+    conn = get_db()
+    try:
+        cursor = conn.execute("""
+            SELECT a.id, a.class_id, a.title, a.description, a.type, a.due_date, a.created_at, a.skill_type, a.bloom_level,
+                   c.name as class_name
+            FROM assignments a
+            JOIN classes c ON a.class_id = c.id
+            ORDER BY a.id DESC
+        """)
+        assignments = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        return assignments
+    except Exception as e:
+        if conn: conn.close()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/assignments")
+def admin_create_assignment(data: AdminAssignmentCreate):
+    conn = get_db()
+    try:
+        conn.execute(
+            """INSERT INTO assignments (class_id, teacher_id, title, description, type, quiz_data, due_date, skill_type, bloom_level) 
+               VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?)""",
+            (data.class_id, data.title, data.description, data.type, data.quiz_data, data.due_date, data.skill_type, data.bloom_level)
+        )
+        conn.commit()
+        conn.close()
+        return {"message": "Assignment created successfully"}
+    except Exception as e:
+        if conn: conn.close()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.delete("/assignments/{assignment_id}")
+def admin_delete_assignment(assignment_id: int):
+    conn = get_db()
+    try:
+        conn.execute("DELETE FROM assignments WHERE id = ?", (assignment_id,))
+        conn.commit()
+        conn.close()
+        return {"message": "Assignment deleted"}
+    except Exception as e:
+        if conn: conn.close()
+        raise HTTPException(status_code=500, detail=str(e))
+

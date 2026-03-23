@@ -350,7 +350,7 @@ def get_class_assignments(class_id: int, authorization: str = Header(...)):
         raise HTTPException(status_code=403, detail="Bạn không có quyền")
 
     cursor = conn.execute("""
-        SELECT a.id, a.class_id, a.title, a.description, a.type, a.quiz_data, a.due_date, a.created_at,
+        SELECT a.id, a.class_id, a.title, a.description, a.type, a.quiz_data, a.due_date, a.created_at, a.skill_type, a.bloom_level,
                c.name as class_name,
                (SELECT COUNT(*) FROM student_scores s WHERE s.assignment_id = a.id) as submissions
         FROM assignments a JOIN classes c ON a.class_id = c.id
@@ -366,7 +366,7 @@ def get_all_my_assignments(authorization: str = Header(...)):
     teacher = _get_current_teacher(authorization)
     conn = get_db()
     cursor = conn.execute("""
-        SELECT a.id, a.class_id, a.title, a.description, a.type, a.quiz_data, a.due_date, a.created_at,
+        SELECT a.id, a.class_id, a.title, a.description, a.type, a.quiz_data, a.due_date, a.created_at, a.skill_type, a.bloom_level,
                c.name as class_name,
                (SELECT COUNT(*) FROM student_scores s WHERE s.assignment_id = a.id) as submissions
         FROM assignments a JOIN classes c ON a.class_id = c.id
@@ -388,8 +388,8 @@ def create_assignment(data: AssignmentCreate, authorization: str = Header(...)):
         conn.close()
         raise HTTPException(status_code=403, detail="Bạn không có quyền tạo bài tập cho lớp này")
     conn.execute(
-        "INSERT INTO assignments (class_id, teacher_id, title, description, type, quiz_data, due_date) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        (data.class_id, teacher["id"], data.title, data.description, data.type, data.quiz_data, data.due_date)
+        "INSERT INTO assignments (class_id, teacher_id, title, description, type, quiz_data, due_date, skill_type, bloom_level) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (data.class_id, teacher["id"], data.title, data.description, data.type, data.quiz_data, data.due_date, data.skill_type, data.bloom_level)
     )
     conn.commit()
     conn.close()
@@ -690,3 +690,50 @@ def get_grammar_file(rule_id: int):
     return Response(content=file_data, media_type=media_type, headers={
         "Content-Disposition": f'inline; filename="{file_name}"'
     })
+
+# ─── NEWS (READING COMPREHENSION) ──────────────────────────────────────────
+
+from ..services.news_service import get_reading_sources
+
+@router.get("/news/topics")
+async def get_news_topics(query: str = "science", limit: int = 5, authorization: str = Header(...)):
+    """Fetch recent news articles to use as reading comprehension topics."""
+    _get_current_teacher(authorization)
+    try:
+        articles = await get_reading_sources(query, limit)
+        return {"articles": articles}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+class NewsGenerateRequest(BaseModel):
+    title: str
+    content: str
+    difficulty: str = "Medium"
+    num_questions: int = 5
+
+@router.post("/news/generate-assignment")
+async def generate_assignment_from_news(req: NewsGenerateRequest, authorization: str = Header(...)):
+    """Generate a reading comprehension test from a news article."""
+    user = _get_current_teacher(authorization)
+    if user.get("credits_ai", 0) < 5:
+        raise HTTPException(status_code=402, detail="Insufficient AI credits (5 required)")
+    
+    # Deduct credits
+    conn = get_db()
+    conn.execute("UPDATE users SET credits_ai = MAX(0, credits_ai - 5) WHERE id = ?", (user["id"],))
+    conn.commit()
+    conn.close()
+
+    try:
+        result = await llm_service.generate_reading_comprehension(
+            article_title=req.title,
+            article_content=req.content,
+            difficulty=req.difficulty,
+            num_questions=req.num_questions
+        )
+        if "error" in result:
+            raise HTTPException(status_code=500, detail=result["error"])
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+

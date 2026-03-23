@@ -368,7 +368,7 @@ def my_assignments(authorization: str = Header(...)):
     student = _get_current_student(authorization)
     conn = get_db()
     rows = conn.execute(
-        """SELECT a.id, a.title, a.description, a.type, a.due_date, a.created_at,
+        """SELECT a.id, a.title, a.description, a.type, a.due_date, a.created_at, a.skill_type, a.bloom_level,
                   c.name as class_name,
                   ss.score, ss.max_score, ss.submitted_at
            FROM assignments a
@@ -389,7 +389,7 @@ def get_assignment_detail(assignment_id: int, authorization: str = Header(...)):
     conn = get_db()
 
     row = conn.execute(
-        """SELECT a.id, a.title, a.description, a.type, a.quiz_data, a.due_date, a.created_at,
+        """SELECT a.id, a.title, a.description, a.type, a.quiz_data, a.due_date, a.created_at, a.skill_type, a.bloom_level,
                   c.name as class_name
            FROM assignments a
            JOIN enrollments e ON a.class_id = e.class_id
@@ -403,7 +403,7 @@ def get_assignment_detail(assignment_id: int, authorization: str = Header(...)):
 
     # Check if already submitted
     score_row = conn.execute(
-        "SELECT score, max_score, submitted_at FROM student_scores WHERE student_id = ? AND assignment_id = ?",
+        "SELECT score, max_score, submitted_at, submission_text, bloom_evaluation FROM student_scores WHERE student_id = ? AND assignment_id = ?",
         (student["id"], assignment_id)
     ).fetchone()
     conn.close()
@@ -416,6 +416,12 @@ def get_assignment_detail(assignment_id: int, authorization: str = Header(...)):
         result["score"] = score_row["score"]
         result["max_score"] = score_row["max_score"]
         result["submitted_at"] = score_row["submitted_at"]
+        result["submission_text"] = score_row["submission_text"]
+        if score_row["bloom_evaluation"]:
+            try:
+                result["evaluation"] = json.loads(score_row["bloom_evaluation"])
+            except:
+                result["evaluation"] = score_row["bloom_evaluation"]
     return result
 
 
@@ -429,13 +435,13 @@ class TextSubmission(BaseModel):
 
 
 @router.post("/assignments/{assignment_id}/submit")
-def submit_assignment(assignment_id: int, submission: Union[QuizSubmission, TextSubmission], authorization: str = Header(...)):
+async def submit_assignment(assignment_id: int, submission: Union[QuizSubmission, TextSubmission], authorization: str = Header(...)):
     student = _get_current_student(authorization)
     conn = get_db()
 
     # Get assignment with enrollment check
     row = conn.execute(
-        """SELECT a.id, a.type, a.quiz_data
+        """SELECT a.id, a.type, a.quiz_data, a.description, a.title
            FROM assignments a
            JOIN enrollments e ON a.class_id = e.class_id
            WHERE a.id = ? AND e.student_id = ?""",
@@ -493,17 +499,36 @@ def submit_assignment(assignment_id: int, submission: Union[QuizSubmission, Text
             "details": details,
         }
     elif assignment_type == "writing":
-        # For writing, just save the text, no grading yet
+        # Grade the writing assignment using LLM
         if not submission.text:
             conn.close()
             raise HTTPException(status_code=400, detail="Text required for writing assignment")
-        conn.execute(
-            "INSERT INTO student_scores (student_id, assignment_id, score, max_score, submission_text) VALUES (?, ?, ?, ?, ?)",
-            (student["id"], assignment_id, 0, 0, submission.text)
-        )
-        conn.commit()
-        conn.close()
-        return {"message": "Writing submitted successfully"}
+            
+        prompt_text = row["title"] + "\\n" + (row["description"] or "")
+        
+        # Assume IELTS by default, unless title suggests otherwise
+        test_type = "TOEIC" if "toeic" in row["title"].lower() else "IELTS"
+        
+        try:
+            evaluation = await llm_service.grade_writing_assignment(prompt_text, submission.text, test_type)
+            
+            score = 0
+            max_score = 9 if test_type == "IELTS" else 100 # arbitrary max scaling
+            
+            if not evaluation.get("error"):
+                score = float(evaluation.get("score", 0))
+                # For TOEIC it might be out of 200, but let's just use what the LLM gives
+                
+            conn.execute(
+                "INSERT INTO student_scores (student_id, assignment_id, score, max_score, submission_text, bloom_evaluation) VALUES (?, ?, ?, ?, ?, ?)",
+                (student["id"], assignment_id, score, max_score, submission.text, json.dumps(evaluation, ensure_ascii=False))
+            )
+            conn.commit()
+            conn.close()
+            return {"message": "Writing submitted successfully", "evaluation": evaluation}
+        except Exception as e:
+            conn.close()
+            raise HTTPException(status_code=500, detail=f"Error grading writing: {str(e)}")
     else:
         conn.close()
         raise HTTPException(status_code=400, detail="Unsupported assignment type")

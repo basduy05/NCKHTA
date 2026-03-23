@@ -743,6 +743,11 @@ function AssignmentsTab({ handleTextareaDoubleClick }: { handleTextareaDoubleCli
   const [generating, setGenerating] = useState(false);
   const [expandedScores, setExpandedScores] = useState<number | null>(null);
   const [scores, setScores] = useState<any[]>([]);
+  
+  // News state
+  const [newsTopics, setNewsTopics] = useState<any[]>([]);
+  const [newsLoading, setNewsLoading] = useState(false);
+  const [selectedNews, setSelectedNews] = useState<any>(null);
 
   useEffect(() => {
     (async () => {
@@ -784,6 +789,44 @@ function AssignmentsTab({ handleTextareaDoubleClick }: { handleTextareaDoubleCli
         setGeneratedQuiz(Array.isArray(data) ? data : []);
       }
     } catch (e) { console.error(e); alert("Lỗi khi tạo quiz"); }
+    finally { setGenerating(false); }
+  };
+
+  const fetchNewsTopics = async () => {
+    setNewsLoading(true);
+    try {
+      const res = await authFetch(`${API_URL}/teacher/news/topics?query=science&limit=5`);
+      if (res.ok) {
+        const data = await res.json();
+        setNewsTopics(data.articles || []);
+      }
+    } catch(e) { console.error(e); }
+    finally { setNewsLoading(false); }
+  };
+
+  const handleGenerateReading = async () => {
+    if (!selectedNews) return alert("Vui lòng chọn một bài báo");
+    setGenerating(true);
+    try {
+      const res = await authFetch(`${API_URL}/teacher/news/generate-assignment`, {
+        method: "POST", body: JSON.stringify({
+          title: selectedNews.title,
+          content: selectedNews.content,
+          difficulty: "Medium",
+          num_questions: 5
+        }),
+        headers: { "Content-Type": "application/json" }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        refreshUser();
+        setGeneratedQuiz(data.questions || []);
+        if (data.passage) setFormQuizText(data.passage);
+        alert("Đã tạo bài tập Reading thành công!");
+      } else {
+        alert("Lỗi khi tạo bài tập Reading");
+      }
+    } catch(e) { console.error(e); alert("Lỗi kết nối"); }
     finally { setGenerating(false); }
   };
 
@@ -880,6 +923,7 @@ function AssignmentsTab({ handleTextareaDoubleClick }: { handleTextareaDoubleCli
           <select value={formType} onChange={e => setFormType(e.target.value)}
             className="border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none">
             <option value="quiz">Quiz (Trắc nghiệm)</option>
+            <option value="reading">Reading (Đọc hiểu - News API)</option>
             <option value="writing">Writing (Viết bài)</option>
             <option value="speaking">Speaking (Nói)</option>
           </select>
@@ -898,24 +942,58 @@ function AssignmentsTab({ handleTextareaDoubleClick }: { handleTextareaDoubleCli
               className="mt-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 flex items-center gap-2 disabled:opacity-50">
               <Brain size={16} /> {generating ? "Đang tạo..." : "Tạo Quiz"}
             </button>
-            {generatedQuiz.length > 0 && (
-              <div className="mt-3 space-y-2">
-                <p className="text-sm text-green-700 font-medium">Đã tạo {generatedQuiz.length} câu hỏi</p>
-                {generatedQuiz.map((q: any, i: number) => (
-                  <div key={i} className="bg-white p-3 rounded-lg text-sm">
-                    <p className="font-medium">{i + 1}. {q.question || q.q}</p>
-                    <div className="ml-4 mt-1 text-gray-600">
-                      {(q.options || []).map((opt: string, j: number) => (
-                        <p key={j} className={j === (q.correct_answer ?? q.ans) ? "text-green-700 font-medium" : ""}>
-                          {String.fromCharCode(65 + j)}. {opt}
-                        </p>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
+          )}
+
+          {/* Render Reading options if formType is reading */}
+          {formType === "reading" && (
+            <div className="bg-gradient-to-r from-indigo-50 to-blue-50 p-4 rounded-xl border border-blue-100 mt-4">
+              <h4 className="font-bold text-indigo-700 mb-2 flex items-center gap-2">Nguồn bài báo (Reading Comprehension)</h4>
+              <div className="flex gap-2 mb-2">
+                <button onClick={fetchNewsTopics} disabled={newsLoading} className="px-4 py-2 bg-white text-indigo-600 border border-indigo-200 rounded-lg text-sm hover:bg-indigo-50 disabled:opacity-50">
+                  {newsLoading ? "Đang tải..." : "Tải tin tức mới nhất (The Guardian)"}
+                </button>
+              </div>
+              {newsTopics.length > 0 && (
+                <div className="space-y-2 mb-4 max-h-40 overflow-y-auto">
+                  {newsTopics.map((news, idx) => (
+                    <div key={idx} onClick={() => setSelectedNews(news)} className={`p-2 border rounded cursor-pointer text-sm ${selectedNews?.title === news.title ? 'bg-indigo-100 border-indigo-500' : 'bg-white hover:bg-gray-50'}`}>
+                      <p className="font-bold">{news.title}</p>
+                      <p className="text-xs text-gray-500 line-clamp-1">{news.content}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {selectedNews && (
+                 <button onClick={handleGenerateReading} disabled={generating} className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 flex items-center gap-2 disabled:opacity-50 mt-2">
+                  <Brain size={16} /> {generating ? "Đang tạo IELTS Reading test..." : "Tạo bài Reading test"}
+                </button>
+              )}
+            </div>
+          )}
+
+          {generatedQuiz.length > 0 && (
+            <div className="mt-4 space-y-2 bg-green-50 p-4 border border-green-100 rounded-xl">
+              <p className="text-sm text-green-700 font-bold">Đã tạo {generatedQuiz.length} câu hỏi / bài tập</p>
+              {generatedQuiz.map((q: any, i: number) => (
+                <div key={i} className="bg-white p-3 rounded-lg text-sm shadow-sm border border-gray-100">
+                  {q.type && <span className="inline-block px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs mb-1 font-medium select-none">{q.type}</span>}
+                  <p className="font-medium text-gray-900">{i + 1}. {q.question || q.q}</p>
+                  <div className="ml-4 mt-1 space-y-1 text-gray-700">
+                    {(q.options || []).map((opt: string, j: number) => {
+                      const ans = q.correct_answer ?? q.ans;
+                      const isCorrect = (typeof ans === 'number' && j === ans) || (typeof ans === 'string' && opt.includes(ans) && !['True', 'False', 'Not Given'].includes(opt)) || (typeof ans === 'string' && opt === ans);
+                      return (
+                        <p key={j} className={isCorrect ? "text-green-700 font-bold flex items-center gap-1" : ""}>
+                          {isCorrect && <CheckCircle2 size={14}/>} {String.fromCharCode(65 + j)}. {opt}
+                        </p>
+                      );
+                    })}
+                  </div>
+                  {q.explanation && <p className="text-xs text-indigo-600 mt-2 italic bg-indigo-50 p-2 rounded">Giải thích: {q.explanation}</p>}
+                </div>
+              ))}
+            </div>
           )}
 
           <button onClick={handleSaveAssignment}

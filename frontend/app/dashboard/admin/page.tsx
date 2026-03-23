@@ -1,7 +1,7 @@
 "use client";
 import { useState, Suspense, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { Users, Database, Plus, UploadCloud, FileSpreadsheet, Save, Edit, Trash2, GraduationCap, X, Check, BookOpen, BookText, Settings, RefreshCw, Mail, Eye, EyeOff, Sparkles } from "lucide-react";
+import { Users, Database, Plus, UploadCloud, FileSpreadsheet, Save, Edit, Trash2, GraduationCap, X, Check, BookOpen, BookText, Settings, RefreshCw, Mail, Eye, EyeOff, Sparkles, ClipboardList } from "lucide-react";
 import { useAuth } from "@/app/context/AuthContext";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://iedu-ksk7.onrender.com";
@@ -43,6 +43,7 @@ function AdminDashboardContent() {
           {activeTab === 'vocab' && 'Kho Từ Vựng Graph'}
           {activeTab === 'classes' && 'Quản lý Lớp Học'}
           {activeTab === 'lessons' && 'Quản lý Bài Học'}
+          {activeTab === 'assignments' && 'Quản lý Bài tập & Đề thi'}
           {activeTab === 'grammar' && 'Kho Ngữ Pháp (AI)'}
           {activeTab === 'settings' && 'Cài đặt hệ thống'}
         </h1>
@@ -53,6 +54,7 @@ function AdminDashboardContent() {
       {activeTab === 'vocab' && <VocabTab />}
       {activeTab === 'classes' && <ClassesTab />}
       {activeTab === 'lessons' && <LessonsTab />}
+      {activeTab === 'assignments' && <AssignmentsTab />}
       {activeTab === 'grammar' && <GrammarTab />}
       {activeTab === 'settings' && <SettingsTab />}
     </div>
@@ -1165,6 +1167,124 @@ function SettingsTab() {
         <button onClick={handleSave} disabled={saving} className="px-8 py-3 bg-indigo-600 text-white rounded-xl font-medium hover:bg-indigo-700 disabled:opacity-50 transition shadow-lg flex items-center">
           <Save size={18} className="mr-2" /> {saving ? 'Saving...' : 'Save all settings'}
         </button>
+      </div>
+    </div>
+  );
+}
+
+function AssignmentsTab() {
+  const { token, authFetch } = useAuth();
+  const [assignments, setAssignments] = useState<any[]>([]);
+  const [classes, setClasses] = useState<any[]>([]);
+  const [form, setForm] = useState({ class_id: '', title: '', description: '', type: 'quiz', due_date: '', skill_type: '', bloom_level: '' });
+  const [loading, setLoading] = useState(true);
+
+  const fetchData = async () => {
+    try {
+      const [assRes, clsRes] = await Promise.all([
+        authFetch(`${API_URL}/admin/assignments`),
+        authFetch(`${API_URL}/admin/classes`)
+      ]);
+      if (assRes.ok) setAssignments(await assRes.json());
+      if (clsRes.ok) setClasses(await clsRes.json());
+    } catch (e) { console.error(e); }
+    finally { setLoading(false); }
+  };
+
+  useEffect(() => { fetchData(); }, []);
+
+  const handleSave = async () => {
+    if (!form.class_id || !form.title) return alert("Vui lòng nhập tên bài tập và chọn lớp.");
+    try {
+      const res = await authFetch(`${API_URL}/admin/assignments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          class_id: parseInt(form.class_id),
+          title: form.title,
+          description: form.description,
+          type: form.type,
+          due_date: form.due_date || "2099-12-31",
+          skill_type: form.skill_type || null,
+          bloom_level: parseInt(form.bloom_level) || null
+        })
+      });
+      if (res.ok) {
+        alert("Tạo thành công!");
+        setForm({ class_id: '', title: '', description: '', type: 'quiz', due_date: '', skill_type: '', bloom_level: '' });
+        fetchData();
+      } else {
+        alert("Lỗi khi tạo.");
+      }
+    } catch (e) { alert("Lỗi kết nối"); }
+  };
+
+  const handleDelete = async (id: number) => {
+    if (!confirm("Bạn có chắc chắn xoá?")) return;
+    try {
+      await authFetch(`${API_URL}/admin/assignments/${id}`, { method: 'DELETE' });
+      fetchData();
+    } catch (e) { alert("Lỗi xoá"); }
+  };
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-in fade-in duration-300">
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+        <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center"><ClipboardList className="mr-2 text-indigo-600" size={20} /> Tạo Bài tập / Đề thi</h2>
+        <div className="space-y-3">
+          <select value={form.class_id} onChange={e => setForm({ ...form, class_id: e.target.value })} className="w-full border rounded-lg p-2 bg-white outline-none focus:ring-2">
+            <option value="">-- Chọn Lớp --</option>
+            {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+          <input type="text" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} placeholder="Tên bài tập/đề thi (VD: IELTS Mock Test 1)" className="w-full border rounded-lg p-2 outline-none focus:ring-2" />
+          <textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} placeholder="Mô tả" className="w-full border rounded-lg p-2 outline-none focus:ring-2" />
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Kỹ năng</label>
+              <select value={form.skill_type} onChange={e => setForm({ ...form, skill_type: e.target.value })} className="w-full border rounded-lg p-2 bg-white outline-none focus:ring-2">
+                <option value="">Không phân loại</option>
+                <option value="Reading">Reading</option>
+                <option value="Listening">Listening</option>
+                <option value="Writing">Writing</option>
+                <option value="Speaking">Speaking</option>
+                <option value="Mixed">Mixed</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Mức độ Bloom</label>
+              <select value={form.bloom_level} onChange={e => setForm({ ...form, bloom_level: e.target.value })} className="w-full border rounded-lg p-2 bg-white outline-none focus:ring-2">
+                <option value="">Không xác định</option>
+                <option value="1">1. Nhớ (Remember)</option>
+                <option value="2">2. Hiểu (Understand)</option>
+                <option value="3">3. Áp dụng (Apply)</option>
+                <option value="4">4. Phân tích (Analyze)</option>
+                <option value="5">5. Đánh giá (Evaluate)</option>
+                <option value="6">6. Sáng tạo (Create)</option>
+              </select>
+            </div>
+          </div>
+          <button onClick={handleSave} className="w-full py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition mt-2">+ Thêm Bài Tập</button>
+        </div>
+      </div>
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 flex-grow">
+        <h2 className="text-lg font-bold text-gray-900 mb-4">Danh sách Tổng quát</h2>
+        {loading ? <p>Đang tải...</p> : (
+          <ul className="space-y-3 max-h-[500px] overflow-y-auto">
+            {assignments.map(a => (
+              <li key={a.id} className="p-3 border rounded-xl bg-gray-50 flex justify-between items-start">
+                <div>
+                  <p className="font-bold text-indigo-700">{a.title}</p>
+                  <p className="text-xs text-gray-500">Lớp: {a.class_name}</p>
+                  <div className="flex gap-2 mt-1">
+                    {a.skill_type && <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full">{a.skill_type}</span>}
+                    {a.bloom_level && <span className="px-2 py-0.5 bg-purple-100 text-purple-700 text-xs rounded-full">Bloom Lvl: {a.bloom_level}</span>}
+                  </div>
+                </div>
+                <button onClick={() => handleDelete(a.id)} className="text-red-500 bg-red-50 p-1.5 rounded hover:bg-red-100"><Trash2 size={16} /></button>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </div>
   );

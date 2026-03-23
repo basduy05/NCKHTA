@@ -404,11 +404,63 @@ function AssignmentsTab() {
           </div>
 
           {takingQuiz.submitted ? (
-            <div className="bg-green-50 border border-green-200 rounded-xl p-6 text-center">
-              <CheckCircle2 size={40} className="mx-auto text-green-500 mb-3" />
-              <p className="font-bold text-green-800">Bạn đã nộp bài viết rồi!</p>
-              <p className="text-green-600 text-lg font-semibold mt-1">Nộp: {new Date(takingQuiz.submitted_at).toLocaleDateString("vi-VN")}</p>
-              <button onClick={() => setTakingQuiz(null)} className="mt-4 text-sm text-blue-600 hover:underline">Quay lại</button>
+            <div className="space-y-4">
+              <div className="bg-green-50 border border-green-200 rounded-xl p-6 text-center">
+                <CheckCircle2 size={40} className="mx-auto text-green-500 mb-3" />
+                <p className="font-bold text-green-800">Bạn đã nộp bài viết rồi!</p>
+                <p className="text-green-600 text-lg font-semibold mt-1">Điểm AI chấm: {takingQuiz.score}/{takingQuiz.max_score}</p>
+                <p className="text-sm text-green-700 mt-1">Nộp lúc: {new Date(takingQuiz.submitted_at).toLocaleDateString("vi-VN")}</p>
+                <button onClick={() => setTakingQuiz(null)} className="mt-4 text-sm text-blue-600 hover:underline">Quay lại danh sách</button>
+              </div>
+              
+              {takingQuiz.evaluation && (
+                 <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm space-y-4">
+                   <h3 className="font-bold text-gray-900 text-lg flex items-center gap-2"><Sparkles className="text-indigo-500" size={20}/> Đánh giá từ AI</h3>
+                   <div className="bg-indigo-50 p-4 rounded-lg text-sm text-indigo-900 leading-relaxed">
+                     <p className="font-bold mb-1">Nhận xét chung:</p>
+                     {takingQuiz.evaluation.feedback_summary}
+                   </div>
+                   
+                   {takingQuiz.evaluation.criteria_scores && (
+                     <div>
+                       <p className="font-bold text-gray-800 mb-2">Điểm thành phần:</p>
+                       <div className="grid grid-cols-2 gap-2">
+                         {Object.entries(takingQuiz.evaluation.criteria_scores).map(([k, v]) => (
+                           <div key={k} className="bg-gray-50 p-2 rounded flex justify-between text-sm">
+                             <span className="text-gray-600">{k}</span>
+                             <span className="font-bold text-indigo-700">{String(v)}</span>
+                           </div>
+                         ))}
+                       </div>
+                     </div>
+                   )}
+
+                   {takingQuiz.evaluation.detailed_feedback?.map((section: any, idx: number) => (
+                     <div key={idx} className="bg-gray-50 p-4 rounded-lg">
+                       <p className={`font-bold mb-2 ${section.category?.includes('Strengths') ? 'text-green-700' : section.category?.includes('Weaknesses') ? 'text-red-700' : 'text-blue-700'}`}>{section.category}</p>
+                       <ul className="list-disc pl-5 space-y-1 text-sm text-gray-700">
+                         {section.points?.map((pt: string, pidx: number) => <li key={pidx}>{pt}</li>)}
+                       </ul>
+                     </div>
+                   ))}
+
+                   {takingQuiz.evaluation.corrected_version && (
+                     <div>
+                       <p className="font-bold text-gray-800 mb-2 mt-4">Bản sửa mẫu từ AI:</p>
+                       <div className="bg-gray-50 border border-gray-200 p-4 rounded-lg text-sm text-gray-800 whitespace-pre-wrap font-serif leading-relaxed">
+                         {takingQuiz.evaluation.corrected_version}
+                       </div>
+                     </div>
+                   )}
+                 </div>
+              )}
+              
+              <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
+                 <h3 className="font-bold text-gray-900 mb-2">Bài viết của bạn</h3>
+                 <div className="bg-gray-50 p-4 rounded-lg text-sm text-gray-700 whitespace-pre-wrap font-serif leading-relaxed">
+                   {takingQuiz.submission_text || "(Không có nội dung)"}
+                 </div>
+              </div>
             </div>
           ) : (
             <>

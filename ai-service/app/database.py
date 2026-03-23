@@ -446,6 +446,27 @@ def init_db():
         cursor.execute("ALTER TABLE dictionary_cache ADD COLUMN word_original TEXT")
     except SQLITE_OP_ERROR: pass
 
+    # --- MIGRATION: Phase 1 - 4 Skills and Bloom's Taxonomy Tracking ---
+    try:
+        cursor.execute("ALTER TABLE generated_exams ADD COLUMN skill_type TEXT")
+    except SQLITE_OP_ERROR: pass
+    
+    try:
+        cursor.execute("ALTER TABLE generated_exams ADD COLUMN bloom_level TEXT")
+    except SQLITE_OP_ERROR: pass
+    
+    try:
+        cursor.execute("ALTER TABLE assignments ADD COLUMN skill_type TEXT")
+    except SQLITE_OP_ERROR: pass
+    
+    try:
+        cursor.execute("ALTER TABLE assignments ADD COLUMN bloom_level TEXT")
+    except SQLITE_OP_ERROR: pass
+    
+    try:
+        cursor.execute("ALTER TABLE student_scores ADD COLUMN bloom_evaluation JSON")
+    except SQLITE_OP_ERROR: pass
+
     # --- MIGRATION: Recreate saved_vocabulary with UNIQUE(user_id, word, pos) ---
     # SQLite can't alter constraints, so we recreate the table if needed
     try:
@@ -670,5 +691,7 @@ class AssignmentCreate(BaseModel):
     type: str = "quiz"
     quiz_data: str = ""
     due_date: str = ""
+    skill_type: Optional[str] = None
+    bloom_level: Optional[str] = None
 
 
