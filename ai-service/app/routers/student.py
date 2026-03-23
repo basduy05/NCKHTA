@@ -627,6 +627,7 @@ async def dictionary_lookup(req: DictionaryRequest, authorization: str = Header(
     free_dict_task = asyncio.create_task(check_free_dict())
     
     neo4j_data, free_data = await asyncio.gather(neo4j_task, free_dict_task)
+    wikipedia_data = None  # Initialize to avoid NameError
 
     # 2.1) Process Results (Neo4j and other caches)
     result_to_return = None

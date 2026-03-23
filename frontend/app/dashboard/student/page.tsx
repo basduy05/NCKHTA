@@ -8,6 +8,7 @@ import {
   Award, TrendingUp, Layers, Search, BookMarked, Volume2, Save, Trash2,
   ExternalLink, Star, Filter, X, ArrowRight, Bookmark, Network, Mic, Upload, Brain, Headphones, Edit3, Terminal, AlertCircle, BookText, Lightbulb
 } from "lucide-react";
+import { ALL_WORDS_DATABASE, simulateSyllabify } from "../../../components/DictionaryData";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://iedu-ksk7.onrender.com";
 
@@ -581,6 +582,10 @@ function AIToolsTab() {
   const [answers, setAnswers] = useState<Record<number, number>>({});
   const [submitted, setSubmitted] = useState(false);
   const [score, setScore] = useState(0);
+  const [selectedWordInfo, setSelectedWordInfo] = useState<any>(null);
+  const [showRecallQuiz, setShowRecallQuiz] = useState(false);
+  const [recallAnswers, setRecallAnswers] = useState<Record<number, string>>({});
+  const [recallSubmitted, setRecallSubmitted] = useState(false);
 
   const analyze = async (type: "text" | "file") => {
     if (type === "text" && !text) return;
@@ -685,6 +690,30 @@ function AIToolsTab() {
     setSubmitted(true);
   };
 
+  const handleTextareaDoubleClick = (e: React.MouseEvent<HTMLTextAreaElement>) => {
+    const textarea = e.currentTarget;
+    const start = textarea.selectionStart;
+    const textVal = textarea.value;
+    
+    // Find word boundaries
+    let left = start;
+    while (left > 0 && /\w/.test(textVal[left - 1])) left--;
+    let right = start;
+    while (right < textVal.length && /\w/.test(textVal[right])) right++;
+    
+    const word = textVal.substring(left, right).toLowerCase();
+    if (!word) return;
+
+    const localData = ALL_WORDS_DATABASE[word] || 
+                      ALL_WORDS_DATABASE[word.replace(/s$/, '')] || 
+                      ALL_WORDS_DATABASE[word.replace(/es$/, '')];
+
+    if (localData) {
+      setSelectedWordInfo(localData);
+      alert(`Từ: ${localData.word}\nPhát âm: ${localData.phonetic}\nNghĩa: ${localData.translation}\n\n${localData.engMeaning}`);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
@@ -706,9 +735,10 @@ function AIToolsTab() {
             <textarea
               rows={5}
               className="w-full bg-gray-50 border border-gray-200 rounded-xl p-4 text-gray-700 focus:bg-white focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 outline-none resize-none transition text-base"
-              placeholder="Dán một đoạn văn bản tiếng Anh vào đây để AI trích xuất từ vựng và tạo câu hỏi trắc nghiệm..."
+              placeholder="Dán một đoạn văn bản tiếng Anh vào đây để AI trích xuất từ vựng và tạo câu hỏi trắc nghiệm... (Double click vào từ bất kỳ để tra nhanh)"
               value={text}
               onChange={(e) => setText(e.target.value)}
+              onDoubleClick={handleTextareaDoubleClick}
             />
             <div className="flex justify-end mt-3">
               <button
@@ -760,6 +790,11 @@ function AIToolsTab() {
                     <div onClick={() => setFlippedWord(flippedWord === idx ? null : idx)} className={`w-full h-full transition-transform duration-500 transform-style-3d ${flippedWord === idx ? "rotate-y-180" : ""}`}>
                       <div className="absolute w-full h-full backface-hidden bg-white border-2 border-blue-100 rounded-xl shadow-sm hover:shadow-md hover:border-blue-300 flex flex-col items-center justify-center p-5 transition">
                         <h4 className="text-2xl font-extrabold text-blue-700 mb-1">{w.word}</h4>
+                        <div className="flex gap-1 mb-2">
+                          {simulateSyllabify(w.word).map((s, i) => (
+                            <span key={i} className="px-1.5 py-0.5 bg-blue-50 text-blue-600 text-[10px] font-bold rounded border border-blue-100">{s}</span>
+                          ))}
+                        </div>
                         <p className="text-gray-400 font-mono text-sm flex items-center"><PlayCircle size={14} className="mr-1" /> {w.phon}</p>
                         {w.pos && <span className="text-xs text-purple-600 bg-purple-50 px-2 py-0.5 rounded mt-1">{w.pos}</span>}
                         <span className="absolute top-2 right-2 px-2 py-0.5 bg-gray-100 text-xs font-bold text-gray-500 rounded">{w.level}</span>
@@ -788,6 +823,70 @@ function AIToolsTab() {
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {result.words.length > 0 && (
+            <div className="bg-blue-50/50 p-6 rounded-2xl border border-blue-100 mt-8">
+              <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
+                <div>
+                  <h3 className="text-lg font-bold text-blue-900 flex items-center gap-2">
+                    <Brain size={20} className="text-blue-600" /> Thử Thách Ghi Nhớ (Recall Quiz)
+                  </h3>
+                  <p className="text-blue-700/70 text-sm">Kiểm tra khả năng nhớ nghĩa của các từ vựng vừa trích xuất.</p>
+                </div>
+                <button 
+                  onClick={() => {
+                    setShowRecallQuiz(!showRecallQuiz);
+                    setRecallAnswers({});
+                    setRecallSubmitted(false);
+                  }}
+                  className="bg-blue-600 text-white px-6 py-2.5 rounded-xl font-bold text-sm shadow-lg shadow-blue-200 hover:bg-blue-700 transition flex items-center gap-2"
+                >
+                  <PlayCircle size={18} /> {showRecallQuiz ? "Đóng Quiz" : "Bắt đầu Recall Quiz"}
+                </button>
+              </div>
+
+              {showRecallQuiz && (
+                <div className="space-y-4 animate-in slide-in-from-top-4 duration-300">
+                  {result.words.map((w: any, idx: number) => (
+                    <div key={idx} className="bg-white p-4 rounded-xl border border-blue-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                      <div className="flex-1">
+                        <span className="text-xs font-bold text-blue-400 uppercase tracking-wider">Từ vựng</span>
+                        <h4 className="text-xl font-black text-blue-800">{w.word}</h4>
+                      </div>
+                      <div className="flex-[2]">
+                        <input 
+                          type="text"
+                          placeholder="Nhập nghĩa tiếng Việt..."
+                          disabled={recallSubmitted}
+                          className={`w-full px-4 py-2 rounded-lg border-2 outline-none transition ${
+                            recallSubmitted 
+                              ? (recallAnswers[idx]?.toLowerCase() === w.meaning.toLowerCase() ? "border-green-400 bg-green-50" : "border-red-400 bg-red-50")
+                              : "border-gray-100 focus:border-blue-400"
+                          }`}
+                          value={recallAnswers[idx] || ""}
+                          onChange={(e) => setRecallAnswers(prev => ({ ...prev, [idx]: e.target.value }))}
+                        />
+                        {recallSubmitted && recallAnswers[idx]?.toLowerCase() !== w.meaning.toLowerCase() && (
+                          <p className="text-[10px] text-green-600 font-bold mt-1">Đáp án đúng: {w.meaning}</p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                  
+                  {!recallSubmitted && Object.keys(recallAnswers).length > 0 && (
+                    <div className="text-center mt-6">
+                      <button 
+                        onClick={() => setRecallSubmitted(true)}
+                        className="btn-primary px-8 py-3 rounded-xl shadow-xl shadow-blue-200"
+                      >
+                        Kiểm tra kết quả
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
@@ -887,6 +986,34 @@ function DictionaryTab() {
   const lookup = async () => {
     const trimmedWord = word.trim();
     if (!trimmedWord) return;
+
+    // Check Local Database First for instant results
+    const localWord = trimmedWord.toLowerCase();
+    const localData = ALL_WORDS_DATABASE[localWord] || 
+                      ALL_WORDS_DATABASE[localWord.replace(/s$/, '')] || 
+                      ALL_WORDS_DATABASE[localWord.replace(/es$/, '')];
+
+    if (localData) {
+      setResult({
+        ...localData,
+        status: "result",
+        _source: "database", // Mark as local database
+        meanings: [{
+          pos: localData.type,
+          definition_en: localData.engMeaning,
+          definition_vn: localData.translation,
+          examples: [localData.example]
+        }],
+        phonetic_uk: localData.phonetic,
+      });
+      setLoading(false);
+      setHistory(prev => {
+        const next = [localWord, ...prev.filter(w => w !== localWord)].slice(0, 10);
+        if (typeof window !== "undefined") localStorage.setItem("dictionaryHistory", JSON.stringify(next));
+        return next;
+      });
+      return;
+    }
 
     // Reset state early to provide immediate feedback
     setLoading(true);

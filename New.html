@@ -1,0 +1,1669 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Học Từ Vựng Tiếng Anh với AI (Intro Siêu Sáng Tạo)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f4f8;
+            overflow: auto; /* Prevent scrollbars during intro */
+        }
+
+        /* Intro Screen Styles */
+        #introScreen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100vh;
+            background-color: #0a0f1f; /* Dark deep blue base */
+            color: white;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+            opacity: 1;
+            transition: opacity 1.2s ease-out, transform 1.2s ease-out;
+            overflow: hidden;
+            padding: 1rem;
+        }
+
+        #particleCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0; /* Behind content */
+        }
+
+        .intro-content-wrapper { /* To keep content above canvas */
+            position: relative;
+            z-index: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 100%;
+        }
+
+
+        #introScreen.hidden {
+            opacity: 0;
+            transform: scale(0.95) translateY(-100vh); /* More dramatic exit */
+            pointer-events: none;
+        }
+
+        .intro-title-container {
+            margin-bottom: 1.5rem; /* Increased margin */
+            text-align: center;
+        }
+
+        .intro-title {
+            font-size: 2.8rem; 
+            font-weight: 900; /* Bolder */
+            letter-spacing: 1.5px; /* Wider spacing */
+            color: #ffffff;
+            text-shadow: 0 0 10px rgba(129, 140, 248, 0.5), 0 0 20px rgba(99, 102, 241, 0.4); /* Indigo glow */
+            opacity: 0;
+            transform: translateY(30px);
+            /* animation: titleReveal 1s ease-out 0.5s forwards; */ /* Replaced by word by word */
+        }
+        
+        @keyframes titleReveal {
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        /* Individual word/phrase animation for title (optional, can be complex) */
+        .intro-title .word {
+            display: inline-block;
+            opacity: 0;
+            transform: translateY(20px);
+            animation: revealWord 0.8s cubic-bezier(0.23, 1, 0.32, 1) forwards;
+        }
+        /* Delays are set in JS */
+        @keyframes revealWord {
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+
+        .intro-subtitle {
+            font-size: 1.2rem;
+            margin-bottom: 3rem; /* Increased margin */
+            max-width: 700px; 
+            text-align: center;
+            line-height: 1.7;
+            color: #cbd5e1; /* Lighter gray for subtitle */
+            opacity: 0;
+            transform: translateY(20px);
+            animation: fadeInSub 1.5s ease-out 1.8s forwards; /* Delayed after title */
+        }
+        @keyframes fadeInSub {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .features-grid { 
+            display: grid;
+            grid-template-columns: 1fr; 
+            gap: 1.5rem; 
+            max-width: 600px; /* Max width for 2x2 on smaller screens */
+            width: 90%;
+            margin-bottom: 3.5rem; /* Increased margin */
+        }
+
+        @media (min-width: 768px) { /* md breakpoint for 2x2 */
+            .features-grid {
+                grid-template-columns: repeat(2, 1fr); 
+                max-width: 750px; /* Wider for 2x2 */
+                gap: 2rem;
+            }
+        }
+
+
+        .feature-item {
+            background: rgba(255, 255, 255, 0.07); /* Slightly more transparent */
+            backdrop-filter: blur(10px); /* Glassmorphism effect */
+            -webkit-backdrop-filter: blur(10px);
+            padding: 1.8rem; /* Increased padding */
+            border-radius: 1rem; 
+            text-align: center;
+            border: 1px solid rgba(255,255,255,0.1);
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.2); /* Softer, more spread shadow */
+            opacity: 0; 
+            transform: translateY(40px) scale(0.9); /* Start further down and smaller */
+            animation: popInFeature 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; /* More bouncy */
+            transition: transform 0.35s ease, box-shadow 0.35s ease;
+        }
+        .feature-item:hover {
+            transform: translateY(-8px) scale(1.05); 
+            box-shadow: 0 12px 40px rgba(31, 38, 135, 0.25);
+        }
+        .feature-item:hover svg {
+            transform: scale(1.1) rotate(5deg);
+            filter: drop-shadow(0 0 10px rgba(165, 180, 252, 0.8));
+        }
+
+        .feature-item svg {
+            width: 50px; height: 50px; margin: 0 auto 1.2rem; /* Increased margin */
+            color: #93c5fd; 
+            filter: drop-shadow(0 0 8px rgba(147, 197, 253, 0.5));
+            transition: transform 0.3s ease, filter 0.3s ease;
+        }
+        .feature-item h3 {
+            font-size: 1.15rem; font-weight: 700; margin-bottom: 0.4rem; color: #f0f9ff; 
+        }
+        .feature-item p {
+            font-size: 0.88rem; opacity: 0.85; line-height: 1.55; color: #cbd5e1; 
+        }
+
+        /* Staggered animation delays for features */
+        .feature-item:nth-child(1) { animation-delay: 2.5s; }
+        .feature-item:nth-child(2) { animation-delay: 2.7s; }
+        .feature-item:nth-child(3) { animation-delay: 2.9s; }
+        .feature-item:nth-child(4) { animation-delay: 3.1s; }
+
+        @keyframes popInFeature {
+            0% { opacity: 0; transform: translateY(40px) scale(0.9); }
+            70% { opacity: 1; transform: translateY(-5px) scale(1.05); } /* Overshoot */
+            100% { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        #startAppBtn { 
+            padding: 1rem 3rem; 
+            font-size: 1.2rem; /* Larger font */
+            font-weight: 700;
+            background: linear-gradient(45deg, #a855f7, #ec4899, #f43f5e); /* Purple, Pink, Rose */
+            color: #ffffff; 
+            border: none;
+            border-radius: 50px; 
+            cursor: pointer;
+            transition: all 0.35s cubic-bezier(0.25, 0.1, 0.25, 1); /* Smoother transition */
+            box-shadow: 0 8px 25px rgba(236, 72, 153, 0.3); 
+            animation: pulseBtn 2.5s infinite 3.5s, fadeInUpBtn 1.2s ease-out 3.3s forwards;
+            opacity: 0;
+            position: relative;
+            overflow: hidden;
+        }
+        #startAppBtn::before { 
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -150%; /* Start further left for a faster shimmer */
+            width: 75%; /* Wider shimmer */
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.6), transparent);
+            transition: none;
+            animation: shimmer 2.5s infinite 3.5s; /* Faster shimmer */
+        }
+
+        #startAppBtn:hover {
+            transform: translateY(-6px) scale(1.1); 
+            box-shadow: 0 14px 30px rgba(236, 72, 153, 0.4);
+            background: linear-gradient(45deg, #c026d3, #f43f5e, #ec4899); /* Shift gradient on hover */
+        }
+        #startAppBtn:active {
+            transform: translateY(-3px) scale(1.05);
+        }
+
+        @keyframes shimmer {
+            0% { left: -150%; }
+            40% { left: 150%; } /* Faster across */
+            100% { left: 150%; } 
+        }
+        @keyframes pulseBtn { 
+            0% { transform: scale(1); }
+            50% { transform: scale(1.03); }
+            100% { transform: scale(1); }
+        }
+        @keyframes fadeInUpBtn { 
+            from { opacity: 0; transform: translateY(25px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+
+        #mainAppWrapper { display: none; opacity: 0; transition: opacity 0.8s ease-in; }
+        #mainAppWrapper.visible { display: block; opacity: 1; }
+        .card { background-color: white; border-radius: 0.75rem; box-shadow: 0 4px 12px -1px rgba(0, 0, 0, 0.07), 0 2px 8px -1px rgba(0, 0, 0, 0.04); padding: 1.5rem; margin-bottom: 1.5rem; transition: all 0.3s ease-in-out; }
+        .card:hover { box-shadow: 0 10px 20px -5px rgba(0, 0, 0, 0.1), 0 6px 12px -3px rgba(0, 0, 0, 0.07); }
+        .btn { padding: 0.75rem 1.5rem; border-radius: 0.5rem; font-weight: 600; transition: all 0.2s ease; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
+        .btn-primary { background-color: #4f46e5; color: white; box-shadow: 0 2px 4px rgba(79, 70, 229, 0.2); }
+        .btn-primary:hover { background-color: #4338ca; box-shadow: 0 4px 8px rgba(79, 70, 229, 0.3); transform: translateY(-1px); }
+        .btn-primary:disabled { background-color: #a5b4fc; cursor: not-allowed; }
+        .btn-secondary { background-color: #e5e7eb; color: #374151; }
+        .btn-secondary:hover { background-color: #d1d5db; transform: translateY(-1px); }
+        .btn-danger { background-color: #ef4444; color: white; }
+        .btn-danger:hover { background-color: #dc2626; }
+        .btn-speaker { background: none; border: none; padding: 0.25rem; color: #6b7280; }
+        .btn-speaker:hover { color: #4f46e5; }
+        .btn-remove-flashcard { background: none; border: none; padding: 0.1rem; color: #9ca3af; position: absolute; top: 8px; right: 8px; }
+        .btn-remove-flashcard:hover { color: #ef4444; }
+
+        textarea, input[type="text"] { border-radius: 0.5rem; border: 1px solid #d1d5db; padding: 0.75rem; width: 100%; transition: border-color 0.2s ease, box-shadow 0.2s ease; }
+        textarea:focus, input[type="text"]:focus { outline: none; border-color: #4f46e5; box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.2); }
+        input[type="text"].correct-answer { border-color: #22c55e; background-color: #f0fdf4; }
+        input[type="text"].incorrect-answer { border-color: #ef4444; background-color: #fef2f2; }
+        .flashcard-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1.5rem; }
+        .flashcard { perspective: 1000px; min-height: 180px; position: relative; } /* Added position relative */
+        .flashcard-inner { position: relative; width: 100%; height: 100%; text-align: center; transition: transform 0.7s; transform-style: preserve-3d; border-radius: 0.75rem; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .flashcard.flipped .flashcard-inner { transform: rotateY(180deg); }
+        .flashcard-front, .flashcard-back { position: absolute; width: 100%; height: 100%; -webkit-backface-visibility: hidden; backface-visibility: hidden; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 1.25rem; border-radius: 0.75rem; border: 1px solid #e5e7eb; }
+        .flashcard-front { background-color: #ffffff; color: #1f2937; }
+        .flashcard-back { background-color: #4f46e5; color: white; transform: rotateY(180deg); }
+        .quiz-option { display: block; padding: 0.85rem 1.15rem; margin-bottom: 0.6rem; border: 1px solid #d1d5db; border-radius: 0.5rem; cursor: pointer; transition: all 0.2s ease; }
+        .quiz-option:hover { background-color: #eef2ff; border-color: #6366f1; }
+        .quiz-option.selected { background-color: #c7d2fe; border-color: #4f46e5; font-weight: 600; color: #3730a3; }
+        .quiz-option.correct { background-color: #dcfce7; border-color: #22c55e; color: #15803d; }
+        .quiz-option.incorrect { background-color: #fee2e2; border-color: #ef4444; color: #b91c1c; }
+        .message-box { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); color: white; padding: 1rem 1.5rem; border-radius: 0.5rem; box-shadow: 0 4px 15px rgba(0,0,0,0.2); z-index: 10000; display: none; opacity: 0; transition: opacity 0.3s ease-in-out, top 0.3s ease-in-out; font-size: 0.95rem; }
+        .message-box.show { display: block; opacity: 1; top: 40px; }
+        .message-box.success { background-color: #22c55e; } 
+        .message-box.error { background-color: #ef4444; } 
+        .message-box.info { background-color: #3b82f6; } 
+        .syllable-item { background-color: #f9fafb; border: 1px solid #e5e7eb; padding: 1rem; border-radius: 0.5rem; }
+        .syllable-word span { display: inline-block; padding: 0.1rem 0.3rem; margin-right: 0.1rem; border-right: 1px dashed #9ca3af; }
+        .syllable-word span:last-child { border-right: none; }
+        .progress-bar-container { width: 100%; background-color: #e5e7eb; border-radius: 0.25rem; overflow: hidden; height: 1.25rem; }
+        .progress-bar { height: 100%; background-color: #4ade80; color: #14532d; display: flex; align-items: center; justify-content: center; font-size: 0.8rem; font-weight: 500; transition: width 0.5s ease-in-out; }
+        .fade-in { animation: fadeInMainApp 0.5s ease-in-out forwards; }
+        @keyframes fadeInMainApp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        
+        /* Modal Styles */
+        .modal {
+            position: fixed;
+            inset: 0;
+            background-color: rgba(31, 41, 55, 0.75); /* bg-gray-800 bg-opacity-75 */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem; /* p-4 */
+            z-index: 3000; /* Ensure modals are on top */
+        }
+        .modal-content {
+            background-color: white;
+            padding: 1.5rem; /* p-6 */
+            border-radius: 0.5rem; /* rounded-lg */
+            box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04); /* shadow-xl */
+            width: 100%;
+        }
+
+
+        @media (max-width: 768px) { .intro-title { font-size: 2rem; } .intro-subtitle { font-size: 1rem; margin-bottom: 2rem;} .features-grid { grid-template-columns: 1fr; gap: 1rem; max-width: 90%;} .feature-item { padding: 1.2rem; } .feature-item svg { width: 40px; height: 40px; margin-bottom: 0.5rem;} #startAppBtn { padding: 0.9rem 2.2rem; font-size: 1.05rem;} }
+        @media (max-width: 480px) { .intro-title { font-size: 1.8rem; } .intro-subtitle { font-size: 0.9rem; margin-bottom: 1.8rem;} .feature-item {padding: 1rem;} #startAppBtn { padding: 0.8rem 2rem; font-size: 1rem;} }
+
+    </style>
+</head>
+
+<body>
+    <div id="introScreen">
+        <canvas id="particleCanvas"></canvas>
+        <div class="intro-content-wrapper">
+            <div class="intro-title-container">
+                <h1 class="intro-title">
+                    </h1>
+            </div>
+            <p class="intro-subtitle">Khám phá phương pháp học tiếng Anh hiệu quả với sự hỗ trợ<br/>của Trí Tuệ Nhân Tạo. Trích xuất từ vựng, học qua flashcards,<br/>làm quiz tương tác và hơn thế nữa!</p>
+            
+            <div class="features-grid">
+                <div class="feature-item">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 17.58A5 5 0 0 0 18 8h-1.26A8 8 0 1 0 4 16.25"/><path d="M8 16h.01"/><path d="M8 20h.01"/><path d="M12 18h.01"/><path d="M12 22h.01"/><path d="M16 16h.01"/><path d="M16 20h.01"/></svg>
+                    <h3>AI Phân Tích</h3>
+                    <p>Nhập văn bản, AI tự động trích xuất từ vựng quan trọng.</p>
+                </div>
+                <div class="feature-item">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M8 12h8"/><path d="M12 8v8"/></svg>
+                    <h3>Flashcards Động</h3>
+                    <p>Học từ, nghĩa, ví dụ và phát âm qua thẻ tương tác.</p>
+                </div>
+                <div class="feature-item">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17h.01"/><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><path d="M9.1 9a3 3 0 0 1 5.82 1c0 2-3 3-3 3"/></svg>
+                    <h3>Quiz Thông Minh</h3>
+                    <p>Kiểm tra kiến thức với trắc nghiệm và đoán từ.</p>
+                </div>
+                <div class="feature-item">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><path d="M8 12h8"/><path d="M8 16h4"/></svg>
+                    <h3>Học Sâu & Ghi Nhớ</h3>
+                    <p>Phân tích âm tiết và gợi ý ôn tập khoa học.</p>
+                </div>
+            </div>
+            <button id="startAppBtn">Bắt đầu Khám Phá!</button>
+        </div>
+    </div>
+
+    <div id="mainAppWrapper">
+        <div id="customMessage" class="message-box"></div> 
+        <div class="container mx-auto p-4 sm:p-6 lg:p-8 max-w-5xl">
+            <header class="text-center mb-10">
+                <h1 class="text-3xl sm:text-4xl font-bold text-indigo-700 mb-2">
+                    Học Từ Vựng Tiếng Anh Thông Minh
+                </h1>
+                <p class="mt-1 text-lg text-gray-600">Nhập văn bản, khám phá từ vựng qua flashcards, làm quiz và hơn thế nữa!</p>
+            </header>
+
+            <div class="card fade-in">
+                <h2 class="text-2xl font-semibold mb-4 text-indigo-600">1. Nhập văn bản Tiếng Anh</h2>
+                <p class="text-sm text-gray-500 mb-2">Mẹo: Nhấn đúp chuột vào một từ trong đoạn văn bản dưới đây để tra cứu nhanh và thêm vào flashcards!</p>
+                <textarea id="englishText" rows="5"
+                    placeholder="Dán hoặc gõ đoạn văn bản tiếng Anh vào đây... ví dụ: Artificial Intelligence is revolutionizing the way people interact with technology, making life easier and more efficient."
+                    class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-shadow"></textarea>
+                <button id="processTextBtn" class="btn btn-primary mt-4 w-full sm:w-auto">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block mr-2 lucide lucide-wand-2"><path d="m21.64 3.64-1.28-1.28a1.21 1.21 0 0 0-1.72 0L2.36 18.64a1.21 1.21 0 0 0 0 1.72l1.28 1.28a1.21 1.21 0 0 0 1.72 0L21.64 5.36a1.21 1.21 0 0 0 0-1.72Z"/><path d="m14 7 3 3"/><path d="M5 6v4"/><path d="M19 14v4"/><path d="M10 2v2"/><path d="M7 8H3"/><path d="M17 16h-4"/><path d="M11 3H9"/><path d="M15 21h-2"/></svg>
+                    Xử lý & Học (Toàn bộ văn bản)
+                </button>
+            </div>
+            
+            <div id="translationSection" class="card hidden fade-in">
+                <h2 class="text-2xl font-semibold mb-3 text-indigo-600">Bản dịch (mô phỏng)</h2>
+                <div id="translatedTextContainer" class="p-3 bg-gray-50 rounded-md border border-gray-200 text-gray-700 italic">
+                    Nội dung dịch sẽ xuất hiện ở đây...
+                </div>
+            </div>
+
+            <div id="vocabularySection" class="card hidden fade-in">
+                <h2 class="text-2xl font-semibold mb-4 text-indigo-600">2. Flashcards Từ Vựng</h2>
+                <div id="flashcardList" class="flashcard-grid">
+                    <p class="text-gray-500 col-span-full">Chưa có từ vựng nào. Hãy nhập văn bản và nhấn "Xử lý" hoặc nhấn đúp vào từ để thêm.</p>
+                </div>
+                <button id="startMcQuizBtn" class="btn btn-primary mt-6 w-full sm:w-auto hidden">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block mr-2 lucide lucide-list-checks"><path d="M8 6h10"/><path d="M8 12h10"/><path d="M8 18h10"/><path d="M4 6h.01"/><path d="M4 12h.01"/><path d="M4 18h.01"/></svg>
+                    Bắt đầu Quiz Trắc Nghiệm
+                </button>
+            </div>
+
+            <div id="mcQuizSection" class="card hidden fade-in">
+                <h2 class="text-2xl font-semibold mb-1 text-indigo-600">3. Quiz Trắc Nghiệm</h2>
+                <p id="mcQuizProgress" class="text-sm text-gray-500 mb-4">Câu hỏi <span id="currentMcQuestionNum">1</span> của <span id="totalMcQuestionsNum">0</span></p>
+                <div id="mcQuizContent">
+                    <p class="text-gray-500">Hãy bắt đầu quiz để xem câu hỏi.</p>
+                </div>
+                <div class="mt-6 flex flex-col sm:flex-row sm:justify-between space-y-2 sm:space-y-0 sm:space-x-3">
+                    <button id="nextMcQuestionBtn" class="btn btn-primary w-full sm:w-auto hidden">
+                        Câu tiếp theo
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block ml-1 lucide lucide-arrow-right"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+                    </button>
+                    <button id="finishMcQuizBtn" class="btn btn-primary w-full sm:w-auto hidden">
+                        Hoàn thành Quiz Trắc Nghiệm
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block ml-1 lucide lucide-check-circle"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                    </button>
+                    <button id="restartMcQuizBtn" class="btn btn-secondary w-full sm:w-auto hidden">
+                        Làm lại Quiz Trắc Nghiệm
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block ml-1 lucide lucide-rotate-ccw"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+                    </button>
+                </div>
+            </div>
+            
+            <div id="recallQuizSection" class="card hidden fade-in">
+                <h2 class="text-2xl font-semibold mb-1 text-indigo-600">4. Recall Quiz - Đoán Từ Tiếng Anh</h2>
+                <p id="recallQuizProgress" class="text-sm text-gray-500 mb-4">Câu hỏi <span id="currentRecallQuestionNum">1</span> của <span id="totalRecallQuestionsNum">0</span></p>
+                <div id="recallQuizContent">
+                    <p class="text-gray-500">Hãy bắt đầu recall quiz để xem câu hỏi.</p>
+                    </div>
+                <div id="recallAnswerFeedback" class="mt-2 text-sm h-6"></div>
+                <div class="mt-6 flex flex-col sm:flex-row sm:justify-center space-y-2 sm:space-y-0 sm:space-x-3">
+                    <button id="submitRecallAnswerBtn" class="btn btn-primary w-full sm:w-auto">
+                        Kiểm tra
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block ml-1 lucide lucide-send"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
+                    </button>
+                    <button id="restartRecallQuizBtn" class="btn btn-secondary w-full sm:w-auto hidden">
+                        Làm lại Recall Quiz
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block ml-1 lucide lucide-rotate-ccw"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+                    </button>
+                </div>
+            </div>
+
+            <div id="syllabificationSection" class="card hidden fade-in">
+                <h2 class="text-2xl font-semibold mb-4 text-indigo-600">5. Phân tách Âm Tiết & Định Nghĩa</h2>
+                <div id="syllabificationList" class="space-y-3">
+                    <p class="text-gray-500">Thông tin âm tiết sẽ xuất hiện ở đây sau khi hoàn thành các phần quiz.</p>
+                </div>
+            </div>
+
+            <div id="resultsSection" class="card hidden fade-in">
+                <h2 class="text-2xl font-semibold mb-4 text-indigo-600">6. Kết Quả Chung</h2>
+                <div id="mcQuizResultArea" class="mb-4 hidden">
+                    <h3 class="text-lg font-semibold text-indigo-500">Quiz Trắc Nghiệm:</h3>
+                    <p id="mcQuizScore" class="text-md">Điểm: <span class="font-bold">0/0</span></p>
+                    <div class="progress-bar-container mt-1">
+                        <div id="mcQuizProgressBar" class="progress-bar" style="width: 0%;">0%</div>
+                    </div>
+                </div>
+                <div id="recallQuizResultArea" class="mb-4 hidden">
+                    <h3 class="text-lg font-semibold text-indigo-500">Recall Quiz - Đoán Từ:</h3>
+                    <p id="recallQuizScore" class="text-md">Điểm: <span class="font-bold">0/0</span></p>
+                    <div class="progress-bar-container mt-1">
+                        <div id="recallQuizProgressBar" class="progress-bar" style="width: 0%;">0%</div>
+                    </div>
+                </div>
+                <div id="overallScoreArea" class="mb-4 hidden">
+                    <h3 class="text-xl font-semibold text-green-600">Tổng Điểm:</h3>
+                    <p id="totalQuizScore" class="text-lg">Điểm: <span class="font-bold">0/0</span></p>
+                    <div class="progress-bar-container mt-1">
+                        <div id="totalQuizProgressBar" class="progress-bar bg-green-500" style="width: 0%;">0%</div>
+                    </div>
+                </div>
+                <div id="reviewAnswersContainer" class="mt-5">
+                    <h4 class="text-lg font-semibold mb-2 text-gray-700">Xem lại câu trả lời:</h4>
+                    <div id="reviewMcAnswers" class="space-y-2 mb-4"></div>
+                    <div id="reviewRecallAnswers" class="space-y-2"></div>
+                </div>
+                <div id="srsSuggestion" class="mt-6 p-4 bg-indigo-50 border border-indigo-200 rounded-lg text-indigo-700 hidden">
+                    <h4 class="font-semibold mb-1">Gợi ý học tập:</h4>
+                    <p class="text-sm">Hãy thử ôn lại những từ bạn sai sau 1 ngày, 3 ngày, và 1 tuần (phương pháp Spaced Repetition) để ghi nhớ tốt hơn!</p>
+                </div>
+                <button id="tryAgainBtn" class="btn btn-primary mt-6 w-full sm:w-auto">
+                    Thử lại với văn bản mới
+                </button>
+            </div>
+
+            <footer class="text-center mt-12 py-6 border-t border-gray-300">
+                <p class="text-gray-600">© <span id="currentYear"></span> - Ứng dụng sử dụng AI hỗ trợ việc học từ vựng tiếng Anh cuộc thi "Chơi sáng tạo, học tư duy" năm 2025.</p>
+                <p class="text-sm text-gray-500 mt-1">Sản phẩm DEMO không đại diện cho ứng dụng chính thức.</p>
+            </footer>
+        </div>
+    </div>
+
+    <div id="wordLookupModal" class="modal hidden">
+        <div class="modal-content max-w-md">
+            <h3 id="lookupWord" class="text-2xl font-bold text-indigo-700 mb-3"></h3>
+            <p class="text-sm text-gray-500 mb-1"><strong>Phiên âm:</strong> <span id="lookupPhonetic" class="font-mono"></span></p>
+            <p class="text-sm text-gray-500 mb-1"><strong>Loại từ:</strong> <span id="lookupType"></span></p>
+            <p class="text-sm text-gray-700 mb-1"><strong>Nghĩa TV:</strong> <span id="lookupTranslation"></span></p>
+            <p class="text-sm text-gray-700 mb-1"><strong>English Definition:</strong> <span id="lookupEngMeaning" class="italic"></span></p>
+            <p class="text-sm text-gray-600 italic mb-4"><strong>Ví dụ:</strong> <span id="lookupExample"></span></p>
+            <div class="flex justify-end space-x-3 mt-5">
+                <button id="addToFlashcardsBtnModal" class="btn btn-primary">Thêm vào Flashcards</button>
+                <button id="closeLookupModalBtn" class="btn btn-secondary">Đóng</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="removeConfirmModal" class="modal hidden">
+        <div class="modal-content max-w-sm text-center">
+            <h3 class="text-xl font-semibold mb-4 text-gray-800">Xác nhận Xóa</h3>
+            <p class="text-gray-700 mb-6">Bạn đã thực sự thuộc từ "<strong id="confirmRemoveWord" class="text-indigo-600"></strong>" này chưa?</p>
+            <div class="flex justify-center space-x-3">
+                <button id="confirmRemoveBtn" class="btn btn-danger">Có, đã thuộc</button>
+                <button id="cancelRemoveBtn" class="btn btn-secondary">Chưa, giữ lại</button>
+            </div>
+        </div>
+    </div>
+
+
+    <script>
+        // --- Simulated A1-C1 Vocabulary Database ---
+        // In a real app, this would be much larger and likely fetched from a server.
+        const ALL_WORDS_DATABASE = {
+            // A1
+           "a": { word: "A/An", phonetic: "/ə, ən/", type: "Indefinite Article", translation: "Một", example: "I see a cat.", engMeaning: "Used when referring to a single, non-specific thing.", level: "A1" },
+            "about": { word: "About", phonetic: "/əˈbaʊt/", type: "Preposition", translation: "Về", example: "Tell me about your family.", engMeaning: "On the subject of, or connected with.", level: "A1" },
+            "address": { word: "Address", phonetic: "/əˈdres/", type: "Noun", translation: "Địa chỉ", example: "What is your home address?", engMeaning: "The details of the place where someone lives or an organization is situated.", level: "A1" },
+            "afraid": { word: "Afraid", phonetic: "/əˈfreɪd/", type: "Adjective", translation: "Sợ hãi", example: "The girl is afraid of spiders.", engMeaning: "Feeling fear or anxiety; frightened.", level: "A1" },
+            "afternoon": { word: "Afternoon", phonetic: "/ˌɑːf.təˈnuːn/", type: "Noun", translation: "Buổi chiều", example: "I will meet you in the afternoon.", engMeaning: "The period that starts at about midday and ends at about 6 p.m.", level: "A1" },
+            "again": { word: "Again", phonetic: "/əˈɡen/", type: "Adverb", translation: "Lại, lần nữa", example: "Can you say that again?", engMeaning: "One more time.", level: "A1" },
+            "all": { word: "All", phonetic: "/ɔːl/", type: "Determiner/Pronoun", translation: "Tất cả", example: "All students must attend.", engMeaning: "The whole quantity or extent of a particular group or thing.", level: "A1" },
+            "always": { word: "Always", phonetic: "/ˈɔːl.weɪz/", type: "Adverb", translation: "Luôn luôn", example: "He is always on time.", engMeaning: "At all times; on all occasions.", level: "A1" },
+            "and": { word: "And", phonetic: "/ænd/", type: "Conjunction", translation: "Và", example: "I like bread and butter.", engMeaning: "Used to connect words, clauses, or sentences.", level: "A1" },
+            "angry": { word: "Angry", phonetic: "/ˈæŋ.ɡri/", type: "Adjective", translation: "Tức giận", example: "The angry man shouted.", engMeaning: "Feeling or showing strong annoyance, displeasure, or hostility.", level: "A1" },
+            "animal": { word: "Animal", phonetic: "/ˈæn.ɪ.məl/", type: "Noun", translation: "Động vật", example: "A lion is a wild animal.", engMeaning: "A living organism that feeds on organic matter.", level: "A1" },
+            "answer": { word: "Answer", phonetic: "/ˈɑːn.sər/", type: "Noun/Verb", translation: "Câu trả lời / Trả lời", example: "Please answer the question.", engMeaning: "A thing said, written, or done to deal with a question, statement, or situation.", level: "A1" },
+            "any": { word: "Any", phonetic: "/ˈen.i/", type: "Determiner/Pronoun", translation: "Bất kỳ", example: "Do you have any questions?", engMeaning: "Used to refer to one or some of a thing or number of things, no matter how much or how many.", level: "A1" },
+            "apartment": { word: "Apartment", phonetic: "/əˈpɑːt.mənt/", type: "Noun", translation: "Căn hộ", example: "She lives in a small apartment.", engMeaning: "A suite of rooms forming one residence, typically in a building containing a number of these.", level: "A1" },
+            "apple": { word: "Apple", phonetic: "/ˈæp.əl/", type: "Noun", translation: "Quả táo", example: "An apple a day keeps the doctor away.", engMeaning: "A round fruit with firm, white flesh and a green or red skin.", level: "A1" },
+            "arm": { word: "Arm", phonetic: "/ɑːm/", type: "Noun", translation: "Cánh tay", example: "He broke his arm.", engMeaning: "Each of the two upper limbs of the human body from the shoulder to the hand.", level: "A1" },
+            "ask": { word: "Ask", phonetic: "/ɑːsk/", type: "Verb", translation: "Hỏi", example: "You can ask me anything.", engMeaning: "Say something in order to obtain an answer or some information.", level: "A1" },
+            "at": { word: "At", phonetic: "/æt/", type: "Preposition", translation: "Tại, ở", example: "I am at the bus stop.", engMeaning: "Expressing location or arrival in a particular place or position.", level: "A1" },
+            "baby": { word: "Baby", phonetic: "/ˈbeɪ.bi/", type: "Noun", translation: "Em bé", example: "The baby is sleeping.", engMeaning: "A very young child, especially one newly born or in infancy.", level: "A1" },
+            "back": { word: "Back", phonetic: "/bæk/", type: "Noun", translation: "Lưng", example: "My back hurts.", engMeaning: "The rear surface of the human body from the shoulders to the hips.", level: "A1" },
+            "bad": { word: "Bad", phonetic: "/bæd/", type: "Adjective", translation: "Tệ, xấu", example: "This is a bad situation.", engMeaning: "Of a poor quality or low standard.", level: "A1" },
+            "bag": { word: "Bag", phonetic: "/bæɡ/", type: "Noun", translation: "Cái túi", example: "I have a new bag.", engMeaning: "A flexible container with an opening at the top, used for carrying things.", level: "A1" },
+            "ball": { word: "Ball", phonetic: "/bɔːl/", type: "Noun", translation: "Quả bóng", example: "Let's play with the ball.", engMeaning: "A solid or hollow spherical or ovoid object that is kicked, thrown, or hit in a game.", level: "A1" },
+            "banana": { word: "Banana", phonetic: "/bəˈnɑː.nə/", type: "Noun", translation: "Quả chuối", example: "Monkeys love to eat bananas.", engMeaning: "A long curved fruit which grows in clusters and has soft pulpy flesh and yellow skin when ripe.", level: "A1" },
+            "bathroom": { word: "Bathroom", phonetic: "/ˈbɑːθ.ruːm/", type: "Noun", translation: "Phòng tắm", example: "Where is the bathroom?", engMeaning: "A room containing a toilet and a bath or shower.", level: "A1" },
+            "be": { word: "Be (am, is, are)", phonetic: "/biː/", type: "Verb", translation: "Thì, là, ở", example: "I am a student. She is happy.", engMeaning: "Exist; used to indicate identity or a state.", level: "A1" },
+            "beautiful": { word: "Beautiful", phonetic: "/ˈbjuː.tɪ.fəl/", type: "Adjective", translation: "Đẹp", example: "What a beautiful flower!", engMeaning: "Pleasing the senses or mind aesthetically.", level: "A1" },
+            "because": { word: "Because", phonetic: "/bɪˈkɒz/", type: "Conjunction", translation: "Bởi vì", example: "I am tired because I worked a lot.", engMeaning: "For the reason that; since.", level: "A1" },
+            "bed": { word: "Bed", phonetic: "/bed/", type: "Noun", translation: "Cái giường", example: "It's time to go to bed.", engMeaning: "A piece of furniture used for sleep or rest.", level: "A1" },
+            "bedroom": { word: "Bedroom", phonetic: "/ˈbed.ruːm/", type: "Noun", translation: "Phòng ngủ", example: "My bedroom is small.", engMeaning: "A room for sleeping in.", level: "A1" },
+            "before": { word: "Before", phonetic: "/bɪˈfɔːr/", type: "Preposition/Conjunction", translation: "Trước khi", example: "Wash your hands before you eat.", engMeaning: "During the period of time preceding a particular event or time.", level: "A1" },
+            "begin": { word: "Begin", phonetic: "/bɪˈɡɪn/", type: "Verb", translation: "Bắt đầu", example: "The class will begin at 9 AM.", engMeaning: "Start; perform or undergo the first part of an action or activity.", level: "A1" },
+            "big": { word: "Big", phonetic: "/bɪɡ/", type: "Adjective", translation: "To, lớn", example: "An elephant is a big animal.", engMeaning: "Of considerable size, extent, or intensity.", level: "A1" },
+            "bike": { word: "Bike", phonetic: "/baɪk/", type: "Noun", translation: "Xe đạp", example: "I ride my bike to school.", engMeaning: "A bicycle or motorcycle.", level: "A1" },
+            "bird": { word: "Bird", phonetic: "/bɜːd/", type: "Noun", translation: "Con chim", example: "A bird is singing in the tree.", engMeaning: "A warm-blooded egg-laying vertebrate distinguished by the possession of feathers, wings, and a beak.", level: "A1" },
+            "birthday": { word: "Birthday", phonetic: "/ˈbɜːθ.deɪ/", type: "Noun", translation: "Sinh nhật", example: "Happy birthday to you!", engMeaning: "The anniversary of the day on which a person was born.", level: "A1" },
+            "black": { word: "Black", phonetic: "/blæk/", type: "Adjective/Noun", translation: "Màu đen", example: "She has a black cat.", engMeaning: "Of the very darkest color owing to the absence of or complete absorption of light.", level: "A1" },
+            "blue": { word: "Blue", phonetic: "/bluː/", type: "Adjective/Noun", translation: "Màu xanh da trời", example: "The sky is blue.", engMeaning: "Of a color intermediate between green and violet, as of the sky on a clear day.", level: "A1" },
+            "body": { word: "Body", phonetic: "/ˈbɒd.i/", type: "Noun", translation: "Cơ thể", example: "Exercise is good for the body.", engMeaning: "The physical structure of a person or an animal.", level: "A1" },
+            "book": { word: "Book", phonetic: "/bʊk/", type: "Noun", translation: "Sách", example: "I am reading a good book.", engMeaning: "A written or printed work consisting of pages glued or sewn together along one side and bound in covers.", level: "A1" },
+            "box": { word: "Box", phonetic: "/bɒks/", type: "Noun", translation: "Cái hộp", example: "What's in the box?", engMeaning: "A container with a flat base and sides, typically square or rectangular and having a lid.", level: "A1" },
+            "boy": { word: "Boy", phonetic: "/bɔɪ/", type: "Noun", translation: "Cậu bé", example: "The boy is playing football.", engMeaning: "A male child or young man.", level: "A1" },
+            "bread": { word: "Bread", phonetic: "/bred/", type: "Noun", translation: "Bánh mì", example: "I eat bread for breakfast.", engMeaning: "Food made of flour, water, and yeast mixed together and baked.", level: "A1" },
+            "breakfast": { word: "Breakfast", phonetic: "/ˈbrek.fəst/", type: "Noun", translation: "Bữa sáng", example: "What did you have for breakfast?", engMeaning: "The first meal of the day.", level: "A1" },
+            "bring": { word: "Bring", phonetic: "/brɪŋ/", type: "Verb", translation: "Mang", example: "Please bring me a glass of water.", engMeaning: "Take or go with (someone or something) to a place.", level: "A1" },
+            "brother": { word: "Brother", phonetic: "/ˈbrʌð.ər/", type: "Noun", translation: "Anh/Em trai", example: "My brother is older than me.", engMeaning: "A man or boy with one or both parents in common with another person.", level: "A1" },
+            "brown": { word: "Brown", phonetic: "/braʊn/", type: "Adjective/Noun", translation: "Màu nâu", example: "He has brown eyes.", engMeaning: "Of a color produced by mixing red, yellow, and black.", level: "A1" },
+            "bus": { word: "Bus", phonetic: "/bʌs/", type: "Noun", translation: "Xe buýt", example: "I take the bus to work.", engMeaning: "A large motor vehicle carrying passengers by road, typically one serving the public on a fixed route.", level: "A1" },
+            "busy": { word: "Busy", phonetic: "/ˈbɪz.i/", type: "Adjective", translation: "Bận rộn", example: "I am very busy today.", engMeaning: "Having a great deal to do.", level: "A1" },
+            "but": { word: "But", phonetic: "/bʌt/", type: "Conjunction", translation: "Nhưng", example: "He is smart but lazy.", engMeaning: "Used to introduce a phrase or clause contrasting with what has already been mentioned.", level: "A1" },
+            "buy": { word: "Buy", phonetic: "/baɪ/", type: "Verb", translation: "Mua", example: "I need to buy some milk.", engMeaning: "Obtain in exchange for payment.", level: "A1" },
+            "bye": { word: "Bye", phonetic: "/baɪ/", type: "Exclamation", translation: "Tạm biệt", example: "Bye! See you tomorrow.", engMeaning: "A shorthand for 'goodbye'.", level: "A1" },
+            "cake": { word: "Cake", phonetic: "/keɪk/", type: "Noun", translation: "Bánh ngọt", example: "We ate cake at the party.", engMeaning: "A sweet baked food made from a mixture of flour, sugar, eggs, fat.", level: "A1" },
+            "camera": { word: "Camera", phonetic: "/ˈkæm.rə/", type: "Noun", translation: "Máy ảnh", example: "She took a photo with her new camera.", engMeaning: "A device for recording visual images in the form of photographs, film, or video signals.", level: "A1" },
+            "can": { word: "Can", phonetic: "/kæn/", type: "Modal Verb", translation: "Có thể", example: "I can speak English.", engMeaning: "Be able to.", level: "A1" },
+            "car": { word: "Car", phonetic: "/kɑːr/", type: "Noun", translation: "Xe ô tô", example: "He drives a red car.", engMeaning: "A road vehicle, typically with four wheels, powered by an internal combustion engine or electric motor.", level: "A1" },
+            "cat": { word: "Cat", phonetic: "/kæt/", type: "Noun", translation: "Con mèo", example: "The cat is sleeping on the mat.", engMeaning: "A small domesticated carnivorous mammal with soft fur, a short snout, and retractable claws.", level: "A1" },
+            "chair": { word: "Chair", phonetic: "/tʃeər/", type: "Noun", translation: "Cái ghế", example: "Please have a seat on this chair.", engMeaning: "A seat for one person, with a back and typically four legs.", level: "A1" },
+            "cheap": { word: "Cheap", phonetic: "/tʃiːp/", type: "Adjective", translation: "Rẻ", example: "This t-shirt is very cheap.", engMeaning: "Low in price; worth more than its cost.", level: "A1" },
+            "cheese": { word: "Cheese", phonetic: "/tʃiːz/", type: "Noun", translation: "Phô mai", example: "I like to eat cheese with bread.", engMeaning: "A food made from the pressed curds of milk.", level: "A1" },
+            "chicken": { word: "Chicken", phonetic: "/ˈtʃɪk.ɪn/", type: "Noun", translation: "Thịt gà, con gà", example: "We are having chicken for dinner.", engMeaning: "A type of bird kept on a farm for its eggs or its meat.", level: "A1" },
+            "child": { word: "Child", phonetic: "/tʃaɪld/", type: "Noun", translation: "Đứa trẻ", example: "Every child needs love and care.", engMeaning: "A young human being below the age of puberty or below the legal age of majority.", level: "A1" },
+            "city": { word: "City", phonetic: "/ˈsɪt.i/", type: "Noun", translation: "Thành phố", example: "Hanoi is a big city.", engMeaning: "A large town.", level: "A1" },
+            "class": { word: "Class", phonetic: "/klɑːs/", type: "Noun", translation: "Lớp học", example: "My English class is interesting.", engMeaning: "A group of students who are taught together.", level: "A1" },
+            "clean": { word: "Clean", phonetic: "/kliːn/", type: "Adjective/Verb", translation: "Sạch sẽ / Dọn dẹp", example: "Please clean your room.", engMeaning: "Free from dirt, marks, or stains.", level: "A1" },
+            "close": { word: "Close", phonetic: "/kləʊz/", type: "Verb", translation: "Đóng", example: "Close the door, please.", engMeaning: "Move so as to bar passage through an opening.", level: "A1" },
+            "clothes": { word: "Clothes", phonetic: "/kləʊðz/", type: "Noun", translation: "Quần áo", example: "I need to wash my clothes.", engMeaning: "Items worn to cover the body.", level: "A1" },
+            "coffee": { word: "Coffee", phonetic: "/ˈkɒf.i/", type: "Noun", translation: "Cà phê", example: "I drink coffee every morning.", engMeaning: "A hot drink made from the roasted and ground seeds of a tropical shrub.", level: "A1" },
+            "cold": { word: "Cold", phonetic: "/kəʊld/", type: "Adjective", translation: "Lạnh", example: "It's cold outside.", engMeaning: "Of or at a low or relatively low temperature.", level: "A1" },
+            "colour": { word: "Colour", phonetic: "/ˈkʌl.ər/", type: "Noun", translation: "Màu sắc", example: "What is your favourite colour?", engMeaning: "The property possessed by an object of producing different sensations on the eye as a result of the way it reflects or emits light.", level: "A1" },
+            "come": { word: "Come", phonetic: "/kʌm/", type: "Verb", translation: "Đến", example: "Can you come to my party?", engMeaning: "Move or travel toward or into a place thought of as near or familiar to the speaker.", level: "A1" },
+            "computer": { word: "Computer", phonetic: "/kəmˈpjuː.tər/", type: "Noun", translation: "Máy tính", example: "I use a computer for work.", engMeaning: "An electronic device for storing and processing data.", level: "A1" },
+            "cook": { word: "Cook", phonetic: "/kʊk/", type: "Verb", translation: "Nấu ăn", example: "My mother cooks very well.", engMeaning: "Prepare (food, a dish, or a meal) by combining and heating the ingredients in various ways.", level: "A1" },
+            "cool": { word: "Cool", phonetic: "/kuːl/", type: "Adjective", translation: "Mát mẻ", example: "The weather is cool today.", engMeaning: "Of or at a fairly low temperature.", level: "A1" },
+            "country": { word: "Country", phonetic: "/ˈkʌn.tri/", type: "Noun", translation: "Đất nước, quốc gia", example: "Vietnam is a beautiful country.", engMeaning: "A nation with its own government, occupying a particular territory.", level: "A1" },
+            "cup": { word: "Cup", phonetic: "/kʌp/", type: "Noun", translation: "Cái cốc, cái tách", example: "A cup of tea.", engMeaning: "A small bowl-shaped container for drinking from, typically having a handle.", level: "A1" },
+            "cut": { word: "Cut", phonetic: "/kʌt/", type: "Verb", translation: "Cắt", example: "Be careful when you cut the paper.", engMeaning: "Make an opening, incision, or wound in (something) with a sharp-edged tool or object.", level: "A1" },
+            "dad": { word: "Dad", phonetic: "/dæd/", type: "Noun", translation: "Bố", example: "My dad is a doctor.", engMeaning: "One's father.", level: "A1" },
+            "day": { word: "Day", phonetic: "/deɪ/", type: "Noun", translation: "Ngày", example: "There are seven days in a week.", engMeaning: "Each of the twenty-four-hour periods, reckoned from one midnight to the next.", level: "A1" },
+            "delicious": { word: "Delicious", phonetic: "/dɪˈlɪʃ.əs/", type: "Adjective", translation: "Ngon", example: "The food is delicious.", engMeaning: "Highly pleasant to the taste.", level: "A1" },
+            "desk": { word: "Desk", phonetic: "/desk/", type: "Noun", translation: "Bàn học", example: "The book is on the desk.", engMeaning: "A piece of furniture with a flat table-style work surface used in a school, office or home.", level: "A1" },
+            "dinner": { word: "Dinner", phonetic: "/ˈdɪn.ər/", type: "Noun", translation: "Bữa tối", example: "What's for dinner tonight?", engMeaning: "The main meal of the day, taken either around midday or in the evening.", level: "A1" },
+            "do": { word: "Do", phonetic: "/duː/", type: "Verb", translation: "Làm", example: "What do you do in your free time?", engMeaning: "Perform (an action, the precise nature of which is often unspecified).", level: "A1" },
+            "doctor": { word: "Doctor", phonetic: "/ˈdɒk.tər/", type: "Noun", translation: "Bác sĩ", example: "I need to see a doctor.", engMeaning: "A qualified practitioner of medicine.", level: "A1" },
+            "dog": { word: "Dog", phonetic: "/dɒɡ/", type: "Noun", translation: "Con chó", example: "My dog loves to play fetch.", engMeaning: "A domesticated carnivorous mammal that typically has a long snout, an acute sense of smell, and a barking voice.", level: "A1" },
+            "door": { word: "Door", phonetic: "/dɔːr/", type: "Noun", translation: "Cửa ra vào", example: "Please open the door.", engMeaning: "A hinged, sliding, or revolving barrier at the entrance to a building, room, or vehicle.", level: "A1" },
+            "drink": { word: "Drink", phonetic: "/drɪŋk/", type: "Noun/Verb", translation: "Đồ uống / Uống", example: "My favorite drink is orange juice.", engMeaning: "A liquid that can be swallowed as refreshment or nourishment.", level: "A1" },
+            "drive": { word: "Drive", phonetic: "/draɪv/", type: "Verb", translation: "Lái xe", example: "I know how to drive a car.", engMeaning: "Operate and control the direction and speed of a motor vehicle.", level: "A1" },
+            "easier": { word: "Easy", phonetic: "/ˈiː.zi/", type: "Adjective", translation: "Dễ", example: "This test is very easy.", engMeaning: "Achieved without great effort; presenting few difficulties.", level: "A1" },
+            "easy": { word: "Easy", phonetic: "/ˈiː.zi/", type: "Adjective", translation: "Dễ", example: "This test is very easy.", engMeaning: "Achieved without great effort; presenting few difficulties.", level: "A1" },
+            "eat": { word: "Eat", phonetic: "/iːt/", type: "Verb", translation: "Ăn", example: "It's time to eat dinner.", engMeaning: "Put (food) into the mouth and chew and swallow it.", level: "A1" },
+            "egg": { word: "Egg", phonetic: "/eɡ/", type: "Noun", translation: "Trứng", example: "I eat an egg every morning.", engMeaning: "An oval or round object laid by female birds, reptiles, amphibians, fish, and insects.", level: "A1" },
+            "eight": { word: "Eight", phonetic: "/eɪt/", type: "Number", translation: "Số tám", example: "There are eight planets in our solar system.", engMeaning: "Equivalent to the sum of seven and one; one more than seven.", level: "A1" },
+            "email": { word: "Email", phonetic: "/ˈiː.meɪl/", type: "Noun/Verb", translation: "Thư điện tử / Gửi thư", example: "I will send you an email.", engMeaning: "Messages distributed by electronic means from one computer user to one or more recipients via a network.", level: "A1" },
+            "english": { word: "English", phonetic: "/ˈɪŋ.ɡlɪʃ/", type: "Noun/Adjective", translation: "Tiếng Anh", example: "I am learning to speak English.", engMeaning: "The language of England, now widely used in many varieties throughout the world.", level: "A1" },
+            "enjoy": { word: "Enjoy", phonetic: "/ɪnˈdʒɔɪ/", type: "Verb", translation: "Thích, tận hưởng", example: "I enjoy playing tennis.", engMeaning: "Take delight or pleasure in (an activity or occasion).", level: "A1" },
+            "evening": { word: "Evening", phonetic: "/ˈiːv.nɪŋ/", type: "Noun", translation: "Buổi tối", example: "I watch TV in the evening.", engMeaning: "The period of time at the end of the day, usually from about 6 p.m. to bedtime.", level: "A1" },
+            "example": { word: "Example", phonetic: "/ɪɡˈzɑːm.pəl/", type: "Noun", translation: "Ví dụ", example: "Can you give me an example?", engMeaning: "A thing characteristic of its kind or illustrating a general rule.", level: "A1" },
+            "expensive": { word: "Expensive", phonetic: "/ɪkˈspen.sɪv/", type: "Adjective", translation: "Đắt", example: "This car is too expensive.", engMeaning: "Costing a lot of money.", level: "A1" },
+            "eye": { word: "Eye", phonetic: "/aɪ/", type: "Noun", translation: "Mắt", example: "She has beautiful blue eyes.", engMeaning: "Each of a pair of globular organs in the head through which people and vertebrate animals see.", level: "A1" },
+            "easy": { word: "Easy", phonetic: " /ˈiː.zi/", type: "Adjective", translation: "Dễ dàng", example: "It isn't easy doing something It isn't easy being a parent.", engMeaning: "needing little effort:", level: "A1" },
+            "family": { word: "Family", phonetic: "/ˈfæm.əl.i/", type: "Noun", translation: "Gia đình", example: "I have a large family.", engMeaning: "A group consisting of parents and children living together in a household.", level: "A1" },
+            "face": { word: "Face", phonetic: "/feɪs/", type: "Noun", translation: "Khuôn mặt", example: "She has a friendly face.", engMeaning: "The front part of a person's head from the forehead to the chin.", level: "A1" },
+            "family": { word: "Family", phonetic: "/ˈfæm.əl.i/", type: "Noun", translation: "Gia đình", example: "I have a big family.", engMeaning: "A group consisting of parents and children living together.", level: "A1" },
+            "famous": { word: "Famous", phonetic: "/ˈfeɪ.məs/", type: "Adjective", translation: "Nổi tiếng", example: "He is a famous singer.", engMeaning: "Known about by many people.", level: "A1" },
+            "fantastic": { word: "Fantastic", phonetic: "/fænˈtæs.tɪk/", type: "Adjective", translation: "Tuyệt vời", example: "We had a fantastic time at the party.", engMeaning: "Extremely good or excellent.", level: "A1" },
+            "farm": { word: "Farm", phonetic: "/fɑːm/", type: "Noun", translation: "Nông trại", example: "They live on a farm and grow vegetables.", engMeaning: "An area of land used for growing crops or raising animals.", level: "A1" },
+            "fast": { word: "Fast", phonetic: "/fɑːst/", type: "Adjective/Adverb", translation: "Nhanh", example: "A cheetah is a very fast animal.", engMeaning: "Moving or capable of moving at high speed.", level: "A1" },
+            "father": { word: "Father", phonetic: "/ˈfɑː.ðər/", type: "Noun", translation: "Bố", example: "My father is a doctor.", engMeaning: "A male parent.", level: "A1" },
+            "favourite": { word: "Favourite", phonetic: "/ˈfeɪ.vər.ɪt/", type: "Adjective", translation: "Yêu thích", example: "What is your favourite colour?", engMeaning: "Preferred to all others of the same kind.", level: "A1" },
+            "feel": { word: "Feel", phonetic: "/fiːl/", type: "Verb", translation: "Cảm thấy", example: "I feel happy today.", engMeaning: "To experience an emotion or sensation.", level: "A1" },
+            "film": { word: "Film", phonetic: "/fɪlm/", type: "Noun", translation: "Phim", example: "Let's watch a film tonight.", engMeaning: "A story or event recorded by a camera as a set of moving images.", level: "A1" },
+            "find": { word: "Find", phonetic: "/faɪnd/", type: "Verb", translation: "Tìm thấy", example: "I can't find my keys.", engMeaning: "To discover something, either by searching or by chance.", level: "A1" },
+            "fine": { word: "Fine", phonetic: "/faɪn/", type: "Adjective", translation: "Khỏe, ổn", example: "'How are you?' 'I'm fine, thanks.'", engMeaning: "In good health; well.", level: "A1" },
+            "finger": { word: "Finger", phonetic: "/ˈfɪŋ.ɡər/", type: "Noun", translation: "Ngón tay", example: "You have five fingers on each hand.", engMeaning: "Each of the four long, thin parts of the hand.", level: "A1" },
+            "finish": { word: "Finish", phonetic: "/ˈfɪn.ɪʃ/", type: "Verb", translation: "Hoàn thành, kết thúc", example: "You need to finish your homework.", engMeaning: "To bring something to an end.", level: "A1" },
+            "fire": { word: "Fire", phonetic: "/faɪər/", type: "Noun", translation: "Lửa", example: "Be careful with fire.", engMeaning: "The hot, bright gas produced by something burning.", level: "A1" },
+            "first": { word: "First", phonetic: "/fɜːst/", type: "Number", translation: "Thứ nhất, đầu tiên", example: "January is the first month of the year.", engMeaning: "Coming before all others in time or order.", level: "A1" },
+            "fish": { word: "Fish", phonetic: "/fɪʃ/", type: "Noun", translation: "Con cá", example: "I like to eat fish.", engMeaning: "An animal that lives in water, has fins and gills.", level: "A1" },
+            "five": { word: "Five", phonetic: "/faɪv/", type: "Number", translation: "Số 5", example: "I have five books.", engMeaning: "The number 5.", level: "A1" },
+            "flat": { word: "Flat", phonetic: "/flæt/", type: "Noun", translation: "Căn hộ", example: "She lives in a small flat in the city.", engMeaning: "A set of rooms for living in, usually on one floor of a building (similar to apartment).", level: "A1" },
+            "floor": { word: "Floor", phonetic: "/flɔːr/", type: "Noun", translation: "Sàn nhà, tầng lầu", example: "My office is on the second floor.", engMeaning: "The lower surface of a room; a level of a building.", level: "A1" },
+            "flower": { word: "Flower", phonetic: "/ˈflaʊ.ər/", type: "Noun", translation: "Bông hoa", example: "This is a beautiful red flower.", engMeaning: "The part of a plant that is often brightly coloured.", level: "A1" },
+            "fly": { word: "Fly", phonetic: "/flaɪ/", type: "Verb", translation: "Bay", example: "Birds can fly high in the sky.", engMeaning: "To move through the air using wings.", level: "A1" },
+            "food": { word: "Food", phonetic: "/fuːd/", type: "Noun", translation: "Thức ăn", example: "My favourite food is pizza.", engMeaning: "Anything that people or animals eat.", level: "A1" },
+            "foot": { word: "Foot", phonetic: "/fʊt/", type: "Noun", translation: "Bàn chân", example: "My left foot hurts.", engMeaning: "The part of the body at the bottom of the leg on which a person stands.", level: "A1" },
+            "football": { word: "Football", phonetic: "/ˈfʊt.bɔːl/", type: "Noun", translation: "Bóng đá", example: "They are playing football in the park.", engMeaning: "A game played between two teams of eleven players with a round ball.", level: "A1" },
+            "for": { word: "For", phonetic: "/fɔːr/", type: "Preposition", translation: "Cho, dành cho", example: "This gift is for you.", engMeaning: "Intended to be given to or used by someone or something.", level: "A1" },
+            "four": { word: "Four", phonetic: "/fɔːr/", type: "Number", translation: "Số 4", example: "A car has four wheels.", engMeaning: "The number 4.", level: "A1" },
+            "Friday": { word: "Friday", phonetic: "/ˈfraɪ.deɪ/", type: "Noun", translation: "Thứ Sáu", example: "The meeting is on Friday.", engMeaning: "The day of the week before Saturday and following Thursday.", level: "A1" },
+            "friend": { word: "Friend", phonetic: "/frend/", type: "Noun", translation: "Bạn bè", example: "He is my best friend.", engMeaning: "A person you know well and whom you like.", level: "A1" },
+            "from": { word: "From", phonetic: "/frɒm/", type: "Preposition", translation: "Từ", example: "I am from Vietnam.", engMeaning: "Indicating the starting point of a journey or action.", level: "A1" },
+            "fruit": { word: "Fruit", phonetic: "/fruːt/", type: "Noun", translation: "Trái cây", example: "An apple is a type of fruit.", engMeaning: "The sweet, fleshy product of a tree or other plant that can be eaten as food.", level: "A1" },
+            "fun": { word: "Fun", phonetic: "/fʌn/", type: "Noun", translation: "Niềm vui, sự vui vẻ", example: "We had a lot of fun at the beach.", engMeaning: "Enjoyment, amusement, or light-hearted pleasure.", level: "A1" },
+            "funny": { word: "Funny", phonetic: "/ˈfʌn.i/", type: "Adjective", translation: "Vui nhộn, hài hước", example: "That's a very funny story.", engMeaning: "Causing laughter or amusement.", level: "A1" },
+            "I": { word: "I", phonetic: "/aɪ/", type: "Pronoun", translation: "Tôi", example: "I am a student.", engMeaning: "Used by a speaker to refer to himself or herself.", level: "A1" },
+            "ice": { word: "Ice", phonetic: "/aɪs/", type: "Noun", translation: "Đá, nước đá", example: "Would you like some ice in your drink?", engMeaning: "Water that has frozen and become solid.", level: "A1" },
+            "ice cream": { word: "Ice cream", phonetic: "/ˌaɪs ˈkriːm/", type: "Noun", translation: "Kem", example: "Chocolate is my favorite ice cream.", engMeaning: "A sweet, frozen food made from milk, cream, and sugar.", level: "A1" },
+            "idea": { word: "Idea", phonetic: "/aɪˈdɪə/", type: "Noun", translation: "Ý tưởng", example: "That's a good idea!", engMeaning: "A thought or suggestion about what to do.", level: "A1" },
+            "in": { word: "In", phonetic: "/ɪn/", type: "Preposition", translation: "Trong", example: "The keys are in the box.", engMeaning: "Expressing the situation of something that is enclosed or surrounded.", level: "A1" },
+            "is": { word: "Is", phonetic: "/iz/", type: "Tobe", translation: "Là", example: "The keys is gold.", engMeaning: "", level: "A1" },
+            "interesting": { word: "Interesting", phonetic: "/ˈɪn.trəs.tɪŋ/", type: "Adjective", translation: "Thú vị, hay", example: "This book is very interesting.", engMeaning: "Arousing curiosity or holding one's attention.", level: "A1" },
+            "internet": { word: "Internet", phonetic: "/ˈɪn.tə.net/", type: "Noun", translation: "Mạng Internet", example: "I use the internet to find information.", engMeaning: "The global computer network providing a variety of information.", level: "A1" },
+            "jacket": { word: "Jacket", phonetic: "/ˈdʒæk.ɪt/", type: "Noun", translation: "Áo khoác", example: "It's cold. You should wear a jacket.", engMeaning: "A short coat.", level: "A1" },
+            "jeans": { word: "Jeans", phonetic: "/dʒiːnz/", type: "Noun", translation: "Quần bò", example: "She is wearing blue jeans.", engMeaning: "Trousers made of denim.", level: "A1" },
+            "job": { word: "Job", phonetic: "/dʒɒb/", type: "Noun", translation: "Công việc", example: "He is looking for a new job.", engMeaning: "A paid position of regular employment.", level: "A1" },
+            "juice": { word: "Juice", phonetic: "/dʒuːs/", type: "Noun", translation: "Nước ép", example: "I would like a glass of orange juice.", engMeaning: "The liquid obtained from or present in fruit or vegetables.", level: "A1" },
+            "key": { word: "Key", phonetic: "/kiː/", type: "Noun", translation: "Chìa khóa", example: "I can't find my car key.", engMeaning: "A small piece of shaped metal used to open a lock.", level: "A1" },
+            "kind": { word: "Kind", phonetic: "/kaɪnd/", type: "Adjective", translation: "Tốt bụng", example: "Thank you, you are very kind.", engMeaning: "Having a friendly, generous, and considerate nature.", level: "A1" },
+            "kitchen": { word: "Kitchen", phonetic: "/ˈkɪtʃ.ən/", type: "Noun", translation: "Nhà bếp", example: "My mother is cooking in the kitchen.", engMeaning: "A room where food is prepared and cooked.", level: "A1" },
+            "know": { word: "Know", phonetic: "/nəʊ/", type: "Verb", translation: "Biết", example: "Do you know the answer?", engMeaning: "To have information in your mind.", level: "A1" },
+            "language": { word: "Language", phonetic: "/ˈlæŋ.ɡwɪdʒ/", type: "Noun", translation: "Ngôn ngữ", example: "I want to learn a new language.", engMeaning: "The method of human communication, either spoken or written.", level: "A1" },
+            "learn": { word: "Learn", phonetic: "/lɜːn/", type: "Verb", translation: "Học", example: "I am learning English.", engMeaning: "To gain knowledge or skill in something.", level: "A1" },
+            "leave": { word: "Leave", phonetic: "/liːv/", type: "Verb", translation: "Rời đi", example: "The train will leave at 5 o'clock.", engMeaning: "To go away from.", level: "A1" },
+            "leg": { word: "Leg", phonetic: "/leɡ/", type: "Noun", translation: "Cái chân", example: "He broke his leg.", engMeaning: "Each of the limbs on which a person or animal walks and stands.", level: "A1" },
+            "lesson": { word: "Lesson", phonetic: "/ˈles.ən/", type: "Noun", translation: "Bài học", example: "Today's lesson is about grammar.", engMeaning: "A period of time in which a person is taught something.", level: "A1" },
+            "letter": { word: "Letter", phonetic: "/ˈlet.ər/", type: "Noun", translation: "Lá thư, chữ cái", example: "I wrote a letter to my friend. 'A' is the first letter of the alphabet.", engMeaning: "A written message; a character representing one or more of the sounds used in speech.", level: "A1" },
+            "like": { word: "Like", phonetic: "/laɪk/", type: "Verb", translation: "Thích", example: "I like listening to music.", engMeaning: "To find something pleasant or enjoyable.", level: "A1" },
+            "listen": { word: "Listen", phonetic: "/ˈlɪs.ən/", type: "Verb", translation: "Nghe", example: "Please listen to the teacher.", engMeaning: "To give attention to someone or something in order to hear them.", level: "A1" },
+            "little": { word: "Little", phonetic: "/ˈlɪt.əl/", type: "Adjective", translation: "Nhỏ, bé, ít", example: "It's a little cat. I have a little money.", engMeaning: "Small in size or amount.", level: "A1" },
+            "live": { word: "Live", phonetic: "/lɪv/", type: "Verb", translation: "Sống", example: "I live in Hanoi.", engMeaning: "To have your home in a particular place.", level: "A1" },
+            "long": { word: "Long", phonetic: "/lɒŋ/", type: "Adjective", translation: "Dài", example: "She has long hair.", engMeaning: "Measuring a great distance from end to end.", level: "A1" },
+            "look": { word: "Look", phonetic: "/lʊk/", type: "Verb", translation: "Nhìn", example: "Look at that beautiful picture!", engMeaning: "To direct your eyes in a particular direction.", level: "A1" },
+            "love": { word: "Love", phonetic: "/lʌv/", type: "Verb/Noun", translation: "Yêu / Tình yêu", example: "I love my family. She needs love and care.", engMeaning: "To have a very strong feeling of affection for someone; a strong feeling of affection.", level: "A1" },
+            "lunch": { word: "Lunch", phonetic: "/lʌntʃ/", type: "Noun", translation: "Bữa trưa", example: "What's for lunch today?", engMeaning: "A meal eaten in the middle of the day.", level: "A1" },
+            "make": { word: "Make", phonetic: "/meɪk/", type: "Verb", translation: "Làm, chế tạo", example: "She can make a beautiful cake.", engMeaning: "To create or produce something.", level: "A1" },
+            "man": { word: "Man", phonetic: "/mæn/", type: "Noun", translation: "Người đàn ông", example: "That man is my father.", engMeaning: "An adult male human being.", level: "A1" },
+            "many": { word: "Many", phonetic: "/ˈmen.i/", type: "Determiner", translation: "Nhiều", example: "There are many books on the shelf.", engMeaning: "A large number of.", level: "A1" },
+            "map": { word: "Map", phonetic: "/mæp/", type: "Noun", translation: "Bản đồ", example: "I need a map of the city.", engMeaning: "A diagram representing an area of land or sea, showing physical features, cities, and roads.", level: "A1" },
+            "meet": { word: "Meet", phonetic: "/miːt/", type: "Verb", translation: "Gặp gỡ", example: "Nice to meet you.", engMeaning: "To come to the same place as somebody.", level: "A1" },
+            "more": { word: "More", phonetic: "/mɔːr/", type: "Adverb", translation: "Hơn", example: "The doctors can't cope with any more patients.", engMeaning: "a larger or extra number or amount:", level: "A1" },
+            "menu": { word: "Menu", phonetic: "/ˈmen.juː/", type: "Noun", translation: "Thực đơn", example: "Can I see the menu, please?", engMeaning: "A list of dishes available in a restaurant.", level: "A1" },
+            "milk": { word: "Milk", phonetic: "/mɪlk/", type: "Noun", translation: "Sữa", example: "I drink a glass of milk every morning.", engMeaning: "The white liquid produced by cows, goats, and sheep, which is drunk by humans.", level: "A1" },
+            "money": { word: "Money", phonetic: "/ˈmʌn.i/", type: "Noun", translation: "Tiền", example: "I need to save some money.", engMeaning: "What you use to buy things, in the form of coins or banknotes.", level: "A1" },
+            "month": { word: "Month", phonetic: "/mʌnθ/", type: "Noun", translation: "Tháng", example: "January is the first month of the year.", engMeaning: "Each of the twelve periods of time that a year is divided into.", level: "A1" },
+            "morning": { word: "Morning", phonetic: "/ˈmɔː.nɪŋ/", type: "Noun", translation: "Buổi sáng", example: "Good morning!", engMeaning: "The period of time between midnight and noon.", level: "A1" },
+            "mother": { word: "Mother", phonetic: "/ˈmʌð.ər/", type: "Noun", translation: "Mẹ", example: "My mother is a teacher.", engMeaning: "A female parent.", level: "A1" },
+            "music": { word: "Music", phonetic: "/ˈmjuː.zɪk/", type: "Noun", translation: "Âm nhạc", example: "I love listening to music.", engMeaning: "Sounds that are arranged in a way that is pleasant or exciting to listen to.", level: "A1" },
+            "name": { word: "Name", phonetic: "/neɪm/", type: "Noun", translation: "Tên", example: "What's your name?", engMeaning: "The word or words that a person, thing, or place is known by.", level: "A1" },
+            "near": { word: "Near", phonetic: "/nɪər/", type: "Preposition", translation: "Gần", example: "My house is near the school.", engMeaning: "At a short distance away from.", level: "A1" },
+            "need": { word: "Need", phonetic: "/niːd/", type: "Verb", translation: "Cần", example: "I need some help.", engMeaning: "To require something because it is essential or very important.", level: "A1" },
+            "never": { word: "Never", phonetic: "/ˈnev.ər/", type: "Adverb", translation: "Không bao giờ", example: "I have never been to Japan.", engMeaning: "At no time in the past or future.", level: "A1" },
+            "new": { word: "New", phonetic: "/njuː/", type: "Adjective", translation: "Mới", example: "I have a new phone.", engMeaning: "Not existing before; made, introduced, or discovered recently.", level: "A1" },
+            "next": { word: "Next", phonetic: "/nekst/", type: "Adjective/Adverb", translation: "Kế tiếp", example: "The next train is in 10 minutes. What should we do next?", engMeaning: "Coming immediately after the present one in time, order, or space.", level: "A1" },
+            "nice": { word: "Nice", phonetic: "/naɪs/", type: "Adjective", translation: "Tốt, đẹp, dễ thương", example: "Have a nice day!", engMeaning: "Pleasant, attractive, or enjoyable.", level: "A1" },
+            "night": { word: "Night", phonetic: "/naɪt/", type: "Noun", translation: "Ban đêm", example: "I sleep at night.", engMeaning: "The period from sunset to sunrise in each twenty-four hours.", level: "A1" },
+            "nine": { word: "Nine", phonetic: "/naɪn/", type: "Number", translation: "Số 9", example: "I have nine books.", engMeaning: "The number equivalent to the sum of eight and one.", level: "A1" },
+            "no": { word: "No", phonetic: "/nəʊ/", type: "Determiner/Exclamation", translation: "Không", example: "There is no milk. 'Are you tired?' 'No.'", engMeaning: "Not any; used to give a negative response.", level: "A1" },
+            "now": { word: "Now", phonetic: "/naʊ/", type: "Adverb", translation: "Bây giờ", example: "It is time to go now.", engMeaning: "At the present time.", level: "A1" },
+            "number": { word: "Number", phonetic: "/ˈnʌm.bər/", type: "Noun", translation: "Con số", example: "What is your phone number?", engMeaning: "A quantity or amount represented by a word or symbol.", level: "A1" },
+            "o'clock": { word: "O'clock", phonetic: "/əˈklɒk/", type: "Adverb", translation: "... giờ đúng", example: "It's seven o'clock.", engMeaning: "Used after a number from one to twelve to say what time it is.", level: "A1" },
+            "of": { word: "Of", phonetic: "/ɒv/", type: "Preposition", translation: "Của", example: "A friend of mine.", engMeaning: "Expressing the relationship between a part and a whole.", level: "A1" },
+            "often": { word: "Often", phonetic: "/ˈɒf.ən/", type: "Adverb", translation: "Thường xuyên", example: "I often go to the cinema.", engMeaning: "Frequently; many times.", level: "A1" },
+            "old": { word: "Old", phonetic: "/əʊld/", type: "Adjective", translation: "Cũ, già", example: "This is an old book. My grandfather is old.", engMeaning: "Having lived for a long time; no longer young.", level: "A1" },
+            "on": { word: "On", phonetic: "/ɒn/", type: "Preposition", translation: "Trên", example: "The book is on the table.", engMeaning: "Physically in contact with and supported by a surface.", level: "A1" },
+            "one": { word: "One", phonetic: "/wʌn/", type: "Number", translation: "Số 1", example: "There is only one apple left.", engMeaning: "The lowest cardinal number; half of two.", level: "A1" },
+            "open": { word: "Open", phonetic: "/ˈəʊ.pən/", type: "Adjective/Verb", translation: "Mở / Mở cửa", example: "The door is open. Can you open the window?", engMeaning: "Not closed or blocked up; to move a door, window, etc., so that it is no longer closed.", level: "A1" },
+            "orange": { word: "Orange", phonetic: "/ˈɒr.ɪndʒ/", type: "Noun/Adjective", translation: "Quả cam / Màu cam", example: "I ate an orange. She has an orange bag.", engMeaning: "A round juicy citrus fruit; a bright reddish-yellow color.", level: "A1" },
+            "or": { word: "Or", phonetic: "/ɔːr/", type: "Conjunction", translation: "Hoặc", example: "Do you want tea or coffee?", engMeaning: "Used to link alternatives.", level: "A1" },
+            "page": { word: "Page", phonetic: "/peɪdʒ/", type: "Noun", translation: "Trang (sách)", example: "Please turn to page 20.", engMeaning: "One side of a sheet of paper in a collection of sheets.", level: "A1" },
+            "paper": { word: "Paper", phonetic: "/ˈpeɪ.pər/", type: "Noun", translation: "Giấy", example: "I need a piece of paper to write on.", engMeaning: "Material manufactured in thin sheets from the pulp of wood.", level: "A1" },
+            "parent": { word: "Parent", phonetic: "/ˈpeə.rənt/", type: "Noun", translation: "Phụ huynh", example: "My parents live in the countryside.", engMeaning: "A person's father or mother.", level: "A1" },
+            "park": { word: "Park", phonetic: "/pɑːk/", type: "Noun", translation: "Công viên", example: "The children are playing in the park.", engMeaning: "A large public garden or area of land used for recreation.", level: "A1" },
+            "party": { word: "Party", phonetic: "/ˈpɑː.ti/", type: "Noun", translation: "Bữa tiệc", example: "We're having a birthday party on Saturday.", engMeaning: "A social gathering of people for entertainment or celebration.", level: "A1" },
+            "pen": { word: "Pen", phonetic: "/pen/", type: "Noun", translation: "Bút mực", example: "I write with a pen.", engMeaning: "An instrument for writing with ink.", level: "A1" },
+            "pencil": { word: "Pencil", phonetic: "/ˈpen.səl/", type: "Noun", translation: "Bút chì", example: "Can I borrow your pencil?", engMeaning: "An instrument for writing or drawing, consisting of a thin stick of graphite.", level: "A1" },
+            "people": { word: "People", phonetic: "/ˈpiː.pəl/", type: "Noun", translation: "Mọi người", example: "There are many people at the station.", engMeaning: "Human beings in general or considered collectively.", level: "A1" },
+            "phone": { word: "Phone", phonetic: "/fəʊn/", type: "Noun", translation: "Điện thoại", example: "My phone is ringing.", engMeaning: "A telephone.", level: "A1" },
+            "picture": { word: "Picture", phonetic: "/ˈpɪk.tʃər/", type: "Noun", translation: "Bức tranh, ảnh", example: "This is a picture of my family.", engMeaning: "A painting, drawing, or photograph.", level: "A1" },
+            "play": { word: "Play", phonetic: "/pleɪ/", type: "Verb", translation: "Chơi", example: "Children love to play games.", engMeaning: "To engage in activity for enjoyment and recreation.", level: "A1" },
+            "please": { word: "Please", phonetic: "/pliːz/", type: "Adverb", translation: "Làm ơn, vui lòng", example: "Can you help me, please?", engMeaning: "Used in polite requests.", level: "A1" },
+            "put": { word: "Put", phonetic: "/pʊt/", type: "Verb", translation: "Đặt, để", example: "Please put the book on the table.", engMeaning: "To move something to a particular place.", level: "A1" },
+            "question": { word: "Question", phonetic: "/ˈkwes.tʃən/", type: "Noun", translation: "Câu hỏi", example: "Do you have any questions?", engMeaning: "A sentence worded so as to elicit information.", level: "A1" },
+            "read": { word: "Read", phonetic: "/riːd/", type: "Verb", translation: "Đọc", example: "I like to read books.", engMeaning: "To look at and comprehend the meaning of written or printed matter.", level: "A1" },
+            "red": { word: "Red", phonetic: "/red/", type: "Adjective/Noun", translation: "Màu đỏ", example: "She is wearing a red dress.", engMeaning: "Of a color at the end of the spectrum next to orange and opposite violet.", level: "A1" },
+            "restaurant": { word: "Restaurant", phonetic: "/ˈres.trɒnt/", type: "Noun", translation: "Nhà hàng", example: "We ate at a nice restaurant.", engMeaning: "A place where people pay to sit and eat meals that are cooked and served on the premises.", level: "A1" },
+            "rice": { word: "Rice", phonetic: "/raɪs/", type: "Noun", translation: "Cơm, gạo", example: "I eat rice every day.", engMeaning: "A swamp grass which is widely cultivated as a source of food, especially in Asia.", level: "A1" },
+            "right": { word: "Right", phonetic: "/raɪt/", type: "Adjective/Noun", translation: "Đúng / Bên phải", example: "That's the right answer. Turn right at the corner.", engMeaning: "True or correct; on or towards the side of a person or thing which is to the east when the person or thing is facing north.", level: "A1" },
+            "room": { word: "Room", phonetic: "/ruːm/", type: "Noun", translation: "Phòng", example: "My room is very big.", engMeaning: "A part or division of a building enclosed by walls, a floor, and a ceiling.", level: "A1" },
+            "run": { word: "Run", phonetic: "/rʌn/", type: "Verb", translation: "Chạy", example: "I can run very fast.", engMeaning: "To move at a speed faster than a walk.", level: "A1" },
+            "sad": { word: "Sad", phonetic: "/sæd/", type: "Adjective", translation: "Buồn", example: "The story has a sad ending.", engMeaning: "Feeling or showing sorrow; unhappy.", level: "A1" },
+            "say": { word: "Say", phonetic: "/seɪ/", type: "Verb", translation: "Nói", example: "What did you say?", engMeaning: "To utter words so as to convey information, an opinion, a feeling, etc.", level: "A1" },
+            "school": { word: "School", phonetic: "/skuːl/", type: "Noun", translation: "Trường học", example: "The children are at school.", engMeaning: "An institution for educating children.", level: "A1" },
+            "see": { word: "See", phonetic: "/siː/", type: "Verb", translation: "Nhìn, thấy", example: "I can see a bird in the sky.", engMeaning: "To perceive with the eyes; discern visually.", level: "A1" },
+            "seven": { word: "Seven", phonetic: "/ˈsev.ən/", type: "Number", translation: "Số 7", example: "There are seven days in a week.", engMeaning: "Equivalent to the sum of six and one.", level: "A1" },
+            "she": { word: "She", phonetic: "/ʃiː/", type: "Pronoun", translation: "Cô ấy, chị ấy, bà ấy", example: "She is a doctor.", engMeaning: "Used to refer to a woman, girl, or female animal previously mentioned.", level: "A1" },
+            "shirt": { word: "Shirt", phonetic: "/ʃɜːt/", type: "Noun", translation: "Áo sơ mi", example: "He is wearing a white shirt.", engMeaning: "A garment for the upper body with a collar, sleeves, and a front opening.", level: "A1" },
+            "shoe": { word: "Shoe", phonetic: "/ʃuː/", type: "Noun", translation: "Giày", example: "I need to buy new shoes.", engMeaning: "A covering for the foot, typically made of leather.", level: "A1" },
+            "shop": { word: "Shop", phonetic: "/ʃɒp/", type: "Noun/Verb", translation: "Cửa hàng / Mua sắm", example: "I am going to the shop. I like to shop for clothes.", engMeaning: "A place where things are sold; to buy things in shops.", level: "A1" },
+            "short": { word: "Short", phonetic: "/ʃɔːt/", type: "Adjective", translation: "Ngắn, thấp", example: "He has short hair. It's a short story.", engMeaning: "Measuring a small distance from end to end; small in height.", level: "A1" },
+            "sister": { word: "Sister", phonetic: "/ˈsɪs.tər/", type: "Noun", translation: "Chị/Em gái", example: "My sister is younger than me.", engMeaning: "A woman or girl who has one or both parents in common with another person.", level: "A1" },
+            "sit": { word: "Sit", phonetic: "/sɪt/", type: "Verb", translation: "Ngồi", example: "Please sit down.", engMeaning: "To adopt or be in a position in which one's weight is supported by one's buttocks.", level: "A1" },
+            "six": { word: "Six", phonetic: "/sɪks/", type: "Number", translation: "Số 6", example: "There are six people in my family.", engMeaning: "Equivalent to the sum of three and three.", level: "A1" },
+            "sleep": { word: "Sleep", phonetic: "/sliːp/", type: "Verb", translation: "Ngủ", example: "I sleep for eight hours every night.", engMeaning: "To rest your mind and body by closing your eyes and becoming unconscious.", level: "A1" },
+            "small": { word: "Small", phonetic: "/smɔːl/", type: "Adjective", translation: "Nhỏ, bé", example: "A mouse is a small animal.", engMeaning: "Of a size that is less than normal or usual.", level: "A1" },
+            "some": { word: "Some", phonetic: "/sʌm/", type: "Determiner", translation: "Một vài", example: "I need to buy some milk.", engMeaning: "An unspecified amount or number of.", level: "A1" },
+            "son": { word: "Son", phonetic: "/sʌn/", type: "Noun", translation: "Con trai", example: "He is my son.", engMeaning: "A boy or man in relation to either of his parents.", level: "A1" },
+            "song": { word: "Song", phonetic: "/sɒŋ/", type: "Noun", translation: "Bài hát", example: "This is my favorite song.", engMeaning: "A short poem or other set of words set to music or meant to be sung.", level: "A1" },
+            "speak": { word: "Speak", phonetic: "/spiːk/", type: "Verb", translation: "Nói", example: "I can speak English.", engMeaning: "To say words in an ordinary voice.", level: "A1" },
+            "sport": { word: "Sport", phonetic: "/spɔːt/", type: "Noun", translation: "Thể thao", example: "Football is a popular sport.", engMeaning: "An activity involving physical exertion and skill.", level: "A1" },
+            "stand": { word: "Stand", phonetic: "/stænd/", type: "Verb", translation: "Đứng", example: "Please stand up.", engMeaning: "To be in an upright position on your feet.", level: "A1" },
+            "start": { word: "Start", phonetic: "/stɑːt/", type: "Verb", translation: "Bắt đầu", example: "The class starts at 8 AM.", engMeaning: "To begin to do something.", level: "A1" },
+            "station": { word: "Station", phonetic: "/ˈsteɪ.ʃən/", type: "Noun", translation: "Nhà ga", example: "I'll meet you at the train station.", engMeaning: "A place where trains or buses regularly stop.", level: "A1" },
+            "stop": { word: "Stop", phonetic: "/stɒp/", type: "Verb", translation: "Dừng lại", example: "The bus stops here.", engMeaning: "To finish an activity or movement.", level: "A1" },
+            "street": { word: "Street", phonetic: "/striːt/", type: "Noun", translation: "Đường phố", example: "My house is on this street.", engMeaning: "A public road in a city or town.", level: "A1" },
+            "student": { word: "Student", phonetic: "/ˈstjuː.dənt/", type: "Noun", translation: "Học sinh, sinh viên", example: "He is a student at a big university.", engMeaning: "A person who is studying at a school or college.", level: "A1" },
+            "study": { word: "Study", phonetic: "/ˈstʌd.i/", type: "Verb", translation: "Học", example: "I need to study for the test.", engMeaning: "To spend time learning about a subject.", level: "A1" },
+            "sun": { word: "Sun", phonetic: "/sʌn/", type: "Noun", translation: "Mặt trời", example: "The sun is shining.", engMeaning: "The star that the Earth moves around and that gives the Earth heat and light.", level: "A1" },
+            "table": { word: "Table", phonetic: "/ˈteɪ.bəl/", type: "Noun", translation: "Cái bàn", example: "The books are on the table.", engMeaning: "A piece of furniture with a flat top and one or more legs.", level: "A1" },
+            "take": { word: "Take", phonetic: "/teɪk/", type: "Verb", translation: "Lấy, mang, cầm", example: "Please take this book.", engMeaning: "To reach for and hold something.", level: "A1" },
+            "talk": { word: "Talk", phonetic: "/tɔːk/", type: "Verb", translation: "Nói chuyện", example: "I like to talk with my friends.", engMeaning: "To speak in order to give information or express ideas.", level: "A1" },
+            "tall": { word: "Tall", phonetic: "/tɔːl/", type: "Adjective", translation: "Cao", example: "He is a tall man.", engMeaning: "Of great or more than average height.", level: "A1" },
+            "taxi": { word: "Taxi", phonetic: "/ˈtæk.si/", type: "Noun", translation: "Xe taxi", example: "Let's take a taxi.", engMeaning: "A car with a driver who you pay to take you somewhere.", level: "A1" },
+            "tea": { word: "Tea", phonetic: "/tiː/", type: "Noun", translation: "Trà", example: "Would you like a cup of tea?", engMeaning: "A hot drink made by pouring water onto dried and cut leaves.", level: "A1" },
+            "teach": { word: "Teach", phonetic: "/tiːtʃ/", type: "Verb", translation: "Dạy", example: "She teaches English at a primary school.", engMeaning: "To give lessons to students in a school, college, etc.", level: "A1" },
+            "teacher": { word: "Teacher", phonetic: "/ˈtiː.tʃər/", type: "Noun", translation: "Giáo viên", example: "My teacher is very kind.", engMeaning: "Someone whose job is to teach in a school or college.", level: "A1" },
+            "ten": { word: "Ten", phonetic: "/ten/", type: "Number", translation: "Số 10", example: "I have ten fingers.", engMeaning: "Equivalent to the product of two and five.", level: "A1" },
+            "test": { word: "Test", phonetic: "/test/", type: "Noun", translation: "Bài kiểm tra", example: "We have an English test tomorrow.", engMeaning: "A set of questions to measure your knowledge or ability.", level: "A1" },
+            "than": { word: "Than", phonetic: "/ðæn/", type: "Conjunction", translation: "Hơn", example: "He is taller than me.", engMeaning: "Used to introduce the second element in a comparison.", level: "A1" },
+            "thank you": { word: "Thank you", phonetic: "/ˌθæŋk ˈjuː/", type: "Phrase", translation: "Cảm ơn", example: "Thank you for your help.", engMeaning: "A polite expression used when acknowledging a gift, service, or compliment.", level: "A1" },
+            "that": { word: "That", phonetic: "/ðæt/", type: "Determiner/Pronoun", translation: "Đó, kia", example: "That house is big.", engMeaning: "Used to identify a specific person or thing observed by the speaker.", level: "A1" },
+            "the": { word: "The", phonetic: "/ðə; ðiː/", type: "Article", translation: "(mạo từ xác định)", example: "The sun is hot.", engMeaning: "Used to refer to specific or particular nouns.", level: "A1" },
+            "their": { word: "Their", phonetic: "/ðeər/", type: "Determiner", translation: "Của họ", example: "This is their house.", engMeaning: "Belonging to or associated with the people or things previously mentioned.", level: "A1" },
+            "them": { word: "Them", phonetic: "/ðem/", type: "Pronoun", translation: "Họ, chúng", example: "I see them.", engMeaning: "Used as the object of a verb or preposition to refer to two or more people or things.", level: "A1" },
+            "then": { word: "Then", phonetic: "/ðen/", type: "Adverb", translation: "Sau đó", example: "I went to the shop and then I went home.", engMeaning: "After that; next.", level: "A1" },
+            "there": { word: "There", phonetic: "/ðeər/", type: "Adverb", translation: "Ở đó", example: "The book is over there.", engMeaning: "In, at, or to that place or position.", level: "A1" },
+            "these": { word: "These", phonetic: "/ðiːz/", type: "Determiner/Pronoun", translation: "Những cái này", example: "These apples are red.", engMeaning: "Used to identify a specific person or thing close at hand.", level: "A1" },
+            "they": { word: "They", phonetic: "/ðeɪ/", type: "Pronoun", translation: "Họ, chúng", example: "They are students.", engMeaning: "Used to refer to two or more people or things previously mentioned.", level: "A1" },
+            "thing": { word: "Thing", phonetic: "/θɪŋ/", type: "Noun", translation: "Vật, thứ, điều", example: "What is that thing on the table?", engMeaning: "An object, an action, or an idea.", level: "A1" },
+            "think": { word: "Think", phonetic: "/θɪŋk/", type: "Verb", translation: "Nghĩ", example: "I think it will rain.", engMeaning: "To have a particular opinion, belief, or idea about someone or something.", level: "A1" },
+            "third": { word: "Third", phonetic: "/θɜːd/", type: "Number", translation: "Thứ ba", example: "This is the third time I've called you.", engMeaning: "Constituting number three in a sequence.", level: "A1" },
+            "this": { word: "This", phonetic: "/ðɪs/", type: "Determiner/Pronoun", translation: "Đây, này", example: "This is my house.", engMeaning: "Used to identify a specific person or thing close at hand.", level: "A1" },
+            "those": { word: "Those", phonetic: "/ðəʊz/", type: "Determiner/Pronoun", translation: "Những cái kia", example: "Those houses are beautiful.", engMeaning: "Used to identify a specific person or thing far from the speaker.", level: "A1" },
+            "three": { word: "Three", phonetic: "/θriː/", type: "Number", translation: "Số 3", example: "There are three books.", engMeaning: "Equivalent to the sum of one and two.", level: "A1" },
+            "ticket": { word: "Ticket", phonetic: "/ˈtɪk.ɪt/", type: "Noun", translation: "Vé", example: "I need a ticket for the train.", engMeaning: "A piece of paper or card that gives the holder a certain right, especially to enter a place, travel on public transport, etc.", level: "A1" },
+            "time": { word: "Time", phonetic: "/taɪm/", type: "Noun", translation: "Thời gian", example: "What time is it?", engMeaning: "The indefinite continued progress of existence and events in the past, present, and future.", level: "A1" },
+            "to": { word: "To", phonetic: "/tuː; tə/", type: "Preposition", translation: "Đến", example: "I am going to school.", engMeaning: "Expressing motion in the direction of a particular location.", level: "A1" },
+            "today": { word: "Today", phonetic: "/təˈdeɪ/", type: "Noun/Adverb", translation: "Hôm nay", example: "Today is my birthday.", engMeaning: "This present day.", level: "A1" },
+            "together": { word: "Together", phonetic: "/təˈɡeð.ər/", type: "Adverb", translation: "Cùng nhau", example: "Let's go to the party together.", engMeaning: "With or in proximity to another person or people.", level: "A1" },
+            "toilet": { word: "Toilet", phonetic: "/ˈtɔɪ.lət/", type: "Noun", translation: "Nhà vệ sinh", example: "Excuse me, where is the toilet?", engMeaning: "A fixed receptacle with a water supply and a flush pipe, for the disposal of human waste.", level: "A1" },
+            "tomato": { word: "Tomato", phonetic: "/təˈmɑː.təʊ/", type: "Noun", translation: "Cà chua", example: "I like tomato soup.", engMeaning: "A glossy red, or occasionally yellow, pulpy edible fruit.", level: "A1" },
+            "tomorrow": { word: "Tomorrow", phonetic: "/təˈmɒr.əʊ/", type: "Noun/Adverb", translation: "Ngày mai", example: "I will see you tomorrow.", engMeaning: "The day after today.", level: "A1" },
+            "too": { word: "Too", phonetic: "/tuː/", type: "Adverb", translation: "Cũng, quá", example: "I like it too. It is too hot.", engMeaning: "In addition; also. To a higher degree than is desirable, permissible, or possible.", level: "A1" },
+            "town": { word: "Town", phonetic: "/taʊn/", type: "Noun", translation: "Thị trấn", example: "I live in a small town.", engMeaning: "A built-up area with a name, defined boundaries, and local government, that is larger than a village and generally smaller than a city.", level: "A1" },
+            "train": { word: "Train", phonetic: "/treɪn/", type: "Noun", translation: "Tàu hỏa", example: "The train to London is late.", engMeaning: "A series of connected railway carriages or wagons moved by a locomotive.", level: "A1" },
+            "tree": { word: "Tree", phonetic: "/triː/", type: "Noun", translation: "Cái cây", example: "There is a big tree in the garden.", engMeaning: "A woody perennial plant, typically having a single stem or trunk growing to a considerable height.", level: "A1" },
+            "trousers": { word: "Trousers", phonetic: "/ˈtraʊ.zəz/", type: "Noun", translation: "Quần dài", example: "He is wearing black trousers.", engMeaning: "An outer garment covering the body from the waist to the ankles, with a separate part for each leg.", level: "A1" },
+            "try": { word: "Try", phonetic: "/traɪ/", type: "Verb", translation: "Thử, cố gắng", example: "You should try this cake. I will try my best.", engMeaning: "To make an attempt or effort to do something.", level: "A1" },
+            "two": { word: "Two", phonetic: "/tuː/", type: "Number", translation: "Số 2", example: "I have two hands.", engMeaning: "Equivalent to the sum of one and one.", level: "A1" },
+            "umbrella": { word: "Umbrella", phonetic: "/ʌmˈbrel.ə/", type: "Noun", translation: "Cái ô, dù", example: "Take an umbrella, it's raining.", engMeaning: "A device consisting of a circular canopy of cloth on a folding metal frame supported by a central rod.", level: "A1" },
+            "uncle": { word: "Uncle", phonetic: "/ˈʌŋ.kəl/", type: "Noun", translation: "Chú, bác, cậu", example: "My uncle lives in Australia.", engMeaning: "The brother of one's father or mother or the husband of one's aunt.", level: "A1" },
+            "under": { word: "Under", phonetic: "/ˈʌn.dər/", type: "Preposition", translation: "Dưới", example: "The cat is under the table.", engMeaning: "Extending or directly below.", level: "A1" },
+            "understand": { word: "Understand", phonetic: "/ˌʌn.dəˈstænd/", type: "Verb", translation: "Hiểu", example: "I don't understand the question.", engMeaning: "To perceive the intended meaning of words, a language, or a speaker.", level: "A1" },
+            "university": { word: "University", phonetic: "/ˌjuː.nɪˈvɜː.sə.ti/", type: "Noun", translation: "Trường đại học", example: "She studies at a famous university.", engMeaning: "A high-level educational institution in which students study for degrees.", level: "A1" },
+            "use": { word: "Use", phonetic: "/juːz/", type: "Verb", translation: "Sử dụng", example: "Can I use your pen?", engMeaning: "To take, hold, or deploy something as a means of accomplishing a purpose.", level: "A1" },
+            "usually": { word: "Usually", phonetic: "/ˈjuː.ʒu.ə.li/", type: "Adverb", translation: "Thường thường", example: "I usually wake up at 6 AM.", engMeaning: "Under normal conditions; generally.", level: "A1" },
+            "vegetable": { word: "Vegetable", phonetic: "/ˈvedʒ.tə.bəl/", type: "Noun", translation: "Rau củ", example: "You should eat more vegetables.", engMeaning: "A plant or part of a plant used as food.", level: "A1" },
+            "very": { word: "Very", phonetic: "/ˈver.i/", type: "Adverb", translation: "Rất", example: "This book is very good.", engMeaning: "In a high degree.", level: "A1" },
+            "visit": { word: "Visit", phonetic: "/ˈvɪz.ɪt/", type: "Verb", translation: "Thăm", example: "I will visit my grandparents this weekend.", engMeaning: "To go to see and spend time with someone socially.", level: "A1" },
+            "wait": { word: "Wait", phonetic: "/weɪt/", type: "Verb", translation: "Đợi", example: "Please wait for me.", engMeaning: "To stay where one is or delay action until a particular time or event.", level: "A1" },
+            "walk": { word: "Walk", phonetic: "/wɔːk/", type: "Verb", translation: "Đi bộ", example: "I walk to school every day.", engMeaning: "To move at a regular pace by lifting and setting down each foot in turn.", level: "A1" },
+            "way": { word: "Way", phonetic: "/wei/", type: "Noun", translation: "Con đường", example: "I've only been living in Madrid for a couple of weeks so I don't really know my way around it yet.", engMeaning: "a route, direction, or path:", level: "A1" },
+            "wall": { word: "Wall", phonetic: "/wɔːl/", type: "Noun", translation: "Bức tường", example: "There is a picture on the wall.", engMeaning: "A continuous vertical brick or stone structure that encloses or divides an area of land.", level: "A1" },
+            "want": { word: "Want", phonetic: "/wɒnt/", type: "Verb", translation: "Muốn", example: "I want a cup of coffee.", engMeaning: "To have a desire to possess or do something.", level: "A1" },
+            "watch": { word: "Watch", phonetic: "/wɒtʃ/", type: "Verb/Noun", translation: "Xem / Đồng hồ đeo tay", example: "I like to watch movies. I have a new watch.", engMeaning: "To look at or observe attentively over a period of time; a small timepiece worn on a strap on one's wrist.", level: "A1" },
+            "water": { word: "Water", phonetic: "/ˈwɔː.tər/", type: "Noun", translation: "Nước", example: "Please give me a glass of water.", engMeaning: "A colorless, transparent, odorless liquid that forms the seas, lakes, rivers, and rain.", level: "A1" },
+            "we": { word: "We", phonetic: "/wiː/", type: "Pronoun", translation: "Chúng tôi", example: "We are friends.", engMeaning: "Used by a speaker to refer to himself or herself and one or more other people.", level: "A1" },
+            "wear": { word: "Wear", phonetic: "/weər/", type: "Verb", translation: "Mặc, đội, mang", example: "I am wearing a blue shirt.", engMeaning: "To have clothing, jewelry, etc. on your body.", level: "A1" },
+            "weather": { word: "Weather", phonetic: "/ˈweð.ər/", type: "Noun", translation: "Thời tiết", example: "What's the weather like today?", engMeaning: "The state of the atmosphere at a place and time as regards heat, dryness, sunshine, wind, rain, etc.", level: "A1" },
+            "week": { word: "Week", phonetic: "/wiːk/", type: "Noun", translation: "Tuần", example: "There are seven days in a week.", engMeaning: "A period of seven days.", level: "A1" },
+            "weekend": { word: "Weekend", phonetic: "/ˌwiːkˈend/", type: "Noun", translation: "Cuối tuần", example: "What will you do this weekend?", engMeaning: "Saturday and Sunday, especially regarded as a time for leisure.", level: "A1" },
+            "what": { word: "What", phonetic: "/wɒt/", type: "Pronoun/Determiner", translation: "Cái gì", example: "What is your name?", engMeaning: "Asking for information specifying something.", level: "A1" },
+            "when": { word: "When", phonetic: "/wen/", type: "Adverb/Conjunction", translation: "Khi nào", example: "When is your birthday?", engMeaning: "At what time.", level: "A1" },
+            "where": { word: "Where", phonetic: "/weər/", type: "Adverb/Conjunction", translation: "Ở đâu", example: "Where do you live?", engMeaning: "In or to what place or position.", level: "A1" },
+            "which": { word: "Which", phonetic: "/wɪtʃ/", type: "Pronoun/Determiner", translation: "Cái nào", example: "Which book do you want?", engMeaning: "Asking for information specifying one or more people or things from a definite set.", level: "A1" },
+            "white": { word: "White", phonetic: "/waɪt/", type: "Adjective/Noun", translation: "Màu trắng", example: "Snow is white.", engMeaning: "Of the color of milk or fresh snow.", level: "A1" },
+            "who": { word: "Who", phonetic: "/huː/", type: "Pronoun", translation: "Ai", example: "Who is that man?", engMeaning: "What or which person or people.", level: "A1" },
+            "why": { word: "Why", phonetic: "/waɪ/", type: "Adverb", translation: "Tại sao", example: "Why are you sad?", engMeaning: "For what reason or purpose.", level: "A1" },
+            "wife": { word: "Wife", phonetic: "/waɪf/", type: "Noun", translation: "Vợ", example: "He loves his wife very much.", engMeaning: "A married woman considered in relation to her spouse.", level: "A1" },
+            "window": { word: "Window", phonetic: "/ˈwɪn.dəʊ/", type: "Noun", translation: "Cửa sổ", example: "Please open the window.", engMeaning: "An opening in the wall or roof of a building or vehicle.", level: "A1" },
+            "with": { word: "With", phonetic: "/wɪð/", type: "Preposition", translation: "Với", example: "I am going with my friend.", engMeaning: "Accompanied by (another person or thing).", level: "A1" },
+            "woman": { word: "Woman", phonetic: "/ˈwʊm.ən/", type: "Noun", translation: "Người phụ nữ", example: "That woman is my mother.", engMeaning: "An adult female human being.", level: "A1" },
+            "word": { word: "Word", phonetic: "/wɜːd/", type: "Noun", translation: "Từ", example: "You need to learn new words.", engMeaning: "A single distinct meaningful element of speech or writing.", level: "A1" },
+            "work": { word: "Work", phonetic: "/wɜːk/", type: "Verb/Noun", translation: "Làm việc / Công việc", example: "I work in an office. My work is interesting.", engMeaning: "To do a job that you are paid for; activity involving mental or physical effort.", level: "A1" },
+            "world": { word: "World", phonetic: "/wɜːld/", type: "Noun", translation: "Thế giới", example: "There are many countries in the world.", engMeaning: "The earth, together with all of its countries and peoples.", level: "A1" },
+            "write": { word: "Write", phonetic: "/raɪt/", type: "Verb", translation: "Viết", example: "I need to write an email.", engMeaning: "To mark coherent words on a surface with a pen or pencil.", level: "A1" },
+            "year": { word: "Year", phonetic: "/jɪər/", type: "Noun", translation: "Năm", example: "There are 12 months in a year.", engMeaning: "The time taken by the earth to make one revolution around the sun.", level: "A1" },
+            "yellow": { word: "Yellow", phonetic: "/ˈjel.əʊ/", type: "Adjective/Noun", translation: "Màu vàng", example: "The sun is yellow.", engMeaning: "Of the color between green and orange in the spectrum.", level: "A1" },
+            "yes": { word: "Yes", phonetic: "/jes/", type: "Exclamation", translation: "Vâng, có", example: "'Are you a student?' 'Yes, I am.'", engMeaning: "Used to give an affirmative response.", level: "A1" },
+            "yesterday": { word: "Yesterday", phonetic: "/ˈjes.tə.deɪ/", type: "Noun/Adverb", translation: "Hôm qua", example: "I saw him yesterday.", engMeaning: "The day before today.", level: "A1" },
+            "you": { word: "You", phonetic: "/juː/", type: "Pronoun", translation: "Bạn, các bạn", example: "You are a good student.", engMeaning: "Used to refer to the person or people that the speaker is addressing.", level: "A1" },
+            "your": { word: "Your", phonetic: "/jɔːr/", type: "Determiner", translation: "Của bạn", example: "This is your book.", engMeaning: "Belonging to or associated with the person or people that the speaker is addressing.", level: "A1" },
+            "zero": { word: "Zero", phonetic: "/ˈzɪə.rəʊ/", type: "Number", translation: "Số 0", example: "The temperature is zero degrees.", engMeaning: "No quantity or number; nought.", level: "A1" },
+            "zoo": { word: "Zoo", phonetic: "/zuː/", type: "Noun", translation: "Sở thú", example: "We saw many animals at the zoo.", engMeaning: "An establishment which maintains a collection of wild animals for study, conservation, or display to the public.", level: "A1" },
+
+            // A2
+            "family": { word: "Family", phonetic: "/ˈfæm.əl.i/", type: "Noun", translation: "Gia đình", example: "I have a large family.", engMeaning: "A group consisting of parents and children living together in a household.", level: "A2" },
+            "happy": { word: "Happy", phonetic: "/ˈhæp.i/", type: "Adjective", translation: "Vui vẻ", example: "She looks very happy today.", engMeaning: "Feeling or showing pleasure or contentment.", level: "A2" },
+            "friend": { word: "Friend", phonetic: "/frend/", type: "Noun", translation: "Bạn bè", example: "He is my best friend.", engMeaning: "A person whom one knows and with whom one has a bond of mutual affection.", level: "A2"},
+            // B1
+            "environment": { word: "Environment", phonetic: "/ɪnˈvaɪ.rən.mənt/", type: "Noun", translation: "Môi trường", example: "We need to protect the environment.", engMeaning: "The surroundings or conditions in which a person, animal, or plant lives or operates.", level: "B1" },
+            "technology": { word: "Technology", phonetic: "/tekˈnɒl.ə.dʒi/", type: "Noun", translation: "Công nghệ", example: "Technology has changed the world.", engMeaning: "The application of scientific knowledge for practical purposes, especially in industry.", level: "B1" },
+            "communicate": { word: "Communicate", phonetic: "/kəˈmjuː.nɪ.keɪt/", type: "Verb", translation: "Giao tiếp", example: "It's important to communicate effectively.", engMeaning: "Share or exchange information, news, or ideas.", level: "B1"},
+            // B2
+            "efficient": { word: "Efficient", phonetic: "/ɪˈfɪʃ.ənt/", type: "Adjective", translation: "Hiệu quả", example: "This machine is very efficient.", engMeaning: "Achieving maximum productivity with minimum wasted effort or expense.", level: "B2" },
+            "analyze": { word: "Analyze", phonetic: "/ˈæn.əl.aɪz/", type: "Verb", translation: "Phân tích", example: "Scientists analyze data to find patterns.", engMeaning: "Examine methodically and in detail the constitution or structure of (something, especially information), typically for purposes of explanation and interpretation.", level: "B2"},
+            "significant": { word: "Significant", phonetic: "/sɪɡˈnɪf.ɪ.kənt/", type: "Adjective", translation: "Quan trọng, đáng kể", example: "There has been a significant increase in sales.", engMeaning: "Sufficiently great or important to be worthy of attention; noteworthy.", level: "B2" },
+            // C1
+            "ubiquitous": { word: "Ubiquitous", phonetic: "/juːˈbɪk.wə.təs/", type: "Adjective", translation: "Phổ biến, ở đâu cũng có", example: "The company's logo is ubiquitous.", engMeaning: "Present, appearing, or found everywhere.", level: "C1" },
+            "ephemeral": { word: "Ephemeral", phonetic: "/ɪˈfem.ər.əl/", type: "Adjective", translation: "Phù du, chóng tàn", example: "Fame in the world of rock and pop is largely ephemeral.", engMeaning: "Lasting for only a short time.", level: "C1" },
+            "articulate": { word: "Articulate", phonetic: "/ɑːˈtɪk.jə.leɪt/", type: "Adjective/Verb", translation: "Lưu loát, rõ ràng / Phát âm rõ ràng", example: "She gave a witty, entertaining, and articulate speech.", engMeaning: "(adj) Having or showing the ability to speak fluently and coherently. (v) Express (an idea or feeling) fluently and coherently.", level: "C1"},
+            // Example words from the initial prompt (if not already covered)
+            "artificial": { word: "Artificial", phonetic: "/ˌɑːr.t̬əˈfɪʃ.əl/", type: "Adjective", translation: "Nhân tạo", example: "This is an artificial flower.", engMeaning: "Made by people, often as a copy of something natural.", level: "B1" },
+            "intelligence": { word: "Intelligence", phonetic: "/ɪnˈtel.ə.dʒəns/", type: "Noun", translation: "Trí tuệ", example: "She is known for her high intelligence.", engMeaning: "The ability to learn, understand, and make judgments.", level: "B2" },
+            "revolutionizing": { word: "Revolutionizing", phonetic: "/ˌrev.əˈluː.ʃən.aɪzɪŋ/", type: "Verb (gerund/participle)", translation: "Cách mạng hóa", example: "The internet is revolutionizing communication.", engMeaning: "Completely changing something, especially an area of human activity.", level: "C1" }, // Note: using base form 'revolutionize' for lookup might be better
+            "revolutionize": { word: "Revolutionize", phonetic: "/ˌrev.əˈluː.ʃən.aɪz/", type: "Verb", translation: "Cách mạng hóa", example: "The internet will revolutionize communication.", engMeaning: "Completely change something, especially an area of human activity.", level: "C1" },
+            "interact": { word: "Interact", phonetic: "/ˌɪn.t̬ɚˈækt/", type: "Verb", translation: "Tương tác", example: "Students should interact more in class.", engMeaning: "To communicate with or react to.", level: "B1" }
+        };
+
+
+        // DOM Elements for Intro
+        const introScreenEl = document.getElementById('introScreen');
+        const introTitleEl = introScreenEl.querySelector('.intro-title');
+        const startAppBtn = document.getElementById('startAppBtn');
+        const mainAppWrapperEl = document.getElementById('mainAppWrapper');
+        const particleCanvas = document.getElementById('particleCanvas');
+        const canvasCtx = particleCanvas.getContext('2d');
+
+        // DOM Elements for Main App (ensure all are correctly referenced)
+        const englishTextEl = document.getElementById('englishText');
+        const processTextBtn = document.getElementById('processTextBtn');
+        const translationSection = document.getElementById('translationSection');
+        const translatedTextContainerEl = document.getElementById('translatedTextContainer');
+        const vocabularySection = document.getElementById('vocabularySection');
+        const flashcardListEl = document.getElementById('flashcardList');
+        const startMcQuizBtn = document.getElementById('startMcQuizBtn');
+        const mcQuizSection = document.getElementById('mcQuizSection');
+        const mcQuizContentEl = document.getElementById('mcQuizContent');
+        const nextMcQuestionBtn = document.getElementById('nextMcQuestionBtn');
+        const finishMcQuizBtn = document.getElementById('finishMcQuizBtn');
+        const restartMcQuizBtn = document.getElementById('restartMcQuizBtn');
+        const mcQuizProgressEl = document.getElementById('mcQuizProgress');
+        const currentMcQuestionNumEl = document.getElementById('currentMcQuestionNum');
+        const totalMcQuestionsNumEl = document.getElementById('totalMcQuestionsNum');
+        const recallQuizSection = document.getElementById('recallQuizSection');
+        const recallQuizProgressEl = document.getElementById('recallQuizProgress');
+        const currentRecallQuestionNumEl = document.getElementById('currentRecallQuestionNum');
+        const totalRecallQuestionsNumEl = document.getElementById('totalRecallQuestionsNum');
+        const recallQuizContentEl = document.getElementById('recallQuizContent');
+        const recallAnswerFeedbackEl = document.getElementById('recallAnswerFeedback');
+        const submitRecallAnswerBtn = document.getElementById('submitRecallAnswerBtn');
+        const restartRecallQuizBtn = document.getElementById('restartRecallQuizBtn');
+        const syllabificationSection = document.getElementById('syllabificationSection');
+        const syllabificationListEl = document.getElementById('syllabificationList');
+        const resultsSection = document.getElementById('resultsSection');
+        const mcQuizResultAreaEl = document.getElementById('mcQuizResultArea');
+        const mcQuizScoreEl = document.getElementById('mcQuizScore');
+        const mcQuizProgressBarEl = document.getElementById('mcQuizProgressBar');
+        const recallQuizResultAreaEl = document.getElementById('recallQuizResultArea');
+        const recallQuizScoreEl = document.getElementById('recallQuizScore');
+        const recallQuizProgressBarEl = document.getElementById('recallQuizProgressBar');
+        const overallScoreAreaEl = document.getElementById('overallScoreArea');
+        const totalQuizScoreEl = document.getElementById('totalQuizScore');
+        const totalQuizProgressBarEl = document.getElementById('totalQuizProgressBar');
+        const reviewAnswersContainerEl = document.getElementById('reviewAnswersContainer');
+        const reviewMcAnswersEl = document.getElementById('reviewMcAnswers');
+        const reviewRecallAnswersEl = document.getElementById('reviewRecallAnswers');
+        const srsSuggestionEl = document.getElementById('srsSuggestion');
+        const tryAgainBtn = document.getElementById('tryAgainBtn');
+        const customMessageEl = document.getElementById('customMessage');
+
+        // Word Lookup Modal Elements
+        const wordLookupModalEl = document.getElementById('wordLookupModal');
+        const lookupWordEl = document.getElementById('lookupWord');
+        const lookupPhoneticEl = document.getElementById('lookupPhonetic');
+        const lookupTypeEl = document.getElementById('lookupType');
+        const lookupTranslationEl = document.getElementById('lookupTranslation');
+        const lookupEngMeaningEl = document.getElementById('lookupEngMeaning');
+        const lookupExampleEl = document.getElementById('lookupExample');
+        const addToFlashcardsBtnModalEl = document.getElementById('addToFlashcardsBtnModal');
+        const closeLookupModalBtnEl = document.getElementById('closeLookupModalBtn');
+
+        // Remove Confirmation Modal Elements
+        const removeConfirmModalEl = document.getElementById('removeConfirmModal');
+        const confirmRemoveWordEl = document.getElementById('confirmRemoveWord');
+        const confirmRemoveBtnEl = document.getElementById('confirmRemoveBtn');
+        const cancelRemoveBtnEl = document.getElementById('cancelRemoveBtn');
+        let wordToRemoveFromFlashcards = null; // Stores the word object to remove
+
+        document.getElementById('currentYear').textContent = new Date().getFullYear();
+
+        let audioCtx; 
+        const synth = window.speechSynthesis; 
+        let vocabularyData = [], mcQuizQuestions = [], mcUserAnswers = [], recallQuizQuestions = [], recallUserAnswers = [];
+        let currentMcQuestionIndex = 0, mcScore = 0, currentRecallQuestionIndex = 0, recallScore = 0;
+        let currentLookupWordData = null; // Stores data for the word in the lookup modal
+
+        // --- Particle Animation ---
+        let particlesArray;
+
+        function setupParticleCanvas() {
+            particleCanvas.width = window.innerWidth;
+            particleCanvas.height = window.innerHeight;
+            particlesArray = [];
+            const numberOfParticles = Math.floor((particleCanvas.width * particleCanvas.height) / 15000); // Adjust density
+            for (let i = 0; i < numberOfParticles; i++) {
+                let size = Math.random() * 2 + 0.5; // Particle size
+                let x = Math.random() * particleCanvas.width;
+                let y = Math.random() * particleCanvas.height;
+                let directionX = (Math.random() * 0.4) - 0.2; // Slower movement
+                let directionY = (Math.random() * 0.4) - 0.2;
+                let color = 'rgba(200, 220, 255, 0.6)'; // Light blueish particles
+                particlesArray.push({ x, y, directionX, directionY, size, color });
+            }
+        }
+
+        function drawParticles() {
+            particlesArray.forEach(particle => {
+                canvasCtx.beginPath();
+                canvasCtx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2, false);
+                canvasCtx.fillStyle = particle.color;
+                canvasCtx.fill();
+            });
+        }
+
+        function connectParticles() {
+            let opacityValue = 1;
+            for (let a = 0; a < particlesArray.length; a++) {
+                for (let b = a; b < particlesArray.length; b++) {
+                    let distance = ((particlesArray[a].x - particlesArray[b].x) * (particlesArray[a].x - particlesArray[b].x))
+                                 + ((particlesArray[a].y - particlesArray[b].y) * (particlesArray[a].y - particlesArray[b].y));
+                    if (distance < (particleCanvas.width/10) * (particleCanvas.height/10)) { // Connect if close
+                        opacityValue = 1 - (distance/20000); // Fade lines with distance
+                        canvasCtx.strokeStyle = `rgba(200, 220, 255, ${opacityValue * 0.3})`; // Lighter, more transparent lines
+                        canvasCtx.lineWidth = 0.5;
+                        canvasCtx.beginPath();
+                        canvasCtx.moveTo(particlesArray[a].x, particlesArray[a].y);
+                        canvasCtx.lineTo(particlesArray[b].x, particlesArray[b].y);
+                        canvasCtx.stroke();
+                    }
+                }
+            }
+        }
+
+        function updateParticles() {
+            particlesArray.forEach(particle => {
+                if (particle.x + particle.size > particleCanvas.width || particle.x - particle.size < 0) {
+                    particle.directionX = -particle.directionX;
+                }
+                if (particle.y + particle.size > particleCanvas.height || particle.y - particle.size < 0) {
+                    particle.directionY = -particle.directionY;
+                }
+                particle.x += particle.directionX;
+                particle.y += particle.directionY;
+            });
+        }
+        
+        let animationFrameId;
+        function particleAnimate() {
+            canvasCtx.clearRect(0,0, particleCanvas.width, particleCanvas.height);
+            updateParticles();
+            drawParticles();
+            connectParticles();
+            animationFrameId = requestAnimationFrame(particleAnimate);
+        }
+
+
+        function initAudioContext() {
+            if (!audioCtx && (window.AudioContext || window.webkitAudioContext)) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+        }
+
+        function playSound(type, delay = 0) {
+            if (!audioCtx) return; 
+            setTimeout(() => {
+                const oscillator = audioCtx.createOscillator();
+                const gainNode = audioCtx.createGain();
+                oscillator.connect(gainNode);
+                gainNode.connect(audioCtx.destination);
+                
+                const now = audioCtx.currentTime;
+                oscillator.start(now); 
+
+                let initialGain = 0.18; // Default gain
+
+                switch(type) {
+                    case 'correct': 
+                        oscillator.type = 'sine'; 
+                        oscillator.frequency.setValueAtTime(700, now); 
+                        gainNode.gain.setValueAtTime(initialGain, now);
+                        gainNode.gain.exponentialRampToValueAtTime(0.0001, now + 0.25); 
+                        oscillator.stop(now + 0.25); 
+                        break;
+                    case 'incorrect': 
+                        oscillator.type = 'square'; 
+                        oscillator.frequency.setValueAtTime(200, now); 
+                        gainNode.gain.setValueAtTime(initialGain, now);
+                        gainNode.gain.exponentialRampToValueAtTime(0.0001, now + 0.35); 
+                        oscillator.stop(now + 0.35); 
+                        break;
+                    case 'transition': 
+                        initialGain = 0.07;
+                        oscillator.type = 'triangle'; 
+                        oscillator.frequency.setValueAtTime(900, now); 
+                        gainNode.gain.setValueAtTime(initialGain, now); 
+                        gainNode.gain.exponentialRampToValueAtTime(0.0001, now + 0.2); 
+                        oscillator.stop(now + 0.2); 
+                        break;
+                    case 'pop': 
+                        initialGain = 0.12;
+                        oscillator.type = 'sine'; 
+                        oscillator.frequency.setValueAtTime(460, now); 
+                        gainNode.gain.setValueAtTime(initialGain, now); 
+                        gainNode.gain.exponentialRampToValueAtTime(0.0001, now + 0.15); 
+                        oscillator.stop(now + 0.15); 
+                        break;
+                    case 'titleReveal': 
+                        initialGain = 0.1;
+                        oscillator.type = 'sawtooth'; 
+                        oscillator.frequency.setValueAtTime(500, now); 
+                        gainNode.gain.setValueAtTime(initialGain, now); 
+                        gainNode.gain.exponentialRampToValueAtTime(0.0001, now + 0.4); 
+                        oscillator.stop(now + 0.4); 
+                        break;
+                    case 'openModal': 
+                        initialGain = 0.05;
+                        oscillator.type = 'sine'; 
+                        oscillator.frequency.setValueAtTime(600, now); 
+                        gainNode.gain.setValueAtTime(initialGain, now); 
+                        gainNode.gain.exponentialRampToValueAtTime(0.0001, now + 0.1); 
+                        oscillator.stop(now + 0.1); 
+                        break;
+                    case 'closeModal': 
+                        initialGain = 0.05;
+                        oscillator.type = 'sine'; 
+                        oscillator.frequency.setValueAtTime(400, now); 
+                        gainNode.gain.setValueAtTime(initialGain, now); 
+                        gainNode.gain.exponentialRampToValueAtTime(0.0001, now + 0.1); 
+                        oscillator.stop(now + 0.1); 
+                        break;
+                    default:
+                        // Handle unknown sound types gracefully
+                        console.warn("Unknown sound type in playSound:", type);
+                        // Fallback: play a very short, quiet click or nothing
+                        gainNode.gain.setValueAtTime(0.01, now); // Very quiet
+                        gainNode.gain.exponentialRampToValueAtTime(0.0001, now + 0.05);
+                        oscillator.stop(now + 0.05);
+                        return; 
+                }
+            }, delay);
+        }
+        
+        const titleFullText = "Học Từ Vựng Tiếng Anh Thông Minh";
+        const titleWords = titleFullText.split(" ");
+        
+        function animateIntroTitle() {
+            introTitleEl.innerHTML = ''; // Clear previous
+            titleWords.forEach((word, index) => {
+                const wordSpan = document.createElement('span');
+                wordSpan.textContent = word + (index < titleWords.length - 1 ? ' ' : '');
+                wordSpan.className = 'word';
+                wordSpan.style.animationDelay = `${0.5 + index * 0.2}s`; // Stagger word appearance
+                introTitleEl.appendChild(wordSpan);
+            });
+            playSound('titleReveal', 500); // Sound for title reveal
+        }
+
+
+        window.addEventListener('load', () => {
+            setupParticleCanvas();
+            particleAnimate();
+            animateIntroTitle(); // Use new title animation
+            
+            playSound('pop', 2500); 
+            playSound('pop', 2700); 
+            playSound('pop', 2900); 
+            playSound('pop', 3100); 
+        });
+        window.addEventListener('resize', () => {
+            cancelAnimationFrame(animationFrameId);
+            setupParticleCanvas();
+            particleAnimate();
+        });
+
+
+        startAppBtn.addEventListener('click', () => {
+            initAudioContext(); 
+            playSound('transition'); 
+            introScreenEl.classList.add('hidden');
+            setTimeout(() => {
+                mainAppWrapperEl.classList.add('visible');
+                introScreenEl.style.display = 'none'; 
+                cancelAnimationFrame(animationFrameId); // Stop particle animation when intro is hidden
+            }, 1200); 
+        });
+
+        processTextBtn.addEventListener('click', handleProcessText);
+        startMcQuizBtn.addEventListener('click', handleStartMcQuiz);
+        nextMcQuestionBtn.addEventListener('click', handleNextMcQuestion); 
+        // MODIFIED: finishMcQuizBtn now also calls handleNextMcQuestion to process the last answer
+        finishMcQuizBtn.addEventListener('click', handleNextMcQuestion); 
+        restartMcQuizBtn.addEventListener('click', handleStartMcQuiz);
+        submitRecallAnswerBtn.addEventListener('click', handleSubmitRecallAnswer);
+        restartRecallQuizBtn.addEventListener('click', handleStartRecallQuiz);
+        tryAgainBtn.addEventListener('click', resetAll);
+
+        // --- New Event Listeners for Modals ---
+        englishTextEl.addEventListener('dblclick', handleTextareaDoubleClick);
+        closeLookupModalBtnEl.addEventListener('click', closeWordLookupModal);
+        addToFlashcardsBtnModalEl.addEventListener('click', handleAddToFlashcardsFromModal);
+
+        confirmRemoveBtnEl.addEventListener('click', () => {
+            if (wordToRemoveFromFlashcards) {
+                const indexToRemove = vocabularyData.findIndex(item => item.word.toLowerCase() === wordToRemoveFromFlashcards.word.toLowerCase());
+                if (indexToRemove > -1) {
+                    vocabularyData.splice(indexToRemove, 1);
+                    displayFlashcards(); // Refresh flashcards
+                    updateQuizAvailability();
+                    showCustomMessage(`Đã xóa từ "${wordToRemoveFromFlashcards.word}" khỏi flashcards.`, "info");
+                }
+            }
+            closeRemoveConfirmModal();
+        });
+        cancelRemoveBtnEl.addEventListener('click', closeRemoveConfirmModal);
+
+
+        function showCustomMessage(message, type = 'info', duration = 3000) {
+            customMessageEl.textContent = message;
+            customMessageEl.className = 'message-box show'; 
+            customMessageEl.classList.add(type); 
+            setTimeout(() => {
+                customMessageEl.classList.remove('show');
+            }, duration);
+        }
+
+        function resetAll() {
+            englishTextEl.value = ''; vocabularyData = [];
+            mcQuizQuestions = []; currentMcQuestionIndex = 0; mcUserAnswers = []; mcScore = 0;
+            recallQuizQuestions = []; currentRecallQuestionIndex = 0; recallUserAnswers = []; recallScore = 0;
+
+            [translationSection, vocabularySection, mcQuizSection, recallQuizSection, syllabificationSection, resultsSection, 
+             startMcQuizBtn, nextMcQuestionBtn, finishMcQuizBtn, restartMcQuizBtn, 
+             submitRecallAnswerBtn, restartRecallQuizBtn, srsSuggestionEl
+            ].forEach(el => { if(el) el.classList.add('hidden')});
+            
+            if(flashcardListEl) flashcardListEl.innerHTML = '<p class="text-gray-500 col-span-full">Chưa có từ vựng nào. Hãy nhập văn bản và nhấn "Xử lý" hoặc nhấn đúp vào từ để thêm.</p>';
+            if(mcQuizContentEl) mcQuizContentEl.innerHTML = '<p class="text-gray-500">Hãy bắt đầu quiz để xem câu hỏi.</p>';
+            if(recallQuizContentEl) recallQuizContentEl.innerHTML = '<p class="text-gray-500">Hãy bắt đầu recall quiz để xem câu hỏi.</p>';
+            if(syllabificationListEl) syllabificationListEl.innerHTML = '<p class="text-gray-500">Thông tin âm tiết sẽ xuất hiện ở đây sau khi hoàn thành các phần quiz.</p>';
+            if(translatedTextContainerEl) translatedTextContainerEl.textContent = 'Nội dung dịch sẽ xuất hiện ở đây...';
+            if(mcQuizResultAreaEl) mcQuizResultAreaEl.classList.add('hidden');
+            if(recallQuizResultAreaEl) recallQuizResultAreaEl.classList.add('hidden');
+            if(overallScoreAreaEl) overallScoreAreaEl.classList.add('hidden');
+            if(reviewMcAnswersEl) reviewMcAnswersEl.innerHTML = '';
+            if(reviewRecallAnswersEl) reviewRecallAnswersEl.innerHTML = '';
+            if(recallAnswerFeedbackEl) recallAnswerFeedbackEl.innerHTML = ''; 
+            if (mainAppWrapperEl.classList.contains('visible')) {
+                showCustomMessage("Đã đặt lại. Bạn có thể nhập văn bản mới.", "info");
+            }
+            if(englishTextEl) englishTextEl.focus();
+            updateQuizAvailability(); // Ensure quiz buttons are correctly hidden/shown
+        }
+        
+        function handleProcessText() {
+            const text = englishTextEl.value.trim();
+            if (!text) { showCustomMessage("Vui lòng nhập đoạn văn bản tiếng Anh.", "error"); return; }
+            showCustomMessage("Đang xử lý văn bản...", "info");
+            const currentText = englishTextEl.value; // Save current text before resetAll clears it
+            resetAll(); 
+            englishTextEl.value = currentText; // Restore text
+            if (!mainAppWrapperEl.classList.contains('visible')) mainAppWrapperEl.classList.add('visible');
+
+            setTimeout(() => {
+                translatedTextContainerEl.textContent = simulateFullTranslation(text);
+                translationSection.classList.remove('hidden');
+                
+                // Extract words from text and try to find them in ALL_WORDS_DATABASE
+                const wordsFromText = text.toLowerCase().replace(/[^\w\s'-]/gi, '').split(/\s+/).filter(w => w.length > 2);
+                const extractedVocab = [];
+                const addedWords = new Set(); // To avoid duplicates from text processing
+
+                wordsFromText.forEach(wordKey => {
+                    if (ALL_WORDS_DATABASE[wordKey] && !addedWords.has(wordKey)) {
+                        extractedVocab.push(ALL_WORDS_DATABASE[wordKey]);
+                        addedWords.add(wordKey);
+                    }
+                });
+                
+                // If few or no words found from database, use the original simulation as a fallback
+                if (extractedVocab.length < 3 && text.toLowerCase().includes("artificial intelligence")) {
+                     vocabularyData = simulateVocabularyExtraction(text); // Original simulation
+                } else if (extractedVocab.length > 0) {
+                    vocabularyData = extractedVocab.slice(0, 8); // Limit to a reasonable number for demo
+                } else {
+                    vocabularyData = simulateVocabularyExtraction(text); // Fallback to original if nothing found
+                }
+
+
+                if (vocabularyData.length === 0) {
+                    flashcardListEl.innerHTML = '<p class="text-gray-500 col-span-full">Không tìm thấy từ vựng nổi bật trong văn bản này. Hãy thử đoạn văn khác hoặc thêm từ thủ công bằng cách nhấn đúp.</p>';
+                } else {
+                    displayFlashcards();
+                }
+                vocabularySection.classList.remove('hidden');
+                updateQuizAvailability();
+                setTimeout(() => (vocabularyData.length > 0 ? vocabularySection : translationSection).scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
+                showCustomMessage("Xử lý văn bản thành công!", "success");
+            }, 1500);
+        }
+
+        function simulateFullTranslation(text) {
+            return text.toLowerCase().includes("artificial intelligence") ? "Trí tuệ nhân tạo đang cách mạng hóa cách mọi người tương tác với công nghệ, làm cho cuộc sống dễ dàng và hiệu quả hơn. (Đây là bản dịch mô phỏng)" : `Đây là bản dịch mô phỏng cho đoạn văn của bạn: "${text.substring(0,100)}..."`;
+        }
+
+        // This function can be kept as a fallback or for specific demo cases
+        function simulateVocabularyExtraction(text) {
+            if (text.toLowerCase().includes("artificial intelligence")) {
+                return [
+                    ALL_WORDS_DATABASE["artificial"] || { word: "Artificial", phonetic: "/ˌɑːr.t̬əˈfɪʃ.əl/", type: "Tính từ", translation: "Nhân tạo", example: "This is an artificial flower.", engMeaning: "Made by people, often as a copy of something natural." },
+                    ALL_WORDS_DATABASE["intelligence"] || { word: "Intelligence", phonetic: "/ɪnˈtel.ə.dʒəns/", type: "Danh từ", translation: "Trí tuệ", example: "She is known for her high intelligence.", engMeaning: "The ability to learn, understand, and make judgments." },
+                    ALL_WORDS_DATABASE["revolutionize"] || { word: "Revolutionizing", phonetic: "/ˌrev.əˈluː.ʃən.aɪzɪŋ/", type: "Động từ", translation: "Cách mạng hóa", example: "The internet is revolutionizing communication.", engMeaning: "Completely changing something, especially an area of human activity." },
+                    ALL_WORDS_DATABASE["interact"] || { word: "Interact", phonetic: "/ˌɪn.t̬ɚˈækt/", type: "Động từ", translation: "Tương tác", example: "Students should interact more in class.", engMeaning: "To communicate with or react to." },
+                    ALL_WORDS_DATABASE["technology"] || { word: "Technology", phonetic: "/tekˈnɑː.lə.dʒi/", type: "Danh từ", translation: "Công nghệ", example: "Technology has changed our lives.", engMeaning: "The application of scientific knowledge for practical purposes." },
+                    ALL_WORDS_DATABASE["efficient"] || { word: "Efficient", phonetic: "/ɪˈfɪʃ.ənt/", type: "Tính từ", translation: "Hiệu quả", example: "This machine is very efficient.", engMeaning: "Working or operating quickly and effectively in an organized way." }
+                ].filter(Boolean); // Filter out undefined if a word isn't in ALL_WORDS_DATABASE
+            }
+            const words = text.toLowerCase().replace(/[^\w\s'-]/gi, '').split(/\s+/);
+            const uniqueWords = [...new Set(words)].filter(w => w.length > 3 && w.length < 15);
+            if (uniqueWords.length === 0) return [];
+            return uniqueWords.slice(0, Math.min(uniqueWords.length, 8)).map((wordKey, i) => {
+                const dbEntry = ALL_WORDS_DATABASE[wordKey];
+                if (dbEntry) return dbEntry;
+                // Fallback if not in DB
+                return {
+                    word: wordKey.charAt(0).toUpperCase() + wordKey.slice(1), phonetic: `/${wordKey.slice(0,3)}.../`,
+                    type: i % 4 === 0 ? "Danh từ" : (i % 4 === 1 ? "Động từ" : (i % 4 === 2 ? "Tính từ" : "Trạng từ")),
+                    translation: `Nghĩa của ${wordKey}`, example: `This is an example for ${wordKey}.`,
+                    engMeaning: `English definition for ${wordKey}. (Simulated)`
+                };
+            });
+        }
+        
+
+        function displayFlashcards() {
+            flashcardListEl.innerHTML = '';
+            if (vocabularyData.length === 0) {
+                flashcardListEl.innerHTML = '<p class="text-gray-500 col-span-full">Chưa có từ vựng nào. Hãy nhập văn bản và nhấn "Xử lý" hoặc nhấn đúp vào từ để thêm.</p>';
+                updateQuizAvailability();
+                return;
+            }
+            vocabularyData.forEach(item => {
+                const cardDiv = document.createElement('div'); cardDiv.className = 'flashcard';
+                cardDiv.innerHTML = `
+                    <div class="flashcard-inner">
+                        <div class="flashcard-front">
+                            <h3 class="text-2xl font-bold text-indigo-700 mb-1">${item.word}</h3>
+                            <p class="text-sm text-gray-500 mb-2 font-mono">${item.phonetic || 'N/A'}</p>
+                            <button class="btn-speaker" data-word="${item.word}" title="Phát âm">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-volume-2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+                            </button>
+                            <p class="mt-3 text-xs text-gray-400">(Nhấn để xem nghĩa)</p>
+                        </div>
+                        <div class="flashcard-back">
+                            <h4 class="text-xl font-semibold mb-1">${item.translation}</h4>
+                            <p class="text-md opacity-80">(${item.type || 'N/A'})</p>
+                            <p class="text-sm italic mt-2 opacity-70">${item.example || 'No example available.'}</p>
+                        </div>
+                    </div>
+                    <button class="btn-remove-flashcard" data-word="${item.word}" title="Xóa khỏi flashcards">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-trash-2"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>
+                    </button>
+                `;
+                cardDiv.addEventListener('click', (e) => {
+                    if (!e.target.closest('.btn-speaker') && !e.target.closest('.btn-remove-flashcard')) {
+                         cardDiv.classList.toggle('flipped');
+                    }
+                });
+                cardDiv.querySelector('.btn-speaker').addEventListener('click', (e) => { e.stopPropagation(); speakWord(item.word); });
+                cardDiv.querySelector('.btn-remove-flashcard').addEventListener('click', (e) => { 
+                    e.stopPropagation(); 
+                    handleRemoveFlashcard(item); 
+                });
+                flashcardListEl.appendChild(cardDiv);
+            });
+            updateQuizAvailability();
+        }
+
+        function updateQuizAvailability() {
+            const hasEnoughVocabForQuiz = vocabularyData.length >= 2;
+            startMcQuizBtn.classList.toggle('hidden', !hasEnoughVocabForQuiz);
+            // Recall quiz can start with 1 word
+            // Syllabification also depends on vocabData
+        }
+        
+        function speakWord(word) {
+            if (!word || !synth) return;
+            if (synth.speaking) synth.cancel(); 
+            const utterThis = new SpeechSynthesisUtterance(word); utterThis.lang = 'en-US';
+            utterThis.onerror = (event) => { console.error('SpeechSynthesisUtterance.onerror', event); showCustomMessage('Lỗi phát âm.', 'error'); }
+            synth.speak(utterThis);
+        }
+
+        function handleStartMcQuiz() {
+            if (vocabularyData.length < 2) { showCustomMessage("Cần ít nhất 2 từ vựng để bắt đầu quiz trắc nghiệm.", "error"); return; }
+            mcQuizQuestions = generateMcQuizQuestions(vocabularyData);
+            if (mcQuizQuestions.length === 0) { showCustomMessage("Không thể tạo quiz.", "error"); return; }
+            currentMcQuestionIndex = 0; mcScore = 0; mcUserAnswers = [];
+            mcQuizSection.classList.remove('hidden');
+            [recallQuizSection, resultsSection, syllabificationSection].forEach(el => el.classList.add('hidden'));
+            displayMcQuizQuestion();
+            mcQuizSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            showCustomMessage("Quiz Trắc Nghiệm bắt đầu!", "info");
+        }
+
+        function generateMcQuizQuestions(vocabArray) { 
+            if (vocabArray.length < 1) return [];
+            return vocabArray.map(item => {
+                const correctAnswer = item.translation; let options = [correctAnswer];
+                const otherTranslations = vocabArray.filter(v => v.translation !== correctAnswer).map(v => v.translation);
+                const shuffledWrongAnswers = otherTranslations.sort(() => 0.5 - Math.random());
+                for (let i = 0; i < Math.min(3, shuffledWrongAnswers.length); i++) { if (options.length < 4 && !options.includes(shuffledWrongAnswers[i])) options.push(shuffledWrongAnswers[i]); }
+                while (options.length < Math.min(4, vocabArray.length + (vocabArray.length > 1 ? 0:1) )) { const genericWrongOption = `Một nghĩa không đúng ${options.length + Math.floor(Math.random()*10)}`; if (!options.includes(genericWrongOption)) options.push(genericWrongOption); }
+                return { questionText: `Từ Tiếng Anh "<span class="font-semibold text-indigo-600">${item.word}</span>" có nghĩa Tiếng Việt là gì?`, word: item.word, options: options.sort(() => 0.5 - Math.random()), correctAnswer };
+            }).filter(q => q.options.length > 1 || vocabArray.length === 1); // Allow quiz for 1 word if that's all there is (options will be limited)
+        }
+
+        function displayMcQuizQuestion() { 
+            if (currentMcQuestionIndex >= mcQuizQuestions.length) { concludeMcQuiz(); return; }
+            const question = mcQuizQuestions[currentMcQuestionIndex];
+            totalMcQuestionsNumEl.textContent = mcQuizQuestions.length; currentMcQuestionNumEl.textContent = currentMcQuestionIndex + 1;
+            mcQuizContentEl.innerHTML = `<p class="text-lg font-medium mb-5">${question.questionText}</p><div id="optionsContainer" class="space-y-2">${question.options.map((option, index) => `<label class="quiz-option" for="mc_option${index}" data-value="${option}"><input type="radio" name="mcQuizOption" id="mc_option${index}" value="${option}" class="sr-only">${option}</label>`).join('')}</div>`;
+            mcQuizContentEl.querySelectorAll('.quiz-option').forEach(label => { label.addEventListener('click', function() { mcQuizContentEl.querySelectorAll('.quiz-option.selected').forEach(sel => sel.classList.remove('selected')); this.classList.add('selected'); }); });
+            nextMcQuestionBtn.classList.toggle('hidden', currentMcQuestionIndex === mcQuizQuestions.length - 1);
+            finishMcQuizBtn.classList.toggle('hidden', currentMcQuestionIndex !== mcQuizQuestions.length - 1);
+            restartMcQuizBtn.classList.remove('hidden');
+            speakWord(question.word);
+        }
+
+        function handleNextMcQuestion() { 
+            const selectedLabel = mcQuizContentEl.querySelector('.quiz-option.selected');
+            if (selectedLabel) {
+                processMcAnswer(selectedLabel.dataset.value);
+            } else {
+                // If it's the finish button that triggered this (because it now calls handleNextMcQuestion)
+                // and no answer is selected for the last question, we might still want to conclude.
+                // However, for consistency, let's require an answer.
+                showCustomMessage("Vui lòng chọn một đáp án.", "error");
+            }
+        }
+
+        function processMcAnswer(selectedAnswer) { 
+            const question = mcQuizQuestions[currentMcQuestionIndex]; const isCorrect = selectedAnswer === question.correctAnswer;
+            if (isCorrect) { mcScore++; playSound('correct'); } else { playSound('incorrect'); }
+            mcUserAnswers.push({ questionText: question.questionText, word: question.word, userAnswer: selectedAnswer, correctAnswer: question.correctAnswer, isCorrect });
+            mcQuizContentEl.querySelectorAll('.quiz-option').forEach(label => { label.style.pointerEvents = 'none'; if (label.dataset.value === question.correctAnswer) label.classList.add('correct'); else if (label.dataset.value === selectedAnswer && !isCorrect) label.classList.add('incorrect'); });
+            nextMcQuestionBtn.disabled = true; finishMcQuizBtn.disabled = true;
+            setTimeout(() => { 
+                nextMcQuestionBtn.disabled = false; 
+                finishMcQuizBtn.disabled = false; 
+                currentMcQuestionIndex++; 
+                if (currentMcQuestionIndex < mcQuizQuestions.length) {
+                    displayMcQuizQuestion(); 
+                } else {
+                    concludeMcQuiz(); 
+                }
+            }, 1500);
+        }
+        
+        function concludeMcQuiz() { 
+            mcQuizSection.classList.add('hidden'); 
+            showCustomMessage("Hoàn thành Quiz Trắc Nghiệm! Chuẩn bị cho Recall Quiz.", "success", 2000);
+            if (vocabularyData.length > 0) {
+                setTimeout(handleStartRecallQuiz, 2000); 
+            } else {
+                showFinalResults(); 
+            }
+        }
+
+        function handleStartRecallQuiz() { 
+            if (vocabularyData.length < 1) { showCustomMessage("Cần ít nhất 1 từ vựng để bắt đầu recall quiz.", "error"); if (mcUserAnswers.length > 0) showFinalResults(); return; }
+            recallQuizQuestions = generateRecallQuizQuestions(vocabularyData);
+            if (recallQuizQuestions.length === 0) { showCustomMessage("Không thể tạo recall quiz.", "error"); if (mcUserAnswers.length > 0) showFinalResults(); return; }
+            currentRecallQuestionIndex = 0; recallScore = 0; recallUserAnswers = [];
+            recallQuizSection.classList.remove('hidden');
+            [mcQuizSection, resultsSection, syllabificationSection].forEach(el => el.classList.add('hidden'));
+            displayRecallQuizQuestion();
+            recallQuizSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            showCustomMessage("Recall Quiz bắt đầu!", "info");
+        }
+
+        function generateRecallQuizQuestions(vocabArray) { 
+            return vocabArray.map(item => ({ questionText: `Nghĩa Tiếng Việt là "<span class="font-semibold text-indigo-600">${item.translation}</span>". Từ Tiếng Anh tương ứng là gì?`, vietnameseMeaning: item.translation, correctAnswerWord: item.word }));
+        }
+
+        function displayRecallQuizQuestion() { 
+            recallAnswerFeedbackEl.innerHTML = ''; submitRecallAnswerBtn.classList.remove('hidden'); submitRecallAnswerBtn.disabled = false; 
+            if (currentRecallQuestionIndex >= recallQuizQuestions.length) { concludeRecallQuiz(); return; }
+            const question = recallQuizQuestions[currentRecallQuestionIndex];
+            totalRecallQuestionsNumEl.textContent = recallQuizQuestions.length; currentRecallQuestionNumEl.textContent = currentRecallQuestionIndex + 1;
+            recallQuizContentEl.innerHTML = `<p class="text-lg font-medium mb-3">${question.questionText}</p><input type="text" id="englishWordInput" placeholder="Nhập từ Tiếng Anh..." class="w-full p-2 border border-gray-300 rounded-md">`;
+            const inputField = recallQuizContentEl.querySelector('#englishWordInput'); inputField.focus();
+            inputField.addEventListener('keypress', function(event) { if (event.key === 'Enter') { event.preventDefault(); if(!submitRecallAnswerBtn.disabled) handleSubmitRecallAnswer(); } });
+            restartRecallQuizBtn.classList.remove('hidden');
+        }
+
+        function handleSubmitRecallAnswer() { 
+            const englishWordInputEl = recallQuizContentEl.querySelector('#englishWordInput'); const userAnswer = englishWordInputEl.value.trim();
+            if (!userAnswer) { showCustomMessage("Vui lòng nhập câu trả lời.", "error"); return; }
+            submitRecallAnswerBtn.disabled = true; processRecallAnswer(userAnswer, englishWordInputEl);
+        }
+
+        function processRecallAnswer(userAnswer, inputElement) { 
+            const question = recallQuizQuestions[currentRecallQuestionIndex]; const isCorrect = userAnswer.toLowerCase() === question.correctAnswerWord.toLowerCase();
+            inputElement.disabled = true; 
+            if (isCorrect) { recallScore++; inputElement.classList.add('correct-answer'); inputElement.classList.remove('incorrect-answer'); recallAnswerFeedbackEl.innerHTML = `<p class="text-green-600 font-semibold mt-2">Chính xác!</p>`; playSound('correct'); }
+            else { inputElement.classList.add('incorrect-answer'); inputElement.classList.remove('correct-answer'); recallAnswerFeedbackEl.innerHTML = `<p class="text-red-600 font-semibold mt-2">Không đúng. Từ đúng là: <strong class="text-green-700">${question.correctAnswerWord}</strong></p>`; playSound('incorrect'); }
+            speakWord(question.correctAnswerWord); 
+            recallUserAnswers.push({ questionText: question.questionText, vietnameseMeaning: question.vietnameseMeaning, userAnswerWord: userAnswer, correctAnswerWord: question.correctAnswerWord, isCorrect });
+            setTimeout(() => { currentRecallQuestionIndex++; if (currentRecallQuestionIndex < recallQuizQuestions.length) displayRecallQuizQuestion(); else concludeRecallQuiz(); }, 2000); 
+        }
+        
+        function concludeRecallQuiz() { 
+            recallQuizSection.classList.add('hidden'); showCustomMessage("Hoàn thành Recall Quiz!", "success", 1500);
+            setTimeout(() => { displaySyllabification(); showFinalResults(); }, 1500);
+        }
+
+        function displaySyllabification() { 
+            syllabificationListEl.innerHTML = ''; if (vocabularyData.length === 0) { syllabificationListEl.innerHTML = '<p class="text-gray-500">Không có từ vựng.</p>'; return; }
+            vocabularyData.forEach(item => { const syllables = simulateSyllabify(item.word); const div = document.createElement('div'); div.className = 'syllable-item';
+                div.innerHTML = `<h4 class="text-lg font-semibold text-indigo-600">${item.word}</h4><p class="text-md text-gray-700 syllable-word my-1"><strong>Âm tiết:</strong> ${syllables.map(s => `<span>${s}</span>`).join('')}</p><p class="text-sm text-gray-600"><strong>Nghĩa TV:</strong> ${item.translation}</p><p class="text-sm text-gray-600"><strong>English Definition:</strong> ${item.engMeaning || 'Not available'}</p>`;
+                syllabificationListEl.appendChild(div); });
+            syllabificationSection.classList.remove('hidden'); syllabificationSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        function simulateSyllabify(word) { 
+            if (!word) return ['N/A'];
+            if (word.length <= 4) return [word]; if (word.toLowerCase() === "artificial") return ["Ar", "ti", "fi", "cial"]; if (word.toLowerCase() === "intelligence") return ["In", "tel", "li", "gence"]; if (word.toLowerCase() === "revolutionizing") return ["Rev", "o", "lu", "tion", "iz", "ing"]; const vowels = "aeiouAEIOU"; let syllables = []; let currentSyllable = ""; for (let char of word) { currentSyllable += char; if (vowels.includes(char) && currentSyllable.length > 1) { if (syllables.length < 4) { syllables.push(currentSyllable); currentSyllable = ""; } } } if (currentSyllable) syllables.push(currentSyllable); return syllables.length > 0 ? syllables : [word];
+        }
+
+        function showFinalResults() { 
+            resultsSection.classList.remove('hidden'); reviewMcAnswersEl.innerHTML = ''; reviewRecallAnswersEl.innerHTML = ''; let totalCorrect = 0; let totalQuestions = 0; let anyMistakes = false;
+            if (mcQuizQuestions.length > 0 && mcUserAnswers.length > 0) { // Ensure there are answers to review
+                mcQuizResultAreaEl.classList.remove('hidden'); 
+                const mcPercentage = mcQuizQuestions.length > 0 ? (mcScore / mcQuizQuestions.length * 100) : 0; 
+                mcQuizScoreEl.innerHTML = `Điểm: <span class="font-bold ${mcPercentage >= 70 ? 'text-green-600' : (mcPercentage >=40 ? 'text-yellow-600' : 'text-red-600')}">${mcScore}/${mcQuizQuestions.length}</span>`; 
+                mcQuizProgressBarEl.style.width = `${mcPercentage.toFixed(0)}%`; 
+                mcQuizProgressBarEl.textContent = `${mcPercentage.toFixed(0)}%`; 
+                mcQuizProgressBarEl.style.backgroundColor = mcPercentage < 40 ? '#f87171' : (mcPercentage < 70 ? '#facc15' : '#4ade80'); 
+                totalCorrect += mcScore; 
+                totalQuestions += mcQuizQuestions.length; 
+                if (mcScore < mcQuizQuestions.length) anyMistakes = true; 
+                
+                const mcReviewTitle = document.createElement('h5'); 
+                mcReviewTitle.className = 'text-md font-semibold mb-1 text-gray-600'; 
+                mcReviewTitle.textContent = 'Quiz Trắc Nghiệm:'; 
+                reviewMcAnswersEl.appendChild(mcReviewTitle); 
+                
+                mcUserAnswers.forEach((ans, index) => { 
+                    const reviewDiv = document.createElement('div'); 
+                    const questionDisplay = ans.questionText.replace(/<span class="font-semibold text-indigo-600">/g, '').replace(/<\/span>/g, ''); 
+                    reviewDiv.className = `p-2 rounded-md text-xs ${ans.isCorrect ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'} border`; 
+                    reviewDiv.innerHTML = `<p class="font-medium text-gray-800">${index + 1}. ${questionDisplay}</p><p class="mt-1">Bạn chọn: <span class="${ans.isCorrect ? 'text-green-700 font-semibold' : 'text-red-700 font-semibold'}">${ans.userAnswer}</span>${!ans.isCorrect ? `<span class="text-gray-500 ml-2">(Đáp án đúng: <strong class="text-green-700">${ans.correctAnswer}</strong>)</span>` : '<span class="text-green-600 ml-2 font-semibold">✔</span>'}</p>`; 
+                    reviewMcAnswersEl.appendChild(reviewDiv); 
+                });
+            } else { 
+                mcQuizResultAreaEl.classList.add('hidden'); 
+                // Optionally, show a message if MC quiz was available but no answers were recorded
+                if (mcQuizQuestions.length > 0 && mcUserAnswers.length === 0) {
+                    const mcReviewTitle = document.createElement('h5'); 
+                    mcReviewTitle.className = 'text-md font-semibold mb-1 text-gray-600'; 
+                    mcReviewTitle.textContent = 'Quiz Trắc Nghiệm:'; 
+                    reviewMcAnswersEl.appendChild(mcReviewTitle);
+                    const noAnswersP = document.createElement('p');
+                    noAnswersP.className = 'text-xs text-gray-500';
+                    noAnswersP.textContent = 'Không có câu trả lời nào được ghi nhận cho quiz trắc nghiệm.';
+                    reviewMcAnswersEl.appendChild(noAnswersP);
+                }
+            }
+
+            if (recallQuizQuestions.length > 0 && recallUserAnswers.length > 0) { // Ensure there are answers to review
+                recallQuizResultAreaEl.classList.remove('hidden'); 
+                const recallPercentage = recallQuizQuestions.length > 0 ? (recallScore / recallQuizQuestions.length * 100) : 0; 
+                recallQuizScoreEl.innerHTML = `Điểm: <span class="font-bold ${recallPercentage >= 70 ? 'text-green-600' : (recallPercentage >=40 ? 'text-yellow-600' : 'text-red-600')}">${recallScore}/${recallQuizQuestions.length}</span>`; 
+                recallQuizProgressBarEl.style.width = `${recallPercentage.toFixed(0)}%`; 
+                recallQuizProgressBarEl.textContent = `${recallPercentage.toFixed(0)}%`; 
+                recallQuizProgressBarEl.style.backgroundColor = recallPercentage < 40 ? '#f87171' : (recallPercentage < 70 ? '#facc15' : '#4ade80'); 
+                totalCorrect += recallScore; 
+                totalQuestions += recallQuizQuestions.length; 
+                if (recallScore < recallQuizQuestions.length) anyMistakes = true; 
+                
+                const recallReviewTitle = document.createElement('h5'); 
+                recallReviewTitle.className = 'text-md font-semibold mb-1 mt-3 text-gray-600'; 
+                recallReviewTitle.textContent = 'Recall Quiz - Đoán Từ:'; 
+                reviewRecallAnswersEl.appendChild(recallReviewTitle); 
+                
+                recallUserAnswers.forEach((ans, index) => { 
+                    const reviewDiv = document.createElement('div'); 
+                    const questionDisplay = ans.questionText.replace(/<span class="font-semibold text-indigo-600">/g, '').replace(/<\/span>/g, ''); 
+                    reviewDiv.className = `p-2 rounded-md text-xs ${ans.isCorrect ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'} border`; 
+                    reviewDiv.innerHTML = `<p class="font-medium text-gray-800">${index + 1}. ${questionDisplay}</p><p class="mt-1">Bạn nhập: "<span class="${ans.isCorrect ? 'text-green-700 font-semibold' : 'text-red-700 font-semibold'}">${ans.userAnswerWord}</span>"${!ans.isCorrect ? `<span class="text-gray-500 ml-2">(Từ đúng: <strong class="text-green-700">${ans.correctAnswerWord}</strong>)</span>` : '<span class="text-green-600 ml-2 font-semibold">✔</span>'}</p>`; 
+                    reviewRecallAnswersEl.appendChild(reviewDiv); 
+                });
+            } else { 
+                recallQuizResultAreaEl.classList.add('hidden'); 
+                 if (recallQuizQuestions.length > 0 && recallUserAnswers.length === 0) {
+                    const recallReviewTitle = document.createElement('h5'); 
+                    recallReviewTitle.className = 'text-md font-semibold mb-1 mt-3 text-gray-600'; 
+                    recallReviewTitle.textContent = 'Recall Quiz - Đoán Từ:'; 
+                    reviewRecallAnswersEl.appendChild(recallReviewTitle);
+                    const noAnswersP = document.createElement('p');
+                    noAnswersP.className = 'text-xs text-gray-500';
+                    noAnswersP.textContent = 'Không có câu trả lời nào được ghi nhận cho recall quiz.';
+                    reviewRecallAnswersEl.appendChild(noAnswersP);
+                }
+            }
+
+            if (totalQuestions > 0) { 
+                overallScoreAreaEl.classList.remove('hidden'); 
+                const totalPercentage = (totalCorrect / totalQuestions * 100); 
+                totalQuizScoreEl.innerHTML = `Điểm: <span class="font-bold ${totalPercentage >= 70 ? 'text-green-700' : (totalPercentage >=40 ? 'text-yellow-700' : 'text-red-700')}">${totalCorrect}/${totalQuestions}</span>`; 
+                totalQuizProgressBarEl.style.width = `${totalPercentage.toFixed(0)}%`; 
+                totalQuizProgressBarEl.textContent = `${totalPercentage.toFixed(0)}%`; 
+                totalQuizProgressBarEl.style.backgroundColor = totalPercentage < 40 ? '#ef4444' : (totalPercentage < 70 ? '#eab308' : '#22c55e'); 
+            } else { 
+                overallScoreAreaEl.classList.add('hidden'); 
+                if (reviewAnswersContainerEl) reviewAnswersContainerEl.innerHTML = '<p class="text-gray-500">Không có kết quả quiz để hiển thị.</p>'; 
+            }
+            srsSuggestionEl.classList.toggle('hidden', !anyMistakes || totalQuestions === 0);
+            resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            if (totalQuestions > 0) showCustomMessage("Xem kết quả tổng kết!", "success"); else showCustomMessage("Không có dữ liệu quiz.", "info");
+        }
+
+        // --- New Functions for Word Lookup and Flashcard Management ---
+
+        function getWordAtCursor(textarea, cursorPosition) {
+            const text = textarea.value;
+            let start = cursorPosition;
+            let end = cursorPosition;
+
+            // Find the start of the word
+            while (start > 0 && text[start - 1].match(/\w/)) {
+                start--;
+            }
+            // Find the end of the word
+            while (end < text.length && text[end].match(/\w/)) {
+                end++;
+            }
+            return text.substring(start, end);
+        }
+        
+        function handleTextareaDoubleClick(event) {
+            const textarea = event.target;
+            const cursorPosition = textarea.selectionStart;
+            const clickedWord = getWordAtCursor(textarea, cursorPosition).trim().toLowerCase();
+
+            if (clickedWord) {
+                const wordDetails = ALL_WORDS_DATABASE[clickedWord] || ALL_WORDS_DATABASE[clickedWord.replace(/s$/, '')] || ALL_WORDS_DATABASE[clickedWord.replace(/es$/, '')] || ALL_WORDS_DATABASE[clickedWord.replace(/ing$/, '')] || ALL_WORDS_DATABASE[clickedWord.replace(/ed$/, '')]; // Simple plural/verb form check
+                if (wordDetails) {
+                    currentLookupWordData = wordDetails; // Store for adding to flashcards
+                    openWordLookupModal(wordDetails);
+                } else {
+                    showCustomMessage(`Không tìm thấy từ "${clickedWord}" trong cơ sở dữ liệu mẫu.`, "info");
+                    currentLookupWordData = null;
+                }
+            }
+        }
+
+        function openWordLookupModal(wordData) {
+            lookupWordEl.textContent = wordData.word;
+            lookupPhoneticEl.textContent = wordData.phonetic || 'N/A';
+            lookupTypeEl.textContent = wordData.type || 'N/A';
+            lookupTranslationEl.textContent = wordData.translation || 'N/A';
+            lookupEngMeaningEl.textContent = wordData.engMeaning || 'N/A';
+            lookupExampleEl.textContent = wordData.example || 'N/A';
+
+            // Check if word is already in flashcards
+            const isInFlashcards = vocabularyData.some(item => item.word.toLowerCase() === wordData.word.toLowerCase());
+            addToFlashcardsBtnModalEl.disabled = isInFlashcards;
+            addToFlashcardsBtnModalEl.textContent = isInFlashcards ? "Đã có trong Flashcards" : "Thêm vào Flashcards";
+            
+            wordLookupModalEl.classList.remove('hidden');
+            playSound('openModal');
+        }
+
+        function closeWordLookupModal() {
+            wordLookupModalEl.classList.add('hidden');
+            currentLookupWordData = null;
+            playSound('closeModal');
+        }
+
+        function handleAddToFlashcardsFromModal() {
+            if (currentLookupWordData) {
+                const isAlreadyAdded = vocabularyData.some(item => item.word.toLowerCase() === currentLookupWordData.word.toLowerCase());
+                if (!isAlreadyAdded) {
+                    vocabularyData.push(currentLookupWordData);
+                    displayFlashcards(); // Refresh flashcards view
+                    showCustomMessage(`Đã thêm từ "${currentLookupWordData.word}" vào flashcards!`, "success");
+                    addToFlashcardsBtnModalEl.disabled = true; // Disable button after adding
+                    addToFlashcardsBtnModalEl.textContent = "Đã thêm";
+                    vocabularySection.classList.remove('hidden'); // Ensure section is visible
+                    updateQuizAvailability();
+                } else {
+                    showCustomMessage(`Từ "${currentLookupWordData.word}" đã có trong flashcards.`, "info");
+                }
+            }
+        }
+
+        function handleRemoveFlashcard(wordObject) {
+            wordToRemoveFromFlashcards = wordObject; // Store the word to be potentially removed
+            confirmRemoveWordEl.textContent = wordObject.word;
+            removeConfirmModalEl.classList.remove('hidden');
+            playSound('openModal');
+        }
+
+        function closeRemoveConfirmModal() {
+            removeConfirmModalEl.classList.add('hidden');
+            wordToRemoveFromFlashcards = null;
+            playSound('closeModal');
+        }
+
+    </script>
+</body>
+</html>
