@@ -235,16 +235,16 @@ def get_llm(provider=None):
     cohere_key = _get_setting("COHERE_API_KEY")
     if cohere_key and provider in (None, "cohere"):
         os.environ["COHERE_API_KEY"] = cohere_key
-        # Use 2026 standard model
-        return ChatCohere(model="command-a", temperature=0)
+        # Use a more stable and currently supported model (command-r)
+        return ChatCohere(model="command-r", temperature=0)
 
     if provider != "cohere" and provider != "openai":
         google_key = _get_setting("GOOGLE_API_KEY")
         if google_key and provider in (None, "google"):
             # Set environment variable for langchain
             os.environ["GOOGLE_API_KEY"] = google_key
-            # Use 2026 standard model
-            return ChatGoogleGenerativeAI(model="gemini-2.5-flash-lite", timeout=30, temperature=0)
+            # Use gemini-1.5-flash as the fallback/standard model
+            return ChatGoogleGenerativeAI(model="gemini-1.5-flash", timeout=30, temperature=0)
 
     if provider != "google" and provider != "cohere":
         openai_key = _get_setting("OPENAI_API_KEY")
@@ -272,14 +272,16 @@ def _safe_invoke(chain, params: dict, retries: int = MAX_RETRIES):
             last_error = e
             error_str = str(e).lower()
             
-            # If it's a quota/rate limit error, fallback to Cohere
-            if any(k in error_str for k in ["quota", "rate_limit", "resource_exhausted", "429", "too many requests", "503"]):
-                print(f"[LLM QUOTA] Primary LLM quota or rate limit exceeded: {e}. Falling back to Cohere...")
+            # If it's a quota/rate limit error OR an authentication/invalid key error, fallback to Cohere
+            # This is critical if the primary provider's key has expired or is invalid.
+            is_quota_error = any(k in error_str for k in ["quota", "rate_limit", "resource_exhausted", "429", "too many requests", "503"])
+            is_auth_error = any(k in error_str for k in ["api_key", "unauthorized", "forbidden", "invalid", "api key"])
+            
+            if is_quota_error or is_auth_error:
+                reason = "quota exceeded" if is_quota_error else "API key invalid/expired"
+                print(f"[LLM ERROR] Primary LLM {reason}: {e}. Falling back to Cohere...")
                 fallback_llm = get_llm(provider="cohere")
                 if fallback_llm:
-                    # We need to recreate the chain with the fallback LLM
-                    # The chain is typically a RunnableSequence (prompt | llm)
-                    # We can access the first part (prompt) from the existing chain
                     if hasattr(chain, 'first'):
                         fallback_chain = chain.first | fallback_llm
                         try:
@@ -294,14 +296,11 @@ def _safe_invoke(chain, params: dict, retries: int = MAX_RETRIES):
                 else:
                     print("[LLM FALLBACK FAILED] Cohere API key not configured or available.")
                     raise e
-                    
-            # Don't retry on auth errors
-            if any(k in error_str for k in ["api_key", "unauthorized", "forbidden", "invalid"]):
-                raise
                 
             if attempt < retries:
                 print(f"[LLM RETRY] Attempt {attempt + 1} failed: {e}. Retrying in {RETRY_DELAY}s...")
                 time.sleep(RETRY_DELAY)
+    raise last_error
                 
 async def _safe_invoke_async(chain, params: dict, retries: int = MAX_RETRIES):
     """Async version of _safe_invoke."""
@@ -316,8 +315,12 @@ async def _safe_invoke_async(chain, params: dict, retries: int = MAX_RETRIES):
         except Exception as e:
             last_error = e
             error_str = str(e).lower()
-            if any(k in error_str for k in ["quota", "rate_limit", "resource_exhausted", "429", "too many requests", "503"]):
-                print(f"[LLM QUOTA] Primary LLM quota exceeded: {e}. Falling back to Cohere...")
+            is_quota_error = any(k in error_str for k in ["quota", "rate_limit", "resource_exhausted", "429", "too many requests", "503"])
+            is_auth_error = any(k in error_str for k in ["api_key", "unauthorized", "forbidden", "invalid", "api key"])
+
+            if is_quota_error or is_auth_error:
+                reason = "quota exceeded" if is_quota_error else "API key invalid/expired"
+                print(f"[LLM ERROR] Primary LLM {reason}: {e}. Falling back to Cohere...")
                 fallback_llm = get_llm(provider="cohere")
                 if fallback_llm and hasattr(chain, 'first'):
                     fallback_chain = chain.first | fallback_llm
@@ -329,11 +332,10 @@ async def _safe_invoke_async(chain, params: dict, retries: int = MAX_RETRIES):
                         print(f"[LLM FALLBACK FAILED] Cohere also failed: {fallback_error}")
                         last_error = fallback_error
                         raise fallback_error
-            if any(k in error_str for k in ["api_key", "unauthorized", "forbidden", "invalid"]):
-                raise
             if attempt < retries:
                 await asyncio.sleep(RETRY_DELAY * (attempt + 1))
     raise last_error
+
 
 
 def generate_flashcard_content(word: str, level: str = "A1"):
@@ -774,9 +776,13 @@ async def translate_meanings_with_ai_stream(word: str, meanings: list, free_data
                     yield chunk.content
         except Exception as e:
             error_str = str(e).lower()
-            if any(k in error_str for k in ["quota", "rate_limit", "resource_exhausted", "429", "too many requests", "503", "403", "404", "forbidden", "not found"]):
+            is_quota = any(k in error_str for k in ["quota", "rate_limit", "resource_exhausted", "429", "too many requests", "503", "403", "404", "forbidden", "not found"])
+            is_auth = any(k in error_str for k in ["api_key", "unauthorized", "invalid", "api key", "expired"])
+            
+            if is_quota or is_auth:
                 if llm_name == "Primary":
-                    print(f"[LLM QUOTA] Primary LLM quota exceeded in stream. Falling back to Cohere...")
+                    reason = "quota exceeded" if is_quota else "API key invalid/expired"
+                    print(f"[LLM ERROR] Primary LLM {reason} in stream. Falling back to Cohere...")
                     fallback_llm = get_llm(provider="cohere")
                     if fallback_llm and hasattr(chain_to_use, 'first'):
                         fallback_chain = chain_to_use.first | fallback_llm
@@ -896,9 +902,12 @@ def lookup_dictionary_full_ai(word: str):
         try:
             response = _safe_invoke(chain, {"word": word})
         except Exception as e:
-            error_str = str(e).lower()
-            if any(k in error_str for k in ["quota", "rate_limit", "resource_exhausted", "429", "too many requests", "403", "404", "forbidden", "not found"]):
-                print(f"[LLM ERROR] Primary LLM error: {e}. Retrying with Cohere in lookup_full...")
+            is_quota = any(k in error_str for k in ["quota", "rate_limit", "resource_exhausted", "429", "too many requests", "403", "404", "forbidden", "not found"])
+            is_auth = any(k in error_str for k in ["api_key", "unauthorized", "invalid", "api key", "expired"])
+            
+            if is_quota or is_auth:
+                reason = "quota exceeded" if is_quota else "API key invalid/expired"
+                print(f"[LLM ERROR] Primary LLM {reason}: {e}. Retrying with Cohere in lookup_full...")
                 fallback_llm = get_llm(provider="cohere")
                 if fallback_llm:
                     chain = prompt | fallback_llm
@@ -972,9 +981,13 @@ async def lookup_dictionary_full_ai_stream(word: str):
                     yield chunk.content
         except Exception as e:
             error_str = str(e).lower()
-            if any(k in error_str for k in ["quota", "rate_limit", "resource_exhausted", "429", "too many requests", "503", "403", "404", "forbidden", "not found"]):
+            is_quota = any(k in error_str for k in ["quota", "rate_limit", "resource_exhausted", "429", "too many requests", "503", "403", "404", "forbidden", "not found"])
+            is_auth = any(k in error_str for k in ["api_key", "unauthorized", "invalid", "api key", "expired"])
+            
+            if is_quota or is_auth:
                 if llm_name == "Primary":
-                    print(f"[LLM QUOTA] Primary LLM quota exceeded in stream. Falling back to Cohere...")
+                    reason = "quota exceeded" if is_quota else "API key invalid/expired"
+                    print(f"[LLM ERROR] Primary LLM {reason} in stream. Falling back to Cohere...")
                     fallback_llm = get_llm(provider="cohere")
                     if fallback_llm and hasattr(chain_to_use, 'first'):
                         fallback_chain = chain_to_use.first | fallback_llm
