@@ -12,6 +12,17 @@ export const metadata: Metadata = {
   description: 'Nền tảng học tiếng Anh thông minh với Đồ thị Tri thức và Trí tuệ Nhân tạo',
 };
 
+if (typeof window !== 'undefined') {
+  window.addEventListener('unhandledrejection', (event) => {
+    // Suppress noisy extension-related errors that are not from the app
+    if (event.reason && event.reason.message && 
+        (event.reason.message.includes('A listener indicated an asynchronous response') ||
+         event.reason.message.includes('Could not establish connection'))) {
+      event.preventDefault();
+    }
+  });
+}
+
 export default function RootLayout({
   children,
 }: {
