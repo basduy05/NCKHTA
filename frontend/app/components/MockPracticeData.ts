@@ -118,5 +118,133 @@ Staff members interested in adjusting their schedules are required to fill out a
       "Trong TOEIC Reading Part 7, hãy luôn tìm kiếm các mốc thời gian và ngoại lệ.",
       "Chú ý đến các từ như 'except', 'however', 'starting' để tránh bị đánh lừa bởi các chi tiết."
     ]
+  },
+  {
+    id: "ielts-reading-2",
+    title: "The Mystery of the Indus Valley Civilization",
+    test_type: "IELTS",
+    skill: "reading",
+    time_limit: 20,
+    instructions: "Read the passage and choose the correct options.",
+    passage: `The Indus Valley Civilization, which flourished around 2500 BCE in what is now Pakistan and northwest India, remains one of the great enigmas of the ancient world. Known for its sophisticated urban planning and advanced drainage systems, it was a major contemporary of Mesopotamia and Egypt.
+
+One of the most striking features of Indus cities like Mohenjo-Daro and Harappa is their grid-like layout. The streets were laid out in straight lines, intersecting at right angles, a design that suggests a high degree of central planning and social organization. Each house was equipped with a bathing area and access to a remarkably efficient sewage system, featuring brick-lined drains that ran along the streets.
+
+The civilization also possessed a unique writing system, which has yet to be fully deciphered. Thousands of seals, often depicting animals and mystical creatures, have been discovered, each bearing a short inscription in the Indus script. Scholars have debated whether this script represents a complete language or simply a system of symbols used for trade and administration.
+
+Around 1900 BCE, the Indus Valley Civilization began to decline. The reasons for its eventual collapse are still debated by archaeologists. Some suggest that climate change, such as shifting river patterns or severe droughts, made agriculture unsustainable. Others point to potential invasions or internal social instability. Despite its disappearance, the legacy of the Indus Valley Civilization continues to fascinate those who study the origins of urban life.`,
+    questions: [
+      {
+        number: 1,
+        question: "What is mentioned as a 'sophisticated' feature of the Indus Valley Civilization?",
+        options: [
+          "Their artistic cave paintings",
+          "Advanced urban planning and drainage",
+          "A complex military hierarchy",
+          "Direct democracy systems"
+        ],
+        correct_answer: 1,
+        explanation: "The text highlights 'sophisticated urban planning and advanced drainage systems'."
+      },
+      {
+        number: 2,
+        question: "What is the status of the Indus writing script according to the text?",
+        options: [
+          "It is widely used in modern Pakistan",
+          "It has been fully translated by scholars",
+          "It remains undeciphered",
+          "It consists only of animal drawings without text"
+        ],
+        correct_answer: 2,
+        explanation: "The text states the script 'has yet to be fully deciphered'."
+      },
+      {
+        number: 3,
+        question: "What is a suspected cause for the civilization's decline?",
+        options: [
+          "A massive volcanic eruption",
+          "Shifting river patterns or droughts",
+          "Discovery of iron weapons",
+          "An agreement to merge with Mesopotamia"
+        ],
+        correct_answer: 1,
+        explanation: "The text mentions climate change factors like 'shifting river patterns or severe droughts'."
+      }
+    ],
+    tips: [
+      "IELTS Reading often uses synonyms. Look for words like 'decline' or 'collapse' in the text when searching for the cause of disappearance.",
+      "Scientific dates and ancient locations are key anchors for finding specific information."
+    ]
+  },
+  {
+    id: "toeic-reading-2",
+    title: "Job Advertisement: Marketing Coordinator",
+    test_type: "TOEIC",
+    skill: "reading",
+    time_limit: 15,
+    instructions: "Read the job advertisement and answer the questions.",
+    passage: `POSITION: Marketing Coordinator
+COMPANY: NexGen Tech Solutions
+LOCATION: Chicago, IL (Remote option available for experienced candidates)
+
+NexGen Tech Solutions is looking for a creative and detail-oriented Marketing Coordinator to join our growing team. The successful candidate will assist in the development and execution of marketing campaigns, manage our social media presence, and coordinate promotional events.
+
+QUALIFICATIONS:
+- Bachelor's degree in Marketing, Communications, or a related field.
+- Minimum of 2 years of experience in digital marketing or public relations.
+- Proficiency in content management systems and graphic design software (Adobe Creative Suite favored).
+- Excellent written and verbal communication skills.
+
+BENEFITS:
+- Competitive salary and performance-based bonuses.
+- Comprehensive health and dental insurance.
+- 15 days of paid time off plus national holidays.
+- Professional development budget for annual conferences.
+
+TO APPLY:
+Please send your resume and a cover letter detailing your relevant experience to careers@nexgentech.com by June 30. Only shortlisted candidates will be contacted for an initial interview via video call.`,
+    questions: [
+      {
+        number: 1,
+        question: "Who is eligible for a remote working option?",
+        options: [
+          "All new employees",
+          "Only candidates from Chicago",
+          "Experienced candidates",
+          "Interns and fresh graduates"
+        ],
+        correct_answer: 2,
+        explanation: "The ad states: 'Remote option available for experienced candidates'."
+      },
+      {
+        number: 2,
+        question: "Which skill is specifically mentioned as 'favored'?",
+        options: [
+          "Public speaking",
+          "Adobe Creative Suite",
+          "Foreign language proficiency",
+          "Project management certification"
+        ],
+        correct_answer: 1,
+        explanation: "The ad mentions: 'Adobe Creative Suite favored'."
+      },
+      {
+        number: 3,
+        question: "What is the deadline for applications?",
+        options: [
+          "May 15",
+          "June 1",
+          "June 30",
+          "July 4"
+        ],
+        correct_answer: 2,
+        explanation: "The text asks to send resumes 'by June 30'."
+      }
+    ],
+    tips: [
+      "Job ads in TOEIC focus on qualifications and benefits. Scan these headings quickly.",
+      "Check the 'To Apply' section for deadlines and specific submission requirements."
+    ]
   }
 ];
+

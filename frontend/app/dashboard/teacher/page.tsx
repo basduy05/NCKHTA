@@ -7,9 +7,11 @@ import {
   FileText, Upload, Download, ClipboardList, Sparkles, Brain,
   BarChart3, UserPlus, UserMinus, ChevronDown, ChevronUp, Eye,
   Search, Volume2, ArrowRight, Bookmark, Network, Terminal, AlertCircle, BookText, 
-  BrainCircuit, Headphones, Edit3, Lightbulb, Trophy, PlayCircle, Layers, CheckCircle2
+  BrainCircuit, Headphones, Edit3, Lightbulb, Trophy, PlayCircle, Layers, CheckCircle2,
+  LayoutDashboard, Award, XCircle
 } from "lucide-react";
-import { ALL_WORDS_DATABASE, WordDetail } from "../../components/DictionaryData";
+import { ALL_WORDS_DATABASE, simulateSyllabify, WordDetail } from "../../components/DictionaryData";
+import { MOCK_PRACTICE_TESTS } from "../../components/MockPracticeData";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://iedu-ksk7.onrender.com";
 
@@ -118,6 +120,8 @@ function TeacherDashboardContent() {
             {activeTab === "assignments" && "Bài tập & Kiểm tra"}
             {activeTab === "ai-tools" && "Công cụ AI Premium"}
             {activeTab === "grammar" && "Kho Ngữ Pháp"}
+            {activeTab === "practice" && "Luyện thi IELTS/TOEIC"}
+            {activeTab === "ipa" && "Luyện phát âm IPA"}
           </h1>
           <p className="text-gray-500 text-sm mt-1">Xin chào, <span className="font-semibold text-indigo-600">{user?.name}</span> (Giáo viên)</p>
         </div>
@@ -207,6 +211,8 @@ function TeacherDashboardContent() {
       {activeTab === "assignments" && <AssignmentsTab handleTextareaDoubleClick={handleTextareaDoubleClick} />}
       {activeTab === "ai-tools" && <AIToolsTab setShowCreditModal={setShowCreditModal} handleTextareaDoubleClick={handleTextareaDoubleClick} />}
       {activeTab === "grammar" && <GrammarTab />}
+      {activeTab === "practice" && <PracticeTab setShowCreditModal={setShowCreditModal} />}
+      {activeTab === "ipa" && <IpaTab />}
     </div>
   );
 }
@@ -1076,6 +1082,16 @@ function AIToolsTab({ setShowCreditModal, handleTextareaDoubleClick }: { setShow
   const [quizResult, setQuizResult] = useState<any[]>([]);
   const [activeAI, setActiveAI] = useState<"vocab" | "quiz" | "dict" | "graph">("vocab");
   const [currentQuizIdx, setCurrentQuizIdx] = useState(0);
+  
+  // Flashcard & Recall Quiz states
+  const [flippedWord, setFlippedWord] = useState<number | null>(null);
+  const [currentCardIdx, setCurrentCardIdx] = useState(0);
+  const [recallAnswers, setRecallAnswers] = useState<Record<number, string>>({});
+  const [recallSubmitted, setRecallSubmitted] = useState(false);
+  const [showRecallQuiz, setShowRecallQuiz] = useState(false);
+  const [quizAnswers, setQuizAnswers] = useState<Record<number, number>>({});
+  const [quizSubmitted, setQuizSubmitted] = useState(false);
+  const [quizScore, setQuizScore] = useState(0);
 
   // Dictionary state
   const [dictWord, setDictWord] = useState("");
@@ -1101,7 +1117,7 @@ function AIToolsTab({ setShowCreditModal, handleTextareaDoubleClick }: { setShow
   const handleExtractVocab = async () => {
     if (!text.trim()) return;
     if (user && user.credits_ai <= 0) { setShowCreditModal(true); return; }
-    setLoading(true); setVocabResult([]);
+    setLoading(true); setVocabResult([]); setQuizResult([]); setFlippedWord(null); setCurrentCardIdx(0); setRecallSubmitted(false); setRecallAnswers({}); setQuizSubmitted(false); setQuizAnswers({}); setQuizScore(0);
     try {
       const formData = new FormData();
       formData.append("text", text);
@@ -1120,7 +1136,7 @@ function AIToolsTab({ setShowCreditModal, handleTextareaDoubleClick }: { setShow
   const handleGenerateQuiz = async () => {
     if (!text.trim()) return;
     if (user && user.credits_ai <= 0) { setShowCreditModal(true); return; }
-    setLoading(true); setQuizResult([]); setCurrentQuizIdx(0);
+    setLoading(true); setQuizResult([]); setCurrentQuizIdx(0); setQuizSubmitted(false); setQuizAnswers({}); setQuizScore(0);
     try {
       const formData = new FormData();
       formData.append("text", text);
@@ -1140,7 +1156,7 @@ function AIToolsTab({ setShowCreditModal, handleTextareaDoubleClick }: { setShow
   const handleFileProcess = async () => {
     if (!file) return;
     if (user && user.credits_ai <= 0) { setShowCreditModal(true); return; }
-    setLoading(true); setVocabResult([]); setQuizResult([]); setCurrentQuizIdx(0);
+    setLoading(true); setVocabResult([]); setQuizResult([]); setCurrentQuizIdx(0); setFlippedWord(null); setRecallSubmitted(false); setRecallAnswers({}); setQuizSubmitted(false); setQuizAnswers({}); setQuizScore(0);
     try {
       const formData = new FormData();
       // @ts-ignore
@@ -1338,14 +1354,22 @@ function AIToolsTab({ setShowCreditModal, handleTextareaDoubleClick }: { setShow
               </button>
             </div>
             
-            <button 
-              onClick={() => inputMode === "text" ? handleExtractVocab() : handleFileProcess()}
-              disabled={loading || (inputMode === "text" ? !text.trim() : !file)}
-              className="bg-indigo-600 text-white px-8 py-3 rounded-2xl font-black text-sm flex items-center gap-2 hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-200 disabled:opacity-50 hover:scale-[1.02] active:scale-95 translate-y-0"
-            >
-              Analyze & Generate
-              <ArrowRight size={18} />
-            </button>
+            <div className="flex gap-3">
+              <button 
+                onClick={() => inputMode === "text" ? handleExtractVocab() : handleFileProcess()}
+                disabled={loading || (inputMode === "text" ? !text.trim() : !file)}
+                className="bg-indigo-600 text-white px-6 py-3 rounded-2xl font-black text-sm flex items-center gap-2 hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-200 disabled:opacity-50 hover:scale-[1.02] active:scale-95"
+              >
+                <Layers size={18} /> Extract Vocab
+              </button>
+              <button 
+                onClick={() => handleGenerateQuiz()}
+                disabled={loading || !text.trim() || inputMode === "file"}
+                className="bg-rose-500 text-white px-6 py-3 rounded-2xl font-black text-sm flex items-center gap-2 hover:bg-rose-600 transition-all shadow-xl shadow-rose-200 disabled:opacity-30 hover:scale-[1.02] active:scale-95"
+              >
+                <Brain size={18} /> Generate Quiz
+              </button>
+            </div>
           </div>
         </div>
       </section>
@@ -1370,49 +1394,206 @@ function AIToolsTab({ setShowCreditModal, handleTextareaDoubleClick }: { setShow
         })}
       </div>
 
-      {/* Flashcards Result */}
       {activeAI === "vocab" && vocabResult.length > 0 && (
-        <section className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-          <div className="flex items-center justify-between">
-            <h3 className="text-xl font-black text-gray-900 flex items-center gap-2">
-              <Layers className="text-indigo-600" size={24} />
-              Premium Flashcards
-              <span className="text-xs bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-full font-bold">{vocabResult.length} words found</span>
-            </h3>
-          </div>
-          
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {vocabResult.map((w: any, idx: number) => (
-              <div 
-                key={idx} 
-                className="bg-white p-6 rounded-[2rem] border border-indigo-50 shadow-xl shadow-indigo-100/10 hover:shadow-indigo-200/20 transition-all group border-l-8 border-l-indigo-500 hover:-translate-y-1 duration-300"
-              >
-                <div className="flex justify-between items-start mb-4">
-                  <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full uppercase tracking-widest border border-indigo-100/50">Level {w.level || 'B2'}</span>
-                  <button 
-                    onClick={() => speak(w.word)}
-                    className="w-10 h-10 bg-slate-50 rounded-xl flex items-center justify-center text-slate-400 group-hover:bg-indigo-600 group-hover:text-white transition-all shadow-sm"
-                  >
-                    <Volume2 size={20} />
-                  </button>
-                </div>
-                
-                <h3 className="text-2xl font-black text-gray-900 mb-1 group-hover:text-indigo-600 transition-colors uppercase tracking-tight">{w.word}</h3>
-                <p className="text-xs text-slate-400 font-mono mb-4 tracking-wider">{w.phonetic || w.phon || '/.../'}</p>
-                
-                <div className="pt-4 border-t border-slate-50 space-y-3">
-                  <div className="flex items-start gap-2">
-                    <div className="mt-1.5 w-1.5 h-1.5 rounded-full bg-indigo-400 shrink-0"></div>
-                    <p className="text-sm text-slate-600 leading-snug font-medium italic">"{w.meaning_en || w.english_definition || w.definition || 'No definition available'}"</p>
-                  </div>
-                  <p className="text-base text-indigo-700 font-bold ml-3.5">{w.meaning_vn || w.vietnamese_meaning || w.meaning}</p>
-                </div>
-
-                <div className="mt-5 flex gap-2">
-                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-tighter bg-slate-50 px-2 py-0.5 rounded border border-slate-100">{w.pos || w.part_of_speech || w.type || 'Noun'}</span>
-                </div>
+        <section className="space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div>
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+              <h3 className="text-xl font-black text-gray-900 flex items-center gap-2">
+                <BrainCircuit className="text-indigo-600" size={24} />
+                Flashcard Slider
+              </h3>
+              <div className="bg-indigo-50 text-indigo-700 px-4 py-1.5 rounded-xl border border-indigo-100 font-bold text-xs">
+                Card {currentCardIdx + 1} of {vocabResult.length}
               </div>
-            ))}
+            </div>
+
+            <div className="max-w-xl mx-auto relative group">
+              <button 
+                onClick={() => { setCurrentCardIdx(prev => Math.max(0, prev - 1)); setFlippedWord(null); }}
+                disabled={currentCardIdx === 0}
+                className="absolute -left-16 top-1/2 -track-y-1/2 w-12 h-12 bg-white rounded-2xl border border-gray-100 shadow-xl flex items-center justify-center text-indigo-600 hover:bg-indigo-50 transition-all disabled:opacity-0 z-20"
+                style={{ top: '50%', transform: 'translateY(-50%)' }}
+              >
+                <ChevronUp className="-rotate-90" size={24} />
+              </button>
+              <button 
+                onClick={() => { setCurrentCardIdx(prev => Math.min(vocabResult.length - 1, prev + 1)); setFlippedWord(null); }}
+                disabled={currentCardIdx === vocabResult.length - 1}
+                className="absolute -right-16 top-1/2 -track-y-1/2 w-12 h-12 bg-white rounded-2xl border border-gray-100 shadow-xl flex items-center justify-center text-indigo-600 hover:bg-indigo-50 transition-all disabled:opacity-0 z-20"
+                style={{ top: '50%', transform: 'translateY(-50%)' }}
+              >
+                <ChevronDown className="-rotate-90" size={24} />
+              </button>
+
+              <div className="perspective-1000 h-[450px]">
+                {vocabResult.map((w: any, idx: number) => {
+                  if (idx !== currentCardIdx) return null;
+                  return (
+                    <div 
+                      key={idx}
+                      onClick={() => setFlippedWord(flippedWord === idx ? null : idx)}
+                      className={`relative w-full h-full transition-all duration-700 preserve-3d cursor-pointer ${flippedWord === idx ? 'rotate-y-180' : ''}`}
+                    >
+                      {/* Front side */}
+                      <div className="absolute inset-0 backface-hidden bg-white border border-indigo-50 rounded-[3rem] shadow-2xl flex flex-col items-center justify-center p-10 transition-all hover:border-indigo-200">
+                        <div className="absolute top-8 left-10">
+                          <span className="text-[10px] font-bold text-indigo-500 bg-indigo-50 px-2.5 py-1 rounded-full uppercase tracking-widest">{w.level || 'B2'}</span>
+                        </div>
+                        <div className="w-20 h-20 bg-indigo-50 rounded-3xl flex items-center justify-center mb-6 ring-8 ring-indigo-50/50">
+                          <Sparkles className="text-indigo-600" size={32} />
+                        </div>
+                        <h4 className="text-5xl font-black text-indigo-900 mb-2 tracking-tight line-clamp-1">{w.word}</h4>
+                        <div className="flex gap-1 mb-4">
+                          {simulateSyllabify(w.word).map((s: string, i: number) => (
+                            <span key={i} className="px-3 py-1 bg-slate-50 text-slate-500 text-xs font-bold rounded-lg border border-slate-100">{s}</span>
+                          ))}
+                        </div>
+                        <div className="flex items-center gap-2 text-slate-400 font-bold text-lg mb-8">
+                           <Volume2 size={24} className="text-indigo-400" />
+                           <span>{w.phonetic || w.phon || "/.../"}</span>
+                        </div>
+                        {w.pos && <span className="text-[11px] font-bold text-purple-600 bg-purple-50 px-3 py-1.5 rounded-xl uppercase border border-purple-100/50">{w.pos}</span>}
+                      </div>
+                      
+                      {/* Back side */}
+                      <div className="absolute inset-0 backface-hidden bg-gradient-to-br from-indigo-600 to-violet-700 rounded-[3rem] shadow-2xl flex flex-col items-center justify-center p-10 rotate-y-180 text-white text-center">
+                        <span className="text-[10px] font-bold text-indigo-200 uppercase tracking-widest mb-6">Translation</span>
+                        <h4 className="text-4xl font-black mb-4 text-indigo-50">{w.meaning_vn || w.meaning}</h4>
+                        {w.meaning_en && <p className="text-indigo-100 text-lg mb-8 leading-relaxed italic line-clamp-3">"{w.meaning_en}"</p>}
+                        {w.example && (
+                          <div className="bg-white/10 p-6 rounded-2xl border border-white/10 backdrop-blur-sm mt-4">
+                            <p className="text-white text-lg italic leading-relaxed line-clamp-3">&ldquo;{w.example}&rdquo;</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              
+              <div className="mt-8 flex justify-center gap-4">
+                 <button 
+                   onClick={(e) => { e.stopPropagation(); speak(vocabResult[currentCardIdx].word); }}
+                   className="flex items-center gap-2 px-8 py-4 bg-indigo-600 text-white rounded-2xl font-bold shadow-xl shadow-indigo-200 hover:bg-indigo-700 transition transform hover:scale-105 active:scale-95"
+                 >
+                   <Volume2 size={24} /> Pronounce
+                 </button>
+                 <button 
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    const w = vocabResult[currentCardIdx];
+                    try {
+                      const res = await authFetch(`${API_URL}/student/vocabulary/save`, {
+                        method: "POST",
+                        body: JSON.stringify({ word: w.word, phonetic: w.phonetic || w.phon || "", pos: w.pos || "", meaning_en: w.meaning_en || "", meaning_vn: w.meaning_vn || w.meaning, example: w.example, level: w.level || 'B2', source: "ai-extraction" })
+                      });
+                      if (res.ok) alert(`Đã lưu "${w.word}" vào kho từ vựng!`);
+                    } catch { }
+                  }}
+                  className="w-16 h-16 bg-white border border-gray-100 text-emerald-500 rounded-2xl flex items-center justify-center hover:bg-emerald-50 transition-all shadow-xl hover:scale-105 active:scale-95"
+                 >
+                   <Bookmark size={28} />
+                 </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Syllable Breakdown Section */}
+          <div className="bg-slate-50 p-8 rounded-[3rem] border border-slate-100">
+            <h3 className="text-xl font-black text-slate-900 mb-6 flex items-center gap-3">
+              <BookText size={24} className="text-indigo-600" />
+              Syllable & Pronunciation Guide
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {vocabResult.map((w: any, idx: number) => {
+                const syllables = simulateSyllabify(w.word);
+                return (
+                  <div key={idx} className="bg-white p-5 rounded-3xl border border-slate-100 flex items-center justify-between gap-4 shadow-sm group hover:border-indigo-200 transition-all">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">{w.pos || "Vocab"}</span>
+                        <span className="px-2 py-0.5 bg-indigo-600 text-white text-[10px] font-bold rounded-lg">{w.level || "B2"}</span>
+                      </div>
+                      <h4 className="text-xl font-black text-slate-800 tracking-tight">{w.word}</h4>
+                      <div className="flex flex-wrap gap-1.5 mt-2">
+                        {syllables.map((s, i) => (
+                          <span key={i} className="px-3 py-1 bg-indigo-50 text-indigo-600 text-[10px] font-black rounded-lg border border-indigo-100/50">{s}</span>
+                        ))}
+                      </div>
+                    </div>
+                    <button onClick={() => speak(w.word)} className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center hover:bg-indigo-600 hover:text-white transition-all shadow-sm">
+                      <Volume2 size={24} />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Recall Quiz Section */}
+          <div className="bg-indigo-900 p-8 rounded-[3rem] shadow-2xl shadow-indigo-200 text-white overflow-hidden relative">
+            <div className="relative z-10 flex flex-col md:flex-row justify-between items-center gap-6 mb-8">
+              <div>
+                <h3 className="text-2xl font-black flex items-center gap-3">
+                  <Brain size={28} className="text-indigo-300" />
+                  Recall Master Challenge
+                </h3>
+                <p className="text-indigo-200 font-medium text-sm mt-1">Kiểm tra khả năng ghi nhớ nghĩa của các từ vừa trích xuất.</p>
+              </div>
+              <button 
+                onClick={() => { setShowRecallQuiz(!showRecallQuiz); setRecallAnswers({}); setRecallSubmitted(false); }}
+                className="bg-white text-indigo-900 px-8 py-3 rounded-2xl font-black text-sm shadow-xl hover:bg-indigo-50 transition-all flex items-center gap-2 hover:scale-105 active:scale-95"
+              >
+                {showRecallQuiz ? <><X size={18} /> Close Quiz</> : <><PlayCircle size={18} /> Start Recall Quiz</>}
+              </button>
+            </div>
+
+            {showRecallQuiz && (
+              <div className="space-y-4 animate-in slide-in-from-top-6 duration-500 relative z-10">
+                {vocabResult.map((w: any, idx: number) => (
+                  <div key={idx} className="bg-white/10 backdrop-blur-md border border-white/10 p-5 rounded-3xl flex flex-col md:flex-row md:items-center justify-between gap-6 transition-all hover:bg-white/15">
+                    <div className="flex-1">
+                      <span className="text-[10px] font-bold text-indigo-300 uppercase tracking-widest mb-1 block">Meaning</span>
+                      <h4 className="text-xl font-black text-white">{w.meaning_vn || w.meaning}</h4>
+                    </div>
+                    <div className="flex-[1.5] relative">
+                      <input 
+                        type="text"
+                        className={`w-full bg-white/5 border-2 px-6 py-3 rounded-2xl outline-none transition-all font-black text-lg ${
+                          recallSubmitted 
+                            ? (recallAnswers[idx]?.toLowerCase().trim() === w.word.toLowerCase().trim() ? "border-emerald-400 text-emerald-300" : "border-rose-400 text-rose-300")
+                            : "border-white/10 focus:border-indigo-400 text-white focus:bg-white/10"
+                        }`}
+                        placeholder="Type the English word..."
+                        value={recallAnswers[idx] || ""}
+                        onChange={(e) => setRecallAnswers(prev => ({ ...prev, [idx]: e.target.value }))}
+                        disabled={recallSubmitted}
+                      />
+                      {recallSubmitted && recallAnswers[idx]?.toLowerCase().trim() !== w.word.toLowerCase().trim() && (
+                        <p className="text-xs text-emerald-400 font-bold mt-2 flex items-center gap-1.5 bg-emerald-400/10 px-3 py-1 rounded-lg w-fit">
+                          <CheckCircle2 size={12} /> Correct answer: {w.word}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                
+                {!recallSubmitted && Object.keys(recallAnswers).length > 0 && (
+                  <div className="text-center mt-8">
+                    <button 
+                      onClick={() => setRecallSubmitted(true)}
+                      className="bg-indigo-400 text-white px-12 py-4 rounded-2xl font-black text-lg shadow-2xl shadow-indigo-500/50 hover:bg-indigo-300 transition-all hover:scale-105 active:scale-95"
+                    >
+                      Finish & Check Progress
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+            
+            {/* Background design elements */}
+            <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/20 rounded-full blur-3xl -mr-32 -mt-32"></div>
+            <div className="absolute bottom-0 left-0 w-48 h-48 bg-violet-600/20 rounded-full blur-3xl -ml-24 -mb-24"></div>
           </div>
         </section>
       )}
@@ -1420,19 +1601,24 @@ function AIToolsTab({ setShowCreditModal, handleTextareaDoubleClick }: { setShow
       {/* Practice Quiz Result */}
       {activeAI === "vocab" && quizResult.length > 0 && (
         <section className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pt-8 border-t border-slate-100">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <h3 className="text-xl font-black text-gray-900 flex items-center gap-2">
               <BrainCircuit className="text-rose-500" size={24} />
-              Interactive Practice
+              Interactive AI Practice
             </h3>
+            {quizSubmitted && (
+              <div className="bg-emerald-50 text-emerald-700 px-4 py-2 rounded-xl border border-emerald-100 font-bold flex items-center gap-2 animate-in zoom-in-95 duration-300">
+                <Trophy size={18} /> Score: {quizScore}/{quizResult.length}
+              </div>
+            )}
           </div>
 
-          <div className="bg-white rounded-[2.5rem] border border-rose-50 p-8 shadow-2xl shadow-rose-100/20 relative overflow-hidden">
+          <div className="bg-white rounded-[2.5rem] border border-rose-50 p-8 shadow-2xl shadow-rose-100/20 relative overflow-hidden min-h-[500px]">
              {/* Progress Bar */}
              <div className="mb-10">
                 <div className="flex justify-between items-center mb-3">
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Question {currentQuizIdx + 1} of {quizResult.length}</span>
-                  <span className="text-xs font-black text-rose-600 bg-rose-50 px-2 py-0.5 rounded-full">{Math.round(((currentQuizIdx + 1) / quizResult.length) * 100)}% Complete</span>
+                  <span className="text-xs font-black text-rose-600 bg-rose-50 px-2 py-0.5 rounded-full">{Math.round(((currentQuizIdx + 1) / quizResult.length) * 100)}% Progress</span>
                 </div>
                 <div className="h-3 w-full bg-slate-50 rounded-full p-0.5 border border-slate-100 shadow-inner">
                   <div 
@@ -1443,54 +1629,105 @@ function AIToolsTab({ setShowCreditModal, handleTextareaDoubleClick }: { setShow
               </div>
 
               {/* Question Content */}
-              <div className="min-h-[300px] flex flex-col items-center text-center">
-                 <div className="w-16 h-16 bg-rose-50 rounded-2xl flex items-center justify-center mb-6">
+              <div className="flex flex-col items-center">
+                 <div className="w-16 h-16 bg-rose-50 rounded-2xl flex items-center justify-center mb-6 ring-4 ring-rose-50/50">
                     <Lightbulb className="text-rose-500" size={32} />
                  </div>
-                 <h4 className="text-2xl font-black text-gray-900 mb-8 max-w-2xl leading-tight">
+                 <h4 className="text-2xl font-black text-gray-900 mb-10 max-w-2xl leading-tight text-center">
                     {quizResult[currentQuizIdx].question || quizResult[currentQuizIdx].q}
                  </h4>
 
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full max-w-3xl">
                     {(quizResult[currentQuizIdx].options || []).map((opt: string, i: number) => {
-                      const correctAns = quizResult[currentQuizIdx].correct_answer || quizResult[currentQuizIdx].answer;
-                      const isCorrect = opt === correctAns || i === quizResult[currentQuizIdx].ans;
+                      const isSelected = quizAnswers[currentQuizIdx] === i;
+                      const correctAnsIdx = typeof quizResult[currentQuizIdx].ans === 'number' ? quizResult[currentQuizIdx].ans : (quizResult[currentQuizIdx].options?.findIndex((o: string) => o === (quizResult[currentQuizIdx].correct_answer || quizResult[currentQuizIdx].answer)) ?? -1);
+                      const isCorrect = i === correctAnsIdx;
+                      
+                      let btnClass = "bg-slate-50 border-transparent text-slate-600 hover:border-indigo-200 hover:bg-white";
+                      if (isSelected) btnClass = "bg-indigo-50 border-indigo-500 text-indigo-900 ring-4 ring-indigo-50/50";
+                      
+                      if (quizSubmitted) {
+                        if (isCorrect) btnClass = "bg-emerald-50 border-emerald-500 text-emerald-900";
+                        else if (isSelected) btnClass = "bg-rose-50 border-rose-500 text-rose-900";
+                        else btnClass = "bg-slate-50 border-transparent text-slate-400 opacity-60";
+                      }
+
                       return (
                         <button 
                           key={i}
-                          className={`p-5 rounded-2xl border-2 transition-all font-bold text-left flex items-center justify-between group ${
-                            isCorrect ? 'bg-emerald-50 border-emerald-500 text-emerald-900' : 'bg-slate-50 border-transparent text-slate-600 hover:border-indigo-200 hover:bg-white'
-                          }`}
+                          onClick={() => !quizSubmitted && setQuizAnswers(prev => ({ ...prev, [currentQuizIdx]: i }))}
+                          className={`p-6 rounded-[1.5rem] border-2 transition-all font-bold text-left flex items-center justify-between group h-full ${btnClass}`}
                         >
                           <div className="flex items-center gap-4">
-                            <span className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm ${isCorrect ? 'bg-emerald-500 text-white' : 'bg-white text-slate-400 border border-slate-200 group-hover:border-indigo-600 group-hover:text-indigo-600'}`}>
+                            <span className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm transition-colors ${
+                              isSelected ? 'bg-indigo-500 text-white' : (quizSubmitted && isCorrect ? 'bg-emerald-500 text-white' : 'bg-white text-slate-400 border border-slate-200 group-hover:border-indigo-600 group-hover:text-indigo-600')
+                            }`}>
                               {String.fromCharCode(65 + i)}
                             </span>
-                            {opt}
+                            <span className="text-lg">{opt}</span>
                           </div>
-                          {isCorrect && <CheckCircle2 className="text-emerald-600" size={20} />}
+                          {quizSubmitted && isCorrect && <CheckCircle2 className="text-emerald-600" size={20} />}
+                          {quizSubmitted && isSelected && !isCorrect && <XCircle className="text-rose-600" size={20} />}
                         </button>
                       );
                     })}
                  </div>
 
-                 <div className="flex justify-between w-full max-w-3xl mt-12 pt-8 border-t border-slate-50">
+                 <div className="flex flex-col sm:flex-row items-center justify-between w-full max-w-3xl mt-12 pt-8 border-t border-slate-50 gap-4">
                     <button 
                       onClick={() => setCurrentQuizIdx(prev => Math.max(0, prev - 1))}
                       disabled={currentQuizIdx === 0}
-                      className="px-6 py-3 rounded-xl font-bold text-slate-400 hover:text-indigo-600 transition-colors disabled:opacity-30 disabled:hover:text-slate-400"
+                      className="px-6 py-3 rounded-xl font-bold text-slate-400 hover:text-indigo-600 transition-colors disabled:opacity-30 flex items-center gap-2"
                     >
-                      Previous
+                      <ChevronUp className="-rotate-90" size={18} /> Previous
                     </button>
-                    <button 
-                      onClick={() => setCurrentQuizIdx(prev => Math.min(quizResult.length - 1, prev + 1))}
-                      disabled={currentQuizIdx === quizResult.length - 1}
-                      className="bg-indigo-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 disabled:opacity-30"
-                    >
-                      Next Question
-                    </button>
+                    
+                    {!quizSubmitted ? (
+                      <div className="flex gap-3">
+                         {currentQuizIdx === quizResult.length - 1 ? (
+                           <button 
+                             onClick={() => {
+                               let s = 0;
+                               quizResult.forEach((q, idx) => {
+                                 const correctIdx = typeof q.ans === 'number' ? q.ans : (q.options?.findIndex((o: any) => o === (q.correct_answer || q.answer)) ?? -1);
+                                 if (quizAnswers[idx] === correctIdx) s++;
+                               });
+                               setQuizScore(s);
+                               setQuizSubmitted(true);
+                             }}
+                             disabled={Object.keys(quizAnswers).length < quizResult.length}
+                             className="bg-emerald-600 text-white px-8 py-4 rounded-[1.25rem] font-black hover:bg-emerald-700 transition-all shadow-xl shadow-emerald-100 disabled:opacity-40"
+                           >
+                             Submit & Finalize
+                           </button>
+                         ) : (
+                           <button 
+                             onClick={() => setCurrentQuizIdx(prev => Math.min(quizResult.length - 1, prev + 1))}
+                             className="bg-indigo-600 text-white px-8 py-4 rounded-[1.25rem] font-black hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-100"
+                           >
+                             Next Question
+                           </button>
+                         )}
+                      </div>
+                    ) : (
+                      <button 
+                        onClick={() => {
+                          setQuizAnswers({});
+                          setQuizSubmitted(false);
+                          setQuizScore(0);
+                          setCurrentQuizIdx(0);
+                        }}
+                        className="bg-slate-900 text-white px-10 py-4 rounded-[1.25rem] font-black hover:bg-black transition-all shadow-xl shadow-slate-200"
+                      >
+                        Try Again
+                      </button>
+                    )}
                  </div>
               </div>
+
+              {/* Decorative elements */}
+              <div className="absolute top-0 right-0 w-32 h-32 bg-rose-50 rounded-full -mr-16 -mt-16"></div>
+              <div className="absolute bottom-0 left-0 w-24 h-24 bg-indigo-50 rounded-full -ml-12 -mb-12"></div>
           </div>
         </section>
       )}
@@ -1886,4 +2123,492 @@ function GrammarTab() {
       </div>
     </div>
   )
+}
+
+// ==================== NEW: IPA DATA & TAB ====================
+const IPA_DATA = {
+  vowels: [
+    { ipa: "iː", example: "see", transcription: "siː", desc: "Long E" }, { ipa: "ɪ", example: "sit", transcription: "sɪt", desc: "Short I" },
+    { ipa: "ʊ", example: "put", transcription: "pʊt", desc: "Short U" }, { ipa: "uː", example: "two", transcription: "tuː", desc: "Long U" },
+    { ipa: "e", example: "ten", transcription: "ten", desc: "Short E" }, { ipa: "ə", example: "about", transcription: "əˈbaʊt", desc: "Schwa" },
+    { ipa: "ɜː", example: "bird", transcription: "bɜːd", desc: "Long R-colored" }, { ipa: "ɔː", example: "saw", transcription: "sɔː", desc: "Long O" },
+    { ipa: "æ", example: "cat", transcription: "kæt", desc: "Short A" }, { ipa: "ʌ", example: "cup", transcription: "kʌp", desc: "Short U" },
+    { ipa: "ɑː", example: "arm", transcription: "ɑːm", desc: "Long A" }, { ipa: "ɒ", example: "hot", transcription: "hɒt", desc: "Short O" }
+  ],
+  diphthongs: [
+    { ipa: "ɪə", example: "near", transcription: "nɪə", desc: "Ear" }, { ipa: "eɪ", example: "day", transcription: "deɪ", desc: "A" },
+    { ipa: "ʊə", example: "tour", transcription: "tʊə", desc: "Ure" }, { ipa: "ɔɪ", example: "boy", transcription: "bɔɪ", desc: "Oy" },
+    { ipa: "əʊ", example: "go", transcription: "gəʊ", desc: "Oh" }, { ipa: "eə", example: "hair", transcription: "heə", desc: "Air" },
+    { ipa: "aɪ", example: "my", transcription: "maɪ", desc: "Eye" }, { ipa: "aʊ", example: "how", transcription: "haʊ", desc: "Ow" }
+  ],
+  consonants: [
+    { ipa: "p", example: "pen", transcription: "pen", desc: "Voiceless bilabial" }, { ipa: "b", example: "bad", transcription: "bæd", desc: "Voiced bilabial" },
+    { ipa: "t", example: "tea", transcription: "tiː", desc: "Voiceless alveolar" }, { ipa: "d", example: "did", transcription: "dɪd", desc: "Voiced alveolar" },
+    { ipa: "tʃ", example: "chain", transcription: "tʃeɪn", desc: "Voiceless affricate" }, { ipa: "dʒ", example: "jam", transcription: "dʒæm", desc: "Voiced affricate" },
+    { ipa: "k", example: "cat", transcription: "kæt", desc: "Voiceless velar" }, { ipa: "g", example: "get", transcription: "get", desc: "Voiced velar" },
+    { ipa: "f", example: "fall", transcription: "fɔːl", desc: "Voiceless labiodental" }, { ipa: "v", example: "van", transcription: "væn", desc: "Voiced labiodental" },
+    { ipa: "θ", example: "thin", transcription: "θɪn", desc: "Voiceless dental" }, { ipa: "ð", example: "this", transcription: "ðɪs", desc: "Voiced dental" },
+    { ipa: "s", example: "see", transcription: "siː", desc: "Voiceless alveolar" }, { ipa: "z", example: "zoo", transcription: "zuː", desc: "Voiced alveolar" },
+    { ipa: "ʃ", example: "shoe", transcription: "ʃuː", desc: "Voiceless palatal" }, { ipa: "ʒ", example: "vision", transcription: "ˈvɪʒ.ən", desc: "Voiced palatal" },
+    { ipa: "m", example: "man", transcription: "mæn", desc: "Bilabial nasal" }, { ipa: "n", example: "now", transcription: "naʊ", desc: "Alveolar nasal" },
+    { ipa: "ŋ", example: "sing", transcription: "sɪŋ", desc: "Velar nasal" }, { ipa: "h", example: "hat", transcription: "hæt", desc: "Glottal fricative" },
+    { ipa: "l", example: "leg", transcription: "leg", desc: "Lateral approximant" }, { ipa: "r", example: "red", transcription: "red", desc: "Alveolar approximant" },
+    { ipa: "w", example: "wet", transcription: "wet", desc: "Labio-velar" }, { ipa: "j", example: "yes", transcription: "jes", desc: "Palatal approximant" }
+  ]
+};
+
+function IpaTab() {
+  const { authFetch, refreshUser } = useAuth();
+  const [focus, setFocus] = useState("vowels");
+  const [loading, setLoading] = useState(false);
+  const [lesson, setLesson] = useState<any>(null);
+  const [quizAnswers, setQuizAnswers] = useState<Record<number, number>>({});
+  const [quizSubmitted, setQuizSubmitted] = useState(false);
+  const [quizScore, setQuizScore] = useState(0);
+
+  const generateLesson = async () => {
+    setLoading(true);
+    setLesson(null);
+    setQuizAnswers({});
+    setQuizSubmitted(false);
+    setQuizScore(0);
+    try {
+      const res = await authFetch(`${API_URL}/student/ipa/generate`, {
+        method: "POST",
+        body: JSON.stringify({ focus })
+      });
+      
+      if (!res.ok) throw new Error("API Error");
+
+      const reader = res.body?.getReader();
+      const decoder = new TextDecoder();
+      let done = false;
+      let buffer = "";
+      let finalData: any = {};
+
+      while (reader && !done) {
+        const { value, done: readerDone } = await reader.read();
+        done = readerDone;
+        if (value) {
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || "";
+
+          for (const line of lines) {
+            let rawJson = line.trim();
+            if (rawJson.startsWith("data: ")) rawJson = rawJson.replace("data: ", "");
+            if (rawJson === "[DONE]" || !rawJson) continue;
+
+            try {
+              const chunkData = JSON.parse(rawJson);
+              if (chunkData.status === "success" || !chunkData.status) {
+                finalData = { ...finalData, ...chunkData };
+              }
+            } catch (e) { }
+          }
+        }
+      }
+      refreshUser();
+      setLesson(finalData);
+    } catch (e) {
+      alert("Lỗi khi tạo bài học IPA");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const speak = (word: string) => {
+    if (typeof window !== "undefined" && window.speechSynthesis) {
+      const u = new SpeechSynthesisUtterance(word);
+      u.lang = "en-US";
+      window.speechSynthesis.speak(u);
+    }
+  };
+
+  const submitQuiz = () => {
+    if (Object.keys(quizAnswers).length === 0) {
+      alert("Vui lòng trả lời ít nhất một câu hỏi!");
+      return;
+    }
+    let correct = 0;
+    lesson.quiz?.forEach((q: any, idx: number) => {
+      if (quizAnswers[idx] === q.correct_answer || quizAnswers[idx] === q.ans) correct++;
+    });
+    setQuizScore(correct);
+    setQuizSubmitted(true);
+  };
+
+  return (
+    <div className="space-y-8">
+      <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
+        <h2 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
+          <BookOpen className="text-blue-500" /> Bảng phiên âm quốc tế (44 âm IPA)
+        </h2>
+
+        {/* Vowels */}
+        <h3 className="text-lg font-bold text-gray-700 mb-4 border-l-4 border-blue-500 pl-3">Nguyên âm (Vowels)</h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-8">
+          {IPA_DATA.vowels.map((s, i) => (
+            <div key={i} className="bg-gray-50 rounded-xl p-4 border border-gray-100 shadow-sm hover:border-blue-300 hover:bg-blue-50 transition text-center cursor-pointer group" onClick={() => speak(s.example)}>
+              <div className="text-3xl font-mono text-blue-600 font-bold mb-2">/{s.ipa}/</div>
+              <div className="font-bold text-gray-800">{s.example} <span className="text-xs text-gray-500 font-normal">/{s.transcription}/</span></div>
+              <button className="mt-2 opacity-0 group-hover:opacity-100 transition"><Volume2 size={16} className="text-blue-500 mx-auto" /></button>
+            </div>
+          ))}
+        </div>
+
+        {/* Diphthongs */}
+        <h3 className="text-lg font-bold text-gray-700 mb-4 border-l-4 border-purple-500 pl-3">Nguyên âm đôi (Diphthongs)</h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-8">
+          {IPA_DATA.diphthongs.map((s, i) => (
+            <div key={i} className="bg-gray-50 rounded-xl p-4 border border-gray-100 shadow-sm hover:border-purple-300 hover:bg-purple-50 transition text-center cursor-pointer group" onClick={() => speak(s.example)}>
+              <div className="text-3xl font-mono text-purple-600 font-bold mb-2">/{s.ipa}/</div>
+              <div className="font-bold text-gray-800">{s.example} <span className="text-xs text-gray-500 font-normal">/{s.transcription}/</span></div>
+              <button className="mt-2 opacity-0 group-hover:opacity-100 transition"><Volume2 size={16} className="text-purple-500 mx-auto" /></button>
+            </div>
+          ))}
+        </div>
+
+        {/* Consonants */}
+        <h3 className="text-lg font-bold text-gray-700 mb-4 border-l-4 border-green-500 pl-3">Phụ âm (Consonants)</h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+          {IPA_DATA.consonants.map((s, i) => (
+            <div key={i} className="bg-gray-50 rounded-xl p-4 border border-gray-100 shadow-sm hover:border-green-300 hover:bg-green-50 transition text-center cursor-pointer group" onClick={() => speak(s.example)}>
+              <div className="text-3xl font-mono text-green-600 font-bold mb-2">/{s.ipa}/</div>
+              <div className="font-bold text-gray-800">{s.example} <span className="text-xs text-gray-500 font-normal">/{s.transcription}/</span></div>
+              <button className="mt-2 opacity-0 group-hover:opacity-100 transition"><Volume2 size={16} className="text-green-500 mx-auto" /></button>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* SECTION 2: AI EXERCISE GENERATION */}
+      <div className="bg-gradient-to-br from-indigo-50 to-blue-50 p-6 rounded-xl border border-indigo-100 shadow-sm text-center">
+        <h2 className="text-xl font-bold text-indigo-900 mb-2 flex items-center justify-center gap-2">
+          <Brain className="text-indigo-500" /> Trợ lý AI tạo bài tập Luyện Âm
+        </h2>
+        <p className="text-indigo-700 mb-6 mt-1">Chọn nhóm âm, AI sẽ cá nhân hoá các cặp từ dễ nhầm lẫn và trắc nghiệm thực hành cho riêng bạn.</p>
+
+        <div className="flex justify-center gap-4">
+          <select value={focus} onChange={e => setFocus(e.target.value)} className="border border-indigo-200 rounded-lg px-4 py-2 outline-none focus:ring-2 focus:ring-indigo-400 font-medium text-gray-700 bg-white">
+            <option value="vowels">Luyện Nguyên âm</option>
+            <option value="consonants">Luyện Phụ âm</option>
+            <option value="diphthongs">Luyện Nguyên âm đôi</option>
+            <option value="difficult">Luyện các âm khó (th, r, l...)</option>
+          </select>
+          <button onClick={generateLesson} disabled={loading} className="px-6 py-2 bg-indigo-600 text-white font-bold rounded-lg flex items-center gap-2 hover:bg-indigo-700 disabled:opacity-50 transition shadow-md">
+            {loading ? "Đang soạn bài..." : <><Sparkles size={18} /> Sinh bài tập AI</>}
+          </button>
+        </div>
+      </div>
+
+      {/* AI EXERCISE RESULTS */}
+      {lesson && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8 space-y-8 animate-in fade-in zoom-in-95 duration-300">
+          <div className="text-center mb-8">
+            <h3 className="text-2xl font-bold text-gray-900">{lesson.lesson_title || "Bài luyện tập phát âm"}</h3>
+            <p className="text-gray-500 max-w-2xl mx-auto mt-2">{lesson.introduction}</p>
+          </div>
+
+          {/* Minimal Pairs */}
+          {lesson.minimal_pairs && lesson.minimal_pairs.length > 0 && (
+            <div>
+              <h4 className="text-lg font-bold text-gray-800 mb-4 flex items-center"><Headphones className="mr-2 text-blue-500" size={20} /> Phân biệt cặp từ dễ nhầm lẫn (Minimal Pairs)</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {lesson.minimal_pairs.map((mp: any, idx: number) => (
+                  <div key={idx} className="flex justify-between items-center p-4 bg-gray-50 rounded-xl border border-gray-200">
+                    <div className="text-center flex-1 cursor-pointer group" onClick={() => speak(mp.word1)}>
+                      <div className="font-bold text-lg text-gray-900 group-hover:text-blue-600">{mp.word1}</div>
+                      <div className="font-mono text-sm text-gray-500 mb-1">/{mp.ipa1}/</div>
+                      <Volume2 size={14} className="mx-auto text-blue-400 opacity-0 group-hover:opacity-100 transition" />
+                    </div>
+                    <div className="font-extrabold text-blue-400 px-4">VS</div>
+                    <div className="text-center flex-1 cursor-pointer group" onClick={() => speak(mp.word2)}>
+                      <div className="font-bold text-lg text-gray-900 group-hover:text-red-600">{mp.word2}</div>
+                      <div className="font-mono text-sm text-gray-500 mb-1">/{mp.ipa2}/</div>
+                      <Volume2 size={14} className="mx-auto text-red-400 opacity-0 group-hover:opacity-100 transition" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Practice Sentences */}
+          {lesson.practice_sentences && lesson.practice_sentences.length > 0 && (
+            <div>
+              <h4 className="text-lg font-bold text-gray-800 mb-4 flex items-center"><Mic className="mr-2 text-green-500" size={20} /> Luyện đọc câu (Speaking Practice)</h4>
+              <div className="space-y-3">
+                {lesson.practice_sentences.map((sent: any, idx: number) => (
+                  <div key={idx} className="p-4 bg-gray-50 rounded-xl border border-gray-200 hover:bg-green-50/50 transition cursor-pointer flex items-center justify-between" onClick={() => speak(sent.sentence)}>
+                    <div>
+                      <p className="font-bold text-gray-900 mb-1 text-lg">{sent.sentence}</p>
+                      <p className="font-mono text-sm text-gray-500">/{sent.ipa}/</p>
+                    </div>
+                    <Volume2 size={24} className="text-green-500 min-w-[24px]" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Quiz */}
+          {lesson.quiz && lesson.quiz.length > 0 && (
+            <div>
+              <h4 className="text-lg font-bold text-gray-800 mb-4 flex items-center"><Edit3 className="mr-2 text-purple-500" size={20} /> Trắc nghiệm kiểm tra</h4>
+              <div className="space-y-4">
+                {lesson.quiz.map((q: any, idx: number) => (
+                  <div key={idx} className="p-5 bg-gray-50 rounded-xl border border-gray-200">
+                    <p className="font-bold text-gray-900 mb-3">{idx + 1}. {q.question}</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {q.options.map((opt: string, oIdx: number) => (
+                        <div key={oIdx} className="flex items-center gap-2 bg-white p-3 rounded-lg border border-gray-200">
+                          <input
+                            type="radio"
+                            name={`quiz-${idx}`}
+                            id={`q-${idx}-${oIdx}`}
+                            checked={quizAnswers[idx] === oIdx}
+                            onChange={() => setQuizAnswers({...quizAnswers, [idx]: oIdx})}
+                            disabled={quizSubmitted}
+                            className="w-4 h-4 text-purple-600"
+                          />
+                          <label htmlFor={`q-${idx}-${oIdx}`} className={quizSubmitted ? (oIdx === q.correct_answer || oIdx === q.ans ? "text-green-700 font-medium" : quizAnswers[idx] === oIdx ? "text-red-700" : "") : "text-sm font-medium"}>
+                            {opt}
+                          </label>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+
+                {!quizSubmitted && (
+                  <div className="mt-6 text-center">
+                    <button
+                      onClick={submitQuiz}
+                      className="bg-purple-600 text-white px-8 py-3 rounded-lg font-bold hover:bg-purple-700 transition flex items-center gap-2 mx-auto"
+                    >
+                      <CheckCircle2 size={20} /> Nộp bài kiểm tra
+                    </button>
+                  </div>
+                )}
+
+                {quizSubmitted && (
+                  <div className="mt-6 bg-gradient-to-r from-green-50 to-blue-50 p-4 rounded-xl border border-green-200 text-center">
+                    <div className="text-2xl font-bold text-green-700 mb-2">
+                      Điểm: {quizScore}/{lesson.quiz?.length || 0}
+                    </div>
+                    <p className="text-green-600">
+                      {quizScore === lesson.quiz?.length ? "Xuất sắc! 🎉" :
+                        quizScore >= (lesson.quiz?.length || 0) * 0.8 ? "Tốt! 👍" :
+                        quizScore >= (lesson.quiz?.length || 0) * 0.6 ? "Khá! 👌" : "Cần luyện tập thêm! 💪"}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ==================== NEW: PRACTICE TAB ====================
+function PracticeTab({ setShowCreditModal }: { setShowCreditModal: (s: boolean) => void }) {
+  const { user, authFetch, refreshUser } = useAuth();
+  const [testType, setTestType] = useState("TOEIC");
+  const [skill, setSkill] = useState("reading");
+  const [loading, setLoading] = useState(false);
+  const [practice, setPractice] = useState<any>(null);
+  const [answers, setAnswers] = useState<Record<number, number>>({});
+  const [submitted, setSubmitted] = useState(false);
+  const [score, setScore] = useState(0);
+  const [source, setSource] = useState<"ai" | "official">("ai");
+
+  const generatePractice = async () => {
+    if (source === "official") {
+      const filtered = MOCK_PRACTICE_TESTS.filter(t => t.test_type === testType && t.skill === skill);
+      if (filtered.length > 0) {
+        setPractice(filtered[0]);
+        setAnswers({});
+        setSubmitted(false);
+        setScore(0);
+      } else {
+        alert("Hiện chưa có bài thi mẫu cho sự kết hợp này. Vui lòng thử AI Generator.");
+      }
+      return;
+    }
+
+    if (user && user.credits_ai !== undefined && user.credits_ai <= 0) {
+      setShowCreditModal(true);
+      return;
+    }
+
+    setLoading(true);
+    setPractice({ status: "generating", questions: [] });
+    setAnswers({});
+    setSubmitted(false);
+    setScore(0);
+    try {
+      const endpoint =
+        skill === "reading" ? "/student/reading/generate" :
+          skill === "writing" ? "/student/writing/evaluate" :
+            skill === "speaking" ? "/student/speaking/topic" :
+              "/student/practice/generate";
+
+      const body = skill === "reading" ? { level: "B1" } :
+        skill === "speaking" ? { level: "B1", topic_type: "general" } :
+          { test_type: testType, skill };
+
+      const res = await authFetch(`${API_URL}${endpoint}`, {
+        method: "POST",
+        body: JSON.stringify(body)
+      });
+      
+      if (!res.ok) throw new Error("API Error");
+
+      const reader = res.body?.getReader();
+      const decoder = new TextDecoder();
+      let done = false;
+      let buffer = "";
+      let finalData: any = { questions: [] };
+
+      while (reader && !done) {
+        const { value, done: readerDone } = await reader.read();
+        done = readerDone;
+        if (value) {
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || "";
+
+          for (const line of lines) {
+            let rawJson = line.trim();
+            if (rawJson.startsWith("data: ")) rawJson = rawJson.replace("data: ", "");
+            if (rawJson === "[DONE]" || !rawJson) continue;
+
+            try {
+              const chunkData = JSON.parse(rawJson);
+              if (chunkData.status === "success" || !chunkData.status) {
+                finalData = { ...finalData, ...chunkData };
+              }
+            } catch (e) { }
+          }
+        }
+      }
+      refreshUser();
+      setPractice(finalData);
+    } catch (e) {
+      alert("Lỗi khi kết nối AI");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const submitTest = () => {
+    let s = 0;
+    practice.questions.forEach((q: any, idx: number) => {
+      if (answers[idx] === q.correct_answer || answers[idx] === q.ans) s++;
+    });
+    setScore(s);
+    setSubmitted(true);
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm">
+        <h2 className="text-xl font-bold mb-6 flex items-center gap-2">
+          <GraduationCap className="text-indigo-600" /> Hệ thống luyện thi thông minh
+        </h2>
+        
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+          <div>
+            <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Loại chứng chỉ</label>
+            <select value={testType} onChange={e => setTestType(e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-400">
+              <option value="TOEIC">TOEIC</option>
+              <option value="IELTS">IELTS</option>
+              <option value="BTEC">BTEC English</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Kỹ năng</label>
+            <select value={skill} onChange={e => setSkill(e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-400">
+              <option value="reading">Reading</option>
+              <option value="grammar">Grammar & Vocab</option>
+              <option value="listening" disabled>Listening (Coming Soon)</option>
+              <option value="speaking">Speaking Topics</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Nguồn đề</label>
+            <select value={source} onChange={e => setSource(e.target.value as any)} className="w-full border border-gray-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-400">
+              <option value="ai">AI Generator (Recommended)</option>
+              <option value="official">Đề mẫu chính thức</option>
+            </select>
+          </div>
+          <div className="flex items-end">
+            <button onClick={generatePractice} disabled={loading} className="w-full bg-indigo-600 text-white font-bold py-3 rounded-xl hover:bg-indigo-700 transition disabled:opacity-50">
+              {loading ? "Đang chuẩn bị..." : "Bắt đầu luyện tập"}
+            </button>
+          </div>
+        </div>
+
+        {practice && practice.status !== "generating" && (
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="border-t border-gray-100 pt-8">
+              <h3 className="text-2xl font-black text-gray-900 mb-2">{practice.title || `${testType} Practice: ${skill}`}</h3>
+              {practice.description && <p className="text-gray-500 mb-8">{practice.description}</p>}
+              
+              {practice.passage && (
+                <div className="bg-slate-50 p-6 rounded-2xl mb-8 border border-slate-100 italic text-gray-700 leading-relaxed whitespace-pre-wrap">
+                  {practice.passage}
+                </div>
+              )}
+
+              <div className="space-y-8">
+                {practice.questions?.map((q: any, idx: number) => (
+                  <div key={idx} className="bg-gray-50/50 p-6 rounded-2xl border border-gray-100">
+                    <p className="font-bold text-lg mb-4 text-gray-800">{idx + 1}. {q.question || q.q}</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {(q.options || []).map((opt: string, oi: number) => (
+                        <button 
+                          key={oi}
+                          onClick={() => !submitted && setAnswers({...answers, [idx]: oi})}
+                          className={`p-4 rounded-xl border-2 text-left transition-all font-medium ${
+                            answers[idx] === oi 
+                              ? (submitted ? (oi === (q.correct_answer || q.ans) ? 'bg-green-50 border-green-500 text-green-700' : 'bg-red-50 border-red-500 text-red-700') : 'bg-indigo-50 border-indigo-500 text-indigo-700')
+                              : (submitted && oi === (q.correct_answer || q.ans) ? 'bg-green-50 border-green-500 text-green-700' : 'bg-white border-transparent hover:border-gray-200 text-gray-600')
+                          }`}
+                        >
+                          {String.fromCharCode(65 + oi)}. {opt}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {!submitted ? (
+                <div className="mt-12 text-center">
+                  <button onClick={submitTest} className="bg-indigo-600 text-white px-12 py-4 rounded-2xl font-black text-lg shadow-xl hover:bg-indigo-700 transition transform active:scale-95">
+                    Nộp bài & Xem điểm
+                  </button>
+                </div>
+              ) : (
+                <div className="mt-12 bg-indigo-900 text-white p-8 rounded-[2.5rem] text-center shadow-2xl relative overflow-hidden">
+                  <div className="relative z-10">
+                    <h4 className="text-xl font-bold mb-2 text-indigo-200">Kết quả của bạn</h4>
+                    <div className="text-6xl font-black mb-4">{score}/{practice.questions?.length}</div>
+                    <p className="text-indigo-200 mb-6">Bạn đã hoàn thành bài luyện tập {testType} {skill}.</p>
+                    <button onClick={() => { setPractice(null); setAnswers({}); setSubmitted(false); }} className="bg-white text-indigo-900 px-8 py-3 rounded-xl font-bold hover:bg-indigo-50 transition">
+                      Làm bài khác
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
