@@ -235,8 +235,8 @@ def get_llm(provider=None):
     cohere_key = _get_setting("COHERE_API_KEY")
     if cohere_key and provider in (None, "cohere"):
         os.environ["COHERE_API_KEY"] = cohere_key
-        # Use a more stable and currently supported model (command-r)
-        return ChatCohere(model="command-r", temperature=0)
+        # Use a stable multilingual model for 2026 (tiny-aya-fire)
+        return ChatCohere(model="tiny-aya-fire", temperature=0)
 
     if provider != "cohere" and provider != "openai":
         google_key = _get_setting("GOOGLE_API_KEY")
