@@ -6,8 +6,10 @@ import {
   Users, BookOpen, Plus, Edit, Trash2, GraduationCap, X, Check,
   FileText, Upload, Download, ClipboardList, Sparkles, Brain,
   BarChart3, UserPlus, UserMinus, ChevronDown, ChevronUp, Eye,
-  Search, Volume2, ArrowRight, Bookmark, Network, Terminal, AlertCircle, BookText
+  Search, Volume2, ArrowRight, Bookmark, Network, Terminal, AlertCircle, BookText, 
+  BrainCircuit, Headphones, Edit3, Lightbulb, Trophy, PlayCircle, Layers, CheckCircle2
 } from "lucide-react";
+import { ALL_WORDS_DATABASE, WordDetail } from "../../components/DictionaryData";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://iedu-ksk7.onrender.com";
 
@@ -18,6 +20,15 @@ function TeacherDashboardContent() {
   const activeTab = searchParams.get("tab") || "overview";
   const { user, token, isInitialized, refreshUser, authFetch } = useAuth();
   const router = useRouter();
+  const [showCreditModal, setShowCreditModal] = useState(false);
+  const [selectedWordInfo, setSelectedWordInfo] = useState<WordDetail | null>(null);
+
+  // Proactively refresh user data when entering key tabs
+  useEffect(() => {
+    if (activeTab === "overview" || activeTab === "ai-tools") {
+      refreshUser();
+    }
+  }, [activeTab, refreshUser]);
 
   // Auth check
   useEffect(() => {
@@ -36,26 +47,165 @@ function TeacherDashboardContent() {
     return <div className="flex justify-center items-center h-64"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600"></div></div>;
   }
 
+  const handleTextareaDoubleClick = async (e: React.MouseEvent<HTMLTextAreaElement>) => {
+    const textarea = e.currentTarget;
+    const start = textarea.selectionStart;
+    const textVal = textarea.value;
+    
+    let left = start;
+    while (left > 0 && /\w/.test(textVal[left - 1])) left--;
+    let right = start;
+    while (right < textVal.length && /\w/.test(textVal[right])) right++;
+    
+    const word = textVal.substring(left, right).toLowerCase();
+    if (!word) return;
+
+    let localData = ALL_WORDS_DATABASE[word] || 
+                    ALL_WORDS_DATABASE[word.replace(/s$/, '')] || 
+                    ALL_WORDS_DATABASE[word.replace(/es$/, '')] || 
+                    ALL_WORDS_DATABASE[word.replace(/ing$/, '')] || 
+                    ALL_WORDS_DATABASE[word.replace(/ed$/, '')];
+
+    if (localData) {
+      setSelectedWordInfo(localData);
+    } else {
+      try {
+        const response = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${word}`);
+        if (response.ok) {
+          const apiDataList = await response.json();
+          const firstEntry = apiDataList[0];
+          const meaning = firstEntry.meanings[0];
+          const def = meaning.definitions[0];
+          
+          const formattedData: WordDetail = {
+            word: firstEntry.word,
+            phonetic: firstEntry.phonetics.find((p: any) => p.text)?.text || firstEntry.phonetic || "/.../",
+            type: meaning.partOfSpeech,
+            translation: "Đang tải bản dịch...",
+            example: def.example || "No example available.",
+            engMeaning: def.definition || "No definition found.",
+            level: "N/A"
+          };
+          setSelectedWordInfo(formattedData);
+        } else {
+          alert(`Không tìm thấy từ "${word}" trong từ điển.`);
+        }
+      } catch (err) {
+        alert(`Không tìm thấy từ "${word}" và lỗi kết nối API.`);
+      }
+    }
+  };
+
+  const speak = (text: string, lang: string = "en-US") => {
+    if (typeof window !== "undefined" && window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = lang;
+      u.rate = 0.85;
+      window.speechSynthesis.speak(u);
+    }
+  };
+
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">
-          {activeTab === "overview" && "Tổng quan"}
-          {activeTab === "classes" && "Lớp học của tôi"}
-          {activeTab === "students" && "Quản lý Học sinh"}
-          {activeTab === "lessons" && "Quản lý Bài học"}
-          {activeTab === "assignments" && "Bài tập & Kiểm tra"}
-          {activeTab === "ai-tools" && "Công cụ AI"}
-          {activeTab === "grammar" && "Kho Ngữ Pháp"}
-        </h1>
+      <div className="flex justify-between items-start mb-6">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">
+            {activeTab === "overview" && "Tổng quan"}
+            {activeTab === "classes" && "Lớp học của tôi"}
+            {activeTab === "students" && "Quản lý Học sinh"}
+            {activeTab === "lessons" && "Quản lý Bài học"}
+            {activeTab === "assignments" && "Bài tập & Kiểm tra"}
+            {activeTab === "ai-tools" && "Công cụ AI Premium"}
+            {activeTab === "grammar" && "Kho Ngữ Pháp"}
+          </h1>
+          <p className="text-gray-500 text-sm mt-1">Xin chào, <span className="font-semibold text-indigo-600">{user?.name}</span> (Giáo viên)</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5 bg-indigo-50 text-indigo-700 px-4 py-2 rounded-2xl border border-indigo-100 font-bold text-sm shadow-sm">
+             <Sparkles size={16} className="text-indigo-500" /> {user?.credits_ai || 0} AI Credits
+          </div>
+        </div>
       </div>
+
+      {showCreditModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-300 border border-gray-100">
+            <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
+              <AlertCircle size={40} className="text-red-500" />
+            </div>
+            <h3 className="text-2xl font-black text-gray-900 text-center mb-2">Hết lượt sử dụng AI!</h3>
+            <p className="text-gray-600 text-center mb-8">
+              Bạn đã sử dụng hết số credits AI trong ngày. Vui lòng quay lại vào ngày mai hoặc nâng cấp gói dịch vụ.
+            </p>
+            <button 
+              onClick={() => setShowCreditModal(false)}
+              className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-bold text-lg shadow-xl shadow-indigo-200 hover:bg-indigo-700 transition"
+            >
+              Đã hiểu
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Word Lookup Modal */}
+      {selectedWordInfo && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden border border-indigo-50 transform animate-in zoom-in-95 duration-200">
+            <div className="bg-gradient-to-r from-indigo-600 to-purple-600 p-6 text-white relative">
+              <button 
+                onClick={() => setSelectedWordInfo(null)}
+                className="absolute top-4 right-4 bg-white/20 hover:bg-white/30 p-1.5 rounded-full transition"
+              >
+                <X size={18} />
+              </button>
+              <h3 className="text-2xl font-black mb-1">{selectedWordInfo.word}</h3>
+              <div className="flex items-center gap-3 mt-2">
+                <button onClick={() => speak(selectedWordInfo.word)} className="flex items-center gap-1.5 bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-lg transition">
+                  <Volume2 size={16} /> <span className="font-mono text-sm">{selectedWordInfo.phonetic}</span>
+                </button>
+                <span className="bg-white/20 px-2.5 py-1 rounded-lg text-xs font-bold uppercase">{selectedWordInfo.level || 'N/A'}</span>
+              </div>
+            </div>
+            
+            <div className="p-6 space-y-4">
+              <div>
+                <span className="text-xs font-bold text-indigo-400 uppercase tracking-widest block mb-1">Loại từ & Nghĩa</span>
+                <p className="text-gray-900 font-bold text-lg leading-tight">
+                  <span className="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded text-sm mr-2">{selectedWordInfo.type}</span> 
+                  {selectedWordInfo.translation}
+                </p>
+              </div>
+
+              <div>
+                <span className="text-xs font-bold text-indigo-400 uppercase tracking-widest block mb-1">Định nghĩa tiếng Anh</span>
+                <p className="text-gray-700 text-sm italic leading-relaxed">"{selectedWordInfo.engMeaning}"</p>
+              </div>
+
+              <div>
+                <span className="text-xs font-bold text-indigo-400 uppercase tracking-widest block mb-1">Ví dụ</span>
+                <p className="text-gray-700 text-sm leading-relaxed">{selectedWordInfo.example}</p>
+              </div>
+
+              <div className="pt-2">
+                <button
+                  onClick={() => setSelectedWordInfo(null)}
+                  className="w-full py-3 bg-gray-50 text-gray-700 font-bold rounded-xl border border-gray-100 hover:bg-gray-100 transition"
+                >
+                  Đóng
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {activeTab === "overview" && <OverviewTab />}
       {activeTab === "classes" && <ClassesTab />}
       {activeTab === "students" && <StudentsTab />}
-      {activeTab === "lessons" && <LessonsTab />}
-      {activeTab === "assignments" && <AssignmentsTab />}
-      {activeTab === "ai-tools" && <AIToolsTab />}
+      {activeTab === "lessons" && <LessonsTab handleTextareaDoubleClick={handleTextareaDoubleClick} />}
+      {activeTab === "assignments" && <AssignmentsTab handleTextareaDoubleClick={handleTextareaDoubleClick} />}
+      {activeTab === "ai-tools" && <AIToolsTab setShowCreditModal={setShowCreditModal} handleTextareaDoubleClick={handleTextareaDoubleClick} />}
       {activeTab === "grammar" && <GrammarTab />}
     </div>
   );
@@ -406,7 +556,7 @@ function StudentsTab() {
 }
 
 // ==================== LESSONS TAB ====================
-function LessonsTab() {
+function LessonsTab({ handleTextareaDoubleClick }: { handleTextareaDoubleClick: (e: React.MouseEvent<HTMLTextAreaElement>) => void }) {
   const { authFetch, token } = useAuth();
   const [classes, setClasses] = useState<any[]>([]);
   const [selectedClass, setSelectedClass] = useState<number | null>(null);
@@ -518,8 +668,13 @@ function LessonsTab() {
           <div className="space-y-3">
             <input value={formTitle} onChange={e => setFormTitle(e.target.value)} placeholder="Tiêu đề bài học"
               className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none" />
-            <textarea value={formContent} onChange={e => setFormContent(e.target.value)} placeholder="Nội dung bài học (tuỳ chọn)" rows={4}
-              className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none resize-none" />
+            <textarea 
+               value={formContent} 
+               onChange={e => setFormContent(e.target.value)} 
+               onDoubleClick={handleTextareaDoubleClick}
+               placeholder="Nội dung bài học (tuỳ chọn)" rows={4}
+              className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none resize-none" 
+            />
             <div className="flex items-center gap-3">
               <label className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg cursor-pointer hover:bg-gray-200">
                 <Upload size={16} /> {formFile ? formFile.name : "Đính kèm file"}
@@ -573,7 +728,7 @@ function LessonsTab() {
 }
 
 // ==================== ASSIGNMENTS TAB ====================
-function AssignmentsTab() {
+function AssignmentsTab({ handleTextareaDoubleClick }: { handleTextareaDoubleClick: (e: React.MouseEvent<HTMLTextAreaElement>) => void }) {
   const { refreshUser, authFetch, token } = useAuth();
   const [classes, setClasses] = useState<any[]>([]);
   const [selectedClass, setSelectedClass] = useState<number | null>(null);
@@ -713,8 +868,13 @@ function AssignmentsTab() {
           </div>
           <input value={formTitle} onChange={e => setFormTitle(e.target.value)} placeholder="Tiêu đề bài tập"
             className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none" />
-          <textarea value={formDesc} onChange={e => setFormDesc(e.target.value)} placeholder="Mô tả (tuỳ chọn)" rows={2}
-            className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none resize-none" />
+          <textarea 
+            value={formDesc} 
+            onChange={e => setFormDesc(e.target.value)} 
+            onDoubleClick={handleTextareaDoubleClick}
+            placeholder="Mô tả (tuỳ chọn)" rows={2}
+            className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none resize-none" 
+          />
           <input type="date" value={formDue} onChange={e => setFormDue(e.target.value)}
             className="border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none" />
           <select value={formType} onChange={e => setFormType(e.target.value)}
@@ -727,9 +887,13 @@ function AssignmentsTab() {
           {formType === "quiz" && (
           <div className="bg-gradient-to-r from-purple-50 to-indigo-50 p-4 rounded-xl border border-indigo-100">
             <h4 className="font-bold text-indigo-700 mb-2 flex items-center gap-2"><Sparkles size={18} /> Tạo Quiz bằng AI</h4>
-            <textarea value={formQuizText} onChange={e => setFormQuizText(e.target.value)}
+            <textarea 
+              value={formQuizText} 
+              onChange={e => setFormQuizText(e.target.value)}
+              onDoubleClick={handleTextareaDoubleClick}
               placeholder="Dán đoạn văn tiếng Anh vào đây, AI sẽ tự động tạo câu hỏi trắc nghiệm..." rows={4}
-              className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none resize-none bg-white" />
+              className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none resize-none bg-white" 
+            />
             <button onClick={handleGenerateQuiz} disabled={generating}
               className="mt-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 flex items-center gap-2 disabled:opacity-50">
               <Brain size={16} /> {generating ? "Đang tạo..." : "Tạo Quiz"}
@@ -824,8 +988,8 @@ function AssignmentsTab() {
 }
 
 // ==================== AI TOOLS TAB ====================
-function AIToolsTab() {
-  const { refreshUser, authFetch, token } = useAuth();
+function AIToolsTab({ setShowCreditModal, handleTextareaDoubleClick }: { setShowCreditModal: (show: boolean) => void, handleTextareaDoubleClick: (e: React.MouseEvent<HTMLTextAreaElement>) => void }) {
+  const { user, refreshUser, authFetch, token } = useAuth();
   const [text, setText] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [inputMode, setInputMode] = useState<"text" | "file">("text");
@@ -833,6 +997,7 @@ function AIToolsTab() {
   const [vocabResult, setVocabResult] = useState<any[]>([]);
   const [quizResult, setQuizResult] = useState<any[]>([]);
   const [activeAI, setActiveAI] = useState<"vocab" | "quiz" | "dict" | "graph">("vocab");
+  const [currentQuizIdx, setCurrentQuizIdx] = useState(0);
 
   // Dictionary state
   const [dictWord, setDictWord] = useState("");
@@ -857,6 +1022,7 @@ function AIToolsTab() {
 
   const handleExtractVocab = async () => {
     if (!text.trim()) return;
+    if (user && user.credits_ai <= 0) { setShowCreditModal(true); return; }
     setLoading(true); setVocabResult([]);
     try {
       const formData = new FormData();
@@ -867,6 +1033,7 @@ function AIToolsTab() {
       if (res.ok) {
         const data = await res.json();
         setVocabResult(Array.isArray(data) ? data : []);
+        refreshUser();
       }
     } catch (e) { console.error(e); alert("Lỗi khi trích xuất từ vựng"); }
     finally { setLoading(false); }
@@ -874,7 +1041,8 @@ function AIToolsTab() {
 
   const handleGenerateQuiz = async () => {
     if (!text.trim()) return;
-    setLoading(true); setQuizResult([]);
+    if (user && user.credits_ai <= 0) { setShowCreditModal(true); return; }
+    setLoading(true); setQuizResult([]); setCurrentQuizIdx(0);
     try {
       const formData = new FormData();
       formData.append("text", text);
@@ -885,6 +1053,7 @@ function AIToolsTab() {
       if (res.ok) {
         const data = await res.json();
         setQuizResult(Array.isArray(data) ? data : []);
+        refreshUser();
       }
     } catch (e) { console.error(e); alert("Lỗi khi tạo quiz"); }
     finally { setLoading(false); }
@@ -892,7 +1061,8 @@ function AIToolsTab() {
 
   const handleFileProcess = async () => {
     if (!file) return;
-    setLoading(true); setVocabResult([]); setQuizResult([]);
+    if (user && user.credits_ai <= 0) { setShowCreditModal(true); return; }
+    setLoading(true); setVocabResult([]); setQuizResult([]); setCurrentQuizIdx(0);
     try {
       const formData = new FormData();
       // @ts-ignore
@@ -909,6 +1079,7 @@ function AIToolsTab() {
         const data = json.result || json;
         if (data.vocabulary) setVocabResult(data.vocabulary);
         if (data.quiz) setQuizResult(data.quiz);
+        refreshUser();
       }
     } catch (e) { console.error(e); alert("Lỗi khi phân tích tệp"); }
     finally { setLoading(false); }
@@ -1019,200 +1190,284 @@ function AIToolsTab() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="bg-gradient-to-r from-amber-500 to-orange-500 rounded-2xl p-6 text-white">
-        <h2 className="text-xl font-bold flex items-center gap-2"><Sparkles size={24} /> Công cụ AI cho Giáo viên</h2>
-        <p className="text-amber-100 mt-1">Trích xuất từ vựng, tạo quiz, tra từ điển, và xem đồ thị tri thức.</p>
-      </div>
+    <div className="space-y-8 max-w-5xl mx-auto pb-12">
+      <section className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-2xl font-black tracking-tight text-gray-900">Nâng tầm giảng dạy với AI</h2>
+          <p className="text-gray-500 text-sm mt-1">Phân tích văn bản, tạo học liệu và tra cứu đa nền tảng chỉ trong vài giây.</p>
+        </div>
+      </section>
 
-      {/* Tool tabs */}
-      <div className="flex gap-2 flex-wrap">
+      {/* Magic AI Input Box */}
+      <section className="bg-white rounded-3xl border border-indigo-50 p-6 shadow-xl shadow-indigo-100/20">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <div className="p-2 bg-indigo-50 rounded-xl">
+              <Sparkles className="text-indigo-600" size={20} />
+            </div>
+            <h2 className="text-lg font-black text-gray-900">Magic AI Input</h2>
+          </div>
+          <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest bg-indigo-50 px-2.5 py-1 rounded-full border border-indigo-100/50">Smart Extraction</span>
+        </div>
+        
+        <div className="space-y-4">
+          <div className="relative group">
+            {inputMode === "text" ? (
+              <textarea 
+                className="w-full bg-slate-50 border border-gray-100 rounded-2xl p-6 text-base font-medium placeholder:text-slate-400 min-h-[160px] focus:ring-4 focus:ring-indigo-100 focus:border-indigo-400 transition-all resize-none shadow-inner" 
+                placeholder="Dán văn bản tiếng Anh vào đây... Lexicon AI sẽ tự động phân tích và trích xuất từ vựng, tạo flashcards và bài luyện tập thử nghiệm."
+                value={text}
+                onChange={e => setText(e.target.value)}
+                onDoubleClick={handleTextareaDoubleClick}
+              />
+            ) : (
+              <div className="border-4 border-dashed border-indigo-100 bg-slate-50 rounded-2xl p-12 flex flex-col items-center justify-center relative cursor-pointer hover:bg-slate-100 transition min-h-[160px]">
+                <input type="file" className="absolute inset-0 opacity-0 cursor-pointer w-full h-full" onChange={(e) => {
+                  if (e.target.files && e.target.files.length > 0) setFile(e.target.files[0]);
+                }} accept=".txt,.pdf,.docx" />
+                <div className="w-16 h-16 bg-white rounded-2xl shadow-md flex items-center justify-center mb-4">
+                  <Upload size={32} className="text-indigo-400" />
+                </div>
+                <p className="font-black text-gray-700">{file ? file.name : "Kéo thả hoặc nhấn để chọn tệp học liệu"}</p>
+                <p className="text-sm text-slate-400 mt-2">Hỗ trợ định dạng .txt, .pdf, .docx</p>
+              </div>
+            )}
+            {loading && (
+              <div className="absolute inset-0 bg-white/60 backdrop-blur-sm rounded-2xl flex flex-col items-center justify-center z-10 animate-in fade-in duration-300">
+                <div className="flex gap-1.5 mb-3">
+                  <div className="w-3 h-3 bg-indigo-600 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
+                  <div className="w-3 h-3 bg-indigo-600 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
+                  <div className="w-3 h-3 bg-indigo-600 rounded-full animate-bounce"></div>
+                </div>
+                <p className="text-indigo-700 font-bold text-sm">Lexicon AI đang phân tích...</p>
+              </div>
+            )}
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-4 pt-2">
+            <div className="flex gap-2">
+              <button 
+                onClick={() => setInputMode("text")}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border ${inputMode === "text" ? "bg-indigo-600 text-white border-indigo-600 shadow-lg shadow-indigo-200" : "bg-white text-slate-600 border-gray-100 hover:bg-slate-50"}`}
+              >
+                Nhập văn bản
+              </button>
+              <button 
+                onClick={() => setInputMode("file")}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border ${inputMode === "file" ? "bg-indigo-600 text-white border-indigo-600 shadow-lg shadow-indigo-200" : "bg-white text-slate-600 border-gray-100 hover:bg-slate-50"}`}
+              >
+                Tải tệp
+              </button>
+            </div>
+            
+            <button 
+              onClick={() => inputMode === "text" ? handleExtractVocab() : handleFileProcess()}
+              disabled={loading || (inputMode === "text" ? !text.trim() : !file)}
+              className="bg-indigo-600 text-white px-8 py-3 rounded-2xl font-black text-sm flex items-center gap-2 hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-200 disabled:opacity-50 hover:scale-[1.02] active:scale-95 translate-y-0"
+            >
+              Analyze & Generate
+              <ArrowRight size={18} />
+            </button>
+          </div>
+        </div>
+      </section>
+
+      {/* Tool Navigation */}
+      <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
         {[
-          { id: "vocab", label: "Trích xuất & Quiz", icon: BookOpen, color: "purple" },
-          { id: "dict", label: "Tra từ điển", icon: Search, color: "blue" },
-          { id: "graph", label: "Đồ thị tri thức", icon: Network, color: "cyan" },
+          { id: "vocab", label: "Dashboard Trích xuất", icon: LayoutDashboard },
+          { id: "dict", label: "Từ điển Lexicon", icon: Search },
+          { id: "graph", label: "Đồ thị tri thức", icon: Network },
         ].map((tab) => {
-          const colors: Record<string, string> = { purple: "bg-purple-600", blue: "bg-blue-600", cyan: "bg-cyan-600" };
+          const Icon = tab.id === "vocab" ? BrainCircuit : tab.icon;
           return (
             <button
               key={tab.id}
               onClick={() => setActiveAI(tab.id as any)}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium transition ${activeAI === tab.id ? `${colors[tab.color]} text-white shadow-md` : "bg-white text-gray-600 border border-gray-200 hover:bg-gray-50"}`}
+              className={`flex items-center gap-2 px-6 py-3 rounded-2xl font-bold text-sm transition-all shrink-0 border ${activeAI === tab.id ? "bg-indigo-600 text-white border-indigo-600 shadow-xl shadow-indigo-100" : "bg-white text-slate-600 border-gray-100 hover:bg-slate-50"}`}
             >
-              <tab.icon size={18} /> {tab.label}
+              <Icon size={18} /> {tab.label}
             </button>
           );
         })}
       </div>
 
-      {/* Vocab/Quiz tool */}
-      {(activeAI === "vocab" || activeAI === "quiz") && (
-        <>
-          <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
-            {/* Input Type Tabs */}
-            <div className="flex gap-2 mb-4">
-              <button onClick={() => setInputMode("text")} className={`px-4 py-2 rounded-lg text-sm font-bold transition ${inputMode === "text" ? "bg-indigo-100 text-indigo-700" : "bg-gray-50 text-gray-500 hover:bg-gray-100"}`}>
-                Nhập văn bản
-              </button>
-              <button onClick={() => setInputMode("file")} className={`px-4 py-2 rounded-lg text-sm font-bold transition ${inputMode === "file" ? "bg-indigo-100 text-indigo-700" : "bg-gray-50 text-gray-500 hover:bg-gray-100"}`}>
-                Tải tệp lên
-              </button>
-            </div>
+      {/* Flashcards Result */}
+      {activeAI === "vocab" && vocabResult.length > 0 && (
+        <section className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xl font-black text-gray-900 flex items-center gap-2">
+              <Layers className="text-indigo-600" size={24} />
+              Premium Flashcards
+              <span className="text-xs bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-full font-bold">{vocabResult.length} words found</span>
+            </h3>
+          </div>
+          
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {vocabResult.map((w: any, idx: number) => (
+              <div 
+                key={idx} 
+                className="bg-white p-6 rounded-[2rem] border border-indigo-50 shadow-xl shadow-indigo-100/10 hover:shadow-indigo-200/20 transition-all group border-l-8 border-l-indigo-500 hover:-translate-y-1 duration-300"
+              >
+                <div className="flex justify-between items-start mb-4">
+                  <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full uppercase tracking-widest border border-indigo-100/50">Level {w.level || 'B2'}</span>
+                  <button 
+                    onClick={() => speak(w.word)}
+                    className="w-10 h-10 bg-slate-50 rounded-xl flex items-center justify-center text-slate-400 group-hover:bg-indigo-600 group-hover:text-white transition-all shadow-sm"
+                  >
+                    <Volume2 size={20} />
+                  </button>
+                </div>
+                
+                <h3 className="text-2xl font-black text-gray-900 mb-1 group-hover:text-indigo-600 transition-colors uppercase tracking-tight">{w.word}</h3>
+                <p className="text-xs text-slate-400 font-mono mb-4 tracking-wider">{w.phonetic || w.phon || '/.../'}</p>
+                
+                <div className="pt-4 border-t border-slate-50 space-y-3">
+                  <div className="flex items-start gap-2">
+                    <div className="mt-1.5 w-1.5 h-1.5 rounded-full bg-indigo-400 shrink-0"></div>
+                    <p className="text-sm text-slate-600 leading-snug font-medium italic">"{w.meaning_en || w.english_definition || w.definition || 'No definition available'}"</p>
+                  </div>
+                  <p className="text-base text-indigo-700 font-bold ml-3.5">{w.meaning_vn || w.vietnamese_meaning || w.meaning}</p>
+                </div>
 
-            {inputMode === "text" ? (
-              <div>
-                <textarea value={text} onChange={e => setText(e.target.value)} rows={6}
-                  placeholder="Dán đoạn văn, bài báo, hoặc nội dung bài học tiếng Anh vào đây..."
-                  className="w-full border rounded-xl p-4 focus:ring-2 focus:ring-indigo-500 outline-none resize-none text-gray-700" />
-                <div className="flex gap-3 mt-4">
-                  <button onClick={() => { setActiveAI("vocab"); handleExtractVocab(); }} disabled={loading || !text.trim()}
-                    className="flex items-center gap-2 px-5 py-2.5 bg-purple-600 text-white rounded-xl hover:bg-purple-700 disabled:opacity-50">
-                    <BookOpen size={18} /> {loading && activeAI === "vocab" ? "Đang xử lý..." : "Trích xuất Từ vựng"}
-                  </button>
-                  <button onClick={() => { setActiveAI("quiz"); handleGenerateQuiz(); }} disabled={loading || !text.trim()}
-                    className="flex items-center gap-2 px-5 py-2.5 bg-green-600 text-white rounded-xl hover:bg-green-700 disabled:opacity-50">
-                    <Brain size={18} /> {loading && activeAI === "quiz" ? "Đang tạo..." : "Tạo Quiz"}
-                  </button>
+                <div className="mt-5 flex gap-2">
+                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-tighter bg-slate-50 px-2 py-0.5 rounded border border-slate-100">{w.pos || w.part_of_speech || w.type || 'Noun'}</span>
                 </div>
               </div>
-            ) : (
-              <div>
-                <div className="border-2 border-dashed border-indigo-200 bg-indigo-50/50 rounded-xl p-8 flex flex-col items-center justify-center relative cursor-pointer hover:bg-indigo-50 transition min-h-[160px]">
-                  <input type="file" className="absolute inset-0 opacity-0 cursor-pointer w-full h-full" onChange={(e) => {
-                    if (e.target.files && e.target.files.length > 0) setFile(e.target.files[0]);
-                  }} accept=".txt,.pdf,.docx" />
-                  <Upload size={32} className="text-indigo-400 mb-2" />
-                  <p className="font-bold text-gray-700">{file ? file.name : "Kéo thả hoặc nhấn để chọn tệp"}</p>
-                  <p className="text-sm text-gray-500 mt-1">Hỗ trợ .txt, .pdf, .docx</p>
-                </div>
-                <div className="flex justify-end gap-3 mt-4">
-                  <button onClick={() => { setActiveAI("vocab"); handleFileProcess(); }} disabled={loading || !file}
-                    className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 shadow-md disabled:opacity-50 transition">
-                    <Sparkles size={18} /> {loading ? "Đang xử lý..." : "Phân tích Tệp (Tạo cả Từ vựng & Quiz)"}
-                  </button>
-                </div>
-              </div>
-            )}
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Practice Quiz Result */}
+      {activeAI === "vocab" && quizResult.length > 0 && (
+        <section className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pt-8 border-t border-slate-100">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xl font-black text-gray-900 flex items-center gap-2">
+              <BrainCircuit className="text-rose-500" size={24} />
+              Interactive Practice
+            </h3>
           </div>
 
-          {/* Vocabulary results */}
-          {vocabResult.length > 0 && (
-            <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
-              <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
-                <BookOpen size={20} className="text-purple-600" /> Từ vựng trích xuất ({vocabResult.length} từ)
-              </h3>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm">
-                  <thead>
-                    <tr className="border-b border-gray-200 text-gray-500">
-                      <th className="pb-3 font-medium">Từ</th>
-                      <th className="pb-3 font-medium">Phiên âm</th>
-                      <th className="pb-3 font-medium">Loại từ</th>
-                      <th className="pb-3 font-medium">Nghĩa tiếng Việt</th>
-                      <th className="pb-3 font-medium">Nghĩa tiếng Anh</th>
-                      <th className="pb-3 font-medium">Level</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {vocabResult.map((w: any, i: number) => (
-                      <tr key={i} className="border-b border-gray-50 hover:bg-gray-50">
-                        <td className="py-3 font-bold text-indigo-700">
-                          <div className="flex items-center gap-1">
-                            {w.word}
-                            <button onClick={() => speak(w.word)} className="text-gray-400 hover:text-blue-600"><Volume2 size={14} /></button>
-                          </div>
-                        </td>
-                        <td className="py-3 text-gray-500 font-mono text-xs">{w.phonetic || w.phon || ""}</td>
-                        <td className="py-3"><span className="text-xs bg-purple-50 text-purple-600 px-2 py-0.5 rounded">{w.pos || w.part_of_speech || w.type || ""}</span></td>
-                        <td className="py-3 font-medium">{w.meaning_vn || w.vietnamese_meaning || w.meaning || ""}</td>
-                        <td className="py-3 text-gray-600">{w.meaning_en || w.english_definition || w.definition || ""}</td>
-                        <td className="py-3"><span className="text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded font-bold">{w.level || ""}</span></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+          <div className="bg-white rounded-[2.5rem] border border-rose-50 p-8 shadow-2xl shadow-rose-100/20 relative overflow-hidden">
+             {/* Progress Bar */}
+             <div className="mb-10">
+                <div className="flex justify-between items-center mb-3">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Question {currentQuizIdx + 1} of {quizResult.length}</span>
+                  <span className="text-xs font-black text-rose-600 bg-rose-50 px-2 py-0.5 rounded-full">{Math.round(((currentQuizIdx + 1) / quizResult.length) * 100)}% Complete</span>
+                </div>
+                <div className="h-3 w-full bg-slate-50 rounded-full p-0.5 border border-slate-100 shadow-inner">
+                  <div 
+                    className="h-full bg-gradient-to-r from-rose-500 to-indigo-600 rounded-full transition-all duration-700 shadow-sm" 
+                    style={{ width: `${((currentQuizIdx + 1) / quizResult.length) * 100}%` }}
+                  ></div>
+                </div>
               </div>
-            </div>
-          )}
 
-          {/* Quiz results */}
-          {quizResult.length > 0 && (
-            <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
-              <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
-                <Brain size={20} className="text-green-600" /> Quiz đã tạo ({quizResult.length} câu)
-              </h3>
-              <div className="space-y-3">
-                {quizResult.map((q: any, i: number) => {
-                  const correctAns = q.correct_answer || q.answer || "";
-                  return (
-                    <div key={i} className="bg-gray-50 p-4 rounded-xl">
-                      <p className="font-medium text-gray-900">{i + 1}. {q.question || q.q}</p>
-                      <div className="ml-4 mt-2 space-y-1">
-                        {(q.options || []).map((opt: string, j: number) => {
-                          const isCorrect = opt === correctAns || j === q.ans;
-                          return (
-                            <p key={j} className={`text-sm ${isCorrect ? "text-green-700 font-bold" : "text-gray-600"}`}>
-                              {String.fromCharCode(65 + j)}. {opt} {isCorrect ? " ✓" : ""}
-                            </p>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })}
+              {/* Question Content */}
+              <div className="min-h-[300px] flex flex-col items-center text-center">
+                 <div className="w-16 h-16 bg-rose-50 rounded-2xl flex items-center justify-center mb-6">
+                    <Lightbulb className="text-rose-500" size={32} />
+                 </div>
+                 <h4 className="text-2xl font-black text-gray-900 mb-8 max-w-2xl leading-tight">
+                    {quizResult[currentQuizIdx].question || quizResult[currentQuizIdx].q}
+                 </h4>
+
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full max-w-3xl">
+                    {(quizResult[currentQuizIdx].options || []).map((opt: string, i: number) => {
+                      const correctAns = quizResult[currentQuizIdx].correct_answer || quizResult[currentQuizIdx].answer;
+                      const isCorrect = opt === correctAns || i === quizResult[currentQuizIdx].ans;
+                      return (
+                        <button 
+                          key={i}
+                          className={`p-5 rounded-2xl border-2 transition-all font-bold text-left flex items-center justify-between group ${
+                            isCorrect ? 'bg-emerald-50 border-emerald-500 text-emerald-900' : 'bg-slate-50 border-transparent text-slate-600 hover:border-indigo-200 hover:bg-white'
+                          }`}
+                        >
+                          <div className="flex items-center gap-4">
+                            <span className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm ${isCorrect ? 'bg-emerald-500 text-white' : 'bg-white text-slate-400 border border-slate-200 group-hover:border-indigo-600 group-hover:text-indigo-600'}`}>
+                              {String.fromCharCode(65 + i)}
+                            </span>
+                            {opt}
+                          </div>
+                          {isCorrect && <CheckCircle2 className="text-emerald-600" size={20} />}
+                        </button>
+                      );
+                    })}
+                 </div>
+
+                 <div className="flex justify-between w-full max-w-3xl mt-12 pt-8 border-t border-slate-50">
+                    <button 
+                      onClick={() => setCurrentQuizIdx(prev => Math.max(0, prev - 1))}
+                      disabled={currentQuizIdx === 0}
+                      className="px-6 py-3 rounded-xl font-bold text-slate-400 hover:text-indigo-600 transition-colors disabled:opacity-30 disabled:hover:text-slate-400"
+                    >
+                      Previous
+                    </button>
+                    <button 
+                      onClick={() => setCurrentQuizIdx(prev => Math.min(quizResult.length - 1, prev + 1))}
+                      disabled={currentQuizIdx === quizResult.length - 1}
+                      className="bg-indigo-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 disabled:opacity-30"
+                    >
+                      Next Question
+                    </button>
+                 </div>
               </div>
-            </div>
-          )}
-        </>
+          </div>
+        </section>
       )}
 
       {/* Dictionary tool */}
       {activeAI === "dict" && (
-        <div className="space-y-6">
-          <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
-            <div className="flex items-center gap-3">
-              <div className="relative flex-1">
-                <Search size={20} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="bg-white p-8 rounded-[2.5rem] border border-indigo-50 shadow-xl shadow-indigo-100/20">
+            <h3 className="text-xl font-black text-gray-900 mb-6 flex items-center gap-2">
+              <Search className="text-indigo-600" size={24} />
+              Lexicon Dictionary
+            </h3>
+            <div className="flex items-center gap-4">
+              <div className="relative flex-1 group">
+                <Search size={22} className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-indigo-500 transition-colors" />
                 <input
                   type="text"
-                  className="w-full pl-12 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-gray-700 focus:bg-white focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 outline-none transition"
-                  placeholder="Nhập từ tiếng Anh cần tra..."
+                  className="w-full pl-14 pr-6 py-4 bg-slate-50 border border-gray-100 rounded-2xl text-lg font-bold placeholder:text-slate-300 focus:bg-white focus:ring-4 focus:ring-indigo-100 focus:border-indigo-400 outline-none transition-all shadow-inner"
+                  placeholder="Tra cứu từ vựng bất kỳ..."
                   value={dictWord}
                   onChange={(e) => setDictWord(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleDictLookup()}
                 />
               </div>
-              <button onClick={handleDictLookup} disabled={dictLoading || !dictWord.trim()}
-                className="btn-primary py-3 px-6 rounded-xl flex items-center gap-2 disabled:opacity-50">
+              <button 
+                onClick={handleDictLookup} 
+                disabled={dictLoading || !dictWord.trim()}
+                className="bg-indigo-600 text-white py-4 px-10 rounded-2xl font-black text-lg shadow-xl shadow-indigo-200 hover:bg-indigo-700 transition-all disabled:opacity-50 hover:scale-[1.02] active:scale-95 translate-y-0"
+              >
                 {dictLoading ? (
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={(e) => { e.stopPropagation(); cancelDictLookup(); }}
-                      className="bg-red-500 hover:bg-red-600 text-white px-2 py-0.5 rounded text-xs transition mr-1"
-                    >
-                      Huỷ
-                    </button>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
-                    <span>Đang tra...</span>
+                  <div className="flex items-center gap-3">
+                    <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent" />
+                    <span>Searching...</span>
                   </div>
-                ) : <><Search size={18} /> Tra từ</>}
+                ) : "Tra từ"}
               </button>
             </div>
           </div>
 
           {/* Error message */}
           {dictError && (
-            <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-center gap-3">
-              <AlertCircle size={20} className="text-red-500 flex-shrink-0" />
-              <div>
-                <p className="text-red-700 font-medium">{dictError}</p>
-                <button
-                  onClick={() => setDictError(null)}
-                  className="text-red-500 text-sm underline hover:text-red-600"
-                >
-                  Đóng
-                </button>
+            <div className="bg-rose-50 border border-rose-100 rounded-[1.5rem] p-6 flex flex-col items-center gap-4 text-center animate-in zoom-in-95 duration-300">
+              <div className="w-12 h-12 bg-rose-100 rounded-full flex items-center justify-center">
+                <AlertCircle size={28} className="text-rose-500" />
               </div>
+              <div>
+                <p className="text-rose-900 font-black text-lg">{dictError}</p>
+                <p className="text-rose-700 text-sm mt-1">Vui lòng kiểm tra lại từ khóa và thử lại.</p>
+              </div>
+              <button
+                onClick={() => setDictError(null)}
+                className="text-rose-600 text-xs font-black uppercase tracking-widest hover:text-rose-800 transition-colors"
+              >
+                Dismiss
+              </button>
             </div>
           )}
 
@@ -1420,19 +1675,34 @@ function AIToolsTab() {
 
       {/* Knowledge Graph */}
       {activeAI === "graph" && (
-        <div className="space-y-6">
-          <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
-            <div className="flex items-center gap-3">
-              <input
-                type="text"
-                className="flex-1 border border-gray-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-cyan-500/30 focus:border-cyan-500 outline-none"
-                placeholder="Chủ đề (để trống = tất cả)..."
-                value={graphTopic}
-                onChange={(e) => setGraphTopic(e.target.value || "all")}
-              />
-              <button onClick={handleLoadGraph} disabled={graphLoading}
-                className="flex items-center gap-2 px-6 py-3 bg-cyan-600 text-white rounded-xl hover:bg-cyan-700 disabled:opacity-50">
-                <Network size={18} /> {graphLoading ? "Đang tải..." : "Tải đồ thị"}
+        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="bg-white p-8 rounded-[2.5rem] border border-cyan-50 shadow-xl shadow-cyan-100/20">
+            <h3 className="text-xl font-black text-gray-900 mb-6 flex items-center gap-2">
+              <Network className="text-cyan-600" size={24} />
+              Knowledge Mapping
+            </h3>
+            <div className="flex items-center gap-4">
+              <div className="relative flex-1 group">
+                <Network size={22} className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-cyan-500 transition-colors" />
+                <input
+                  type="text"
+                  className="w-full pl-14 pr-6 py-4 bg-slate-50 border border-gray-100 rounded-2xl text-lg font-bold placeholder:text-slate-300 focus:bg-white focus:ring-4 focus:ring-cyan-100 focus:border-cyan-400 outline-none transition-all shadow-inner"
+                  placeholder="Nhập chủ đề để lọc đồ thị (vd: all, environment...)"
+                  value={graphTopic}
+                  onChange={(e) => setGraphTopic(e.target.value)}
+                />
+              </div>
+              <button 
+                onClick={handleLoadGraph} 
+                disabled={graphLoading}
+                className="bg-cyan-600 text-white py-4 px-10 rounded-2xl font-black text-lg shadow-xl shadow-cyan-200 hover:bg-cyan-700 transition-all disabled:opacity-50 hover:scale-[1.02] active:scale-95 translate-y-0"
+              >
+                {graphLoading ? (
+                  <div className="flex items-center gap-3">
+                    <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent" />
+                    <span>Loading...</span>
+                  </div>
+                ) : "Tải đồ thị"}
               </button>
             </div>
           </div>
