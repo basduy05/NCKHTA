@@ -235,15 +235,16 @@ def get_llm(provider=None):
     cohere_key = _get_setting("COHERE_API_KEY")
     if cohere_key and provider in (None, "cohere"):
         os.environ["COHERE_API_KEY"] = cohere_key
-        # Use command-r-plus-08-2024 with temperature 0 for stability
-        return ChatCohere(model="command-r-plus-08-2024", temperature=0)
+        # Use 2026 standard model
+        return ChatCohere(model="command-a", temperature=0)
 
     if provider != "cohere" and provider != "openai":
         google_key = _get_setting("GOOGLE_API_KEY")
         if google_key and provider in (None, "google"):
+            # Set environment variable for langchain
             os.environ["GOOGLE_API_KEY"] = google_key
-            # Use gemini-2.0-flash with temperature 0 for stability
-            return ChatGoogleGenerativeAI(model="gemini-2.0-flash", timeout=30, temperature=0)
+            # Use 2026 standard model
+            return ChatGoogleGenerativeAI(model="gemini-2.5-flash-lite", timeout=30, temperature=0)
 
     if provider != "google" and provider != "cohere":
         openai_key = _get_setting("OPENAI_API_KEY")
@@ -773,7 +774,7 @@ async def translate_meanings_with_ai_stream(word: str, meanings: list, free_data
                     yield chunk.content
         except Exception as e:
             error_str = str(e).lower()
-            if any(k in error_str for k in ["quota", "rate_limit", "resource_exhausted", "429", "too many requests", "503"]):
+            if any(k in error_str for k in ["quota", "rate_limit", "resource_exhausted", "429", "too many requests", "503", "403", "404", "forbidden", "not found"]):
                 if llm_name == "Primary":
                     print(f"[LLM QUOTA] Primary LLM quota exceeded in stream. Falling back to Cohere...")
                     fallback_llm = get_llm(provider="cohere")
@@ -896,8 +897,8 @@ def lookup_dictionary_full_ai(word: str):
             response = _safe_invoke(chain, {"word": word})
         except Exception as e:
             error_str = str(e).lower()
-            if any(k in error_str for k in ["quota", "rate_limit", "resource_exhausted", "429", "too many requests"]):
-                print(f"[LLM QUOTA] Primary LLM quota exceeded. Retrying with Cohere in lookup_full...")
+            if any(k in error_str for k in ["quota", "rate_limit", "resource_exhausted", "429", "too many requests", "403", "404", "forbidden", "not found"]):
+                print(f"[LLM ERROR] Primary LLM error: {e}. Retrying with Cohere in lookup_full...")
                 fallback_llm = get_llm(provider="cohere")
                 if fallback_llm:
                     chain = prompt | fallback_llm
@@ -971,7 +972,7 @@ async def lookup_dictionary_full_ai_stream(word: str):
                     yield chunk.content
         except Exception as e:
             error_str = str(e).lower()
-            if any(k in error_str for k in ["quota", "rate_limit", "resource_exhausted", "429", "too many requests", "503"]):
+            if any(k in error_str for k in ["quota", "rate_limit", "resource_exhausted", "429", "too many requests", "503", "403", "404", "forbidden", "not found"]):
                 if llm_name == "Primary":
                     print(f"[LLM QUOTA] Primary LLM quota exceeded in stream. Falling back to Cohere...")
                     fallback_llm = get_llm(provider="cohere")

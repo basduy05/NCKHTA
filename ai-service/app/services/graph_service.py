@@ -35,7 +35,7 @@ def get_graph():
         uri = _get_setting("NEO4J_URI")
         username = _get_setting("NEO4J_USERNAME")
         password = _get_setting("NEO4J_PASSWORD")
-        db_name = _get_setting("NEO4J_DATABASE", username)
+        db_name = _get_setting("NEO4J_DATABASE", "neo4j")
 
         if not uri or not username or not password:
             last_error = "Neo4j credentials not configured. Set them in Admin > Settings or .env file."
