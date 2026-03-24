@@ -1287,6 +1287,13 @@ function AIToolsTab({ setShowCreditModal, handleTextareaDoubleClick }: { setShow
     <div className="space-y-8 max-w-5xl mx-auto pb-12">
       <section className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
+          <h1 className="text-3xl font-black text-gray-900 tracking-tight">Teacher Dashboard</h1>
+          <p className="text-gray-500 font-medium">Quản lý lớp học và tài nguyên giảng dạy AI</p>
+        </div>
+      </section>
+
+      <section className="flex flex-col md:flex-row md:items-center justify-between gap-4 mt-8">
+        <div>
           <h2 className="text-2xl font-black tracking-tight text-gray-900">Nâng tầm giảng dạy với AI</h2>
           <p className="text-gray-500 text-sm mt-1">Phân tích văn bản, tạo học liệu và tra cứu đa nền tảng chỉ trong vài giây.</p>
         </div>
@@ -1394,10 +1401,11 @@ function AIToolsTab({ setShowCreditModal, handleTextareaDoubleClick }: { setShow
         })}
       </div>
 
-      {activeAI === "vocab" && vocabResult.length > 0 && (
-        <section className="space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
-          <div>
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+      {activeAI === "vocab" && (
+        <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          {vocabResult.length > 0 && (
+            <section>
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
               <h3 className="text-xl font-black text-gray-900 flex items-center gap-2">
                 <BrainCircuit className="text-indigo-600" size={24} />
                 Flashcard Slider
@@ -1467,7 +1475,6 @@ function AIToolsTab({ setShowCreditModal, handleTextareaDoubleClick }: { setShow
                         )}
                       </div>
                     </div>
-                    </div>
                   );
                 })}
               </div>
@@ -1497,7 +1504,7 @@ function AIToolsTab({ setShowCreditModal, handleTextareaDoubleClick }: { setShow
                  </button>
               </div>
             </div>
-          </div>
+          </section>
 
           {/* Syllable Breakdown Section */}
           <div className="bg-slate-50 p-8 rounded-[3rem] border border-slate-100">
@@ -1595,13 +1602,12 @@ function AIToolsTab({ setShowCreditModal, handleTextareaDoubleClick }: { setShow
             {/* Background design elements */}
             <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/20 rounded-full blur-3xl -mr-32 -mt-32"></div>
             <div className="absolute bottom-0 left-0 w-48 h-48 bg-violet-600/20 rounded-full blur-3xl -ml-24 -mb-24"></div>
-          </div>
-        </section>
+          </section>
+        </div>
       )}
 
-      {/* Practice Quiz Result */}
-      {activeAI === "vocab" && quizResult.length > 0 && (
-        <section className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pt-8 border-t border-slate-100">
+          {quizResult.length > 0 && (
+            <section className="space-y-6 pt-8 border-t border-slate-100">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <h3 className="text-xl font-black text-gray-900 flex items-center gap-2">
               <BrainCircuit className="text-rose-500" size={24} />
@@ -1729,9 +1735,9 @@ function AIToolsTab({ setShowCreditModal, handleTextareaDoubleClick }: { setShow
               {/* Decorative elements */}
               <div className="absolute top-0 right-0 w-32 h-32 bg-rose-50 rounded-full -mr-16 -mt-16"></div>
               <div className="absolute bottom-0 left-0 w-24 h-24 bg-indigo-50 rounded-full -ml-12 -mb-12"></div>
+            </section>
           </div>
-        </section>
-      )}
+        )}
 
       {/* Dictionary tool */}
       {activeAI === "dict" && (
@@ -2090,11 +2096,15 @@ function GrammarTab() {
       if (!res.ok) throw new Error(`API error ${res.status}`);
       const data = await res.json();
       setRules(Array.isArray(data) ? data : []);
-    } catch { }
-    finally { setLoading(false); }
+    } catch (e) {
+    } finally {
+      setLoading(false);
+    }
   };
 
-  useEffect(() => { fetchRules(); }, []);
+  useEffect(() => {
+    fetchRules();
+  }, []);
 
   return (
     <div className="animate-in fade-in duration-300">
@@ -2622,5 +2632,14 @@ function PracticeTab({ setShowCreditModal }: { setShowCreditModal: (s: boolean) 
         )}
       </div>
     </div>
+  );
+}
+}
+
+export default function TeacherPage() {
+  return (
+    <Suspense fallback={<div className="flex justify-center items-center h-screen"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600"></div></div>}>
+      <TeacherDashboardContent />
+    </Suspense>
   );
 }
