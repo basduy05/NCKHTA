@@ -79,7 +79,7 @@ function OverviewTab() {
 
     const fetchStats = async () => {
       try {
-        const res = await authFetch(`${API_URL}/admin/stats`, { signal: AbortSignal.timeout(5000) });
+        const res = await authFetch(`${API_URL}/admin/stats`);
         if (res.status === 401 || res.status === 403) throw new Error("Unauthorized");
         if (!res.ok) throw new Error("API failed");
         const data = await res.json();

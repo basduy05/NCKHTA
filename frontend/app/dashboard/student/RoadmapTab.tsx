@@ -14,14 +14,41 @@ export default function RoadmapTab({ API_URL }: RoadmapTabProps) {
   const [roadmap, setRoadmap] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [streamingText, setStreamingText] = useState("");
 
   const fetchRoadmap = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setStreamingText("");
     try {
       const res = await authFetch(`${API_URL}/student/roadmap`);
       if (res.ok) {
-        setRoadmap(await res.json());
+        const reader = res.body?.getReader();
+        if (!reader) throw new Error("No reader");
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n\n");
+          buffer = lines.pop() || "";
+          for (const line of lines) {
+            if (line.startsWith("data: ")) {
+              const dataStr = line.replace("data: ", "");
+              if (dataStr === "[DONE]") continue;
+              try {
+                const data = JSON.parse(dataStr);
+                if (data.status === "generating") {
+                  setStreamingText(prev => (prev + (data.chunk || "")).slice(-500));
+                } else if (data.title) {
+                  setRoadmap(data);
+                }
+              } catch (e) {}
+            }
+          }
+        }
       } else {
         const err = await res.json().catch(() => ({}));
         setError(err.detail || "Không thể tạo lộ trình lúc này.");
@@ -38,10 +65,35 @@ export default function RoadmapTab({ API_URL }: RoadmapTabProps) {
   }, [fetchRoadmap]);
 
   if (loading) return (
-    <div className="bg-white rounded-2xl p-12 border border-gray-100 text-center shadow-sm">
-      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4" />
-      <h3 className="text-lg font-bold text-gray-700">Đang phân tích dữ liệu học tập...</h3>
-      <p className="text-gray-500 text-sm mt-2">AI đang xây dựng lộ trình cá nhân hóa dựa trên vốn từ vựng của bạn.</p>
+    <div className="space-y-6">
+      <div className="bg-slate-900 rounded-[3rem] p-10 border border-slate-700 shadow-2xl overflow-hidden relative group min-h-[400px] flex flex-col justify-center">
+        <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center gap-4">
+            <div className="w-3 h-3 bg-cyan-400 rounded-full animate-pulse shadow-[0_0_15px_rgba(34,211,238,0.8)]"></div>
+            <h3 className="text-cyan-400 font-mono text-sm font-bold uppercase tracking-[0.2em]">Neural Roadmap Architect</h3>
+          </div>
+          <div className="flex gap-2">
+            <span className="w-2 h-2 rounded-full bg-slate-800"></span>
+            <span className="w-2 h-2 rounded-full bg-slate-800"></span>
+            <span className="w-2 h-2 rounded-full bg-slate-800"></span>
+          </div>
+        </div>
+        
+        <div className="font-mono text-sm text-cyan-50/60 h-48 overflow-hidden relative">
+          <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-slate-900 to-transparent pointer-events-none z-10"></div>
+          <p className="whitespace-pre-wrap break-all leading-relaxed">
+            {streamingText || "> Initializing pedagogical analysis...\n> Retrieving vocabulary mastery data...\n> Constructing optimal learning vectors...\n> Waiting for AI sequence stream..."}
+          </p>
+        </div>
+
+        <div className="mt-8 flex items-center justify-between border-t border-slate-800 pt-6">
+          <div className="flex items-center gap-3">
+            <div className="animate-spin rounded-full h-4 w-4 border-2 border-cyan-500/30 border-t-cyan-500"></div>
+            <span className="text-slate-500 font-mono text-[10px] uppercase tracking-widest">Processing Data Chunks</span>
+          </div>
+          <span className="text-slate-700 font-mono text-[10px]">v.roadmap-alpha-9</span>
+        </div>
+      </div>
     </div>
   );
 

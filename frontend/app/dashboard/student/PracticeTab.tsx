@@ -21,6 +21,7 @@ export default function PracticeTab({ API_URL, setShowCreditModal }: PracticeTab
   const [submitted, setSubmitted] = useState(false);
   const [score, setScore] = useState(0);
   const [source, setSource] = useState<"ai" | "official">("ai");
+  const [streamingText, setStreamingText] = useState("");
 
   const generatePractice = async () => {
     if (source === "official") {
@@ -42,6 +43,7 @@ export default function PracticeTab({ API_URL, setShowCreditModal }: PracticeTab
     }
 
     setLoading(true);
+    setStreamingText("");
     setPractice({ status: "generating", questions: [] });
     setAnswers({});
     setSubmitted(false);
@@ -80,8 +82,9 @@ export default function PracticeTab({ API_URL, setShowCreditModal }: PracticeTab
         const { value, done: readerDone } = await reader.read();
         done = readerDone;
         if (value) {
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split('\n');
+          const chunkStr = decoder.decode(value, { stream: true });
+          buffer += chunkStr;
+          const lines = buffer.split('\n\n');
           buffer = lines.pop() || "";
 
           for (const line of lines) {
@@ -91,7 +94,9 @@ export default function PracticeTab({ API_URL, setShowCreditModal }: PracticeTab
 
             try {
               const chunkData = JSON.parse(rawJson);
-              if (chunkData.status === "success" || !chunkData.status) {
+              if (chunkData.status === "generating") {
+                setStreamingText(prev => (prev + (chunkData.chunk || "")).slice(-500));
+              } else if (chunkData.status === "success" || !chunkData.status) {
                 finalData = { ...finalData, ...chunkData };
               }
             } catch (e) { }
@@ -99,18 +104,6 @@ export default function PracticeTab({ API_URL, setShowCreditModal }: PracticeTab
         }
       }
       refreshUser();
-      
-      if (buffer.trim()) {
-          try {
-              let rawJson = buffer.trim();
-              if (rawJson.startsWith("data: ")) rawJson = rawJson.replace("data: ", "");
-              if (rawJson !== "[DONE]") {
-                  const chunkData = JSON.parse(rawJson);
-                  finalData = { ...finalData, ...chunkData };
-              }
-          } catch (e) {}
-      }
-
       setPractice(finalData);
     } catch (e) {
       alert("Lỗi khi tạo bài luyện tập");
@@ -165,7 +158,26 @@ export default function PracticeTab({ API_URL, setShowCreditModal }: PracticeTab
         </div>
       </div>
 
-      {practice && skill === "reading" && (
+      {loading && (
+        <div className="bg-slate-900 rounded-xl p-6 border border-slate-700 shadow-2xl overflow-hidden relative group">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
+              <h3 className="text-emerald-500 font-mono text-xs font-bold uppercase tracking-widest">AI Terminal Output</h3>
+            </div>
+            <span className="text-slate-500 font-mono text-[10px] animate-pulse">RECEPTION: CHUNKING...</span>
+          </div>
+          <div className="font-mono text-sm text-slate-300 h-32 overflow-hidden relative">
+            <div className="absolute inset-0 bg-gradient-to-t from-slate-900 to-transparent pointer-events-none z-10"></div>
+            <p className="whitespace-pre-wrap break-all opacity-80 leading-relaxed">
+              {streamingText || "Establishing secure connection to Lexicon LLM...\nWaiting for first data chunk..."}
+            </p>
+          </div>
+          <div className="absolute bottom-4 right-4 text-[10px] font-bold text-slate-600 font-mono uppercase">Lexicon-V4-Stream ⚡</div>
+        </div>
+      )}
+
+      {practice && skill === "reading" && !loading && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
           <h3 className="text-xl font-bold mb-4">{practice.title || "Bài đọc hiểu"}</h3>
           <div className="bg-gray-50 p-4 rounded-lg mb-6 whitespace-pre-wrap leading-relaxed">
@@ -222,9 +234,133 @@ export default function PracticeTab({ API_URL, setShowCreditModal }: PracticeTab
         </div>
       )}
 
-      {practice && (skill === "listening" || skill === "writing" || !["reading", "speaking"].includes(skill)) && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 text-center text-gray-500">
-          Yêu cầu tính năng {skill} đã được mô phỏng. Dữ liệu mock: {JSON.stringify(practice).substring(0, 100)}...
+      {practice && (skill === "listening" || (skill !== "reading" && skill !== "speaking")) && !loading && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+          <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-black text-gray-900">{practice.title || `${testType} ${skill.toUpperCase()} Practice`}</h3>
+              {skill === "listening" && (
+                  <div className="flex items-center gap-2 bg-amber-50 text-amber-700 px-4 py-2 rounded-full border border-amber-100 text-sm font-bold animate-pulse">
+                      <div className="w-2 h-2 bg-amber-500 rounded-full"></div>
+                      AUDIO GENERATING...
+                  </div>
+              )}
+          </div>
+          
+          {practice.passage && (
+            <div className="bg-gray-50 p-6 rounded-2xl mb-8 border border-gray-100 italic text-gray-700 leading-relaxed shadow-inner">
+              {practice.passage}
+            </div>
+          )}
+
+          <div className="space-y-8">
+            {practice.questions?.map((q: any, idx: number) => (
+              <div key={idx} className={`rounded-2xl p-6 transition-all duration-300 border-2 ${submitted ? (answers[idx] === q.correct_answer ? 'border-green-100 bg-green-50/30' : 'border-red-100 bg-red-50/30') : 'border-gray-50 hover:border-blue-100 bg-white shadow-sm'}`}>
+                <div className="flex items-start gap-4">
+                    <div className="w-8 h-8 rounded-lg bg-slate-900 text-white flex items-center justify-center font-bold shrink-0 shadow-lg">
+                        {idx + 1}
+                    </div>
+                    <div className="flex-1">
+                        <p className="font-extrabold text-lg text-slate-800 mb-6 leading-snug">{q.question || q.q}</p>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {q.options?.map((opt: string, oIdx: number) => {
+                            const optChar = String.fromCharCode(65 + oIdx);
+                            const isCorrect = optChar === q.correct_answer || opt === q.correct_answer || oIdx === q.ans;
+                            const isSelected = answers[idx] === oIdx;
+                            
+                            let btnCls = "border-gray-100 bg-white hover:border-blue-400 hover:bg-blue-50";
+                            if (submitted) {
+                                if (isCorrect) btnCls = "border-green-500 bg-green-100 text-green-800 ring-4 ring-green-500/10";
+                                else if (isSelected) btnCls = "border-red-500 bg-red-100 text-red-800";
+                                else btnCls = "opacity-40 border-gray-100";
+                            } else if (isSelected) {
+                                btnCls = "border-blue-600 bg-blue-50 text-blue-700 ring-4 ring-blue-500/10";
+                            }
+
+                            return (
+                                <button key={oIdx} 
+                                    disabled={submitted}
+                                    onClick={() => setAnswers({...answers, [idx]: oIdx})}
+                                    className={`p-4 rounded-xl border-2 text-left transition-all duration-200 flex items-center gap-3 group ${btnCls}`}
+                                >
+                                    <span className={`w-7 h-7 rounded-md flex items-center justify-center font-bold text-sm ${isSelected ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-500 group-hover:bg-blue-200 group-hover:text-blue-700'}`}>
+                                        {optChar}
+                                    </span>
+                                    <span className="font-bold">{opt}</span>
+                                </button>
+                            );
+                        })}
+                        </div>
+
+                        {submitted && (
+                            <div className={`mt-6 p-4 rounded-xl border ${answers[idx] === q.correct_answer ? 'bg-green-50 border-green-200 text-green-700' : 'bg-red-50 border-red-200 text-red-700'}`}>
+                                <p className="font-black flex items-center gap-2 mb-1">
+                                    {answers[idx] === q.correct_answer ? '✨ CHÍNH XÁC!' : '❌ CHƯA ĐÚNG!'}
+                                </p>
+                                <p className="text-sm leading-relaxed opacity-90">{q.explanation || "Giải thích đang được AI cập nhật..."}</p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+              </div>
+            ))}
+          </div>
+          
+          {!submitted && practice.questions?.length > 0 && (
+              <button 
+                  onClick={() => {
+                        let s = 0;
+                        practice.questions.forEach((q: any, i: number) => {
+                            const optChar = String.fromCharCode(65 + answers[i]);
+                            if (optChar === q.correct_answer || answers[i] === q.ans || practice.questions[i].options[answers[i]] === q.correct_answer) s++;
+                        });
+                        setScore(s);
+                        setSubmitted(true);
+                  }}
+                  className="w-full mt-10 bg-slate-900 text-white py-5 rounded-2xl font-black text-xl shadow-2xl hover:bg-black transition-all transform active:scale-95"
+              >
+                  NỘP BÀI VÀ XEM KẾT QUẢ
+              </button>
+          )}
+
+          {submitted && (
+              <div className="mt-12 bg-gradient-to-br from-blue-600 to-indigo-700 p-10 rounded-[2rem] text-center text-white shadow-2xl relative overflow-hidden">
+                  <div className="relative z-10">
+                      <Trophy size={64} className="mx-auto mb-4 text-yellow-300 animate-bounce" />
+                      <h3 className="text-3xl font-black mb-2">Kết quả: {score}/{practice.questions?.length}</h3>
+                      <p className="text-blue-100 mb-8 font-medium">Tuyệt vời! Bạn đang tiến bộ rất nhanh.</p>
+                      <button onClick={() => setPractice(null)} className="bg-white text-blue-600 px-10 py-4 rounded-2xl font-bold shadow-lg hover:shadow-xl transition-all">Luyện tập bài khác</button>
+                  </div>
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16 blur-3xl"></div>
+              </div>
+          )}
+        </div>
+      )}
+
+      {practice && skill === "writing" && !loading && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8 max-w-4xl mx-auto">
+            <h3 className="text-2xl font-black mb-6 text-slate-800 border-b pb-4 flex items-center gap-3">
+                <Award className="text-blue-600" /> Writing Task: {practice.title || "Essay Preparation"}
+            </h3>
+            
+            <div className="bg-blue-50 p-6 rounded-2xl border border-blue-100 mb-8">
+                <h4 className="font-black text-blue-800 mb-3 uppercase tracking-wider text-xs">Prompt / Question</h4>
+                <p className="text-slate-700 font-medium leading-relaxed italic">{practice.passage || practice.prompt || "Please write an essay discussed in the context below."}</p>
+            </div>
+
+            <textarea 
+                className="w-full h-80 p-6 border-2 border-gray-100 rounded-3xl outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all font-serif text-lg leading-relaxed shadow-inner bg-gray-50/30"
+                placeholder="Start writing your essay here... (Word count will be analyzed by AI)"
+            />
+            
+            <div className="mt-8 flex justify-between items-center text-sm font-bold text-gray-400">
+                <div className="flex gap-4">
+                    <span>Words: 0</span>
+                    <span>Estimated Score: N/A</span>
+                </div>
+                <button className="btn-primary px-8 py-3 rounded-xl shadow-xl hover:shadow-2xl transition transform active:scale-95">
+                    Nộp bài chấm điểm AI
+                </button>
+            </div>
         </div>
       )}
 

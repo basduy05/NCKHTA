@@ -20,6 +20,7 @@ export default function GrammarTab({ API_URL }: GrammarTabProps) {
   const [answers, setAnswers] = useState<Record<number, string>>({});
   const [submitted, setSubmitted] = useState(false);
   const [score, setScore] = useState(0);
+  const [streamingText, setStreamingText] = useState("");
 
   const fetchRules = async () => {
     setLoading(true);
@@ -42,15 +43,41 @@ export default function GrammarTab({ API_URL }: GrammarTabProps) {
     setPracticing(true);
     setSubmitted(false);
     setAnswers({});
+    setQuestions([]);
+    setStreamingText("");
     try {
       const res = await authFetch(`${API_URL}/student/grammar/practice`, {
         method: "POST",
         body: JSON.stringify({ rule_ids: selectedRules, difficulty })
       });
       if (res.ok) {
-        const data = await res.json();
-        refreshUser();
-        setQuestions(data.questions || []);
+        const reader = res.body?.getReader();
+        if (!reader) throw new Error("No reader");
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n\n");
+          buffer = lines.pop() || "";
+          for (const line of lines) {
+            if (line.startsWith("data: ")) {
+              const dataStr = line.replace("data: ", "");
+              if (dataStr === "[DONE]") continue;
+              try {
+                const data = JSON.parse(dataStr);
+                if (data.status === "generating") {
+                  setStreamingText(prev => (prev + (data.chunk || "")).slice(-500));
+                } else if (Array.isArray(data)) {
+                  setQuestions(data);
+                  refreshUser();
+                }
+              } catch (e) {}
+            }
+          }
+        }
       }
     } catch (e) { console.error(e); }
   };
@@ -73,7 +100,31 @@ export default function GrammarTab({ API_URL }: GrammarTabProps) {
           <h2 className="text-xl font-bold">Luyện tập Ngữ pháp</h2>
           <button onClick={() => setPracticing(false)} className="text-gray-500 hover:text-red-600">Thoát</button>
         </div>
-        {questions.length === 0 ? <p className="text-center py-10">Đang chuẩn bị bài tập với AI...</p> : (
+        {questions.length === 0 ? (
+          <div className="bg-slate-900 rounded-3xl p-8 border border-slate-700 shadow-2xl overflow-hidden relative group max-w-2xl mx-auto my-12">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_10px_rgba(16,185,129,0.8)]"></div>
+                <h3 className="text-emerald-500 font-mono text-xs font-bold uppercase tracking-widest">Grammar AI Stream</h3>
+              </div>
+              <div className="flex gap-1.5">
+                <div className="w-2 h-2 bg-slate-700 rounded-full"></div>
+                <div className="w-2 h-2 bg-slate-700 rounded-full"></div>
+                <div className="w-2 h-2 bg-slate-700 rounded-full"></div>
+              </div>
+            </div>
+            <div className="font-mono text-sm text-slate-300 h-48 overflow-hidden relative">
+              <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-transparent pointer-events-none z-10"></div>
+              <p className="whitespace-pre-wrap break-all opacity-90 leading-relaxed font-mono">
+                {streamingText || "> Initializing grammar engine...\n> Analyzing selected rules...\n> Generating contextual exercises..."}
+              </p>
+            </div>
+            <div className="mt-6 flex items-center justify-between border-t border-slate-800 pt-4">
+              <span className="text-slate-500 font-mono text-[10px] animate-pulse">STATUS: CONSTRUCTING_SENTENCES</span>
+              <span className="text-slate-600 font-mono text-[10px]">v.gram-3.1</span>
+            </div>
+          </div>
+        ) : (
             <div className="space-y-6">
                 {questions.map((q, i) => (
                     <div key={i} className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm">

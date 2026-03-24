@@ -72,16 +72,41 @@ export function AIToolsTab({ authFetch, user, API_URL, setShowCreditModal, handl
   const handleExtractVocab = async () => {
     if (!text.trim()) return;
     setLoading(true);
+    setVocabResult([]);
     try {
       const res = await authFetch(`${API_URL}/teacher/ai/extract-vocab`, {
         method: "POST",
         body: JSON.stringify({ text })
       });
       if (!res.ok) throw new Error("API error");
-      const data = await res.json();
-      setVocabResult(data.vocabulary || []);
-      setCurrentCardIdx(0);
-    } catch {
+      
+      const reader = res.body?.getReader();
+      if (!reader) throw new Error("No reader");
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n\n");
+        buffer = lines.pop() || "";
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            const dataStr = line.replace("data: ", "");
+            if (dataStr === "[DONE]") continue;
+            try {
+              const data = JSON.parse(dataStr);
+              if (data.vocabulary) {
+                setVocabResult(data.vocabulary);
+                setCurrentCardIdx(0);
+              }
+            } catch (e) {}
+          }
+        }
+      }
+    } catch (err) {
+      console.error(err);
       alert("Extraction failed. Check Credits.");
     } finally {
       setLoading(false);
@@ -91,6 +116,7 @@ export function AIToolsTab({ authFetch, user, API_URL, setShowCreditModal, handl
   const handleFileProcess = async () => {
     if (!file) return;
     setLoading(true);
+    setVocabResult([]);
     const formData = new FormData();
     formData.append("file", file);
     try {
@@ -100,9 +126,34 @@ export function AIToolsTab({ authFetch, user, API_URL, setShowCreditModal, handl
       });
       if (res.status === 402) return setShowCreditModal(true);
       if (!res.ok) throw new Error("API failed");
-      const data = await res.json();
-      setVocabResult(data.vocabulary || []);
-    } catch {
+      
+      const reader = res.body?.getReader();
+      if (!reader) throw new Error("No reader");
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n\n");
+        buffer = lines.pop() || "";
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            const dataStr = line.replace("data: ", "");
+            if (dataStr === "[DONE]") continue;
+            try {
+              const data = JSON.parse(dataStr);
+              if (data.vocabulary) {
+                setVocabResult(data.vocabulary);
+                setCurrentCardIdx(0);
+              }
+            } catch (e) {}
+          }
+        }
+      }
+    } catch (err) {
+      console.error(err);
       alert("Error processing file");
     } finally {
       setLoading(false);
@@ -112,18 +163,43 @@ export function AIToolsTab({ authFetch, user, API_URL, setShowCreditModal, handl
   const handleGenerateQuiz = async () => {
     if (!text.trim()) return;
     setLoading(true);
+    setQuizResult([]);
     try {
       const res = await authFetch(`${API_URL}/teacher/ai/generate-quiz`, {
         method: "POST",
         body: JSON.stringify({ text })
       });
       if (!res.ok) throw new Error("Quiz generation failed");
-      const data = await res.json();
-      setQuizResult(data.quiz || []);
-      setCurrentQuizIdx(0);
-      setQuizAnswers({});
-      setQuizSubmitted(false);
-    } catch {
+      
+      const reader = res.body?.getReader();
+      if (!reader) throw new Error("No reader");
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n\n");
+        buffer = lines.pop() || "";
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            const dataStr = line.replace("data: ", "");
+            if (dataStr === "[DONE]") continue;
+            try {
+              const data = JSON.parse(dataStr);
+              if (data.quiz) {
+                setQuizResult(data.quiz);
+                setCurrentQuizIdx(0);
+                setQuizAnswers({});
+                setQuizSubmitted(false);
+              }
+            } catch (e) {}
+          }
+        }
+      }
+    } catch (err) {
+      console.error(err);
       alert("Quiz failed. Check Credits");
     } finally {
       setLoading(false);
