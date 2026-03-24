@@ -107,24 +107,36 @@ def get_db(retries=3):
     for attempt in range(retries):
         try:
             if TURSO_URL and TURSO_AUTH_TOKEN:
-                # Direct Connection Strategy (More reliable for ephemeral environments like Render)
-                # We prioritize direct connection to avoid 'local replica' sync issues on read-only filesystems
+                # Direct Connection Strategy (Standard and safest for Render/Production)
                 try:
-                    url_to_use = TURSO_URL.replace("libsql://", "https://")
-                    if HAS_LIBSQL_EXPERIMENTAL:
-                        conn = libsql.connect(url_to_use, auth_token=TURSO_AUTH_TOKEN)
+                    url_to_use = TURSO_URL.strip()
+                    if not url_to_use.startswith(("https://", "libsql://")):
+                        url_to_use = f"https://{url_to_use}"
                     else:
+                        url_to_use = url_to_use.replace("libsql://", "https://")
+                    
+                    # Try connecting with both auth_token (snake_case) and authToken (camelCase)
+                    try:
                         conn = libsql.connect(url_to_use, auth_token=TURSO_AUTH_TOKEN)
-                    print(f"[DB] Connected to Turso (Direct)")
+                    except (TypeError, Exception):
+                        try:
+                            conn = libsql.connect(url_to_use, authToken=TURSO_AUTH_TOKEN)
+                        except (TypeError, Exception):
+                            # Last resort: token in URL
+                            token_url = f"{url_to_use}?authToken={TURSO_AUTH_TOKEN}"
+                            conn = libsql.connect(token_url)
+                    
+                    print(f"[DB] Connected to Turso (Verified Direct Strategy)")
                 except Exception as e:
-                    # Fallback to Replica mode only if NOT on Render/Vercel
+                    # Fallback to Local Replica only if absolutely needed and on non-production
                     if HAS_LIBSQL_EXPERIMENTAL and not os.getenv("RENDER"):
-                        print(f"[DB] Direct failed, trying local replica: {e}")
+                        print(f"[DB] Direct failed, trying replica: {e}")
                         conn = libsql.connect(database=DB_PATH, sync_url=TURSO_URL, auth_token=TURSO_AUTH_TOKEN)
                     else:
+                        print(f"[DB CONNECTION ERROR] Critical fail: {e}")
                         raise e
             else:
-                # standard sqlite3 or libsql without sync
+                # Standard Local SQLite fallback
                 conn = libsql.connect(DB_PATH)
             
             # Use standard Row for builtin sqlite3 if possible, but our wrapper is more consistent
