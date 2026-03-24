@@ -3,11 +3,99 @@ from ..database import get_db
 from ..services import auth_service, llm_service, graph_service, file_service
 from pydantic import BaseModel
 from typing import Optional, List
+import datetime
+import math
+
+# --- FSRS Spaced Repetition Logic (Simplified FSRS v4) ---
+class FSRS:
+    # Default weights for FSRS v4 (simplified)
+    # w[0]-w[3]: initial stability for ratings 1-4
+    # w[4]: difficulty initial weight
+    # w[5]: difficulty adjunct weight
+    # w[6]: difficulty decay weight
+    # w[7]: stability decay weight
+    # w[8]: stability exponential weight
+    # w[9]: stability benefit weight (for correct recall)
+    # w[10]: stability punishment weight (for forgetting)
+    W = [0.4, 0.6, 2.4, 5.8, 4.93, 0.94, 0.86, 0.01, 1.49, 0.14, 0.94, 2.18, 0.05, 0.34, 1.26, 0.26, 2.05]
+
+    @staticmethod
+    def init_stability(rating):
+        return FSRS.W[rating - 1]
+
+    @staticmethod
+    def init_difficulty(rating):
+        return min(max(FSRS.W[4] - FSRS.W[5] * (rating - 3), 1.0), 10.0)
+
+    @staticmethod
+    def next_interval(stability, request_retention=0.9):
+        return max(1, round(stability / 9 * (1 / request_retention - 1)))
+
+    @staticmethod
+    def update_difficulty(difficulty, rating):
+        next_d = difficulty - FSRS.W[6] * (rating - 3)
+        return min(max(next_d, 1.0), 10.0)
+
+    @staticmethod
+    def update_stability_forget(stability, difficulty, retrievability):
+        # stability punishment after forgetting
+        return min(FSRS.W[11] * math.pow(difficulty, -FSRS.W[12]) * (math.pow(stability + 1, FSRS.W[13]) - 1) * math.exp(FSRS.W[14] * (1 - retrievability)), stability)
+
+    @staticmethod
+    def update_stability_recall(stability, difficulty, retrievability, rating):
+        hard_penalty = FSRS.W[15] if rating == 2 else 1.0
+        easy_bonus = FSRS.W[16] if rating == 4 else 1.0
+        return stability * (1 + math.exp(FSRS.W[8]) * (11 - difficulty) * math.pow(stability, -FSRS.W[9]) * (math.exp((1 - retrievability) * FSRS.W[10]) - 1) * hard_penalty * easy_bonus)
+
+    @staticmethod
+    def get_retrievability(stability, elapsed_days):
+        return math.pow(1 + 0.1 * elapsed_days / stability, -1) if stability > 0 else 0
+
+    @classmethod
+    def update_card(cls, card, rating):
+        # card = {stability, difficulty, scheduled_at, last_reviewed_at, reps, lapses}
+        # rating: 1 (Again), 2 (Hard), 3 (Good), 4 (Easy)
+        
+        now = datetime.datetime.now()
+        last_review = card.get("last_reviewed_at")
+        if isinstance(last_review, str):
+            last_review = datetime.datetime.fromisoformat(last_review.replace('Z', '+00:00'))
+        
+        if not last_review or card.get("reps", 0) == 0:
+            # First time review
+            new_stability = cls.init_stability(rating)
+            new_difficulty = cls.init_difficulty(rating)
+            elapsed_days = 0
+        else:
+            elapsed_days = (now - last_review).days
+            retrievability = cls.get_retrievability(card["stability"], elapsed_days)
+            
+            if rating == 1: # Again (Forgot)
+                new_stability = cls.update_stability_forget(card["stability"], card["difficulty"], retrievability)
+                new_difficulty = cls.update_difficulty(card["difficulty"], rating)
+            else: # Recalled
+                new_stability = cls.update_stability_recall(card["stability"], card["difficulty"], retrievability, rating)
+                new_difficulty = cls.update_difficulty(card["difficulty"], rating)
+        
+        interval = cls.next_interval(new_stability)
+        scheduled_at = now + datetime.timedelta(days=interval)
+        
+        return {
+            "stability": round(new_stability, 2),
+            "difficulty": round(new_difficulty, 2),
+            "scheduled_at": scheduled_at.isoformat(),
+            "last_reviewed_at": now.isoformat(),
+            "reps": card["reps"] + 1,
+            "lapses": card["lapses"] + (1 if rating == 1 else 0),
+            "interval": interval,
+            "elapsed_days": elapsed_days
+        }
+
 class VocabPracticeReq(BaseModel):
     word_ids: List[int]
 
 class VocabPracticeComplete(BaseModel):
-    results: List[dict] # {word_id, correct}
+    results: List[dict] # {word_id, correct, rating: optional 1-4}
 
 class GrammarPracticeReq(BaseModel):
     rule_ids: List[int]
@@ -122,10 +210,10 @@ def student_stats(authorization: str = Header(...)):
     ).fetchone()
     vocab_count = vocab_row[0] if vocab_row else 0
     
-    # Review needed: last_reviewed_at is null OR more than 24h ago
+    # Review needed: scheduled_at is NULL (new word) OR <= CURRENT_TIMESTAMP
     review_needed_row = conn.execute(
         """SELECT COUNT(*) FROM saved_vocabulary 
-           WHERE user_id = ? AND (last_reviewed_at IS NULL OR datetime(last_reviewed_at, '+1 day') < CURRENT_TIMESTAMP)""",
+           WHERE user_id = ? AND (scheduled_at IS NULL OR datetime(scheduled_at) <= CURRENT_TIMESTAMP)""",
         (student["id"],)
     ).fetchone()
     review_needed_count = review_needed_row[0] if review_needed_row else 0
@@ -176,11 +264,11 @@ async def start_vocab_practice(req: VocabPracticeReq, authorization: str = Heade
         
         # Fetch words from database
         if not req.word_ids:
-            # SR-based: select words never reviewed OR reviewed > 24h ago, limit 10
+            # FSRS-based: select words never reviewed (scheduled_at IS NULL) OR due now
             cursor = conn.execute(
                 """SELECT id, word, meaning_en, meaning_vn FROM saved_vocabulary 
-                   WHERE user_id = ? AND (last_reviewed_at IS NULL OR datetime(last_reviewed_at, '+1 day') < CURRENT_TIMESTAMP)
-                   ORDER BY last_reviewed_at ASC LIMIT 10""",
+                   WHERE user_id = ? AND (scheduled_at IS NULL OR datetime(scheduled_at) <= CURRENT_TIMESTAMP)
+                   ORDER BY stability ASC LIMIT 10""",
                 (student["id"],)
             )
         else:
@@ -213,6 +301,74 @@ async def start_vocab_practice(req: VocabPracticeReq, authorization: str = Heade
         if conn: conn.close()
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.post("/vocabulary/quiz/generate")
+async def generate_quiz(req: dict, authorization: str = Header(...)):
+    """Generate IELTS-style quiz from provided text."""
+    student = _get_current_student(authorization)
+    text = req.get("text")
+    num = req.get("num", 5)
+    
+    if not text:
+        raise HTTPException(status_code=400, detail="Text is required")
+        
+    _check_usage_limit(student["id"], "quiz_gen", limit=10)
+    
+    try:
+        questions = await llm_service.generate_quiz_from_text(text, num)
+        return {"questions": questions}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/vocabulary/quiz-error")
+async def handle_quiz_error(req: dict, authorization: str = Header(...)):
+    """Automated bridge: save a word/phrase that the student got wrong in a quiz."""
+    student = _get_current_student(authorization)
+    word = req.get("word")
+    context = req.get("context", "")
+    
+    if not word:
+        raise HTTPException(status_code=400, detail="Word is required")
+    
+    conn = get_db()
+    try:
+        # 1. Check if word already exists for this user
+        cursor = conn.execute(
+            "SELECT id FROM saved_vocabulary WHERE user_id = ? AND word = ?",
+            (student["id"], word.lower())
+        )
+        existing = cursor.fetchone()
+        
+        if existing:
+            # If it exists, we just 'reset' its stability to encourage immediate re-learning via FSRS
+            # This effectively treats it as a 'lapse' during a quiz
+            conn.execute(
+                """UPDATE saved_vocabulary 
+                   SET stability = 0.5, difficulty = 5.0, scheduled_at = CURRENT_TIMESTAMP,
+                       lapses = lapses + 1
+                   WHERE id = ?""",
+                (existing["id"],)
+            )
+            message = f"Cập nhật trạng thái SRS cho '{word}'"
+        else:
+            # 2. If it's a new word, fetch content from AI and save
+            content = await llm_service.generate_flashcard_content(word)
+            conn.execute(
+                """INSERT INTO saved_vocabulary 
+                   (user_id, word, phonetic, pos, meaning_en, meaning_vn, example, source)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                (student["id"], word, content.get("phonetic"), content.get("pos"), 
+                 content.get("definition"), content.get("meaning_vn"), 
+                 context or content.get("example"), "quiz-error")
+            )
+            message = f"Ghi nhớ từ mới '{word}' từ Quiz"
+        
+        conn.commit()
+        conn.close()
+        return {"status": "success", "message": message}
+    except Exception as e:
+        if conn: conn.close()
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.post("/vocabulary/practice/complete")
 async def complete_vocab_practice(req: VocabPracticeComplete, authorization: str = Header(...)):
     student = _get_current_student(authorization)
@@ -222,28 +378,68 @@ async def complete_vocab_practice(req: VocabPracticeComplete, authorization: str
         for res in req.results:
             word_id = res.get("word_id")
             correct = res.get("correct", False)
+            rating = res.get("rating") # 1: Again, 2: Hard, 3: Good, 4: Easy
+            
+            # Map simple boolean 'correct' to FSRS ratings if 'rating' is missing
+            if rating is None:
+                rating = 3 if correct else 1
+
             if word_id:
-                # Update SR metadata
+                # 1. Fetch current SRS metadata
+                cursor = conn.execute(
+                    "SELECT stability, difficulty, reps, lapses, last_reviewed_at FROM saved_vocabulary WHERE id = ? AND user_id = ?",
+                    (word_id, student["id"])
+                )
+                card = cursor.fetchone()
+                if not card: continue
+
+                # 2. Calculate next state using FSRS
+                # Ensure we have default values for FSRS fields if they were NULL
+                card_dict = {
+                    "stability": card["stability"] or 0.0,
+                    "difficulty": card["difficulty"] or 0.0,
+                    "reps": card["reps"] or 0,
+                    "lapses": card["lapses"] or 0,
+                    "last_reviewed_at": card["last_reviewed_at"]
+                }
+                
+                updated = FSRS.update_card(card_dict, rating)
+
+                # 3. Update saved_vocabulary
+                conn.execute(
+                    """UPDATE saved_vocabulary 
+                       SET stability = ?, difficulty = ?, scheduled_at = ?, 
+                           last_reviewed_at = ?, reps = ?, lapses = ?,
+                           review_count = review_count + 1
+                       WHERE id = ?""",
+                    (updated["stability"], updated["difficulty"], updated["scheduled_at"],
+                     updated["last_reviewed_at"], updated["reps"], updated["lapses"], word_id)
+                )
+
+                # 4. Log the review
+                conn.execute(
+                    """INSERT INTO study_logs 
+                       (user_id, word_id, rating, stability, difficulty, elapsed_days, scheduled_days)
+                       VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                    (student["id"], word_id, rating, updated["stability"], 
+                     updated["difficulty"], updated["elapsed_days"], updated["interval"])
+                )
+
                 if correct:
-                    conn.execute(
-                        "UPDATE saved_vocabulary SET last_reviewed_at = CURRENT_TIMESTAMP, review_count = review_count + 1 WHERE id = ?",
-                        (word_id,)
-                    )
                     points_earned += 10
-                else:
-                    # Reset or decay review count on failure? For now just update time
-                    conn.execute(
-                        "UPDATE saved_vocabulary SET last_reviewed_at = CURRENT_TIMESTAMP WHERE id = ?",
-                        (word_id,)
-                    )
         
         # Award points
         conn.execute("UPDATE users SET points = points + ? WHERE id = ?", (points_earned, student["id"]))
         conn.commit()
         conn.close()
-        return {"message": "Practice results saved", "points_earned": points_earned}
+        return {
+            "status": "success",
+            "message": "Practice results saved with FSRS scheduler", 
+            "points_earned": points_earned
+        }
     except Exception as e:
         if conn: conn.close()
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/grammar/practice")
@@ -891,6 +1087,30 @@ def delete_vocabulary(vocab_id: int, authorization: str = Header(...)):
     conn.close()
     return {"status": "deleted"}
 
+@router.put("/vocabulary/{vocab_id}")
+def update_vocabulary(vocab_id: int, req: SaveVocabRequest, authorization: str = Header(...)):
+    """Update an existing saved word."""
+    student = _get_current_student(authorization)
+    conn = get_db()
+    row = conn.execute(
+        "SELECT id FROM saved_vocabulary WHERE id = ? AND user_id = ?",
+        (vocab_id, student["id"])
+    ).fetchone()
+    
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Word not found")
+        
+    conn.execute(
+        """UPDATE saved_vocabulary 
+           SET phonetic=?, audio_url=?, pos=?, meaning_en=?, meaning_vn=?, example=?, level=?
+           WHERE id = ?""",
+        (req.phonetic, req.audio_url, req.pos, req.meaning_en, req.meaning_vn, req.example, req.level, vocab_id)
+    )
+    conn.commit()
+    conn.close()
+    return {"status": "updated"}
+
 
 class BulkVocabSync(BaseModel):
     words: List[SaveVocabRequest]
@@ -923,7 +1143,35 @@ def sync_vocabulary(data: BulkVocabSync, authorization: str = Header(...)):
     return {"status": "synced", "count": synced}
 
 
-# ─── KNOWLEDGE GRAPH VISUALIZATION ───────────────────────────────────────────
+# ─── PERSONALIZED ROADMAP ────────────────────────────────────────────────────
+
+@router.get("/roadmap")
+async def get_student_roadmap(authorization: str = Header(...)):
+    """Generate a personalized learning roadmap based on student's profile and vocabulary."""
+    student = _get_current_student(authorization)
+    
+    # Fetch student's vocabulary to personalize the roadmap
+    conn = get_db()
+    vocab_rows = conn.execute(
+        "SELECT word, meaning_en, level FROM saved_vocabulary WHERE user_id = ? LIMIT 30",
+        (student["id"],)
+    ).fetchall()
+    conn.close()
+    
+    words = [dict(r) for r in vocab_rows]
+    
+    # Add dummy target if missing for now
+    user_info = {
+        "current_level": student.get("level", "B1"),
+        "target_goal": "TOEIC 750+" # Default goal for now
+    }
+    
+    try:
+        roadmap = await llm_service.generate_personalized_roadmap(user_info, words)
+        return roadmap
+    except Exception as e:
+        print(f"Roadmap generation error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to generate roadmap")
 
 @router.get("/knowledge-graph")
 def student_knowledge_graph(

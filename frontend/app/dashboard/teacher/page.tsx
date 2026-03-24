@@ -10,7 +10,7 @@ import {
   PlayCircle, Plus, Search, Sparkles, Star, Terminal, Trash2, Trophy, Upload, 
   UserMinus, UserPlus, Users, Volume2, X, XCircle
 } from "lucide-react";
-import { ALL_WORDS_DATABASE, simulateSyllabify, WordDetail } from "../../components/DictionaryData";
+import { ALL_WORDS_DATABASE, simulateSyllabify, WordDetail, getPosColor, POS_MAP } from "../../components/DictionaryData";
 import { MOCK_PRACTICE_TESTS } from "../../components/MockPracticeData";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://iedu-ksk7.onrender.com";
@@ -1467,6 +1467,7 @@ function AIToolsTab({ setShowCreditModal, handleTextareaDoubleClick }: { setShow
                         )}
                       </div>
                     </div>
+                    </div>
                   );
                 })}
               </div>
@@ -1848,15 +1849,27 @@ function AIToolsTab({ setShowCreditModal, handleTextareaDoubleClick }: { setShow
                     <span className="text-sm font-bold text-gray-500">{dictResult.meanings.length} nghĩa được tìm thấy</span>
                   </div>
                 )}
-                {Array.isArray(dictResult.meanings) && dictResult.meanings.map((m: any, i: number) => (
-                  <div key={i} className="border-l-4 border-blue-400 pl-4">
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="bg-blue-100 text-blue-700 px-2.5 py-0.5 rounded-lg text-sm font-bold">{m.pos || dictResult.pos}</span>
-                      <span className="text-xs text-gray-400">Nghĩa {i + 1}</span>
-                      {m.register && (
-                        <span className="bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-lg text-xs font-medium italic">{m.register}</span>
-                      )}
-                    </div>
+                {Array.isArray(dictResult.meanings) && dictResult.meanings.map((m: any, i: number) => {
+                  const colors = getPosColor(m.pos || dictResult.pos);
+                  return (
+                    <div key={i} className={`border-l-4 ${colors.accent} pl-5 py-1 relative hover:bg-slate-50 transition-colors rounded-r-xl`}>
+                      <div className="flex items-center gap-2 mb-2 flex-wrap">
+                        <span className={`${colors.bg} ${colors.text} px-2.5 py-1 rounded-lg text-[10px] font-black uppercase border ${colors.border} shadow-sm`}>
+                          {POS_MAP[(m.pos || dictResult.pos)?.toLowerCase()] || (m.pos || dictResult.pos)}
+                        </span>
+                        {i === 0 ? (
+                          <span className="bg-indigo-600 text-white px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-tighter shadow-md shadow-indigo-100 flex items-center gap-1">
+                            <Star size={10} fill="currentColor" /> Nghĩa chính
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-100/80 px-2 py-1 rounded-lg border border-slate-200/50">
+                            Tham khảo #{i}
+                          </span>
+                        )}
+                        {m.register && (
+                          <span className="bg-yellow-100 text-yellow-700 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest border border-yellow-200 italic">{m.register}</span>
+                        )}
+                      </div>
                     <p className="text-gray-900 font-medium text-lg">{m.definition_en}</p>
                     <p className="text-blue-700 font-medium mt-1">{m.definition_vn}</p>
 
@@ -1889,8 +1902,8 @@ function AIToolsTab({ setShowCreditModal, handleTextareaDoubleClick }: { setShow
                         </div>
                       )}
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
 
                 {/* Word family, collocations, idioms, graph connections */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 pt-4 border-t border-gray-100">
@@ -1983,10 +1996,9 @@ function AIToolsTab({ setShowCreditModal, handleTextareaDoubleClick }: { setShow
                   </div>
                 )}
               </div>
-            </div>
-          )}
-        </div>
-      )}
+            )}
+          </div>
+        )}
 
       {/* Knowledge Graph */}
       {activeAI === "graph" && (

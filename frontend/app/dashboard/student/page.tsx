@@ -8,7 +8,7 @@ import {
   Award, TrendingUp, Layers, Search, BookMarked, Volume2, Save, Trash2,
   ExternalLink, Star, Filter, X, ArrowRight, Bookmark, Network, Mic, Upload, Brain, Headphones, Edit3, Terminal, AlertCircle, BookText, Lightbulb
 } from "lucide-react";
-import { ALL_WORDS_DATABASE, simulateSyllabify, WordDetail } from "../../components/DictionaryData";
+import { ALL_WORDS_DATABASE, simulateSyllabify, WordDetail, getPosColor, POS_MAP } from "../../components/DictionaryData";
 import { MOCK_PRACTICE_TESTS } from "../../components/MockPracticeData";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://iedu-ksk7.onrender.com";
@@ -69,6 +69,7 @@ function StudentDashboardContent() {
         {tabName === "ipa" && <IpaTab />}
         {tabName === "practice" && <PracticeTab setShowCreditModal={setShowCreditModal} />}
         {tabName === "ranking" && <RankingTab />}
+        {tabName === "roadmap" && <RoadmapTab />}
       </div>
     );
   };
@@ -88,6 +89,7 @@ function StudentDashboardContent() {
           {activeTab === "ipa" && "Luyện phát âm IPA"}
           {activeTab === "practice" && "Luyện thi"}
           {activeTab === "ranking" && "Bảng xếp hạng toàn cầu"}
+          {activeTab === "roadmap" && "Lộ trình học tập cá nhân"}
         </h1>
         <div className="flex items-center gap-4">
           <button 
@@ -123,7 +125,7 @@ function StudentDashboardContent() {
         </div>
       )}
 
-      {["overview", "classes", "assignments", "dictionary", "vocabulary", "ai-tools", "grammar", "scores", "ipa", "practice", "ranking"].map(tab => renderTab(tab))}
+      {["overview", "classes", "assignments", "dictionary", "vocabulary", "ai-tools", "grammar", "scores", "ipa", "practice", "ranking", "roadmap"].map(tab => renderTab(tab))}
     </div>
   );
 }
@@ -1049,56 +1051,100 @@ function AIToolsTab({ setShowCreditModal }: { setShowCreditModal: (s: boolean) =
           {result.quiz.length > 0 && (
             <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
               <h3 className="text-lg font-bold text-gray-900 mb-6 flex items-center gap-2">
-                <Award size={20} className="text-green-600" /> Quiz Thử Thách
+                <Award size={20} className="text-green-600" /> IELTS Practice Quiz
               </h3>
 
               {submitted && (
-                <div className={`mb-6 p-4 rounded-xl flex items-center gap-3 ${score === result.quiz.length ? "bg-green-50 text-green-800 border border-green-200" : "bg-yellow-50 text-yellow-800 border border-yellow-200"}`}>
-                  <Trophy size={28} />
-                  <div>
-                    <p className="font-bold text-lg">Bạn đạt {score}/{result.quiz.length} điểm!</p>
+                <div className={`mb-6 p-4 rounded-xl flex items-center justify-between gap-3 ${score === result.quiz.length ? "bg-green-50 text-green-800 border border-green-200" : "bg-blue-50 text-blue-800 border border-blue-200"}`}>
+                  <div className="flex items-center gap-3">
+                    <Trophy size={28} />
+                    <div>
+                      <p className="font-bold text-lg">Bạn đạt {score}/{result.quiz.length} điểm!</p>
+                    </div>
                   </div>
+                  {score < result.quiz.length && (
+                    <button 
+                      onClick={async () => {
+                        const wrongQuestions = result.quiz.filter((q: any, i: number) => {
+                          const correctAns = q.answer;
+                          const userAns = answers[i] !== undefined ? q.options[answers[i]] : null;
+                          return userAns !== correctAns;
+                        });
+                        
+                        for (const q of wrongQuestions) {
+                          // Extract potential keyword from question
+                          const wordMatch = q.question.match(/['"](.*?)['"]/);
+                          const word = wordMatch ? wordMatch[1] : q.answer;
+                          try {
+                            await authFetch(`${API_URL}/student/vocabulary/quiz-error`, {
+                              method: "POST",
+                              body: JSON.stringify({ word, context: q.question })
+                            });
+                          } catch (e) {}
+                        }
+                        alert("Đã thêm các từ bạn làm sai vào Flashcard để ôn tập!");
+                      }}
+                      className="bg-white text-blue-600 px-4 py-2 rounded-lg font-bold text-xs shadow-sm border border-blue-100 hover:bg-blue-50 transition"
+                    >
+                      Lưu câu sai vào Flashcards
+                    </button>
+                  )}
                 </div>
               )}
 
               <div className="space-y-5">
-                {result.quiz.map((q: any, i: number) => (
-                  <div key={i} className="p-4 border border-gray-100 rounded-xl">
-                    <p className="font-bold text-gray-800 mb-3 flex items-start">
-                      <span className="bg-blue-100 text-blue-700 w-7 h-7 rounded-lg flex items-center justify-center mr-2 shrink-0 text-sm">{i + 1}</span>
-                      {q.q}
-                    </p>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 pl-9">
-                      {q.options.map((opt: string, oi: number) => {
-                        const isSelected = answers[i] === oi;
-                        let cls = "border-gray-100 hover:border-blue-300 hover:bg-blue-50/50 cursor-pointer";
-                        let icon = null;
-                        if (submitted) {
-                          if (oi === q.ans) { cls = "border-green-400 bg-green-50"; icon = <CheckCircle2 size={18} className="text-green-500" />; }
-                          else if (isSelected) { cls = "border-red-400 bg-red-50"; icon = <XCircle size={18} className="text-red-500" />; }
-                          else cls = "border-gray-100 opacity-50";
-                        } else if (isSelected) cls = "border-blue-500 bg-blue-50";
+                {result.quiz.map((q: any, i: number) => {
+                  return (
+                    <div key={i} className="p-4 border border-gray-100 rounded-xl shadow-sm hover:shadow-md transition">
+                      <div className="flex items-start gap-2 mb-3">
+                        <span className="bg-blue-100 text-blue-700 w-7 h-7 rounded-lg flex items-center justify-center shrink-0 text-sm font-bold">{i + 1}</span>
+                        <div>
+                           <span className="bg-gray-100 text-gray-500 px-2 py-0.5 rounded text-[10px] font-bold uppercase mr-2">{q.type}</span>
+                           <p className="font-bold text-gray-800 inline leading-relaxed">{q.question}</p>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2 pl-9">
+                        {q.options.map((opt: string, oi: number) => {
+                          const isSelected = answers[i] === oi;
+                          let cls = "border-gray-100 hover:border-blue-300 hover:bg-blue-50/50 cursor-pointer";
+                          let icon = null;
+                          if (submitted) {
+                            if (opt === q.answer) { cls = "border-green-400 bg-green-50 ring-4 ring-green-100"; icon = <CheckCircle2 size={18} className="text-green-500" />; }
+                            else if (isSelected) { cls = "border-red-400 bg-red-50"; icon = <XCircle size={18} className="text-red-500" />; }
+                            else cls = "border-gray-50 opacity-40 grayscale";
+                          } else if (isSelected) cls = "border-blue-500 bg-blue-50 shadow-sm";
 
-                        return (
-                          <div key={oi} onClick={() => !submitted && setAnswers(prev => ({ ...prev, [i]: oi }))} className={`flex items-center justify-between p-3 rounded-lg border-2 transition ${cls}`}>
-                            <div className="flex items-center gap-2">
-                              <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${isSelected ? "border-blue-600" : "border-gray-300"}`}>
-                                {isSelected && !submitted && <div className="w-2 h-2 bg-blue-600 rounded-full" />}
+                          return (
+                            <div key={oi} onClick={() => !submitted && setAnswers(prev => ({ ...prev, [i]: oi }))} className={`flex items-center justify-between p-3 rounded-lg border-2 transition-all ${cls}`}>
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-medium text-gray-700">{opt}</span>
                               </div>
-                            <span className="text-sm font-medium text-gray-700">{opt}</span>
+                              {icon}
                             </div>
-                            {icon}
-                          </div>
-                        )
-                      })}
+                          )
+                        })}
+                      </div>
+                      {submitted && q.explanation && (
+                        <div className="mt-3 ml-9 p-3 bg-indigo-50/50 rounded-xl text-xs text-indigo-700 border-l-4 border-indigo-400">
+                          <p className="flex items-start gap-2"><Sparkles size={14} className="mt-0.5" /> <strong>AI Explanation:</strong></p>
+                          <p className="mt-1 ml-6">{q.explanation}</p>
+                        </div>
+                      )}
                     </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
 
               {!submitted && Object.keys(answers).length > 0 && (
-                <div className="mt-6 text-center">
-                  <button onClick={handleSubmitQuiz} className="btn-primary px-8 py-2.5 rounded-xl shadow-md">Nộp bài & Chấm điểm</button>
+                <div className="mt-8 text-center">
+                  <button onClick={() => {
+                    let s = 0;
+                    result.quiz.forEach((q: any, i: number) => {
+                      if (answers[i] !== undefined && q.options[answers[i]] === q.answer) s++;
+                    });
+                    setScore(s);
+                    setSubmitted(true);
+                  }} className="btn-primary px-10 py-3 rounded-2xl shadow-xl shadow-blue-200 hover:shadow-2xl transition transform active:scale-95 text-lg font-black">Nộp bài & Chấm điểm</button>
                 </div>
               )}
             </div>
@@ -1560,15 +1606,27 @@ function DictionaryTab() {
                 <span className="text-sm font-bold text-gray-500">{result.meanings.length} nghĩa được tìm thấy</span>
               </div>
             )}
-            {Array.isArray(result.meanings) && result.meanings.map((m: any, i: number) => (
-              <div key={i} className="border-l-4 border-blue-400 pl-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="bg-blue-100 text-blue-700 px-2.5 py-0.5 rounded-lg text-sm font-bold">{m.pos || result.pos}</span>
-                  <span className="text-xs text-gray-400">Nghĩa {i + 1}</span>
-                  {m.register && (
-                    <span className="bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-lg text-xs font-medium italic">{m.register}</span>
-                  )}
-                </div>
+            {Array.isArray(result.meanings) && result.meanings.map((m: any, i: number) => {
+              const colors = getPosColor(m.pos || result.pos);
+              return (
+                <div key={i} className={`border-l-4 ${colors.accent} pl-5 py-1 relative hover:bg-gray-50/50 transition-colors rounded-r-xl`}>
+                  <div className="flex items-center gap-2 mb-2 flex-wrap">
+                    <span className={`${colors.bg} ${colors.text} px-2.5 py-1 rounded-lg text-xs font-black uppercase border ${colors.border} shadow-sm`}>
+                      {POS_MAP[(m.pos || result.pos)?.toLowerCase()] || (m.pos || result.pos)}
+                    </span>
+                    {i === 0 ? (
+                      <span className="bg-indigo-600 text-white px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-tighter shadow-md shadow-indigo-100 flex items-center gap-1">
+                        <Star size={10} fill="currentColor" /> Nghĩa chính
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-100/80 px-2 py-1 rounded-lg border border-slate-200/50">
+                        Tham khảo #{i}
+                      </span>
+                    )}
+                    {m.register && (
+                      <span className="bg-yellow-100 text-yellow-700 px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest border border-yellow-200 italic">{m.register}</span>
+                    )}
+                  </div>
                 <p className="text-gray-900 font-medium text-lg">{m.definition_en}</p>
                 <p className="text-blue-700 font-medium mt-1">{m.definition_vn}</p>
 
@@ -1602,7 +1660,8 @@ function DictionaryTab() {
                   )}
                 </div>
               </div>
-            ))}
+            );
+          })}
 
             {/* Word family, collocations, idioms, graph connections */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 pt-4 border-t border-gray-100">
@@ -1721,6 +1780,10 @@ function VocabularyTab() {
   const [practiceAnswers, setPracticeAnswers] = useState<Record<number, string>>({});
   const [exerciseSubmitted, setExerciseSubmitted] = useState(false);
   const [showHint, setShowHint] = useState(false);
+  
+  // Edit Vocabulary states
+  const [editingWord, setEditingWord] = useState<any | null>(null);
+  const [isUpdating, setIsUpdating] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search), 300);
@@ -1754,6 +1817,23 @@ function VocabularyTab() {
     finally { setDeleting(null); }
   };
 
+  const updateWord = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingWord) return;
+    setIsUpdating(true);
+    try {
+      const res = await authFetch(`${API_URL}/student/vocabulary/${editingWord.id}`, {
+        method: "PUT",
+        body: JSON.stringify(editingWord)
+      });
+      if (res.ok) {
+        setWords(words.map(w => w.id === editingWord.id ? editingWord : w));
+        setEditingWord(null);
+      }
+    } catch (e) { console.error(e); }
+    finally { setIsUpdating(false); }
+  };
+
   const speak = (text: string, audio_url?: string) => {
     if (audio_url) {
       new Audio(audio_url).play().catch(() => {});
@@ -1766,6 +1846,25 @@ function VocabularyTab() {
         u.rate = 0.85;
         window.speechSynthesis.speak(u);
     }
+  };
+
+  const renderFSRSStatus = (w: any) => {
+    if (!w.stability) return null;
+    const stability = parseFloat(w.stability);
+    const difficulty = parseFloat(w.difficulty);
+    
+    // Calculate color based on stability (higher = greener)
+    let color = "text-red-500";
+    if (stability > 30) color = "text-green-500";
+    else if (stability > 10) color = "text-blue-500";
+    else if (stability > 3) color = "text-yellow-600";
+
+    return (
+      <div className="flex items-center gap-3 mt-2 text-[9px] font-bold uppercase tracking-wider">
+        <span className="bg-gray-100 px-2 py-0.5 rounded-md text-gray-500">Độ bền: <span className={color}>{stability.toFixed(1)} ngày</span></span>
+        <span className="bg-gray-100 px-2 py-0.5 rounded-md text-gray-500">Độ khó: {difficulty.toFixed(1)}</span>
+      </div>
+    );
   };
 
   const startRichPractice = async () => {
@@ -1794,12 +1893,15 @@ function VocabularyTab() {
     finally { setGeneratingPractice(false); }
   };
 
-  const submitCurrentExercise = () => {
+  const submitCurrentExercise = (rating?: number) => {
     const ex = practiceExercises[currentExerciseIdx];
     const ans = practiceAnswers[currentExerciseIdx] || "";
     const isCorrect = ans.toLowerCase().trim() === ex.answer.toLowerCase().trim();
     
-    setPracticeResults(prev => [...prev, { word_id: ex.word_id, correct: isCorrect }]);
+    // Use explicit rating if provided (SRS), else default to Good/Again based on correctness
+    const finalRating = rating || (isCorrect ? 3 : 1);
+    
+    setPracticeResults(prev => [...prev, { word_id: ex.word_id, correct: isCorrect, rating: finalRating }]);
     setExerciseSubmitted(true);
   };
 
@@ -1836,6 +1938,11 @@ function VocabularyTab() {
             <div className="bg-blue-50 text-blue-600 px-4 py-2 rounded-xl font-bold flex items-center gap-2">
               <BookMarked size={18} /> {words.length} từ đã lưu
             </div>
+            {words.some(w => !w.scheduled_at || new Date(w.scheduled_at) <= new Date()) && (
+               <div className="bg-orange-100 text-orange-600 px-4 py-2 rounded-xl font-bold flex items-center gap-2 animate-pulse">
+                 <Clock size={18} /> {words.filter(w => !w.scheduled_at || new Date(w.scheduled_at) <= new Date()).length} từ cần ôn
+               </div>
+            )}
             <div className="hidden lg:flex items-center gap-1">
               {levels.map(l => {
                 const count = words.filter(w => w.level === l).length;
@@ -1875,7 +1982,7 @@ function VocabularyTab() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {words.map((w) => {
-            const isDue = w.next_review ? new Date(w.next_review) <= new Date() : true;
+            const isDue = !w.scheduled_at || new Date(w.scheduled_at) <= new Date();
             return (
               <div key={w.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 hover:shadow-md transition group relative overflow-hidden">
                 {isDue && <div className="absolute top-0 right-0 bg-orange-500 text-white text-[10px] px-2 py-0.5 font-bold rounded-bl-lg">CẦN ÔN TẬP</div>}
@@ -1893,6 +2000,8 @@ function VocabularyTab() {
                 <p className="text-gray-800 font-medium line-clamp-2 mb-2">{w.meaning_vn}</p>
                 {w.example && <p className="text-gray-500 text-xs italic line-clamp-2 border-l-2 border-gray-200 pl-2">{w.example}</p>}
                 
+                {renderFSRSStatus(w)}
+
                 <div className="mt-4 pt-4 border-t border-gray-50 flex justify-between items-center text-[10px] text-gray-400">
                     <div className="flex gap-2">
                         <span>Đã thuộc: {Math.min(w.review_count || 0, 5)}/5</span>
@@ -1902,7 +2011,10 @@ function VocabularyTab() {
                             ))}
                         </div>
                     </div>
-                    <button onClick={() => deleteWord(w.id)} className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 transition"><Trash2 size={14} /></button>
+                    <div className="flex gap-2">
+                        <button onClick={() => setEditingWord(w)} className="opacity-0 group-hover:opacity-100 text-blue-400 hover:text-blue-600 transition"><Edit3 size={14} /></button>
+                        <button onClick={() => deleteWord(w.id)} className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 transition"><Trash2 size={14} /></button>
+                    </div>
                 </div>
               </div>
             );
@@ -1995,20 +2107,50 @@ function VocabularyTab() {
                 </div>
               )}
 
-              <div className="mt-10 flex justify-between items-center">
+              <div className="mt-10 flex flex-col gap-4">
                 {!exerciseSubmitted ? (
-                    <>
-                        <button onClick={() => setShowHint(!showHint)} className="text-gray-400 hover:text-yellow-600 font-bold flex items-center gap-1 transition">
+                    <div className="flex justify-between items-center">
+                        <button onClick={() => setShowHint(!showHint)} className="text-gray-400 hover:text-yellow-600 font-bold flex items-center gap-1 transition text-sm">
                             <Lightbulb size={18} /> {showHint ? "Ẩn gợi ý" : "Xem gợi ý"}
                         </button>
-                        <button onClick={submitCurrentExercise} disabled={!practiceAnswers[currentExerciseIdx]} className="btn-primary px-10 py-4 rounded-2xl font-black text-lg shadow-xl hover:shadow-2xl transition transform active:scale-95 disabled:opacity-50">
+                        <button onClick={() => submitCurrentExercise()} disabled={!practiceAnswers[currentExerciseIdx]} className="btn-primary px-10 py-4 rounded-2xl font-black text-lg shadow-xl hover:shadow-2xl transition transform active:scale-95 disabled:opacity-50">
                             KIỂM TRA
                         </button>
-                    </>
+                    </div>
                 ) : (
-                  <button onClick={nextExercise} className="ml-auto bg-gray-900 text-white px-10 py-4 rounded-2xl font-black text-lg flex items-center gap-2 hover:bg-black transition shadow-xl transform active:scale-95">
-                    {currentExerciseIdx < practiceExercises.length - 1 ? "TIẾP THEO" : "HOÀN THÀNH"} <ArrowRight size={24} />
-                  </button>
+                  <div className="space-y-6">
+                    <div className="bg-gray-50 p-6 rounded-2xl border border-gray-100">
+                        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4 text-center">Đánh giá mức độ ghi nhớ (FSRS)</p>
+                        <div className="grid grid-cols-4 gap-3">
+                            {[
+                                { r: 1, l: "Quên", c: "bg-red-50 text-red-600 border-red-200 hover:bg-red-600 hover:text-white" },
+                                { r: 2, l: "Khó", c: "bg-orange-50 text-orange-600 border-orange-200 hover:bg-orange-600 hover:text-white" },
+                                { r: 3, l: "Tốt", c: "bg-green-50 text-green-600 border-green-200 hover:bg-green-600 hover:text-white" },
+                                { r: 4, l: "Dễ", c: "bg-blue-50 text-blue-600 border-blue-200 hover:bg-blue-600 hover:text-white" }
+                            ].map(btn => (
+                                <button key={btn.r} 
+                                    onClick={() => {
+                                        // Update the rating for the current result
+                                        setPracticeResults(prev => {
+                                            const next = [...prev];
+                                            next[next.length - 1].rating = btn.r;
+                                            return next;
+                                        });
+                                        nextExercise();
+                                    }}
+                                    className={`flex flex-col items-center py-3 rounded-xl border-2 transition-all font-black ${btn.c}`}
+                                >
+                                    <span className="text-lg">{btn.l}</span>
+                                    <span className="text-[10px] opacity-70 font-bold">Rating: {btn.r}</span>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                    
+                    <button onClick={nextExercise} className="w-full bg-gray-900 text-white py-4 rounded-2xl font-black text-lg flex items-center justify-center gap-2 hover:bg-black transition shadow-xl transform active:scale-95">
+                      {currentExerciseIdx < practiceExercises.length - 1 ? "TIẾP THEO" : "HOÀN THÀNH"} <ArrowRight size={24} />
+                    </button>
+                  </div>
                 )}
               </div>
             </div>
@@ -2856,6 +2998,145 @@ function RankingTab() {
             <p className="font-extrabold text-blue-600">{r.points} pts</p>
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+// ==================== ROADMAP TAB ====================
+function RoadmapTab() {
+  const { token, authFetch } = useAuth();
+  const [roadmap, setRoadmap] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchRoadmap = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await authFetch(`${API_URL}/student/roadmap`);
+      if (res.ok) {
+        setRoadmap(await res.json());
+      } else {
+        const err = await res.json().catch(() => ({}));
+        setError(err.detail || "Không thể tạo lộ trình lúc này.");
+      }
+    } catch (e) {
+      setError("Lỗi kết nối máy chủ AI.");
+    } finally {
+      setLoading(false);
+    }
+  }, [authFetch]);
+
+  useEffect(() => {
+    fetchRoadmap();
+  }, [fetchRoadmap]);
+
+  if (loading) return (
+    <div className="bg-white rounded-2xl p-12 border border-gray-100 text-center shadow-sm">
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4" />
+      <h3 className="text-lg font-bold text-gray-700">Đang phân tích dữ liệu học tập...</h3>
+      <p className="text-gray-500 text-sm mt-2">AI đang xây dựng lộ trình cá nhân hóa dựa trên vốn từ vựng của bạn.</p>
+    </div>
+  );
+
+  if (error) return (
+    <div className="bg-red-50 border border-red-200 rounded-2xl p-8 text-center">
+      <AlertCircle size={48} className="mx-auto text-red-500 mb-4" />
+      <h3 className="text-xl font-bold text-red-700 mb-2">Oops! Có lỗi xảy ra</h3>
+      <p className="text-red-600 mb-6">{error}</p>
+      <button onClick={fetchRoadmap} className="btn-primary px-8 py-3 rounded-xl shadow-lg">Thử lại</button>
+    </div>
+  );
+
+  if (!roadmap) return null;
+
+  return (
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <div className="bg-gradient-to-br from-indigo-600 via-blue-600 to-cyan-500 rounded-3xl p-8 text-white shadow-xl relative overflow-hidden">
+        <div className="relative z-10 max-w-2xl">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="bg-white/20 p-2 rounded-xl backdrop-blur-md">
+              <TrendingUp size={24} />
+            </div>
+            <span className="text-blue-100 font-bold tracking-widest uppercase text-sm">AI Learning Path</span>
+          </div>
+          <h2 className="text-4xl font-black mb-4 leading-tight">{roadmap.title}</h2>
+          <p className="text-blue-50 text-xl font-medium leading-relaxed mb-6 opacity-90">{roadmap.summary_vn}</p>
+          <div className="flex items-center gap-6">
+            <div className="flex items-center gap-2 bg-white/10 px-4 py-2 rounded-full border border-white/20 backdrop-blur-sm">
+              <Clock size={18} className="text-blue-200" />
+              <span className="font-bold">{roadmap.estimated_completion}</span>
+            </div>
+          </div>
+        </div>
+        <Sparkles className="absolute -right-12 -top-12 text-white/10 w-64 h-64" />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="lg:col-span-2 space-y-6">
+          <h3 className="text-2xl font-black text-gray-900 flex items-center gap-3">
+            <Layers className="text-blue-600" /> Các giai đoạn học tập
+          </h3>
+          <div className="space-y-4 relative">
+            <div className="absolute left-[27px] top-8 bottom-8 w-0.5 bg-gradient-to-b from-blue-200 via-indigo-200 to-transparent"></div>
+            {roadmap.phases?.map((phase: any, i: number) => (
+              <div key={i} className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all group relative ml-14">
+                <div className="absolute -left-[45px] top-6 w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-sm shadow-lg shadow-blue-200 ring-4 ring-white z-10 transition-transform group-hover:scale-110">
+                  {i + 1}
+                </div>
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
+                  <div>
+                    <h4 className="text-xl font-extrabold text-gray-900 group-hover:text-blue-600 transition-colors">{phase.name}</h4>
+                    <p className="text-sm text-gray-500 font-medium flex items-center gap-1.5 mt-1">
+                      <Clock size={14} /> Thời gian dự kiến: {phase.duration}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {phase.focus_topics?.map((topic: string, j: number) => (
+                      <span key={j} className="text-[10px] uppercase tracking-wider font-black px-2.5 py-1 bg-blue-50 text-blue-600 rounded-lg">
+                        {topic}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                <div className="space-y-2.5 bg-gray-50 p-4 rounded-xl border border-gray-100">
+                  {phase.tasks_vn?.map((task: string, j: number) => (
+                    <div key={j} className="flex items-start gap-3">
+                      <div className="mt-1.5 w-1.5 h-1.5 rounded-full bg-blue-400 shrink-0" />
+                      <p className="text-gray-700 text-sm font-medium">{task}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="space-y-6">
+           <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm sticky top-6">
+              <h3 className="text-xl font-black text-gray-900 mb-6 flex items-center gap-2">
+                <Lightbulb className="text-yellow-500" /> Lời khuyên từ AI
+              </h3>
+              <div className="space-y-4">
+                {roadmap.tips_vn?.map((tip: string, i: number) => (
+                  <div key={i} className="flex items-start gap-4 p-4 rounded-2xl bg-gradient-to-br from-yellow-50 to-orange-50 border border-yellow-100 shadow-sm shadow-yellow-100/50">
+                    <div className="w-10 h-10 bg-white rounded-xl shadow-sm flex items-center justify-center shrink-0">
+                      <span className="text-lg">💡</span>
+                    </div>
+                    <p className="text-gray-700 text-sm leading-relaxed font-medium">{tip}</p>
+                  </div>
+                ))}
+              </div>
+              
+              <div className="mt-8 pt-8 border-t border-gray-100 bg-gradient-to-b from-transparent to-blue-50/30 rounded-b-3xl -mx-6 -mb-6 p-6 px-12">
+                 <button onClick={fetchRoadmap} className="w-full bg-white text-blue-600 border border-blue-100 py-3.5 rounded-2xl font-bold text-sm shadow-sm hover:bg-blue-600 hover:text-white hover:border-blue-600 transition-all flex items-center justify-center gap-2 group">
+                    <Sparkles size={16} className="group-hover:animate-pulse" /> Cập nhật lộ trình mới
+                 </button>
+                 <p className="text-[10px] text-gray-400 text-center mt-3 font-medium uppercase tracking-widest">Powered by AI Education</p>
+              </div>
+           </div>
+        </div>
       </div>
     </div>
   );

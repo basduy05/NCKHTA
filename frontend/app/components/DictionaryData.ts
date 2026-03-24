@@ -275,6 +275,34 @@ export const ALL_WORDS_DATABASE: Record<string, WordDetail> = {
   "world": { word: "World", phonetic: "/wɜːld/", type: "Noun", translation: "Thế giới", example: "There are many beautiful places in the world.", engMeaning: "The earth, together with all of its countries, peoples, and natural features.", level: "A1" }
 };
 
+
+export const POS_MAP: Record<string, string> = {
+  "noun": "Danh từ",
+  "verb": "Động từ",
+  "adjective": "Tính từ",
+  "adverb": "Trạng từ",
+  "pronoun": "Đại từ",
+  "preposition": "Giới từ",
+  "conjunction": "Liên từ",
+  "interjection": "Thán từ",
+  "determiner": "Hạn định từ",
+  "modal verb": "Động từ khuyết thiếu",
+  "phrase": "Cụm từ"
+};
+
+export function getPosColor(pos: string): { bg: string; text: string; border: string; accent: string } {
+  const p = pos?.toLowerCase() || "";
+  if (p.includes("noun")) return { bg: "bg-blue-50", text: "text-blue-700", border: "border-blue-100", accent: "border-blue-400" };
+  if (p.includes("verb") || p.includes("v")) return { bg: "bg-emerald-50", text: "text-emerald-700", border: "border-emerald-100", accent: "border-emerald-400" };
+  if (p.includes("adj") || p.includes("adjective")) return { bg: "bg-amber-50", text: "text-amber-700", border: "border-amber-100", accent: "border-amber-400" };
+  if (p.includes("adv") || p.includes("adverb")) return { bg: "bg-rose-50", text: "text-rose-700", border: "border-rose-100", accent: "border-rose-400" };
+  if (p.includes("prep") || p.includes("preposition")) return { bg: "bg-indigo-50", text: "text-indigo-700", border: "border-indigo-100", accent: "border-indigo-400" };
+  if (p.includes("conj") || p.includes("conjunction")) return { bg: "bg-purple-50", text: "text-purple-700", border: "border-purple-100", accent: "border-purple-400" };
+  if (p.includes("pron") || p.includes("pronoun")) return { bg: "bg-cyan-50", text: "text-cyan-700", border: "border-cyan-100", accent: "border-cyan-400" };
+  if (p.includes("phrase") || p.includes("idiom")) return { bg: "bg-teal-50", text: "text-teal-700", border: "border-teal-100", accent: "border-teal-400" };
+  return { bg: "bg-slate-50", text: "text-slate-700", border: "border-slate-100", accent: "border-slate-400" };
+}
+
 export function simulateSyllabify(word: string): string[] {
   if (!word) return ['N/A'];
   const lowerWord = word.toLowerCase();

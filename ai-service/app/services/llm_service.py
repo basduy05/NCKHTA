@@ -177,7 +177,6 @@ def _get_setting(key, default=None):
         cursor = conn.cursor()
         cursor.execute("SELECT value FROM settings WHERE key = ?", (key,))
         row = cursor.fetchone()
-        conn.close()
         
         val = None
         if row and row["value"]:
@@ -195,34 +194,29 @@ def _get_setting(key, default=None):
 
 
 def parse_json_response(text):
+    if not text:
+        return []
     try:
-        if not text:
-            return []
-        if isinstance(text, (list, dict)):
-            return text
+        # 1. Clean up potential markdown wrappers
+        clean_text = text.strip()
+        if "```json" in clean_text:
+            match = re.search(r"```json\s*(.*?)\s*```", clean_text, re.DOTALL)
+            if match:
+                clean_text = match.group(1)
+        elif "```" in clean_text:
+            match = re.search(r"```\s*(.*?)\s*```", clean_text, re.DOTALL)
+            if match:
+                clean_text = match.group(1)
         
-        # Try to find JSON block using regex if there's surrounding text
-        text_str = str(text).strip()
-        
-        # Remove markdown code blocks if present (common LLM behavior)
-        if text_str.startswith("```"):
-            lines = text_str.splitlines()
-            if len(lines) > 2:
-                # Remove first line (```json) and last line (```)
-                text_str = "\n".join(lines[1:-1]).strip()
-
-        match = re.search(r'\{.*\}|\[.*\]', text_str, re.DOTALL)
-        if match:
-            text_str = match.group(0)
-            
-        return json.loads(text_str)
-    except Exception as e:
-        print("JSON parse error:", e)
-        # Attempt repair if standard parse fails
+        # 2. Try standard json
         try:
-            return json.loads(json_repair.repair_json(text_str))
+            return json.loads(clean_text)
         except:
-            return []
+            # 3. Fallback to json_repair for truncated or messy responses
+            return json_repair.repair_json(clean_text, return_objects=True)
+    except Exception as e:
+        print(f"[LLM PARSE] Critical Error: {e}")
+        return []
 
 def get_llm(provider=None):
     """
@@ -243,15 +237,15 @@ def get_llm(provider=None):
         if google_key and provider in (None, "google"):
             # Set environment variable for langchain
             os.environ["GOOGLE_API_KEY"] = google_key
-            # Use gemini-2.5-flash-lite as the fallback/standard model for 2026
-            return ChatGoogleGenerativeAI(model="gemini-2.5-flash-lite", timeout=30, temperature=0)
+            # Increased timeout to 60s for long-running generations
+            return ChatGoogleGenerativeAI(model="gemini-2.5-flash-lite", timeout=60, temperature=0)
 
     if provider != "google" and provider != "cohere":
         openai_key = _get_setting("OPENAI_API_KEY")
         if openai_key and provider in (None, "openai"):
             os.environ["OPENAI_API_KEY"] = openai_key
-            # Use gpt-4o-mini for better speed and cost-effectiveness
-            return ChatOpenAI(model="gpt-4o-mini")
+            # Increased timeout to 60s
+            return ChatOpenAI(model="gpt-4o-mini", timeout=60)
 
     return None
 
@@ -381,18 +375,24 @@ def extract_vocabulary_from_text(text: str):
     if not llm:
         return [{"word": "Error", "meaning": "LLM not configured"}]
         
+    num = 10
     prompt = PromptTemplate.from_template(
-        "Analyze the following English text and extract 5-10 key vocabulary words suitable for learning.\n"
-        "Text: {text}\n\n"
-        "For EACH word, return these EXACT JSON keys:\n"
-        '- "word": the English word\n'
-        '- "phonetic": IPA phonetic transcription (e.g. /əˈbaʊt/)\n'
-        '- "pos": part of speech (noun, verb, adjective, etc.)\n'
-        '- "meaning_vn": Vietnamese meaning\n'
-        '- "meaning_en": English definition\n'
-        '- "example": example sentence using the word\n'
-        '- "level": CEFR level (A1/A2/B1/B2/C1/C2)\n\n'
-        "Return ONLY a valid JSON array. No markdown, no explanation."
+        "You are an expert English linguist and teacher.\n"
+        "Analyze the following text and extract exactly {num} important vocabulary words/terms for a student to learn.\n\n"
+        "TEXT:\n{text}\n\n"
+        "SELECTION CRITERIA:\n"
+        "1. Prioritize academic, professional, or complex words that appear in the text.\n"
+        "2. Do NOT include basic words (like 'the', 'is', 'happy') unless used in a technical sense.\n"
+        "3. Ensure the word/phrase is SPELLED EXACTLY as it appears in the text.\n\n"
+        "Return a JSON array of objects with these EXACT keys:\n"
+        '- "word": the word or phrase\n'
+        '- "pos": part of speech\n'
+        '- "meaning_vn": clear Vietnamese translation\n'
+        '- "meaning_en": simple English definition\n'
+        '- "example": the sentence from the text containing this word (or a very similar natural one)\n'
+        '- "level": CEFR level (A1-C2)\n'
+        '- "phonetic": IPA pronunciation\n\n'
+        "Return ONLY the JSON array. High quality results only."
     )
 
     chain = prompt | llm
@@ -408,20 +408,32 @@ def extract_vocabulary_from_text(text: str):
 
 def generate_quiz_from_text(text: str, num_questions: int = 5):
     """
-    Generates dynamic Multiple Choice Questions based on the specific text context.
+    Generates dynamic IELTS-style questions (MCQ, T/F/NG, Matching, Fill-in-blanks)
+    based on the specific text context.
     """
     llm = get_llm()
     if not llm:
         return []
         
     prompt = PromptTemplate.from_template(
-        "Generate {num} multiple-choice questions based on the vocabulary and context of this English text:\n"
+        "You are an expert IELTS exam content creator.\n"
+        "Generate {num} high-quality questions based on this English text:\n"
         "{text}\n\n"
+        "QUESTION TYPES TO INCLUDE (Mix them):\n"
+        "1. Multiple Choice (MCQ): Standard 4-option question.\n"
+        "2. True/False/Not Given (TFNG): Test if a statement is True, False, or Not Mentioned in the text.\n"
+        "3. Matching (MATCH): Match a term/name to a description/statement.\n"
+        "4. Fill-in-the-blanks (FIB): Provide a sentence with a [blank] and 4 options to fill it correctly.\n\n"
+        "REQUIREMENTS:\n"
+        "- Options must be plausible distractors.\n"
+        "- Ensure the context is strictly based on the text.\n\n"
         "For EACH question, return these EXACT JSON keys:\n"
-        '- "question": the question text\n'
-        '- "options": array of exactly 4 answer choices\n'
-        '- "correct_answer": the correct option (must be one of the options exactly)\n\n'
-        "Return ONLY a valid JSON array. No markdown, no explanation."
+        '- "type": "MCQ", "TFNG", "MATCH", or "FIB"\n'
+        '- "question": the question or statement text\n'
+        '- "options": array of answer choices (for MATCH, these are the labels; for TFNG, [True, False, Not Given])\n'
+        '- "answer": the correct option (index or text)\n'
+        '- "explanation": brief explanation of why it is correct based on the text\n\n'
+        "Return ONLY the JSON array."
     )
 
     chain = prompt | llm
@@ -433,6 +445,36 @@ def generate_quiz_from_text(text: str, num_questions: int = 5):
         return []
     except Exception as e:
         print(f"generate_quiz error: {e}")
+        return []
+
+def generate_fsrs_review_quiz(words: list):
+    """
+    Generates a contextual review quiz for a list of words due for SRS review.
+    Focuses on differentiation and usage in sentences.
+    """
+    llm = get_llm()
+    if not llm or not words:
+        return []
+
+    words_str = ", ".join([f"{w['word']} ({w['meaning_en']})" for w in words])
+    
+    prompt = PromptTemplate.from_template(
+        "You are a specialized language tutor. Generate a vocabulary review quiz for these words: {words}\n\n"
+        "Include 2 types of questions:\n"
+        "1. Contextual usage (Fill in the blank with the correct word from the list).\n"
+        "2. Definition matching or Synonym checking.\n\n"
+        "Return a JSON array of objects with keys: question, options, answer, word_id.\n"
+        "The 'word_id' should map back to the 'id' of the word being tested from this list (if provided) or just help track progress.\n\n"
+        "Return ONLY the JSON array."
+    )
+
+    # Note: frontend needs to handle word_id mapping if we want to auto-update FSRS after these quizzes.
+    chain = prompt | llm
+    try:
+        response = _safe_invoke(chain, {"words": words_str})
+        return parse_json_response(response.content)
+    except Exception as e:
+        print(f"generate_fsrs_review_quiz error: {e}")
         return []
 
 def generate_example_sentence(word: str, meaning: str = "", level: str = "B1"):
@@ -608,7 +650,8 @@ def translate_meanings_with_ai(word: str, meanings: list, estimate_level: bool =
         "and Urban Dictionary (for slang/informal usage).\n"
         "I have raw dictionary meanings for the English word '{word}'.\n"
         "Your task is to consolidate into 4-6 distinct grouped meanings, BUT also ADD any important "
-        "meanings that are MISSING from the raw data (especially slang, informal, or specialized meanings).\n\n"
+        "meanings that are MISSING from the raw data (especially slang, informal, or specialized meanings).\n"
+        "**CRITICAL:** Sort the meanings by relevance and frequency. The MOST COMMON and SAT NGHĨA (most accurate/direct) meanings MUST be listed FIRST.\n\n"
         "Raw Definitions:\n{definitions}\n\n"
         "For EACH distinct meaning, provide ALL of these fields (NEVER leave any empty):\n"
         "1. 'pos' — part of speech\n"
@@ -1700,16 +1743,20 @@ async def generate_vocab_practice_rich(words: List[dict]):
     words_info = "\n".join([f"- {w['word']} ({w['meaning_en']})" for w in words])
     
     prompt = PromptTemplate.from_template(
-        "Create a premium vocabulary practice set for these words:\n{words}\n\n"
-        "Question Types: Multiple Choice, Synonym Match, Contextual Fill-in, Scrambled Sentences.\n"
-        "Include for EACH question:\n"
-        "- 'question': the prompt\n"
-        "- 'hint': a helpful clue (can be audio-friendly or context)\n"
-        "- 'options': if multiple choice (4 options)\n"
-        "- 'answer': the correct string\n"
-        "- 'explanation': why this answer is correct (bilingual)\n\n"
-        "IMPORTANT: The 'question', 'options', and 'answer' fields MUST be written entirely in English. Do not use Vietnamese in these fields. Only 'hint' and 'explanation' can contain Vietnamese.\n\n"
-        "Return a JSON array of 10-15 questions."
+        "You are a premium English language assessment designer.\n"
+        "Create a challenging and meaningful vocabulary practice set for these words:\n{words}\n\n"
+        "INSTRUCTIONS:\n"
+        "1. Create a MIX of these types: Multiple Choice (meaning), Synonym Match, Contextual Fill-in (sentence), and Scrambled Sentences.\n"
+        "2. Ensure questions are NATURAL and reflect real-world usage.\n"
+        "3. Avoid repetitive or 'robotic' question patterns.\n"
+        "4. Focus on the core meaning provided for each word.\n\n"
+        "FOR EACH QUESTION, INCLUDE:\n"
+        "- 'question': the prompt (English only)\n"
+        "- 'hint': a subtle, helpful clue (can be Vietnamese)\n"
+        "- 'options': 4 distinct options if multiple choice, otherwise null\n"
+        "- 'answer': the correct string (English only)\n"
+        "- 'explanation': a clear, bilingual explanation (VN/EN) of why this is correct.\n\n"
+        "Return a JSON array of 10-15 questions. Return ONLY the JSON."
     )
     print(f"[LLM VOCAB PRACTICE] Generating for {len(words)} words...", flush=True)
     chain = prompt | llm
@@ -1841,3 +1888,46 @@ async def grade_writing_assignment(prompt_text: str, student_answer: str, test_t
     except Exception as e:
         print(f"[LLM WRITING GRADING] Error: {e}", flush=True)
         return {"error": str(e)}
+
+async def generate_personalized_roadmap(user_info: dict, words: List[dict]):
+    """Generate a custom learning roadmap based on user's vocabulary and goals."""
+    llm = get_llm()
+    if not llm: return {"error": "LLM not configured"}
+    
+    goal = user_info.get("target_goal", "General English")
+    level = user_info.get("current_level", "B1")
+    words_summary = ", ".join([w['word'] for w in words[:20]])
+    
+    prompt = PromptTemplate.from_template(
+        "You are an expert AI Education Advisor.\n"
+        "Create a personalized English learning roadmap for a student with these details:\n"
+        "- Current Level: {level}\n"
+        "- Target Goal: {goal}\n"
+        "- Recently Learned Words: {words}\n\n"
+        "Return a JSON object with this structure:\n"
+        "{{\n"
+        "  \"title\": \"Catchy title for the roadmap\",\n"
+        "  \"summary_vn\": \"Brief overview in Vietnamese (2-3 sentences)\",\n"
+        "  \"phases\": [\n"
+        "    {{\n"
+        "      \"name\": \"Phase name (e.g. Vocabulary Expansion)\",\n"
+        "      \"duration\": \"Estimated time (e.g. 2 weeks)\",\n"
+        "      \"tasks_vn\": [\"Task 1 in Vietnamese\", \"Task 2\"],\n"
+        "      \"focus_topics\": [\"Topic 1\", \"Topic 2\"]\n"
+        "    }}\n"
+        "  ],\n"
+        "  \"tips_vn\": [\"Tip 1\", \"Tip 2\"],\n"
+        "  \"estimated_completion\": \"e.g. 3 months\"\n"
+        "}}\n"
+        "Ensure the roadmap is practical, encouraging, and highly relevant to the student's goal.\n"
+        "Return ONLY the JSON."
+    )
+    
+    chain = prompt | llm
+    print(f"[LLM ROADMAP] Generating for goal: {goal}...", flush=True)
+    try:
+        response = await _safe_invoke_async(chain, {"level": level, "goal": goal, "words": words_summary})
+        return parse_json_response(response.content)
+    except Exception as e:
+        print(f"[LLM ROADMAP] Error: {e}")
+        return {"error": "Failed to generate roadmap"}

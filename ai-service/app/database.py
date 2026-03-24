@@ -467,6 +467,43 @@ def init_db():
         cursor.execute("ALTER TABLE student_scores ADD COLUMN bloom_evaluation JSON")
     except SQLITE_OP_ERROR: pass
 
+    # --- MIGRATION: FSRS Spaced Repetition Logic ---
+    try:
+        cursor.execute("ALTER TABLE saved_vocabulary ADD COLUMN stability REAL DEFAULT 0.0")
+    except SQLITE_OP_ERROR: pass
+    try:
+        cursor.execute("ALTER TABLE saved_vocabulary ADD COLUMN difficulty REAL DEFAULT 0.0")
+    except SQLITE_OP_ERROR: pass
+    try:
+        cursor.execute("ALTER TABLE saved_vocabulary ADD COLUMN retrievability REAL DEFAULT 0.0")
+    except SQLITE_OP_ERROR: pass
+    try:
+        cursor.execute("ALTER TABLE saved_vocabulary ADD COLUMN scheduled_at TIMESTAMP")
+    except SQLITE_OP_ERROR: pass
+    try:
+        cursor.execute("ALTER TABLE saved_vocabulary ADD COLUMN reps INTEGER DEFAULT 0")
+    except SQLITE_OP_ERROR: pass
+    try:
+        cursor.execute("ALTER TABLE saved_vocabulary ADD COLUMN lapses INTEGER DEFAULT 0")
+    except SQLITE_OP_ERROR: pass
+
+    # --- STUDY LOGS TABLE (For FSRS review history) ---
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS study_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            word_id INTEGER NOT NULL,
+            rating INTEGER NOT NULL,
+            stability REAL NOT NULL,
+            difficulty REAL NOT NULL,
+            elapsed_days INTEGER NOT NULL,
+            scheduled_days INTEGER NOT NULL,
+            review_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id),
+            FOREIGN KEY (word_id) REFERENCES saved_vocabulary(id)
+        )
+    """)
+
     # --- MIGRATION: Recreate saved_vocabulary with UNIQUE(user_id, word, pos) ---
     # SQLite can't alter constraints, so we recreate the table if needed
     try:
