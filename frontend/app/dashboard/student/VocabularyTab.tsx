@@ -185,15 +185,27 @@ export default function VocabularyTab({ API_URL }: VocabularyTabProps) {
       setShowHint(false);
     } else {
       try {
-        await authFetch(`${API_URL}/student/vocabulary/practice/complete`, {
+        // Filter out any results that might be missing word_id (safety)
+        const validResults = practiceResults.filter(r => r.word_id);
+        const res = await authFetch(`${API_URL}/student/vocabulary/practice/complete`, {
           method: "POST",
-          body: JSON.stringify({ results: practiceResults })
+          body: JSON.stringify({ results: validResults })
         });
-        refreshUser();
-        alert(`Hoàn thành! Bạn đúng ${practiceResults.filter(r => r.correct).length}/${practiceExercises.length}.`);
-        setPracticeExercises([]);
-        fetchWords(); 
-      } catch (e) { alert("Lỗi khi lưu kết quả"); }
+        
+        if (res.ok) {
+            refreshUser();
+            const correctCount = practiceResults.filter(r => r.correct).length;
+            alert(`Chúc mừng! Bạn đã hoàn thành bài ôn tập.\nĐúng: ${correctCount}/${practiceExercises.length}\nĐiểm thưởng: +${correctCount * 10}`);
+            setPracticeExercises([]);
+            // Force a slight delay to ensure DB commit is visible to next query
+            setTimeout(() => fetchWords(), 500);
+        } else {
+            alert("Lỗi khi lưu kết quả bài tập.");
+        }
+      } catch (e) { 
+          console.error(e);
+          alert("Lỗi khi kết nối máy chủ để lưu kết quả."); 
+      }
     }
   };
 

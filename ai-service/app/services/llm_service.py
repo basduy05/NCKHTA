@@ -1479,21 +1479,24 @@ async def generate_practice_test_stream(test_type: str = "TOEIC", skill: str = "
     prompt = PromptTemplate.from_template(
         "You are a professional {test_type} examiner and content creator.\n"
         "Generate a high-quality practice section for: {test_type} - {skill} {part}\n\n"
+        "INSTRUCTIONS FOR {skill}:\n"
+        "- If READING: Provide a formal or semi-formal passage (200-300 words). Questions should test comprehension, inference, and vocabulary.\n"
+        "- If LISTENING: Provide a transcript representing a dialogue or lecture. The user UI will treat this as 'simulated audio content'.\n"
+        "- If WRITING: Provide a specific prompt/task (e.g., Essay Topic for IELTS, Email for TOEIC). The 'questions' array should be empty, but provide a 'scoring_criteria' field instead.\n\n"
         "Requirements:\n"
-        "1. Content must strictly follow {test_type} official formats and difficulty levels.\n"
-        "2. Include a realistic passage or context if relevant (Reading/Listening).\n"
-        "3. Provide 5-8 questions with 4 options each.\n"
-        "4. Include detailed explanations in Vietnamese for WHY the correct answer is right and why others are wrong.\n\n"
+        "1. Strictly follow {test_type} formats.\n"
+        "2. Include 5-8 questions (except for Writing).\n"
+        "3. Provide detailed explanations in Vietnamese for all questions.\n\n"
         "Return a JSON object with this structure:\n"
         '- "test_type": "{test_type}"\n'
         '- "skill": "{skill}"\n'
-        '- "part": "{part}"\n'
-        '- "passage": "text content here"\n'
+        '- "passage": "the prompt/transcript/reading text"\n'
         '- "questions": [\n'
         '    {{"number": 1, "question": "...", "options": ["A", "B", "C", "D"], "correct_answer": "...", "explanation": "..."}}\n'
         ']\n'
-        '- "tips": ["exam tip 1 in Vietnamese", "exam tip 2"]\n\n'
-        "Return ONLY the raw JSON object. No markdown, no prefixes."
+        '- "tips": ["exam tip 1 in Vietnamese", "exam tip 2"]\n'
+        '- "scoring_criteria": ["point 1", "point 2"] (for writing only)\n\n'
+        "Return ONLY the raw JSON object."
     )
     chain = prompt | llm
     
@@ -1806,7 +1809,7 @@ async def generate_vocab_practice_rich_stream(words: List[dict]):
         yield json.dumps({"error": "LLM not configured"})
         return
     
-    words_info = "\n".join([f"- {w['word']} ({w['meaning_en']})" for w in words])
+    words_info = "\n".join([f"- [ID: {w['id']}] {w['word']} ({w['meaning_en']})" for w in words])
     
     prompt = PromptTemplate.from_template(
         "You are a premium English language assessment designer.\n"
@@ -1814,8 +1817,9 @@ async def generate_vocab_practice_rich_stream(words: List[dict]):
         "INSTRUCTIONS:\n"
         "1. Create a MIX of these types: Multiple Choice (meaning), Synonym Match, Contextual Fill-in (sentence), and Scrambled Sentences.\n"
         "2. Ensure questions are NATURAL and reflect real-world usage.\n"
-        "3. Provide explanation in Vietnamese for each.\n\n"
-        "Return a JSON array of 10-15 questions. Return ONLY the raw JSON array."
+        "3. Provide explanation in Vietnamese for each.\n"
+        "4. CRITICAL: Each question MUST include the 'word_id' field matching the ID provided in the list above.\n\n"
+        "Return a JSON array of 10-15 questions. Each object must have: {word_id, question, hint_vn, options, answer, explanation_vn}."
     )
     chain = prompt | llm
     
