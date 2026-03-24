@@ -1399,7 +1399,12 @@ async def generate_exercises_from_text_stream(text: str, exercise_type: str = "m
     prompt = PromptTemplate.from_template(
         "You are an English teacher.\nTEXT:\n{text}\n\n{grammar_context}\n"
         "Create {num} {exercise_type} exercises.\n"
-        "Return JSON with title, difficulty, vocabulary (word, meaning_vn, pos), exercises (type, question, options, correct_answer, explanation), summary_vn.\n"
+        "Return JSON with:\n"
+        '- "title": title of the content\n'
+        '- "difficulty": CEFR level\n'
+        '- "vocabulary": array of 10 objects with keys: word, meaning_vn, meaning_en, pos, example, phonetic\n'
+        '- "quiz": array of {num} objects with keys: type, question, options, correct_answer, explanation\n'
+        '- "summary_vn": brief summary in Vietnamese\n'
         "Return ONLY valid JSON."
     )
     chain = prompt | llm
@@ -1472,10 +1477,23 @@ async def generate_practice_test_stream(test_type: str = "TOEIC", skill: str = "
         return
 
     prompt = PromptTemplate.from_template(
-        "You are an expert {test_type} exam preparation tutor.\n"
-        "Generate a practice section for: {test_type} - {skill} {part}\n\n"
-        "Return a JSON object with passage, questions (number, question, type, options, correct_answer, explanation), tips.\n"
-        "Return ONLY valid JSON."
+        "You are a professional {test_type} examiner and content creator.\n"
+        "Generate a high-quality practice section for: {test_type} - {skill} {part}\n\n"
+        "Requirements:\n"
+        "1. Content must strictly follow {test_type} official formats and difficulty levels.\n"
+        "2. Include a realistic passage or context if relevant (Reading/Listening).\n"
+        "3. Provide 5-8 questions with 4 options each.\n"
+        "4. Include detailed explanations in Vietnamese for WHY the correct answer is right and why others are wrong.\n\n"
+        "Return a JSON object with this structure:\n"
+        '- "test_type": "{test_type}"\n'
+        '- "skill": "{skill}"\n'
+        '- "part": "{part}"\n'
+        '- "passage": "text content here"\n'
+        '- "questions": [\n'
+        '    {{"number": 1, "question": "...", "options": ["A", "B", "C", "D"], "correct_answer": "...", "explanation": "..."}}\n'
+        ']\n'
+        '- "tips": ["exam tip 1 in Vietnamese", "exam tip 2"]\n\n'
+        "Return ONLY the raw JSON object. No markdown, no prefixes."
     )
     chain = prompt | llm
     
@@ -1622,8 +1640,21 @@ async def evaluate_writing_stream(text: str, task_type: str = "essay", target_te
         "You are an expert {target_test} writing examiner.\n"
         "Evaluate the following {task_type} writing:\n\n"
         "STUDENT'S WRITING:\n{text}\n\n"
-        "Evaluate based on detailed criteria and return JSON with overall_band, word_count, criteria details, strengths, weaknesses, and improved_version.\n"
-        "Return ONLY valid JSON."
+        "Requirements:\n"
+        "1. Provide a band score or percentage based on official {target_test} standards.\n"
+        "2. Break down the evaluation into detailed criteria (Task Response, Coherence & Cohesion, Lexical Resource, Grammatical Range & Accuracy).\n"
+        "3. Provide feedback for EACH criterion in Vietnamese.\n"
+        "4. Include specific corrected sentences with explanations in Vietnamese.\n"
+        "5. Provide a high-quality model paragraph for comparison.\n\n"
+        "Return a JSON object with this structure:\n"
+        '- "overall_band": number\n'
+        '- "word_count": number\n'
+        '- "criteria": {{"task_achievement": {{"score": n, "feedback_vn": "..."}}, "coherence_cohesion": {{"score": n, "feedback_vn": "..."}}, "lexical_resource": {{"score": n, "feedback_vn": "..."}}, "grammar_accuracy": {{"score": n, "feedback_vn": "..."}}}}\n'
+        '- "strengths": ["...", "..." in Vietnamese]\n'
+        '- "improvements": ["...", "..." in Vietnamese]\n'
+        '- "corrected_sentences": [{{"original": "...", "corrected": "...", "explanation_vn": "..."}}]\n'
+        '- "model_paragraph": "text content"\n\n'
+        "Return ONLY the raw JSON object. No markdown."
     )
     chain = prompt | llm
     

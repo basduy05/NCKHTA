@@ -758,15 +758,26 @@ class TextAnalysisRequest(BaseModel):
 
 
 @router.post("/analyze-text")
-def analyze_text(req: TextAnalysisRequest, authorization: str = Header(...)):
+async def analyze_text(req: TextAnalysisRequest, authorization: str = Header(...)):
+    from fastapi.responses import StreamingResponse
     user = _get_current_student(authorization)
+    if user.get("credits_ai", 0) < 5:
+        raise HTTPException(status_code=402, detail="Insufficient AI credits (5 required)")
+    
     _check_usage_limit(user["id"], "ai-tools")
-    llm = llm_service.get_llm()
-    if not llm:
-        raise HTTPException(status_code=503, detail="LLM service unavailable — configure API key in Admin settings")
-    vocab = llm_service.extract_vocabulary_from_text(req.text)
-    quiz = llm_service.generate_quiz_from_text(req.text, req.num_questions)
-    return {"vocabulary": vocab, "quiz": quiz}
+    
+    # Deduct credit
+    conn = get_db()
+    conn.execute("UPDATE users SET credits_ai = MAX(0, credits_ai - 5) WHERE id = ?", (user["id"],))
+    conn.commit()
+    conn.close()
+
+    async def gen():
+        async for chunk in llm_service.generate_exercises_from_text_stream(req.text, "mixed", req.num_questions):
+            yield f"data: {chunk}\n\n"
+        yield "data: [DONE]\n\n"
+
+    return StreamingResponse(gen(), media_type="text/event-stream")
 
 
 # ─── DICTIONARY LOOKUP ────────────────────────────────────────────────────────
