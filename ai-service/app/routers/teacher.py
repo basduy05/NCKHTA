@@ -6,6 +6,7 @@ from ..services import auth_service, llm_service, graph_service, file_service
 from pydantic import BaseModel
 from typing import Optional
 import json
+import traceback
 
 router = APIRouter(prefix="/teacher", tags=["Teacher"])
 
@@ -725,15 +726,17 @@ async def generate_assignment_from_news(req: NewsGenerateRequest, authorization:
     conn.close()
 
     try:
-        result = await llm_service.generate_reading_comprehension(
-            article_title=req.title,
-            article_content=req.content,
-            difficulty=req.difficulty,
-            num_questions=req.num_questions
-        )
-        if "error" in result:
-            raise HTTPException(status_code=500, detail=result["error"])
-        return result
+        async def gen():
+            async for chunk in llm_service.generate_reading_comprehension_stream(
+                article_title=req.title,
+                article_content=req.content,
+                difficulty=req.difficulty,
+                num_questions=req.num_questions
+            ):
+                yield f"data: {chunk}\n\n"
+            yield "data: [DONE]\n\n"
+        return StreamingResponse(gen(), media_type="text/event-stream")
     except Exception as e:
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 

@@ -1,10 +1,12 @@
-from fastapi import APIRouter, HTTPException, Header, Query, UploadFile, File, Form, BackgroundTasks, Response
+from fastapi import APIRouter, HTTPException, Header, Query, UploadFile, File, Form, BackgroundTasks, Response, StreamingResponse
 from ..database import get_db
 from ..services import auth_service, llm_service, graph_service, file_service
 from pydantic import BaseModel
 from typing import Optional, List
 import datetime
 import math
+import json
+import traceback
 
 # --- FSRS Spaced Repetition Logic (Simplified FSRS v4) ---
 class FSRS:
@@ -294,16 +296,19 @@ async def start_vocab_practice(req: VocabPracticeReq, authorization: str = Heade
         if not words:
             raise HTTPException(status_code=404, detail="No words found. Save some vocabulary first!")
             
-        # Generate rich practice using AI
-        questions = await llm_service.generate_vocab_practice_rich(words)
-        return {"questions": questions}
+        async def gen():
+            async for chunk in llm_service.generate_vocab_practice_rich_stream(words):
+                yield f"data: {chunk}\n\n"
+            yield "data: [DONE]\n\n"
+        return StreamingResponse(gen(), media_type="text/event-stream")
     except Exception as e:
         if conn: conn.close()
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/vocabulary/quiz/generate")
 async def generate_quiz(req: dict, authorization: str = Header(...)):
-    """Generate IELTS-style quiz from provided text."""
+    """Generate IELTS-style quiz from provided text (Streaming)."""
     student = _get_current_student(authorization)
     text = req.get("text")
     num = req.get("num", 5)
@@ -314,9 +319,13 @@ async def generate_quiz(req: dict, authorization: str = Header(...)):
     _check_usage_limit(student["id"], "quiz_gen", limit=10)
     
     try:
-        questions = await llm_service.generate_quiz_from_text(text, num)
-        return {"questions": questions}
+        async def gen():
+            async for chunk in llm_service.generate_exercises_from_text_stream(text, "quiz", num):
+                yield f"data: {chunk}\n\n"
+            yield "data: [DONE]\n\n"
+        return StreamingResponse(gen(), media_type="text/event-stream")
     except Exception as e:
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/vocabulary/quiz-error")
@@ -465,10 +474,14 @@ async def start_grammar_practice(req: GrammarPracticeReq, authorization: str = H
         if not rule_names:
             raise HTTPException(status_code=404, detail="Rules not found")
             
-        questions = await llm_service.generate_grammar_practice(rule_names, req.difficulty)
-        return {"questions": questions}
+        async def gen():
+            async for chunk in llm_service.generate_grammar_practice_stream(rule_names, req.difficulty):
+                yield f"data: {chunk}\n\n"
+            yield "data: [DONE]\n\n"
+        return StreamingResponse(gen(), media_type="text/event-stream")
     except Exception as e:
         if conn: conn.close()
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/exams/save")
@@ -1171,18 +1184,12 @@ async def get_student_roadmap(authorization: str = Header(...)):
     
     words = [dict(r) for r in vocab_rows]
     
-    # Add dummy target if missing for now
-    user_info = {
-        "current_level": student.get("level", "B1"),
-        "target_goal": "TOEIC 750+" # Default goal for now
-    }
-    
-    try:
-        roadmap = await llm_service.generate_personalized_roadmap(user_info, words)
-        return roadmap
-    except Exception as e:
-        print(f"Roadmap generation error: {e}")
-        raise HTTPException(status_code=500, detail="Failed to generate roadmap")
+    # 3. Generate with AI (Streaming)
+    async def gen():
+        async for chunk in llm_service.generate_personalized_roadmap_stream(student, words):
+            yield f"data: {chunk}\n\n"
+        yield "data: [DONE]\n\n"
+    return StreamingResponse(gen(), media_type="text/event-stream")
 
 @router.get("/knowledge-graph")
 def student_knowledge_graph(

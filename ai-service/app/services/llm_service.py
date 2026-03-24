@@ -1794,11 +1794,42 @@ async def generate_vocab_practice_rich(words: List[dict]):
     try:
         response = await _safe_invoke_async(chain, {"words": words_info})
         result = parse_json_response(response.content)
-        print(f"[LLM VOCAB PRACTICE] Success: generated {len(result) if isinstance(result, list) else 0} questions", flush=True)
         return result
     except Exception as e:
         print(f"[LLM VOCAB PRACTICE] ERROR: {e}", flush=True)
         return []
+
+async def generate_vocab_practice_rich_stream(words: List[dict]):
+    """Streaming version of generate_vocab_practice_rich."""
+    llm = get_llm()
+    if not llm:
+        yield json.dumps({"error": "LLM not configured"})
+        return
+    
+    words_info = "\n".join([f"- {w['word']} ({w['meaning_en']})" for w in words])
+    
+    prompt = PromptTemplate.from_template(
+        "You are a premium English language assessment designer.\n"
+        "Create a challenging and meaningful vocabulary practice set for these words:\n{words}\n\n"
+        "INSTRUCTIONS:\n"
+        "1. Create a MIX of these types: Multiple Choice (meaning), Synonym Match, Contextual Fill-in (sentence), and Scrambled Sentences.\n"
+        "2. Ensure questions are NATURAL and reflect real-world usage.\n"
+        "3. Provide explanation in Vietnamese for each.\n\n"
+        "Return a JSON array of 10-15 questions. Return ONLY the raw JSON array."
+    )
+    chain = prompt | llm
+    
+    full_content = ""
+    async for chunk in chain.astream({"words": words_info}):
+        full_content += chunk.content
+        yield json.dumps({"status": "generating", "chunk": chunk.content}, ensure_ascii=False)
+        
+    try:
+        result = parse_json_response(full_content)
+        yield json.dumps(result, ensure_ascii=False)
+    except:
+        yield json.dumps({"error": "Failed to parse AI response"}, ensure_ascii=False)
+
 
 async def generate_grammar_practice(rules: List[str], difficulty: str = "Medium"):
     """Generate tailored grammar practice based on specific rules."""
@@ -1820,6 +1851,71 @@ async def generate_grammar_practice(rules: List[str], difficulty: str = "Medium"
     except Exception as e:
         print(f"[LLM GRAMMAR PRACTICE] ERROR: {e}", flush=True)
         return []
+
+async def generate_grammar_practice_stream(rules: List[str], difficulty: str = "Medium"):
+    """Streaming version of generate_grammar_practice."""
+    llm = get_llm()
+    if not llm:
+        yield json.dumps({"error": "LLM not configured"})
+        return
+    
+    prompt = PromptTemplate.from_template(
+        "You are an expert English teacher.\n"
+        "Create a {difficulty} level grammar practice for these rules: {rules}.\n"
+        "Include variety: Structure completion, Error correction, and Transformation.\n"
+        "Provide detailed explanations in Vietnamese.\n\n"
+        "Return a JSON array of 10-15 objects {{question, options, answer, explanation_vn}}."
+    )
+    chain = prompt | llm
+    
+    full_content = ""
+    async for chunk in chain.astream({"difficulty": difficulty, "rules": ", ".join(rules)}):
+        full_content += chunk.content
+        yield json.dumps({"status": "generating", "chunk": chunk.content}, ensure_ascii=False)
+        
+    try:
+        result = parse_json_response(full_content)
+        yield json.dumps(result, ensure_ascii=False)
+    except:
+        yield json.dumps({"error": "Failed to parse AI response"}, ensure_ascii=False)
+
+async def generate_personalized_roadmap_stream(user_info: dict, words: List[dict]):
+    """Streaming version of generate_personalized_roadmap."""
+    llm = get_llm()
+    if not llm:
+        yield json.dumps({"error": "LLM not configured"})
+        return
+    
+    goal = user_info.get("target_goal", "General English")
+    level = user_info.get("current_level", "B1")
+    words_summary = ", ".join([w['word'] for w in words[:20]])
+    
+    prompt = PromptTemplate.from_template(
+        "You are an expert AI Education Advisor.\n"
+        "Create a personalized English learning roadmap for a student with these details:\n"
+        "- Current Level: {level}\n"
+        "- Target Goal: {goal}\n"
+        "- Recently Learned Words: {words}\n\n"
+        "Return a JSON object with title, summary_vn, phases (name, duration, tasks_vn, focus_topics), and tips_vn.\n"
+        "Return ONLY the raw JSON object."
+    )
+    chain = prompt | llm
+    
+    full_content = ""
+    async for chunk in chain.astream({
+        "level": level,
+        "goal": goal,
+        "words": words_summary,
+    }):
+        full_content += chunk.content
+        yield json.dumps({"status": "generating", "chunk": chunk.content}, ensure_ascii=False)
+        
+    try:
+        result = parse_json_response(full_content)
+        yield json.dumps(result, ensure_ascii=False)
+    except:
+        yield json.dumps({"error": "Failed to parse AI response"}, ensure_ascii=False)
+
 
 async def generate_exam_content(test_type: str, part: Optional[str] = None):
     """Generate realistic TOEIC/IELTS content (full or specific parts)."""
@@ -1881,6 +1977,41 @@ async def generate_reading_comprehension(article_title: str, article_content: st
     except Exception as e:
         print(f"[LLM READING COMPREHENSION] Error: {e}", flush=True)
         return {"error": str(e)}
+
+async def generate_reading_comprehension_stream(article_title: str, article_content: str, difficulty: str = "Medium", num_questions: int = 5):
+    """Streaming version of generate_reading_comprehension."""
+    llm = get_llm()
+    if not llm:
+        yield json.dumps({"error": "LLM not configured"})
+        return
+        
+    prompt = PromptTemplate.from_template(
+        "You are an expert English teacher. Create a reading comprehension test for the following article.\n\n"
+        "Title: {title}\n"
+        "Content: {content}\n\n"
+        "Difficulty Level: {difficulty}\n"
+        "Number of Questions: {num_questions}\n\n"
+        "Please generate {num_questions} questions. Include a mix of Multiple Choice, True/False/Not Given, and Vocabulary in Context.\n"
+        "Return a JSON object with passage and questions (type, question, options, correct_answer, explanation).\n"
+        "Return ONLY the raw JSON object."
+    )
+    chain = prompt | llm
+    
+    full_content = ""
+    async for chunk in chain.astream({
+        "title": article_title, 
+        "content": article_content, 
+        "difficulty": difficulty, 
+        "num_questions": num_questions
+    }):
+        full_content += chunk.content
+        yield json.dumps({"status": "generating", "chunk": chunk.content}, ensure_ascii=False)
+        
+    try:
+        result = parse_json_response(full_content)
+        yield json.dumps(result, ensure_ascii=False)
+    except:
+        yield json.dumps({"error": "Failed to parse AI response"}, ensure_ascii=False)
 
 async def grade_writing_assignment(prompt_text: str, student_answer: str, test_type: str = "IELTS"):
     """Grade a writing assignment (IELTS or TOEIC) and return detailed feedback."""

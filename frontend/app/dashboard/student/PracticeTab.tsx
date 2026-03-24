@@ -21,6 +21,7 @@ export default function PracticeTab({ API_URL, setShowCreditModal }: PracticeTab
   const [submitted, setSubmitted] = useState(false);
   const [score, setScore] = useState(0);
   const [source, setSource] = useState<"ai" | "official">("ai");
+  const [streamingText, setStreamingText] = useState("");
 
   const generatePractice = async () => {
     if (source === "official") {
@@ -42,6 +43,7 @@ export default function PracticeTab({ API_URL, setShowCreditModal }: PracticeTab
     }
 
     setLoading(true);
+    setStreamingText("");
     setPractice({ status: "generating", questions: [] });
     setAnswers({});
     setSubmitted(false);
@@ -80,8 +82,9 @@ export default function PracticeTab({ API_URL, setShowCreditModal }: PracticeTab
         const { value, done: readerDone } = await reader.read();
         done = readerDone;
         if (value) {
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split('\n');
+          const chunkStr = decoder.decode(value, { stream: true });
+          buffer += chunkStr;
+          const lines = buffer.split('\n\n');
           buffer = lines.pop() || "";
 
           for (const line of lines) {
@@ -91,7 +94,9 @@ export default function PracticeTab({ API_URL, setShowCreditModal }: PracticeTab
 
             try {
               const chunkData = JSON.parse(rawJson);
-              if (chunkData.status === "success" || !chunkData.status) {
+              if (chunkData.status === "generating") {
+                setStreamingText(prev => (prev + (chunkData.chunk || "")).slice(-500));
+              } else if (chunkData.status === "success" || !chunkData.status) {
                 finalData = { ...finalData, ...chunkData };
               }
             } catch (e) { }
@@ -99,18 +104,6 @@ export default function PracticeTab({ API_URL, setShowCreditModal }: PracticeTab
         }
       }
       refreshUser();
-      
-      if (buffer.trim()) {
-          try {
-              let rawJson = buffer.trim();
-              if (rawJson.startsWith("data: ")) rawJson = rawJson.replace("data: ", "");
-              if (rawJson !== "[DONE]") {
-                  const chunkData = JSON.parse(rawJson);
-                  finalData = { ...finalData, ...chunkData };
-              }
-          } catch (e) {}
-      }
-
       setPractice(finalData);
     } catch (e) {
       alert("Lỗi khi tạo bài luyện tập");
@@ -165,7 +158,26 @@ export default function PracticeTab({ API_URL, setShowCreditModal }: PracticeTab
         </div>
       </div>
 
-      {practice && skill === "reading" && (
+      {loading && (
+        <div className="bg-slate-900 rounded-xl p-6 border border-slate-700 shadow-2xl overflow-hidden relative group">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
+              <h3 className="text-emerald-500 font-mono text-xs font-bold uppercase tracking-widest">AI Terminal Output</h3>
+            </div>
+            <span className="text-slate-500 font-mono text-[10px] animate-pulse">RECEPTION: CHUNKING...</span>
+          </div>
+          <div className="font-mono text-sm text-slate-300 h-32 overflow-hidden relative">
+            <div className="absolute inset-0 bg-gradient-to-t from-slate-900 to-transparent pointer-events-none z-10"></div>
+            <p className="whitespace-pre-wrap break-all opacity-80 leading-relaxed">
+              {streamingText || "Establishing secure connection to Lexicon LLM...\nWaiting for first data chunk..."}
+            </p>
+          </div>
+          <div className="absolute bottom-4 right-4 text-[10px] font-bold text-slate-600 font-mono uppercase">Lexicon-V4-Stream ⚡</div>
+        </div>
+      )}
+
+      {practice && skill === "reading" && !loading && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
           <h3 className="text-xl font-bold mb-4">{practice.title || "Bài đọc hiểu"}</h3>
           <div className="bg-gray-50 p-4 rounded-lg mb-6 whitespace-pre-wrap leading-relaxed">

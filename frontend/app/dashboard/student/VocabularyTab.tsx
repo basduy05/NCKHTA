@@ -28,6 +28,8 @@ export default function VocabularyTab({ API_URL }: VocabularyTabProps) {
   const [exerciseSubmitted, setExerciseSubmitted] = useState(false);
   const [showHint, setShowHint] = useState(false);
   
+  const [streamingText, setStreamingText] = useState("");
+  
   // Edit Vocabulary states
   const [editingWord, setEditingWord] = useState<any | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -115,20 +117,46 @@ export default function VocabularyTab({ API_URL }: VocabularyTabProps) {
 
   const startRichPractice = async () => {
     setGeneratingPractice(true);
+    setStreamingText("");
+    setPracticeExercises([]);
     try {
       const res = await authFetch(`${API_URL}/student/vocabulary/practice`, {
         method: "POST",
         body: JSON.stringify({ word_ids: [] }) 
       });
       if (res.ok) {
-        const data = await res.json();
-        setPracticeExercises(data.questions || []);
-        setCurrentExerciseIdx(0);
-        setPracticeResults([]);
-        setPracticeAnswers({});
-        setExerciseSubmitted(false);
-        setShowHint(false);
-        refreshUser();
+        const reader = res.body?.getReader();
+        if (!reader) throw new Error("No reader");
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n\n");
+          buffer = lines.pop() || "";
+          for (const line of lines) {
+            if (line.startsWith("data: ")) {
+              const dataStr = line.replace("data: ", "");
+              if (dataStr === "[DONE]") continue;
+              try {
+                const data = JSON.parse(dataStr);
+                if (data.status === "generating") {
+                  setStreamingText(prev => (prev + (data.chunk || "")).slice(-500));
+                } else if (Array.isArray(data)) {
+                  setPracticeExercises(data);
+                  setCurrentExerciseIdx(0);
+                  setPracticeResults([]);
+                  setPracticeAnswers({});
+                  setExerciseSubmitted(false);
+                  setShowHint(false);
+                  refreshUser();
+                }
+              } catch (e) {}
+            }
+          }
+        }
       } else {
         const errorData = await res.json();
         alert(errorData.detail || "Lỗi khi chuẩn bị bài tập");
@@ -264,7 +292,33 @@ export default function VocabularyTab({ API_URL }: VocabularyTabProps) {
         </div>
       )}
 
-      {practiceExercises.length > 0 && currentEx && (
+      {generatingPractice && (
+          <div className="bg-slate-900 rounded-3xl p-8 border border-slate-700 shadow-2xl overflow-hidden relative group max-w-2xl mx-auto my-12">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_10px_rgba(16,185,129,0.8)]"></div>
+                <h3 className="text-emerald-500 font-mono text-xs font-bold uppercase tracking-widest">Lexicon AI Stream</h3>
+              </div>
+              <div className="flex gap-1.5">
+                <div className="w-2 h-2 bg-slate-700 rounded-full"></div>
+                <div className="w-2 h-2 bg-slate-700 rounded-full"></div>
+                <div className="w-2 h-2 bg-slate-700 rounded-full"></div>
+              </div>
+            </div>
+            <div className="font-mono text-sm text-slate-300 h-48 overflow-hidden relative">
+              <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-transparent pointer-events-none z-10"></div>
+              <p className="whitespace-pre-wrap break-all opacity-90 leading-relaxed font-mono">
+                {streamingText || "> Establishing neural connection...\n> Initializing LLM context...\n> Waiting for vocabulary chunks..."}
+              </p>
+            </div>
+            <div className="mt-6 flex items-center justify-between border-t border-slate-800 pt-4">
+              <span className="text-slate-500 font-mono text-[10px] animate-pulse">STATUS: RECEIVING_CHUNKS</span>
+              <span className="text-slate-600 font-mono text-[10px]">v4.0.2-stable</span>
+            </div>
+          </div>
+        )}
+
+      {practiceExercises.length > 0 && !generatingPractice && currentEx && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/80 backdrop-blur-md p-4 overflow-y-auto">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in zoom-in-95 duration-200 my-auto">
             <div className="bg-gradient-to-r from-blue-600 to-indigo-700 p-6 text-white flex justify-between items-center">
