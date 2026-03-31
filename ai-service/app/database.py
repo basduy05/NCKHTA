@@ -119,13 +119,21 @@ def get_db(retries=3):
     """
     # Check if we already have a connection in this thread
     if hasattr(_thread_local, "db_conn") and _thread_local.db_conn:
-        try:
-            # Test if connection is still alive
-            _thread_local.db_conn.execute("SELECT 1")
+        import time
+        now = time.time()
+        last_check = getattr(_thread_local, "last_check", 0)
+        
+        if now - last_check > 30:
+            try:
+                # Test if connection is still alive (only once every 30s)
+                _thread_local.db_conn.execute("SELECT 1")
+                _thread_local.last_check = now
+            except Exception:
+                # Connection dead, remove it
+                _thread_local.db_conn = None
+        
+        if _thread_local.db_conn:
             return _thread_local.db_conn
-        except Exception:
-            # Connection dead, remove it
-            _thread_local.db_conn = None
 
     global TURSO_URL, TURSO_AUTH_TOKEN
     # Refresh env vars only if not already set to save time
@@ -293,6 +301,10 @@ def init_db():
     # --- PERFORMANCE INDEXES ---
     try:
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_revoked_tokens_expires_at ON revoked_tokens(expires_at)")
+    except Exception: pass
+
+    try:
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_role_points ON users(role, points DESC)")
     except Exception: pass
 
     # -----------------------------------

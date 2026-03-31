@@ -5,8 +5,20 @@ from .database import get_db
 
 security = HTTPBearer()
 
+import time
+
+_user_cache = {}
+USER_CACHE_TTL = 30  # seconds
+
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
     token = credentials.credentials
+    now = time.time()
+    
+    # Check cache first
+    cached = _user_cache.get(token)
+    if cached and now - cached['time'] < USER_CACHE_TTL:
+        return cached['user']
+        
     conn = None
     user = None
     try:
@@ -39,6 +51,15 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
     if not is_active:
         raise HTTPException(status_code=403, detail="User account is disabled")
         
+    # Update cache
+    _user_cache[token] = {'user': user, 'time': now}
+    
+    # Cleanup big cache periodically (~1% chance to run)
+    if len(_user_cache) > 1000 and int(now) % 100 == 0:
+        keys_to_del = [k for k, v in _user_cache.items() if now - v['time'] > USER_CACHE_TTL]
+        for k in keys_to_del:
+            del _user_cache[k]
+            
     return user
 
 async def get_admin_user(current_user: dict = Depends(get_current_user)):

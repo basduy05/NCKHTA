@@ -29,6 +29,8 @@ export default function VocabularyTab({ API_URL }: VocabularyTabProps) {
   const [practiceAnswers, setPracticeAnswers] = useState<Record<number, string>>({});
   const [exerciseSubmitted, setExerciseSubmitted] = useState(false);
   const [showHint, setShowHint] = useState(false);
+  const [matchingSelections, setMatchingSelections] = useState<{ word: string | null, def: string | null }>({ word: null, def: null });
+  const [matches, setMatches] = useState<Record<string, string>>({});
   
 
   
@@ -122,21 +124,34 @@ export default function VocabularyTab({ API_URL }: VocabularyTabProps) {
     setGeneratingPractice(true);
     setPracticeExercises([]);
     try {
+      // Collect IDs of words that are due or just the top 10 if none are due
+      const dueWords = words.filter(w => !w.scheduled_at || new Date(w.scheduled_at) <= new Date());
+      const selectedWords = dueWords.length > 0 ? dueWords : words.slice(0, 10);
+      const wordIds = selectedWords.map(w => w.id);
+
       const res = await authFetch(`${API_URL}/student/vocabulary/practice`, {
         method: "POST",
-        body: JSON.stringify({ word_ids: [] }) 
+        body: JSON.stringify({ word_ids: wordIds }) 
       });
       if (res.ok) {
         const data = await res.json();
-        if (data) {
-          const rawEx = Array.isArray(data) ? data : (data.exercises || data.quiz || []);
-          const validEx = Array.isArray(rawEx) ? rawEx.filter((ex: any) => ex && (ex.question || ex.q)) : [];
+        if (data && !data.error) {
+          const rawEx = data.exercises || data.quiz || (Array.isArray(data) ? data : []);
+          const validEx = Array.isArray(rawEx) ? rawEx.filter((ex: any) => ex && (ex.question || ex.q || ex.type === 'MATCHING')) : [];
+          
+          if (validEx.length === 0) {
+            showAlert("AI không tạo được câu hỏi phù hợp. Vui lòng thử lại.", 'warning');
+            return;
+          }
+
           setPracticeExercises(validEx);      
           setCurrentExerciseIdx(0);
           setPracticeResults([]);
           setPracticeAnswers({});
           setExerciseSubmitted(false);
           setShowHint(false);
+          setMatches({});
+          setMatchingSelections({ word: null, def: null });
           refreshUser();
         }
       } else {
@@ -152,10 +167,16 @@ export default function VocabularyTab({ API_URL }: VocabularyTabProps) {
   const submitCurrentExercise = (rating?: number) => {
     const ex = practiceExercises[currentExerciseIdx];
     const ans = practiceAnswers[currentExerciseIdx] || "";
-    const isCorrect = ans.toLowerCase().trim() === ex.answer.toLowerCase().trim();
+    
+    let isCorrect = false;
+    if (ex.type === 'MATCHING') {
+      const pairCount = ex.matching_pairs?.length || 0;
+      isCorrect = Object.keys(matches).length === pairCount;
+    } else {
+      isCorrect = ans.toLowerCase().trim() === ex.answer.toLowerCase().trim();
+    }
     
     const finalRating = rating || (isCorrect ? 3 : 1);
-    
     setPracticeResults(prev => [...prev, { word_id: ex.word_id, correct: isCorrect, rating: finalRating }]);
     setExerciseSubmitted(true);
   };
@@ -165,6 +186,8 @@ export default function VocabularyTab({ API_URL }: VocabularyTabProps) {
       setCurrentExerciseIdx(prev => prev + 1);
       setExerciseSubmitted(false);
       setShowHint(false);
+      setMatches({});
+      setMatchingSelections({ word: null, def: null });
     } else {
       try {
         // Filter out any results that might be missing word_id (safety)
@@ -177,7 +200,19 @@ export default function VocabularyTab({ API_URL }: VocabularyTabProps) {
         if (res.ok) {
             refreshUser();
             const correctCount = practiceResults.filter(r => r.correct).length;
-            showAlert(`Chúc mừng! Bạn đã hoàn thành bài ôn tập.\nĐúng: ${correctCount}/${practiceExercises.length}\nĐiểm thưởng: +${correctCount * 10}`, 'success');
+            const percentage = (correctCount / practiceExercises.length) * 100;
+            
+            let message = "";
+            let type: 'success' | 'warning' | 'info' = 'success';
+            
+            if (percentage >= 80) message = `Tuyệt vời! Bạn đã hoàn thành xuất sắc bài ôn tập.`;
+            else if (percentage >= 50) message = `Khá tốt! Bạn đã hoàn thành bài ôn tập.`;
+            else {
+                message = `Bạn đã hoàn thành bài ôn tập. Hãy cố gắng hơn ở lần sau nhé!`;
+                type = 'info';
+            }
+            
+            showAlert(`${message}\nĐúng: ${correctCount}/${practiceExercises.length}\nĐiểm thưởng: +${correctCount * 10}`, type);
             setPracticeExercises([]);
             // Force a slight delay to ensure DB commit is visible to next query
             setTimeout(() => fetchWords(), 500);
@@ -294,134 +329,242 @@ export default function VocabularyTab({ API_URL }: VocabularyTabProps) {
         )}
 
       {practiceExercises.length > 0 && !generatingPractice && currentEx && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/80 backdrop-blur-md p-4 overflow-y-auto">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in zoom-in-95 duration-200 my-auto">
-            <div className="bg-gradient-to-r from-blue-600 to-indigo-700 p-6 text-white flex justify-between items-center">
-              <div>
-                <p className="text-xs opacity-80 font-bold uppercase tracking-widest mb-1">Cấp độ: {currentEx.level || 'B1'}</p>
-                <h3 className="font-extrabold text-xl flex items-center gap-2 underline decoration-blue-400 underline-offset-4 decoration-2">
-                  <Brain size={24} /> Câu hỏi {currentExerciseIdx + 1}/{practiceExercises.length}
-                </h3>
-              </div>
-              <button onClick={() => setPracticeExercises([])} className="bg-white/10 hover:bg-white/20 p-2 rounded-xl transition"><X size={24} /></button>
+        <div className="fixed inset-0 z-50 flex flex-col bg-white overflow-y-auto animate-in slide-in-from-bottom-5 duration-300">
+          {/* Top Progress Header */}
+          <div className="sticky top-0 bg-white/80 backdrop-blur-md z-10 px-6 py-4 flex items-center gap-6 border-b border-gray-100">
+            <button onClick={() => setPracticeExercises([])} className="text-gray-400 hover:text-gray-600 transition"><X size={28} /></button>
+            <div className="flex-1 h-3 bg-gray-100 rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-green-500 transition-all duration-500 rounded-full" 
+                  style={{ width: `${((currentExerciseIdx) / practiceExercises.length) * 100}%` }}
+                />
             </div>
+            <span className="font-extrabold text-blue-600 text-lg">{currentExerciseIdx + 1} / {practiceExercises.length}</span>
+          </div>
+          
+          {/* Main Quiz Content */}
+          <div className="flex-1 max-w-3xl w-full mx-auto p-6 md:p-12 flex flex-col justify-center">
             
-            <div className="p-8">
-              <div className="mb-8">
-                <p className="text-gray-400 text-sm font-bold uppercase mb-3 flex items-center gap-2">
-                    <Sparkles size={16} className="text-yellow-500" /> AI Instruction
-                </p>
-                <h4 className="text-2xl font-black text-gray-900 leading-tight mb-4">{currentEx.question}</h4>
-                
-                {currentEx.type === 'fill_blank' && (
-                  <div className="bg-gray-50 p-5 rounded-2xl border border-gray-100 italic text-gray-700 border-l-4 border-l-blue-500">
-                    "{currentEx.context}"
-                  </div>
-                )}
-              </div>
-
-              <div className="space-y-4">
-                {currentEx.options ? (
-                  <div className="grid grid-cols-1 gap-3">
-                    {currentEx.options.map((opt: string, i: number) => {
-                      const isSelected = practiceAnswers[currentExerciseIdx] === opt;
-                      const isCorrect = opt === currentEx.answer;
-                      let cls = "border-gray-100 bg-gray-50 hover:border-blue-300 hover:shadow-md";
-                      if (exerciseSubmitted) {
-                        if (isCorrect) cls = "border-green-500 bg-green-50 text-green-700 ring-4 ring-green-500/10";
-                        else if (isSelected) cls = "border-red-500 bg-red-50 text-red-700";
-                        else cls = "opacity-40 grayscale";
-                      } else if (isSelected) cls = "border-blue-600 bg-blue-50 text-blue-700 ring-4 blue-500/10";
-
-                      return (
-                        <button key={i} disabled={exerciseSubmitted}
-                          onClick={() => setPracticeAnswers({ ...practiceAnswers, [currentExerciseIdx]: opt })}
-                          className={`p-5 rounded-2xl border-2 text-left transition-all duration-300 font-bold text-lg ${cls}`}
-                        >
-                          {opt}
-                        </button>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="relative">
-                    <input
-                      autoFocus type="text"
-                      value={practiceAnswers[currentExerciseIdx] || ""}
-                      onChange={e => setPracticeAnswers({ ...practiceAnswers, [currentExerciseIdx]: e.target.value })}
-                      onKeyDown={e => { if (e.key === 'Enter' && !exerciseSubmitted) submitCurrentExercise(); }}
-                      placeholder="Gõ đáp án của bạn..."
-                      className={`w-full text-2xl p-6 border-2 rounded-2xl outline-none transition-all font-bold ${exerciseSubmitted ? (practiceAnswers[currentExerciseIdx]?.toLowerCase().trim() === currentEx.answer.toLowerCase() ? "border-green-500 bg-green-50 text-green-700" : "border-red-500 bg-red-50 text-red-700") : "border-gray-100 bg-gray-50 focus:border-blue-500 focus:bg-white focus:shadow-xl"}`}
-                      disabled={exerciseSubmitted}
-                    />
-                  </div>
-                )}
-
-                {showHint && !exerciseSubmitted && (
-                    <div className="bg-yellow-50 p-4 rounded-xl border border-yellow-200 text-yellow-800 text-sm animate-in slide-in-from-top-2">
-                        <strong>Gợi ý từ AI:</strong> {currentEx.hint_vn || "Hãy nghĩ về nghĩa tiếng Việt của từ này."}
-                    </div>
-                )}
-              </div>
-
-              {exerciseSubmitted && (
-                <div className={`mt-8 p-5 rounded-2xl flex items-center gap-4 animate-in slide-in-from-bottom-4 ${String(practiceAnswers[currentExerciseIdx] || "").toLowerCase().trim() === String(currentEx.answer || "").toLowerCase().trim() ? "bg-green-50 text-green-700 border border-green-200" : "bg-red-50 text-red-700 border border-red-200"}`}>
-                  <div className={`p-3 rounded-full ${String(practiceAnswers[currentExerciseIdx] || "").toLowerCase().trim() === String(currentEx.answer || "").toLowerCase().trim() ? 'bg-green-500' : 'bg-red-500'} text-white`}>
-                    {String(practiceAnswers[currentExerciseIdx] || "").toLowerCase().trim() === String(currentEx.answer || "").toLowerCase().trim() ? <CheckCircle2 size={32} /> : <X size={32} />}
-                  </div>
-                  <div>
-                    <h5 className="font-black text-lg">{String(practiceAnswers[currentExerciseIdx] || "").toLowerCase().trim() === String(currentEx.answer || "").toLowerCase().trim() ? "Tuyệt vời!" : "Chưa chính xác!"}</h5>
-                    <p className="font-medium">Đáp án đúng: <span className="underline decoration-2">{currentEx.answer}</span></p>
-                    {currentEx.explanation_vn && <p className="text-sm mt-1 opacity-80">{currentEx.explanation_vn}</p>}
-                  </div>
+            <div className="mb-10 text-center">
+              <span className="inline-block px-4 py-1.5 bg-blue-50 text-blue-600 rounded-xl font-bold uppercase tracking-widest text-xs mb-6 shadow-sm border border-blue-100">
+                {currentEx.type === 'FIB' ? 'Điền vào chỗ trống' : currentEx.type === 'SPELLING' ? 'Nghe và Viết' : currentEx.type === 'PARAPHRASE' ? 'Cụm từ đồng nghĩa' : 'Chọn đáp án đúng'}
+              </span>
+              
+              <h2 className="text-3xl md:text-4xl font-black text-gray-800 leading-tight mb-6">
+                {currentEx.type === 'MATCHING' ? "Ghép từ với định nghĩa tương ứng" : currentEx.question}
+              </h2>
+              
+              {currentEx.type !== 'MATCHING' && (currentEx.type === 'FIB' || currentEx.context) && (
+                <div className="text-xl md:text-2xl font-medium text-gray-600 bg-gray-50 p-6 md:p-8 rounded-3xl border border-gray-100 leading-relaxed max-w-2xl mx-auto shadow-inner">
+                  {currentEx.context}
                 </div>
               )}
 
-              <div className="mt-10 flex flex-col gap-4">
-                {!exerciseSubmitted ? (
-                    <div className="flex justify-between items-center">
-                        <button onClick={() => setShowHint(!showHint)} className="text-gray-400 hover:text-yellow-600 font-bold flex items-center gap-1 transition text-sm">
-                            <Lightbulb size={18} /> {showHint ? "Ẩn gợi ý" : "Xem gợi ý"}
-                        </button>
-                        <button onClick={() => submitCurrentExercise()} disabled={!practiceAnswers[currentExerciseIdx]} className="btn-primary px-10 py-4 rounded-2xl font-black text-lg shadow-xl hover:shadow-2xl transition transform active:scale-95 disabled:opacity-50">
-                            KIỂM TRA
-                        </button>
+              {currentEx.type === 'SPELLING' && (
+                <button 
+                  onClick={() => speak(currentEx.answer)} 
+                  className="mt-6 mx-auto bg-blue-100 hover:bg-blue-200 text-blue-600 p-5 rounded-full transition transform active:scale-90 shadow-md"
+                >
+                  <Volume2 size={36} />
+                </button>
+              )}
+            </div>
+
+            <div className="w-full max-w-4xl mx-auto space-y-4">
+              {currentEx.type === 'MATCHING' ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
+                   {/* Words Column */}
+                   <div className="space-y-3">
+                      <h4 className="text-center font-black text-blue-500 uppercase tracking-widest text-xs mb-4">Từ vựng</h4>
+                      {(currentEx.matching_pairs || []).map((pair: any, i: number) => {
+                         const isMatched = !!matches[pair.word];
+                         const isSelected = matchingSelections.word === pair.word;
+                         return (
+                            <button 
+                              key={i}
+                              disabled={exerciseSubmitted || isMatched}
+                              onClick={() => setMatchingSelections(prev => ({ ...prev, word: pair.word }))}
+                              className={`w-full p-6 md:p-8 rounded-3xl border-2 text-center font-black text-xl md:text-2xl transition-all ${
+                                isMatched ? "bg-green-50 border-green-200 text-green-600 opacity-50" :
+                                isSelected ? "bg-blue-100 border-blue-500 text-blue-700 shadow-md scale-[1.02] ring-4 ring-blue-500/20" :
+                                "bg-white border-gray-100 hover:border-blue-200 text-gray-700 shadow-sm"
+                              }`}
+                            >
+                               {pair.word}
+                            </button>
+                         )
+                      })}
+                   </div>
+                   {/* Definitions Column */}
+                   <div className="space-y-3">
+                      <h4 className="text-center font-black text-purple-500 uppercase tracking-widest text-xs mb-4">Định nghĩa</h4>
+                      {/* Shuffle definitions once if needed, but for simplicity here we just render them */}
+                      {(currentEx.matching_pairs || []).map((pair: any, i: number) => {
+                         // Find which word this definition belongs to
+                         const def = pair.def;
+                         const matchedWord = Object.keys(matches).find(k => matches[k] === def);
+                         const isSelected = matchingSelections.def === def;
+                         
+                         return (
+                            <button 
+                              key={i}
+                              disabled={exerciseSubmitted || !!matchedWord}
+                              onClick={() => {
+                                 if (matchingSelections.word) {
+                                    // Check if correct match
+                                    const correctPair = currentEx.matching_pairs.find((p: any) => p.word === matchingSelections.word);
+                                    if (correctPair && correctPair.def === def) {
+                                       setMatches(prev => ({ ...prev, [matchingSelections.word!]: def }));
+                                       setMatchingSelections({ word: null, def: null });
+                                       if (Object.keys(matches).length + 1 === currentEx.matching_pairs.length) {
+                                          submitCurrentExercise(4); // Perfect score for matching
+                                       }
+                                    } else {
+                                       showAlert("Không khớp! Thử lại nhé.", 'warning');
+                                       setMatchingSelections({ word: null, def: null });
+                                    }
+                                 } else {
+                                    setMatchingSelections(prev => ({ ...prev, def: def }));
+                                 }
+                              }}
+                              className={`w-full p-6 md:p-8 rounded-3xl border-2 text-left text-lg md:text-xl font-bold transition-all leading-tight ${
+                                matchedWord ? "bg-green-50 border-green-200 text-green-600 opacity-50" :
+                                isSelected ? "bg-purple-100 border-purple-500 text-purple-700 shadow-md scale-[1.02] ring-4 ring-purple-500/20" :
+                                "bg-white border-gray-100 hover:border-purple-200 text-gray-600 shadow-sm"
+                              }`}
+                            >
+                               {def}
+                            </button>
+                         )
+                      })}
+                   </div>
+                </div>
+              ) : currentEx.options && currentEx.type !== 'SPELLING' ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {currentEx.options.map((opt: string, i: number) => {
+                    const isSelected = practiceAnswers[currentExerciseIdx] === opt;
+                    const isCorrect = opt === currentEx.answer;
+                    
+                    let bgClass = "bg-white border-gray-200 hover:border-blue-400 hover:bg-blue-50 text-gray-700 shadow-sm";
+                    if (exerciseSubmitted) {
+                      if (isCorrect) bgClass = "bg-green-100 border-green-500 text-green-800 shadow-md scale-[1.02] z-10 ring-4 ring-green-500/20";
+                      else if (isSelected) bgClass = "bg-red-50 border-red-400 text-red-600";
+                      else bgClass = "opacity-40 grayscale border-gray-100";
+                    } else if (isSelected) {
+                      bgClass = "bg-blue-100 border-blue-500 text-blue-800 shadow-md scale-[1.02] ring-4 ring-blue-500/20";
+                    }
+
+                    return (
+                      <button 
+                        key={i} 
+                        disabled={exerciseSubmitted}
+                        onClick={() => setPracticeAnswers({ ...practiceAnswers, [currentExerciseIdx]: opt })}
+                        className={`p-6 md:p-8 rounded-3xl border-2 text-left transition-all duration-300 font-bold text-lg md:text-xl flex items-center gap-4 ${bgClass}`}
+                      >
+                        <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center font-black ${exerciseSubmitted && isCorrect ? 'border-green-600 text-green-700 bg-white' : exerciseSubmitted && isSelected ? 'border-red-500 text-red-600 bg-white' : isSelected ? 'border-blue-600 text-blue-600 bg-white' : 'border-gray-300 text-gray-400'}`}>
+                           {exerciseSubmitted && isCorrect ? <CheckCircle2 size={16}/> : exerciseSubmitted && isSelected ? <X size={16}/> : i + 1}
+                        </div>
+                        <span className="flex-1">{opt}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="relative max-w-lg mx-auto">
+                  <input
+                    autoFocus type="text"
+                    value={practiceAnswers[currentExerciseIdx] || ""}
+                    onChange={e => setPracticeAnswers({ ...practiceAnswers, [currentExerciseIdx]: e.target.value })}
+                    onKeyDown={e => { if (e.key === 'Enter' && !exerciseSubmitted && practiceAnswers[currentExerciseIdx]) submitCurrentExercise(); }}
+                    placeholder={currentEx.type === 'SPELLING' ? "Nghe và nhập chính xác từ..." : "Nhập đáp án..."}
+                    className={`w-full text-3xl font-black text-center p-8 border-b-4 rounded-3xl outline-none transition-all shadow-sm ${exerciseSubmitted ? (practiceAnswers[currentExerciseIdx]?.toLowerCase().trim() === currentEx.answer.toLowerCase() ? "border-green-500 bg-green-50 text-green-700" : "border-red-500 bg-red-50 text-red-700") : "border-gray-300 bg-gray-50 focus:border-blue-500 focus:bg-white focus:shadow-xl"}`}
+                    disabled={exerciseSubmitted}
+                  />
+                  {currentEx.type === 'SPELLING' && !exerciseSubmitted && (
+                     <p className="text-center text-sm text-gray-400 mt-4 font-bold flex items-center justify-center gap-1">
+                        <Sparkles size={14} className="text-yellow-500"/> Gợi ý: {currentEx.hint_vn || "Cố gắng nghe kỹ!"}
+                     </p>
+                  )}
+                </div>
+              )}
+            </div>
+            
+            {showHint && !exerciseSubmitted && currentEx.hint_vn && currentEx.type !== 'SPELLING' && (
+                <div className="bg-yellow-50 p-5 rounded-2xl border border-yellow-200 text-yellow-800 text-sm md:text-base font-medium max-w-2xl mx-auto mt-8 flex items-start gap-3 animate-in fade-in zoom-in-95">
+                    <Lightbulb size={24} className="text-yellow-600 flex-shrink-0" />
+                    <p><strong>Gợi ý từ AI:</strong> {currentEx.hint_vn}</p>
+                </div>
+            )}
+
+            {/* Empty space filler to push the footer down */}
+            <div className="flex-1"></div>
+          </div>
+
+          {/* Bottom Action Footer */}
+          <div className={`border-t-2 sm:px-12 p-6 transition-colors duration-300 ${exerciseSubmitted ? (String(practiceAnswers[currentExerciseIdx] || "").toLowerCase().trim() === String(currentEx.answer || "").toLowerCase().trim() ? "bg-green-100 border-green-200" : "bg-red-100 border-red-200") : "bg-white border-gray-100"}`}>
+            <div className="max-w-5xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-6">
+               
+               {/* Left side: Status or Feedback */}
+               <div className="flex-1 flex items-center gap-6 w-full sm:w-auto">
+                 {!exerciseSubmitted ? (
+                    <button onClick={() => setShowHint(!showHint)} className="text-gray-400 hover:text-gray-700 font-bold flex items-center gap-2 transition px-4 py-2 hover:bg-gray-100 rounded-xl">
+                        <Lightbulb size={20} /> {showHint ? "Ẩn gợi ý" : "Xin gợi ý"}
+                    </button>
+                 ) : (
+                    <div className="flex items-center gap-5 flex-1 w-full animate-in slide-in-from-left-4">
+                       <div className={`w-16 h-16 rounded-full flex items-center justify-center flex-shrink-0 shadow-lg ${String(practiceAnswers[currentExerciseIdx] || "").toLowerCase().trim() === String(currentEx.answer || "").toLowerCase().trim() ? 'bg-white text-green-500' : 'bg-white text-red-500'}`}>
+                         {String(practiceAnswers[currentExerciseIdx] || "").toLowerCase().trim() === String(currentEx.answer || "").toLowerCase().trim() ? <CheckCircle2 size={40} /> : <X size={40} />}
+                       </div>
+                       <div>
+                         <h3 className={`font-black text-2xl ${String(practiceAnswers[currentExerciseIdx] || "").toLowerCase().trim() === String(currentEx.answer || "").toLowerCase().trim() ? "text-green-800" : "text-red-800"}`}>
+                           {String(practiceAnswers[currentExerciseIdx] || "").toLowerCase().trim() === String(currentEx.answer || "").toLowerCase().trim() ? "Tuyệt vời!" : "Sai rồi!"}
+                         </h3>
+                         <p className={`font-bold mt-1 text-lg ${String(practiceAnswers[currentExerciseIdx] || "").toLowerCase().trim() === String(currentEx.answer || "").toLowerCase().trim() ? "text-green-700" : "text-red-700"}`}>
+                            Đáp án: <span className="underline decoration-4 underline-offset-4">{currentEx.answer}</span>
+                         </p>
+                         {currentEx.explanation_en && <p className="text-sm mt-2 opacity-80 text-gray-800 max-w-xl">{currentEx.explanation_en}</p>}
+                       </div>
                     </div>
-                ) : (
-                  <div className="space-y-6">
-                    <div className="bg-gray-50 p-6 rounded-2xl border border-gray-100">
-                        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4 text-center">Đánh giá mức độ ghi nhớ (FSRS)</p>
-                        <div className="grid grid-cols-4 gap-3">
-                            {[
-                                { r: 1, l: "Quên", c: "bg-red-50 text-red-600 border-red-200 hover:bg-red-600 hover:text-white" },
-                                { r: 2, l: "Khó", c: "bg-orange-50 text-orange-600 border-orange-200 hover:bg-orange-600 hover:text-white" },
-                                { r: 3, l: "Tốt", c: "bg-green-50 text-green-600 border-green-200 hover:bg-green-600 hover:text-white" },
-                                { r: 4, l: "Dễ", c: "bg-blue-50 text-blue-600 border-blue-200 hover:bg-blue-600 hover:text-white" }
+                 )}
+               </div>
+
+               {/* Right side: Action Buttons */}
+               <div className="w-full sm:w-auto flex-shrink-0">
+                 {!exerciseSubmitted ? (
+                    <button 
+                      onClick={() => submitCurrentExercise()} 
+                      disabled={!practiceAnswers[currentExerciseIdx]} 
+                      className="w-full sm:w-auto px-12 py-5 rounded-2xl font-black text-xl text-white bg-blue-500 hover:bg-blue-600 shadow-[0_6px_0_0_#2563ea] active:shadow-[0_0px_0_0_#2563ea] active:translate-y-[6px] transition-all disabled:opacity-50 disabled:shadow-none disabled:translate-y-[6px] disabled:bg-gray-300 uppercase tracking-widest"
+                    >
+                        Kiểm tra
+                    </button>
+                 ) : (
+                    <div className="flex flex-col sm:flex-row items-center gap-4 w-full">
+                        <div className="bg-white/50 backdrop-blur-sm p-2 rounded-2xl flex gap-2 shadow-sm w-full sm:w-auto">
+                            {[ 
+                                { r: 1, l: "Lại", c: "hover:bg-red-100 text-red-600 border border-red-200" },
+                                { r: 2, l: "Khó", c: "hover:bg-orange-100 text-orange-600 border border-orange-200" },
+                                { r: 3, l: "Khá", c: "hover:bg-green-100 text-green-600 border border-green-200" },
+                                { r: 4, l: "Dễ", c: "hover:bg-blue-100 text-blue-600 border border-blue-200" }
                             ].map(btn => (
-                                <button key={btn.r} 
-                                    onClick={() => {
-                                        setPracticeResults(prev => {
-                                            const next = [...prev];
-                                            next[next.length - 1].rating = btn.r;
-                                            return next;
-                                        });
-                                        nextExercise();
-                                    }}
-                                    className={`flex flex-col items-center py-3 rounded-xl border-2 transition-all font-black ${btn.c}`}
-                                >
-                                    <span className="text-lg">{btn.l}</span>
-                                    <span className="text-[10px] opacity-70 font-bold">Rating: {btn.r}</span>
+                                <button key={btn.r} onClick={() => {
+                                    setPracticeResults(prev => { const next = [...prev]; next[next.length - 1].rating = btn.r; return next; });
+                                    nextExercise();
+                                }} className={`w-14 h-14 flex flex-col items-center justify-center rounded-xl font-black transition-colors bg-white shadow-sm ${btn.c}`}>
+                                    <span className="text-[15px]">{btn.l}</span>
+                                    <span className="text-[10px] opacity-70">Rate: {btn.r}</span>
                                 </button>
                             ))}
                         </div>
+                        <button 
+                          onClick={nextExercise} 
+                          className={`w-full sm:w-auto px-10 py-5 rounded-2xl font-black text-xl text-white shadow-[0_6px_0_0_rgba(0,0,0,0.2)] active:shadow-none active:translate-y-[6px] transition-all uppercase tracking-widest ${String(practiceAnswers[currentExerciseIdx] || "").toLowerCase().trim() === String(currentEx.answer || "").toLowerCase().trim() ? "bg-green-600" : "bg-red-600"}`}
+                        >
+                          {currentExerciseIdx < practiceExercises.length - 1 ? "Tiếp tục" : "Hoàn thành"} <ArrowRight size={24} className="inline ml-2 -mt-1" />
+                        </button>
                     </div>
-                    
-                    <button onClick={nextExercise} className="w-full bg-gray-900 text-white py-4 rounded-2xl font-black text-lg flex items-center justify-center gap-2 hover:bg-black transition shadow-xl transform active:scale-95">
-                      {currentExerciseIdx < practiceExercises.length - 1 ? "TIẾP THEO" : "HOÀN THÀNH"} <ArrowRight size={24} />
-                    </button>
-                  </div>
-                )}
-              </div>
+                 )}
+               </div>
             </div>
           </div>
         </div>

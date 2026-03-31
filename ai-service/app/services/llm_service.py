@@ -1,9 +1,10 @@
-print("[LLM] Starting llm_service imports...")
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_openai import ChatOpenAI
 from langchain_cohere import ChatCohere
 from langchain_core.prompts import PromptTemplate
 from typing import List, Dict, Optional, Any
+import sys
+import io
 import os
 import json
 import asyncio
@@ -14,6 +15,74 @@ from dotenv import load_dotenv
 import re
 import json_repair
 import cohere
+from pydantic import BaseModel, Field
+
+# Global cache for failed providers to avoid repeated timeouts/auth delays
+# Format: { provider_name: timestamp_of_failure }
+PROVIDER_ERRORS = {}
+PROVIDER_ERRORS_LOCK = threading.Lock()
+FAILURE_WINDOW = 600  # 10 minutes
+
+def is_provider_failed(provider: str) -> bool:
+    """Check if a provider is in a recent failure state."""
+    with PROVIDER_ERRORS_LOCK:
+        if provider not in PROVIDER_ERRORS:
+            return False
+        fail_time = PROVIDER_ERRORS[provider]
+        if time.time() - fail_time > FAILURE_WINDOW:
+            del PROVIDER_ERRORS[provider]
+            return False
+        return True
+
+def mark_provider_failed(provider: str):
+    """Mark a provider as failed."""
+    with PROVIDER_ERRORS_LOCK:
+        PROVIDER_ERRORS[provider] = time.time()
+        print(f"[LLM] Marking {provider} as FAILED. Will skip for {FAILURE_WINDOW/60: .1f} mins.")
+
+# --- Pydantic Schemas for Strict AI Outputs ---
+class FlashcardSchema(BaseModel):
+    word: str = Field(description="The word being defined")
+    definition: str = Field(description="Clear English definition")
+    example: str = Field(description="Example usage sentence")
+    synonym: str = Field(description="A synonymous word")
+    antonym: str = Field(description="An antonymous word")
+
+class VocabItemSchema(BaseModel):
+    word: str
+    pos: str
+    meaning_vn: str
+    meaning_en: str
+    example: str
+    level: str
+    phonetic: str
+
+class VocabListSchema(BaseModel):
+    items: List[VocabItemSchema]
+
+class QuizQuestionSchema(BaseModel):
+    type: str = Field(description="Must be MCQ, TFNG, MATCH, or FIB")
+    question: str
+    options: List[str]
+    answer: str
+    explanation: str
+
+class QuizListSchema(BaseModel):
+    items: List[QuizQuestionSchema]
+
+class FSRSQuestionSchema(BaseModel):
+    type: str = Field(description="Must be MCQ, FIB, SPELLING, or PARAPHRASE")
+    question: str = Field(description="The main question text (English ONLY)")
+    context: Optional[str] = Field(default=None, description="A context sentence with a [blank] for FIB or SPELLING")
+    options: Optional[List[str]] = Field(default=None, description="Array of choices (for MCQ/PARAPHRASE)")
+    answer: str = Field(description="The correct answer string (must match an option or be the exact spelling word)")
+    hint_vn: Optional[str] = Field(default=None, description="A helpful Vietnamese hint or translation")
+    explanation_en: Optional[str] = Field(default=None, description="Explanation of why the answer is correct (English ONLY)")
+    word_id: Optional[int] = Field(default=None)
+
+class FSRSQuizListSchema(BaseModel):
+    items: List[FSRSQuestionSchema]
+# ----------------------------------------------
 print("[LLM] Core imports done, loading database...")
 from ..database import get_db, get_cached_dictionary, set_cached_dictionary
 from ..utils.resilience import retry
@@ -187,116 +256,115 @@ def parse_json_response(text):
         print(f"[LLM PARSE] Critical Error: {e}")
         return []
 
-def get_llm(provider=None):
+def get_llm(provider: Optional[str] = None):
     """
     Factory to return the configured LLM instance.
-    Reads API key from DB settings first, then environment variables.
-    If provider is specified ("google", "openai", "cohere"), only return that provider.
-    Default order: Google Gemini → OpenAI → Cohere.
+    Reads API key from DB settings first.
+    Skips providers in a recent failure state (cached globally).
     """
-    # Prioritize Cohere as requested by user
-    cohere_key = get_setting("COHERE_API_KEY")
-    if cohere_key and provider in (None, "cohere"):
-        os.environ["COHERE_API_KEY"] = cohere_key
-        # Use a stable multilingual model for 2026 (tiny-aya-fire)
-        return ChatCohere(model="tiny-aya-fire", temperature=0)
-
-    if provider != "cohere" and provider != "openai":
-        google_key = get_setting("GOOGLE_API_KEY")
-        if google_key and provider in (None, "google"):
-            # Set environment variable for langchain
-            os.environ["GOOGLE_API_KEY"] = google_key
-            # Increased timeout to 60s for long-running generations
-            return ChatGoogleGenerativeAI(model="gemini-2.5-flash-lite", timeout=60, temperature=0)
-
-    if provider != "google" and provider != "cohere":
-        openai_key = get_setting("OPENAI_API_KEY")
-        if openai_key and provider in (None, "openai"):
-            os.environ["OPENAI_API_KEY"] = openai_key
-            # Increased timeout to 60s
-            return ChatOpenAI(model="gpt-4o-mini", timeout=60)
-
+    import app.database as db # Local import to avoid circular dependency if any
+    
+    if provider is None:
+        # Priority 1: Google Gemini (Currently expired, so we want to skip it quickly)
+        if not is_provider_failed("Gemini"):
+            gemini_key = db.get_setting("GOOGLE_API_KEY")
+            if gemini_key and gemini_key.strip():
+                try:
+                    print(f"[LLM] Selecting Google (gemini-1.5-flash)", flush=True)
+                    return ChatGoogleGenerativeAI(model="gemini-1.5-flash", google_api_key=gemini_key, timeout=20, temperature=0.7)
+                except Exception as e:
+                    print(f"[LLM] Gemini Init Failed: {e}")
+                    mark_provider_failed("Gemini")
+        
+        # Priority 2: OpenAI
+        if not is_provider_failed("OpenAI"):
+            openai_key = db.get_setting("OPENAI_API_KEY")
+            if openai_key and openai_key.strip():
+                try:
+                    print(f"[LLM] Selecting OpenAI (gpt-4o-mini)", flush=True)
+                    return ChatOpenAI(model="gpt-4o-mini", openai_api_key=openai_key, timeout=20, temperature=0.7)
+                except Exception as e:
+                    print(f"[LLM] OpenAI Init Failed: {e}")
+                    mark_provider_failed("OpenAI")
+        
+        # Priority 3: Cohere (Reliable Fallback)
+        cohere_key = db.get_setting("COHERE_API_KEY")
+        if cohere_key and cohere_key.strip():
+            print(f"[LLM] Selecting Cohere (fallback)", flush=True)
+            return ChatCohere(model="command-nightly", cohere_api_key=cohere_key, temperature=0.7)
+            
+        print("[LLM] NO PROVIDERS CONFIGURED OR AVAILABLE.")
+        return None
+    
+    # Specific provider requested
+    if provider == "gemini":
+        key = db.get_setting("GOOGLE_API_KEY")
+        return ChatGoogleGenerativeAI(model="gemini-1.5-flash", google_api_key=key) if key else None
+    if provider == "openai":
+        key = db.get_setting("OPENAI_API_KEY")
+        return ChatOpenAI(model="gpt-4o-mini", openai_api_key=key) if key else None
+    if provider == "cohere":
+        key = db.get_setting("COHERE_API_KEY")
+        return ChatCohere(model="command-nightly", cohere_api_key=key) if key else None
     return None
 
 # ─── SAFE LLM INVOKE with retry ──────────────────────────────────────────────
 MAX_RETRIES = 1
-RETRY_DELAY = 0.5  # seconds
+RETRY_DELAY = 0.5
 
 def _safe_invoke(chain, params: dict, retries: int = MAX_RETRIES):
-    """Invoke LLM chain with automatic retry on transient failures and fallback to Cohere."""
+    """Invoke LLM chain with automatic retry and failure caching."""
     last_error = None
-    
-    # First attempt with the primary chain
     for attempt in range(retries + 1):
         try:
-            response = chain.invoke(params)
-            return response
+            return chain.invoke(params)
         except Exception as e:
             last_error = e
             error_str = str(e).lower()
+            is_auth_error = any(k in error_str for k in ["api_key", "unauthorized", "expired", "401", "403", "forbidden"])
             
-            # If it's a quota/rate limit error OR an authentication/invalid key error, fallback to Cohere
-            # This is critical if the primary provider's key has expired or is invalid.
-            is_quota_error = any(k in error_str for k in ["quota", "rate_limit", "resource_exhausted", "429", "too many requests", "503"])
-            is_auth_error = any(k in error_str for k in ["api_key", "unauthorized", "forbidden", "invalid", "api key"])
-            
-            if is_quota_error or is_auth_error:
-                reason = "quota exceeded" if is_quota_error else "API key invalid/expired"
-                print(f"[LLM ERROR] Primary LLM {reason}: {e}. Falling back to Cohere...")
-                fallback_llm = get_llm(provider="cohere")
-                if fallback_llm:
-                    if hasattr(chain, 'first'):
-                        fallback_chain = chain.first | fallback_llm
-                        try:
-                            return fallback_chain.invoke(params)
-                        except Exception as fallback_error:
-                            print(f"[LLM FALLBACK FAILED] Cohere also failed: {fallback_error}")
-                            last_error = fallback_error
-                            raise fallback_error
-                    else:
-                        print("[LLM FALLBACK FAILED] Could not extract prompt from chain for fallback.")
-                        raise e
-                else:
-                    print("[LLM FALLBACK FAILED] Cohere API key not configured or available.")
-                    raise e
+            if is_auth_error:
+                # Detect provider
+                provider_name = "Gemini" if "google" in error_str or "gemini" in error_str else "OpenAI"
+                print(f"[LLM ERROR] {provider_name} Auth Failed. Marking as failed for {FAILURE_WINDOW}s.")
+                mark_provider_failed(provider_name)
                 
+                # Fallback to Cohere immediately
+                fallback_llm = get_llm(provider="cohere")
+                if fallback_llm and hasattr(chain, 'first'):
+                    return (chain.first | fallback_llm).invoke(params)
+            
             if attempt < retries:
-                print(f"[LLM RETRY] Attempt {attempt + 1} failed: {e}. Retrying in {RETRY_DELAY}s...")
                 time.sleep(RETRY_DELAY)
     raise last_error
-                
+
 async def _safe_invoke_async(chain, params: dict, retries: int = MAX_RETRIES):
-    """Async version of _safe_invoke."""
+    """Async version of _safe_invoke with failure caching."""
     last_error = None
     for attempt in range(retries + 1):
         try:
             if hasattr(chain, 'ainvoke'):
-                response = await chain.ainvoke(params)
-            else:
-                response = await asyncio.to_thread(chain.invoke, params)
-            return response
+                return await chain.ainvoke(params)
+            return await asyncio.to_thread(chain.invoke, params)
         except Exception as e:
             last_error = e
             error_str = str(e).lower()
-            is_quota_error = any(k in error_str for k in ["quota", "rate_limit", "resource_exhausted", "429", "too many requests", "503"])
-            is_auth_error = any(k in error_str for k in ["api_key", "unauthorized", "forbidden", "invalid", "api key"])
-
-            if is_quota_error or is_auth_error:
-                reason = "quota exceeded" if is_quota_error else "API key invalid/expired"
-                print(f"[LLM ERROR] Primary LLM {reason}: {e}. Falling back to Cohere...")
+            is_auth_error = any(k in error_str for k in ["api_key", "unauthorized", "expired", "401", "403", "forbidden"])
+            
+            if is_auth_error:
+                provider_name = "Gemini" if "google" in error_str or "gemini" in error_str else "OpenAI"
+                print(f"[LLM ERROR] {provider_name} Auth Failed. Marking as failed.")
+                mark_provider_failed(provider_name)
+                
                 fallback_llm = get_llm(provider="cohere")
                 if fallback_llm and hasattr(chain, 'first'):
                     fallback_chain = chain.first | fallback_llm
-                    try:
-                        if hasattr(fallback_chain, 'ainvoke'):
-                            return await fallback_chain.ainvoke(params)
-                        return await asyncio.to_thread(fallback_chain.invoke, params)
-                    except Exception as fallback_error:
-                        print(f"[LLM FALLBACK FAILED] Cohere also failed: {fallback_error}")
-                        last_error = fallback_error
-                        raise fallback_error
+                    if hasattr(fallback_chain, 'ainvoke'):
+                        return await fallback_chain.ainvoke(params)
+                    return await asyncio.to_thread(fallback_chain.invoke, params)
+            
             if attempt < retries:
-                await asyncio.sleep(RETRY_DELAY * (attempt + 1))
+                await asyncio.sleep(RETRY_DELAY)
     raise last_error
 
 
@@ -310,141 +378,173 @@ def generate_flashcard_content(word: str, level: str = "A1"):
             "example": "Example not available"
         }
         
-    prompt = PromptTemplate.from_template(
-        "Generate a flashcard for the English word '{word}' suitable for level '{level}'. "
-        "Return strictly JSON format with keys: definition, example, synonym, antonym."
+    parser = PydanticOutputParser(pydantic_object=FlashcardSchema)
+    
+    prompt = PromptTemplate(
+        template=(
+            "Generate a flashcard for the English word '{word}' suitable for level '{level}'.\n\n"
+            "{format_instructions}\n"
+        ),
+        input_variables=["word", "level"],
+        partial_variables={"format_instructions": parser.get_format_instructions()}
     )
     
     chain = prompt | llm
     try:
         response = _safe_invoke(chain, {"word": word, "level": level})
-        result = parse_json_response(response.content)
-        if isinstance(result, dict) and "definition" in result:
-            return result
-        # Fallback for plain text response
-        return {
-            "word": word,
-            "definition": str(response.content).strip(),
-            "example": f"Usage of {word} at {level} level."
-        }
+        result = parser.invoke(response)
+        return result.model_dump()
     except Exception as e:
         print(f"generate_flashcard_content error: {e}")
+        if 'response' in locals() and hasattr(response, 'content'):
+            res = parse_json_response(response.content)
+            if isinstance(res, dict) and "definition" in res:
+                return res
         return {
             "word": word,
             "definition": f"Error generating content: {str(e)}",
             "example": ""
         }
 
+from langchain_core.output_parsers import PydanticOutputParser
+
 def extract_vocabulary_from_text(text: str):
     """
     Uses LLM to analyse text and extract key vocabulary words with metadata.
     Essential for the 'Input Text -> Learn' feature.
+    Guaranteed JSON schema output via PydanticOutputParser.
     """
     llm = get_llm()
     if not llm:
         return [{"word": "Error", "meaning": "LLM not configured"}]
         
     num = 10
-    prompt = PromptTemplate.from_template(
-        "You are an expert English linguist and teacher.\n"
-        "Analyze the following text and extract exactly {num} important vocabulary words/terms for a student to learn.\n\n"
-        "TEXT:\n{text}\n\n"
-        "SELECTION CRITERIA:\n"
-        "1. Prioritize academic, professional, or complex words that appear in the text.\n"
-        "2. Do NOT include basic words (like 'the', 'is', 'happy') unless used in a technical sense.\n"
-        "3. Ensure the word/phrase is SPELLED EXACTLY as it appears in the text.\n\n"
-        "Return a JSON array of objects with these EXACT keys:\n"
-        '- "word": the word or phrase\n'
-        '- "pos": part of speech\n'
-        '- "meaning_vn": clear Vietnamese translation\n'
-        '- "meaning_en": simple English definition\n'
-        '- "example": the sentence from the text containing this word (or a very similar natural one)\n'
-        '- "level": CEFR level (A1-C2)\n'
-        '- "phonetic": IPA pronunciation\n\n'
-        "Return ONLY the JSON array. High quality results only."
+    parser = PydanticOutputParser(pydantic_object=VocabListSchema)
+    
+    prompt = PromptTemplate(
+        template=(
+            "You are an expert English linguist and teacher.\n"
+            "Analyze the following text and extract exactly {num} important vocabulary words/terms for a student to learn.\n\n"
+            "TEXT:\n{text}\n\n"
+            "SELECTION CRITERIA:\n"
+            "1. Prioritize academic, professional, or complex words that appear in the text.\n"
+            "2. Do NOT include basic words (like 'the', 'is', 'happy') unless used in a technical sense.\n"
+            "3. Ensure the word/phrase is SPELLED EXACTLY as it appears in the text.\n\n"
+            "{format_instructions}\n"
+        ),
+        input_variables=["num", "text"],
+        partial_variables={"format_instructions": parser.get_format_instructions()}
     )
 
     chain = prompt | llm
     try:
-        response = _safe_invoke(chain, {"text": text})
-        result = parse_json_response(response.content)
-        if isinstance(result, list) and len(result) > 0:
-            return result
-        return [{"word": "(no vocabulary found)", "meaning_vn": "Không tìm thấy từ vựng"}]
+        response = _safe_invoke(chain, {"text": text, "num": num})
+        # Parse text into Pydantic model
+        result = parser.invoke(response)
+        # Convert List[VocabItemSchema] -> List[dict]
+        return [item.model_dump() for item in result.items]
     except Exception as e:
         print(f"extract_vocabulary error: {e}")
-        return [{"word": "Error", "meaning_vn": str(e)}]
+        # Fallback to old parsing if OutputParser fails due to hallucination
+        if 'response' in locals() and hasattr(response, 'content'):
+            res = parse_json_response(response.content)
+            if isinstance(res, list) and len(res) > 0:
+                try: 
+                    # Try to map fields correctly if nested in 'items'
+                    if isinstance(res, dict) and "items" in res:
+                        return res["items"]
+                    return res
+                except: pass
+        return [{"word": "Error", "meaning_vn": str(e), "pos": "", "meaning_en": "", "example": "", "level": "", "phonetic": ""}]
 
 def generate_quiz_from_text(text: str, num_questions: int = 5):
     """
     Generates dynamic IELTS-style questions (MCQ, T/F/NG, Matching, Fill-in-blanks)
     based on the specific text context.
+    Ensured strict format with PydanticOutputParser.
     """
     llm = get_llm()
     if not llm:
         return []
         
-    prompt = PromptTemplate.from_template(
-        "You are an expert IELTS exam content creator.\n"
-        "Generate {num} high-quality questions based on this English text:\n"
-        "{text}\n\n"
-        "QUESTION TYPES TO INCLUDE (Mix them):\n"
-        "1. Multiple Choice (MCQ): Standard 4-option question.\n"
-        "2. True/False/Not Given (TFNG): Test if a statement is True, False, or Not Mentioned in the text.\n"
-        "3. Matching (MATCH): Match a term/name to a description/statement.\n"
-        "4. Fill-in-the-blanks (FIB): Provide a sentence with a [blank] and 4 options to fill it correctly.\n\n"
-        "REQUIREMENTS:\n"
-        "- Options must be plausible distractors.\n"
-        "- Ensure the context is strictly based on the text.\n\n"
-        "For EACH question, return these EXACT JSON keys:\n"
-        '- "type": "MCQ", "TFNG", "MATCH", or "FIB"\n'
-        '- "question": the question or statement text (English only)\n'
-        '- "options": array of answer choices in English (for MATCH, these are the labels; for TFNG, [True, False, Not Given])\n'
-        '- "answer": the correct option text (English only, must match one of the options exactly)\n'
-        '- "explanation": brief explanation of why it is correct based on the text\n\n'
-        "CRITICAL: ALL questions, options, and answers MUST be in English only. Do NOT include Vietnamese in any question, option, or answer field. Explanations may include Vietnamese translations.\n\n"
-        "Return ONLY the JSON array."
+    parser = PydanticOutputParser(pydantic_object=QuizListSchema)
+    
+    prompt = PromptTemplate(
+        template=(
+            "You are an expert IELTS exam content creator.\n"
+            "Generate {num} high-quality questions based on this English text:\n"
+            "{text}\n\n"
+            "QUESTION TYPES TO INCLUDE (Mix them):\n"
+            "1. Multiple Choice (MCQ): Standard 4-option question.\n"
+            "2. True/False/Not Given (TFNG): Test if a statement is True, False, or Not Mentioned in the text.\n"
+            "3. Matching (MATCH): Match a term/name to a description/statement.\n"
+            "4. Fill-in-the-blanks (FIB): Provide a sentence with a [blank] and 4 options to fill it correctly.\n\n"
+            "REQUIREMENTS:\n"
+            "- Options must be plausible distractors.\n"
+            "- Ensure the context is strictly based on the text.\n"
+            "CRITICAL: ALL questions, options, and answers MUST be in English only. Do NOT include Vietnamese in any question, option, or answer field. Explanations may include Vietnamese translations.\n\n"
+            "{format_instructions}\n"
+        ),
+        input_variables=["num", "text"],
+        partial_variables={"format_instructions": parser.get_format_instructions()}
     )
 
     chain = prompt | llm
     try:
         response = _safe_invoke(chain, {"text": text, "num": num_questions})
-        result = parse_json_response(response.content)
-        if isinstance(result, list) and len(result) > 0:
-            return result
-        return []
+        result = parser.invoke(response)
+        return [item.model_dump() for item in result.items]
     except Exception as e:
         print(f"generate_quiz error: {e}")
+        if 'response' in locals() and hasattr(response, 'content'):
+            res = parse_json_response(response.content)
+            if isinstance(res, list) and len(res) > 0:
+                return res
         return []
 
 def generate_fsrs_review_quiz(words: list):
     """
     Generates a contextual review quiz for a list of words due for SRS review.
-    Focuses on differentiation and usage in sentences.
+    Ensures strict format consistency with Pydantic schemas.
     """
     llm = get_llm()
     if not llm or not words:
         return []
 
     words_str = ", ".join([f"{w['word']} ({w['meaning_en']})" for w in words])
+    parser = PydanticOutputParser(pydantic_object=FSRSQuizListSchema)
     
-    prompt = PromptTemplate.from_template(
-        "You are a specialized language tutor. Generate a vocabulary review quiz for these words: {words}\n\n"
-        "Include 2 types of questions:\n"
-        "1. Contextual usage (Fill in the blank with the correct word from the list).\n"
-        "2. Definition matching or Synonym checking.\n\n"
-        "Return a JSON array of objects with keys: question, options, answer, word_id.\n"
-        "The 'word_id' should map back to the 'id' of the word being tested from this list (if provided) or just help track progress.\n\n"
-        "Return ONLY the JSON array."
+    prompt = PromptTemplate(
+        template=(
+            "You are a specialized English language tutor. Generate an engaging review quiz for these vocabulary words: {words}\n\n"
+            "QUESTION TYPES TO INCLUDE (Mix them up):\n"
+            "1. MCQ: Choose the correct definition or synonym.\n"
+            "2. FIB: Fill in the blanks. Provide a `context` sentence with a '[blank]', where the `answer` fits perfectly.\n"
+            "3. SPELLING: Give a meaning or context, and ask the user to type the word exactly. No options needed.\n"
+            "4. PARAPHRASE: Provide a sentence, ask the user to choose the option that has the closest meaning.\n\n"
+            "REQUIREMENTS:\n"
+            "- CRITICAL: Ensure ALL questions, contexts, options, and answers are **100% strictly in English**. DO NOT include any Vietnamese in them.\n"
+            "- CRITICAL: For MCQ, FIB, and PARAPHRASE types, the `answer` string MUST EXACTLY MATCH one of the items in the `options` array. It cannot be slightly different.\n"
+            "- The only fields allowed to hold Vietnamese are `hint_vn` (to help the user) and `explanation_en` (which must actually be in English despite the name mismatch).\n"
+            "- The 'word_id' should map back to the 'id' of the word being tested from this list.\n\n"
+            "{format_instructions}\n"
+        ),
+        input_variables=["words"],
+        partial_variables={"format_instructions": parser.get_format_instructions()}
     )
 
     # Note: frontend needs to handle word_id mapping if we want to auto-update FSRS after these quizzes.
     chain = prompt | llm
     try:
         response = _safe_invoke(chain, {"words": words_str})
-        return parse_json_response(response.content)
+        result = parser.invoke(response)
+        return [item.model_dump() for item in result.items]
     except Exception as e:
         print(f"generate_fsrs_review_quiz error: {e}")
+        if 'response' in locals() and hasattr(response, 'content'):
+            res = parse_json_response(response.content)
+            if isinstance(res, list) and len(res) > 0:
+                return res
         return []
 
 def generate_example_sentence(word: str, meaning: str = "", level: str = "B1"):
@@ -1297,25 +1397,26 @@ def generate_exercises_from_text(text: str, exercise_type: str = "mixed", num_qu
         print(f"Error fetching grammar rules for AI: {e}")
 
     prompt = PromptTemplate.from_template(
-        "You are an English teacher creating exercises from the following text.\n\n"
+        "You are a premium English language assessment designer creating exercises from the following text.\n\n"
         "TEXT:\n{text}\n\n"
         "{grammar_context}"
-        "Create {num} exercises of type: {exercise_type}\n\n"
-        "Return a JSON object with:\n"
-        '"title": suggested exercise title\n'
-        '"difficulty": estimated CEFR level (A1-C2)\n'
-        '"vocabulary": array of 5-8 key words from the text, each with:\n'
-        '  "word": the word\n'
-        '  "meaning_vn": Vietnamese meaning\n'
-        '  "pos": part of speech\n'
-        '"exercises": array of exercise objects, each with:\n'
-        '  "type": "mcq" or "fill_blank" or "true_false" or "matching"\n'
-        '  "question": the question/prompt (English only)\n'
-        '  "options": array of choices in English (for mcq, true_false)\n'
-        '  "correct_answer": the correct answer (must be EXACT TEXT of the correct option, English only)\n'
-        '  "explanation": brief explanation why this is correct\n'
-        '"summary_vn": Vietnamese summary of the text (2-3 sentences)\n\n'
-        "CRITICAL: ALL questions, options, and answers MUST be in English only. Do NOT use Vietnamese in questions or answer options. Only 'summary_vn' and 'meaning_vn' fields should be in Vietnamese.\n\n"
+        "TASKS:\n"
+        "1. Extract 5-8 key vocabulary words from the text.\n"
+        "2. Create {num} MIXED exercises. Include these types:\n"
+        "   - MCQ: Multiple choice for definition or synonym.\n"
+        "   - FIB: Fill in the blanks. Use a context sentence from the text (or inspired by it) with a '[blank]'.\n"
+        "   - SPELLING: Ask the user to spell a word based on its meaning/context.\n"
+        "   - PARAPHRASE: Choose an option that has the closest meaning to a sentence from the text.\n\n"
+        "REQUIREMENTS:\n"
+        "- CRITICAL: ALL questions, options, and answers MUST be strictly in English. NO Vietnamese here.\n"
+        "- ONLY 'summary_vn', 'meaning_vn', and 'explanation_vn' should be in Vietnamese.\n"
+        "- For MCQ, FIB, and PARAPHRASE, the `answer` MUST exactly match one of the `options` strings.\n"
+        "- Return a JSON object with:\n"
+        '  "title": suggested exercise title\n'
+        '  "difficulty": estimated CEFR level (A1-C2)\n'
+        '  "vocabulary": array of {{"word", "meaning_vn", "meaning_en", "pos", "phonetic", "example"}}\n'
+        '  "exercises": array of {{"type", "question", "options", "answer", "explanation_vn", "hint_vn"}}\n'
+        '  "summary_vn": Vietnamese summary of the text\n\n'
         "Return ONLY valid JSON. No markdown."
     )
     chain = prompt | llm
@@ -1783,35 +1884,41 @@ async def generate_grammar_rule_description(topic: str):
 async def generate_vocab_practice_rich(words: List[dict]):
     """Generate professional vocabulary exercises with hints and diverse types."""
     llm = get_llm()
-    if not llm: return []
+    if not llm:
+        return []
     
     words_info = "\n".join([f"- [ID: {w.get('id', i)}] {w['word']} ({w.get('meaning_en', '')})" for i, w in enumerate(words)])
     
-    prompt = PromptTemplate.from_template(
-        "You are a premium English language assessment designer.\n"
-        "Create a challenging and meaningful vocabulary practice set for these words:\n{words}\n\n"
-        "INSTRUCTIONS:\n"
-        "1. Create a MIX of these types: Multiple Choice (meaning), Synonym Match, Contextual Fill-in (sentence), and Scrambled Sentences.\n"
-        "2. Ensure questions are NATURAL and reflect real-world usage.\n"
-        "3. Avoid repetitive or 'robotic' question patterns.\n"
-        "4. Focus on the core meaning provided for each word.\n"
-        "5. CRITICAL: Each question MUST include the 'word_id' field matching the [ID: ...] provided in the word list above.\n"
-        "6. ALL questions, options, and answers MUST be in English only. Do NOT use Vietnamese in questions or answer options.\n"
-        "7. Hints and explanations may be bilingual (VN/EN).\n\n"
-        "FOR EACH QUESTION, INCLUDE:\n"
-        "- 'word_id': the ID from the word list (REQUIRED)\n"
-        "- 'question': the prompt (English only)\n"
-        "- 'hint': a subtle, helpful clue (can be Vietnamese)\n"
-        "- 'options': 4 distinct options if multiple choice, otherwise null\n"
-        "- 'answer': the correct string (English only)\n"
-        "- 'explanation': a clear, bilingual explanation (VN/EN) of why this is correct.\n\n"
-        "Return a JSON array of 10-15 questions. Return ONLY the JSON array, no markdown."
+    prompt = PromptTemplate(
+        input_variables=["words"],
+        template=(
+            "You are a premium English language assessment designer.\n"
+            "Create a challenging and meaningful vocabulary practice set for these words:\n{words}\n\n"
+            "QUESTION TYPES TO INCLUDE (Mix them up):\n"
+            "1. MCQ: Traditional multiple choice for definition or synonym.\n"
+            "2. FIB: Fill in the blanks. Provide a `question` sentence with a '[blank]'. The `answer` must be the word being tested.\n"
+            "3. SPELLING: Give a meaning or context, and ask the user to type the word exactly. No options needed.\n"
+            "4. PARAPHRASE: Provide a sentence, ask the user to choose the option that has the closest meaning.\n"
+            "5. MATCHING: Provide a list of terms and a list of definitions to be matched.\n\n"
+            "REQUIREMENTS:\n"
+            "- CRITICAL: Ensure ALL questions, options, and answers are **100% strictly in English**. DO NOT include any Vietnamese in them.\n"
+            "- CRITICAL: For MCQ, FIB, and PARAPHRASE, the `answer` string MUST EXACTLY MATCH one of the strings in the `options` array.\n"
+            "- For MATCHING, the `options` should be an array of definitions, and `answer` should be a corresponding array of words in the same order, OR a special `matching_pairs` field: [{{\"word\": \"...\", \"def\": \"...\"}}].\n"
+            "- The only fields allowed to hold Vietnamese are `hint_vn` (required for all) and `explanation_vn` (brief Vietnamese explanation).\n"
+            "- Each question MUST include the 'word_id' field matching the [ID: ...] provided in the list.\n"
+            "- 'type': One of ['MCQ', 'FIB', 'SPELLING', 'PARAPHRASE', 'MATCHING'].\n\n"
+            "Return a JSON object with an 'exercises' key containing an array of 10-15 objects with these keys: {{word_id, type, question, hint_vn, options, answer, matching_pairs, explanation_vn}}.\n"
+            "Return ONLY the JSON. No markdown."
+        )
     )
-    print(f"[LLM VOCAB PRACTICE] Generating for {len(words)} words...", flush=True)
     chain = prompt | llm
     try:
-        response = await _safe_invoke_async(chain, {"words": words_info})
+        # Added num: 10 as a safety measure for mysterious 'num' requirement
+        response = await _safe_invoke_async(chain, {"words": words_info, "num": 10})
         result = parse_json_response(response.content)
+        # Ensure it's always an array wrapper if it's just a raw list
+        if isinstance(result, list):
+            return {"exercises": result}
         return result
     except Exception as e:
         print(f"[LLM VOCAB PRACTICE] ERROR: {e}", flush=True)
@@ -1834,7 +1941,7 @@ async def generate_vocab_practice_rich_stream(words: List[dict]):
         "2. Ensure questions are NATURAL and reflect real-world usage.\n"
         "3. Provide explanation in Vietnamese for each.\n"
         "4. CRITICAL: Each question MUST include the 'word_id' field matching the ID provided in the list above.\n\n"
-        "Return a JSON array of 10-15 questions. Each object must have: {word_id, question, hint_vn, options, answer, explanation_vn}."
+        "Return a JSON array of 10-15 questions. Each object must have: {{word_id, question, hint_vn, options, answer, explanation_vn}}."
     )
     chain = prompt | llm
     

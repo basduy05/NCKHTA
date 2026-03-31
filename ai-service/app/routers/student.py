@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Header, Query, UploadFile, File, Form, BackgroundTasks, Response
+from fastapi import APIRouter, Depends, HTTPException, Header, Query, UploadFile, File, Form, BackgroundTasks, Response
 from ..database import get_db
 from ..services import auth_service, llm_service, graph_service, file_service
 from pydantic import BaseModel
@@ -240,10 +240,18 @@ def student_stats(authorization: str = Header(...)):
         "credits_ai": student.get("credits_ai", 0)
     }
 
+import time
+_ranking_cache = {"data": None, "timestamp": 0}
+
 @router.get("/ranking")
 def get_ranking(authorization: str = Header(...)):
     """Get global student leaderboard."""
     _get_current_student(authorization) # Ensure auth
+    
+    # Return cache if less than 60 seconds old
+    if _ranking_cache["data"] is not None and time.time() - _ranking_cache["timestamp"] < 60:
+        return _ranking_cache["data"]
+
     conn = get_db()
     try:
         cursor = conn.execute(
@@ -251,6 +259,11 @@ def get_ranking(authorization: str = Header(...)):
         )
         ranking = [dict(row) for row in cursor.fetchall()]
         conn.close()
+        
+        # Update cache
+        _ranking_cache["data"] = ranking
+        _ranking_cache["timestamp"] = time.time()
+        
         return ranking
     except Exception as e:
         if conn: conn.close()
@@ -301,7 +314,7 @@ async def start_vocab_practice(req: VocabPracticeReq, authorization: str = Heade
             raise HTTPException(status_code=404, detail="No words found. Save some vocabulary first!")
             
         result = await llm_service.generate_vocab_practice_rich(words)
-        if isinstance(result, list):
+        if result:
             return result
         return {"error": "Failed to generate practice"}
     except Exception as e:
@@ -384,62 +397,74 @@ def complete_vocab_practice(req: VocabPracticeComplete, authorization: str = Hea
     conn = get_db()
     try:
         points_earned = 0
+        # Wrap everything in a single transaction for significant speedup and consistency
+        # In SQLite, conn.execute("BEGIN") and conn.commit() or using 'with conn:' handles this.
+        conn.execute("BEGIN TRANSACTION")
+        
+        # Batch fetch all relevant words for this student to minimize SELECT calls
+        word_ids = [res.get("word_id") for res in req.results if res.get("word_id")]
+        if not word_ids:
+            return {"status": "success", "message": "No words to update"}
+            
+        placeholders = ",".join(["?"] * len(word_ids))
+        cursor = conn.execute(
+            f"SELECT id, stability, difficulty, reps, lapses, last_reviewed_at FROM saved_vocabulary WHERE id IN ({placeholders}) AND user_id = ?",
+            (*word_ids, student["id"])
+        )
+        # Create a lookup map for efficiency
+        cards_map = {row["id"]: dict(row) for row in cursor.fetchall()}
+
         for res in req.results:
             word_id = res.get("word_id")
+            if not word_id or word_id not in cards_map:
+                continue
+                
             correct = res.get("correct", False)
             rating = res.get("rating") # 1: Again, 2: Hard, 3: Good, 4: Easy
             
-            # Map simple boolean 'correct' to FSRS ratings if 'rating' is missing
             if rating is None:
                 rating = 3 if correct else 1
 
-            if word_id:
-                # 1. Fetch current SRS metadata
-                cursor = conn.execute(
-                    "SELECT stability, difficulty, reps, lapses, last_reviewed_at FROM saved_vocabulary WHERE id = ? AND user_id = ?",
-                    (word_id, student["id"])
-                )
-                card = cursor.fetchone()
-                if not card: continue
+            card = cards_map[word_id]
 
-                # 2. Calculate next state using FSRS
-                # Ensure we have default values for FSRS fields if they were NULL
-                card_dict = {
-                    "stability": card["stability"] or 0.0,
-                    "difficulty": card["difficulty"] or 0.0,
-                    "reps": card["reps"] or 0,
-                    "lapses": card["lapses"] or 0,
-                    "last_reviewed_at": card["last_reviewed_at"]
-                }
-                
-                updated = FSRS.update_card(card_dict, rating)
+            # 2. Calculate next state using FSRS
+            card_dict = {
+                "stability": card["stability"] or 0.0,
+                "difficulty": card["difficulty"] or 0.0,
+                "reps": card["reps"] or 0,
+                "lapses": card["lapses"] or 0,
+                "last_reviewed_at": card["last_reviewed_at"]
+            }
+            
+            updated = FSRS.update_card(card_dict, rating)
 
-                # 3. Update saved_vocabulary
-                conn.execute(
-                    """UPDATE saved_vocabulary 
-                       SET stability = ?, difficulty = ?, scheduled_at = ?, 
-                           last_reviewed_at = ?, reps = ?, lapses = ?,
-                           review_count = review_count + 1
-                       WHERE id = ?""",
-                    (updated["stability"], updated["difficulty"], updated["scheduled_at"],
-                     updated["last_reviewed_at"], updated["reps"], updated["lapses"], word_id)
-                )
+            # 3. Update saved_vocabulary
+            conn.execute(
+                """UPDATE saved_vocabulary 
+                   SET stability = ?, difficulty = ?, scheduled_at = ?, 
+                       last_reviewed_at = ?, reps = ?, lapses = ?,
+                       review_count = review_count + 1
+                   WHERE id = ?""",
+                (updated["stability"], updated["difficulty"], updated["scheduled_at"],
+                 updated["last_reviewed_at"], updated["reps"], updated["lapses"], word_id)
+            )
 
-                # 4. Log the review
-                conn.execute(
-                    """INSERT INTO study_logs 
-                       (user_id, word_id, rating, stability, difficulty, elapsed_days, scheduled_days)
-                       VALUES (?, ?, ?, ?, ?, ?, ?)""",
-                    (student["id"], word_id, rating, updated["stability"], 
-                     updated["difficulty"], updated["elapsed_days"], updated["interval"])
-                )
+            # 4. Log the review
+            conn.execute(
+                """INSERT INTO study_logs 
+                   (user_id, word_id, rating, stability, difficulty, elapsed_days, scheduled_days)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (student["id"], word_id, rating, updated["stability"], 
+                 updated["difficulty"], updated["elapsed_days"], updated["interval"])
+            )
 
-                if correct:
-                    points_earned += 10
+            if correct:
+                points_earned += 10
         
         # Award points
         conn.execute("UPDATE users SET points = points + ? WHERE id = ?", (points_earned, student["id"]))
-        conn.commit()
+        conn.execute("COMMIT")
+        
         conn.close()
         return {
             "status": "success",
@@ -447,7 +472,10 @@ def complete_vocab_practice(req: VocabPracticeComplete, authorization: str = Hea
             "points_earned": points_earned
         }
     except Exception as e:
-        if conn: conn.close()
+        if conn: 
+            try: conn.execute("ROLLBACK")
+            except: pass
+            conn.close()
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
