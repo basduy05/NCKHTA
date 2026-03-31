@@ -1,6 +1,7 @@
 "use client";
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useNotification } from './NotificationContext';
 
 type User = {
   id: number;
@@ -40,6 +41,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
   const router = useRouter();
+  const { showConfirm } = useNotification();
 
   useEffect(() => {
     const storedToken = localStorage.getItem('eam_token');
@@ -49,6 +51,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(JSON.parse(storedUser));
     }
     setIsInitialized(true);
+
+    // Sync logout across tabs
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'eam_logout_trigger') {
+        window.location.href = '/login';
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
 
   // Helper: retry fetch logic
@@ -169,16 +180,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const logout = async (showConfirm: boolean = true) => {
-    if (showConfirm) {
-      const confirmed = window.confirm("Bạn có chắc chắn muốn đăng xuất?");
+  const logout = async (confirmLogout: boolean = true) => {
+    if (confirmLogout) {
+      const confirmed = await showConfirm("Bạn có chắc chắn muốn đăng xuất?");
       if (!confirmed) return false;
     }
-    setUser(null);
-    setToken(null);
-    localStorage.removeItem('eam_token');
-    localStorage.removeItem('eam_user');
-    router.push('/login');
+    
+    setIsLoading(true);
+    try {
+      // 1. Notify backend if we have a token
+      if (token) {
+        await fetch(`${API_URL}/auth/logout`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` }
+        }).catch(err => console.warn("[AUTH] Backend logout failed:", err));
+      }
+    } finally {
+      // 2. Clear local state
+      setUser(null);
+      setToken(null);
+      
+      // 3. Clear all storage
+      localStorage.removeItem('eam_token');
+      localStorage.removeItem('eam_user');
+      localStorage.removeItem('dictionaryHistory'); // Clear app-specific data
+      sessionStorage.clear(); // Clear all session data (like tips dismissed state)
+      
+      // 4. Trigger logout in other tabs
+      localStorage.setItem('eam_logout_trigger', Date.now().toString());
+      
+      setIsLoading(false);
+      
+      // 5. Force full reload for clean state
+      window.location.href = '/login';
+    }
     return true;
   };
 

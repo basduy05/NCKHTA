@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, Header, UploadFile, File, Form, Query, BackgroundTasks
-from fastapi.responses import Response, StreamingResponse
+from fastapi.responses import Response
 from ..database import get_db, AssignmentCreate
 from ..services import auth_service, llm_service, graph_service, file_service
 
@@ -651,12 +651,8 @@ async def teacher_generate_assignment_from_file(
     if not text or len(text.strip()) == 0:
         raise HTTPException(status_code=400, detail="Could not extract text from file")
 
-    async def gen():
-        async for chunk in llm_service.generate_exercises_from_text_stream(text, exercise_type, num_questions):
-            yield f"data: {chunk}\n\n"
-        yield "data: [DONE]\n\n"
-
-    return StreamingResponse(gen(), media_type="text/event-stream")
+    result = llm_service.generate_exercises_from_text(text, exercise_type, num_questions)
+    return result
 
 
 # ─── GRAMMAR ────────────────────────────────────────────────────────────────
@@ -726,16 +722,13 @@ async def generate_assignment_from_news(req: NewsGenerateRequest, authorization:
     conn.close()
 
     try:
-        async def gen():
-            async for chunk in llm_service.generate_reading_comprehension_stream(
-                article_title=req.title,
-                article_content=req.content,
-                difficulty=req.difficulty,
-                num_questions=req.num_questions
-            ):
-                yield f"data: {chunk}\n\n"
-            yield "data: [DONE]\n\n"
-        return StreamingResponse(gen(), media_type="text/event-stream")
+        result = await llm_service.generate_reading_comprehension(
+            article_title=req.title,
+            article_content=req.content,
+            difficulty=req.difficulty,
+            num_questions=req.num_questions
+        )
+        return result
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))

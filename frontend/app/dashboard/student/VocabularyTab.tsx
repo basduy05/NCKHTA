@@ -5,6 +5,7 @@ import {
   Brain, X, Sparkles, CheckCircle2, ArrowRight, Lightbulb 
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
+import { useNotification } from "../../context/NotificationContext";
 
 interface VocabularyTabProps {
   API_URL: string;
@@ -12,6 +13,7 @@ interface VocabularyTabProps {
 
 export default function VocabularyTab({ API_URL }: VocabularyTabProps) {
   const { token, authFetch, refreshUser } = useAuth();
+  const { showAlert, showConfirm } = useNotification();
   const [words, setWords] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -28,7 +30,7 @@ export default function VocabularyTab({ API_URL }: VocabularyTabProps) {
   const [exerciseSubmitted, setExerciseSubmitted] = useState(false);
   const [showHint, setShowHint] = useState(false);
   
-  const [streamingText, setStreamingText] = useState("");
+
   
   // Edit Vocabulary states
   const [editingWord, setEditingWord] = useState<any | null>(null);
@@ -57,7 +59,8 @@ export default function VocabularyTab({ API_URL }: VocabularyTabProps) {
   useEffect(() => { fetchWords(); }, [fetchWords]);
 
   const deleteWord = async (id: number) => {
-    if (!confirm("Xóa từ này khỏi kho từ vựng?")) return;
+    const confirmed = await showConfirm("Xóa từ này khỏi kho từ vựng?");
+    if (!confirmed) return;
     setDeleting(id);
     try {
       const res = await authFetch(`${API_URL}/student/vocabulary/${id}`, { method: "DELETE" });
@@ -117,7 +120,6 @@ export default function VocabularyTab({ API_URL }: VocabularyTabProps) {
 
   const startRichPractice = async () => {
     setGeneratingPractice(true);
-    setStreamingText("");
     setPracticeExercises([]);
     try {
       const res = await authFetch(`${API_URL}/student/vocabulary/practice`, {
@@ -125,44 +127,24 @@ export default function VocabularyTab({ API_URL }: VocabularyTabProps) {
         body: JSON.stringify({ word_ids: [] }) 
       });
       if (res.ok) {
-        const reader = res.body?.getReader();
-        if (!reader) throw new Error("No reader");
-        const decoder = new TextDecoder();
-        let buffer = "";
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split("\n\n");
-          buffer = lines.pop() || "";
-          for (const line of lines) {
-            if (line.startsWith("data: ")) {
-              const dataStr = line.replace("data: ", "");
-              if (dataStr === "[DONE]") continue;
-              try {
-                const data = JSON.parse(dataStr);
-                if (data.status === "generating") {
-                  setStreamingText(prev => (prev + (data.chunk || "")).slice(-500));
-                } else if (Array.isArray(data)) {
-                  setPracticeExercises(data);
-                  setCurrentExerciseIdx(0);
-                  setPracticeResults([]);
-                  setPracticeAnswers({});
-                  setExerciseSubmitted(false);
-                  setShowHint(false);
-                  refreshUser();
-                }
-              } catch (e) {}
-            }
-          }
+        const data = await res.json();
+        if (data) {
+          const rawEx = Array.isArray(data) ? data : (data.exercises || data.quiz || []);
+          const validEx = Array.isArray(rawEx) ? rawEx.filter((ex: any) => ex && (ex.question || ex.q)) : [];
+          setPracticeExercises(validEx);      
+          setCurrentExerciseIdx(0);
+          setPracticeResults([]);
+          setPracticeAnswers({});
+          setExerciseSubmitted(false);
+          setShowHint(false);
+          refreshUser();
         }
       } else {
         const errorData = await res.json();
-        alert(errorData.detail || "Lỗi khi chuẩn bị bài tập");
+        showAlert(errorData.detail || "Lỗi khi chuẩn bị bài tập", 'error');
       }
     } catch (e) { 
-        alert("Lỗi kết nối. Vui lòng kiểm tra lại dịch vụ AI."); 
+        showAlert("Lỗi kết nối. Vui lòng kiểm tra lại dịch vụ AI.", 'error'); 
     }
     finally { setGeneratingPractice(false); }
   };
@@ -195,16 +177,16 @@ export default function VocabularyTab({ API_URL }: VocabularyTabProps) {
         if (res.ok) {
             refreshUser();
             const correctCount = practiceResults.filter(r => r.correct).length;
-            alert(`Chúc mừng! Bạn đã hoàn thành bài ôn tập.\nĐúng: ${correctCount}/${practiceExercises.length}\nĐiểm thưởng: +${correctCount * 10}`);
+            showAlert(`Chúc mừng! Bạn đã hoàn thành bài ôn tập.\nĐúng: ${correctCount}/${practiceExercises.length}\nĐiểm thưởng: +${correctCount * 10}`, 'success');
             setPracticeExercises([]);
             // Force a slight delay to ensure DB commit is visible to next query
             setTimeout(() => fetchWords(), 500);
         } else {
-            alert("Lỗi khi lưu kết quả bài tập.");
+            showAlert("Lỗi khi lưu kết quả bài tập.", 'error');
         }
       } catch (e) { 
           console.error(e);
-          alert("Lỗi khi kết nối máy chủ để lưu kết quả."); 
+          showAlert("Lỗi khi kết nối máy chủ để lưu kết quả.", 'error'); 
       }
     }
   };
@@ -305,28 +287,9 @@ export default function VocabularyTab({ API_URL }: VocabularyTabProps) {
       )}
 
       {generatingPractice && (
-          <div className="bg-slate-900 rounded-3xl p-8 border border-slate-700 shadow-2xl overflow-hidden relative group max-w-2xl mx-auto my-12">
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-3">
-                <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_10px_rgba(16,185,129,0.8)]"></div>
-                <h3 className="text-emerald-500 font-mono text-xs font-bold uppercase tracking-widest">Lexicon AI Stream</h3>
-              </div>
-              <div className="flex gap-1.5">
-                <div className="w-2 h-2 bg-slate-700 rounded-full"></div>
-                <div className="w-2 h-2 bg-slate-700 rounded-full"></div>
-                <div className="w-2 h-2 bg-slate-700 rounded-full"></div>
-              </div>
-            </div>
-            <div className="font-mono text-sm text-slate-300 h-48 overflow-hidden relative">
-              <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-transparent pointer-events-none z-10"></div>
-              <p className="whitespace-pre-wrap break-all opacity-90 leading-relaxed font-mono">
-                {streamingText || "> Establishing neural connection...\n> Initializing LLM context...\n> Waiting for vocabulary chunks..."}
-              </p>
-            </div>
-            <div className="mt-6 flex items-center justify-between border-t border-slate-800 pt-4">
-              <span className="text-slate-500 font-mono text-[10px] animate-pulse">STATUS: RECEIVING_CHUNKS</span>
-              <span className="text-slate-600 font-mono text-[10px]">v4.0.2-stable</span>
-            </div>
+          <div className="flex flex-col items-center justify-center py-16 space-y-4">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+            <p className="text-gray-500 font-medium">AI đang tạo bài luyện tập từ vựng...</p>
           </div>
         )}
 
@@ -402,12 +365,12 @@ export default function VocabularyTab({ API_URL }: VocabularyTabProps) {
               </div>
 
               {exerciseSubmitted && (
-                <div className={`mt-8 p-5 rounded-2xl flex items-center gap-4 animate-in slide-in-from-bottom-4 ${practiceAnswers[currentExerciseIdx]?.toLowerCase().trim() === currentEx.answer.toLowerCase() ? "bg-green-50 text-green-700 border border-green-200" : "bg-red-50 text-red-700 border border-red-200"}`}>
-                  <div className={`p-3 rounded-full ${practiceAnswers[currentExerciseIdx]?.toLowerCase().trim() === currentEx.answer.toLowerCase() ? 'bg-green-500' : 'bg-red-500'} text-white`}>
-                    {practiceAnswers[currentExerciseIdx]?.toLowerCase().trim() === currentEx.answer.toLowerCase() ? <CheckCircle2 size={32} /> : <X size={32} />}
+                <div className={`mt-8 p-5 rounded-2xl flex items-center gap-4 animate-in slide-in-from-bottom-4 ${String(practiceAnswers[currentExerciseIdx] || "").toLowerCase().trim() === String(currentEx.answer || "").toLowerCase().trim() ? "bg-green-50 text-green-700 border border-green-200" : "bg-red-50 text-red-700 border border-red-200"}`}>
+                  <div className={`p-3 rounded-full ${String(practiceAnswers[currentExerciseIdx] || "").toLowerCase().trim() === String(currentEx.answer || "").toLowerCase().trim() ? 'bg-green-500' : 'bg-red-500'} text-white`}>
+                    {String(practiceAnswers[currentExerciseIdx] || "").toLowerCase().trim() === String(currentEx.answer || "").toLowerCase().trim() ? <CheckCircle2 size={32} /> : <X size={32} />}
                   </div>
                   <div>
-                    <h5 className="font-black text-lg">{practiceAnswers[currentExerciseIdx]?.toLowerCase().trim() === currentEx.answer.toLowerCase() ? "Tuyệt vời!" : "Chưa chính xác!"}</h5>
+                    <h5 className="font-black text-lg">{String(practiceAnswers[currentExerciseIdx] || "").toLowerCase().trim() === String(currentEx.answer || "").toLowerCase().trim() ? "Tuyệt vời!" : "Chưa chính xác!"}</h5>
                     <p className="font-medium">Đáp án đúng: <span className="underline decoration-2">{currentEx.answer}</span></p>
                     {currentEx.explanation_vn && <p className="text-sm mt-1 opacity-80">{currentEx.explanation_vn}</p>}
                   </div>

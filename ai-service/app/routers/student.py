@@ -1,5 +1,4 @@
 from fastapi import APIRouter, HTTPException, Header, Query, UploadFile, File, Form, BackgroundTasks, Response
-from fastapi.responses import StreamingResponse
 from ..database import get_db
 from ..services import auth_service, llm_service, graph_service, file_service
 from pydantic import BaseModel
@@ -111,6 +110,10 @@ class ExamSaveReq(BaseModel):
     score: Optional[int] = 0
     max_score: Optional[int] = 0
     completed: bool = False
+    user_answers: Optional[dict] = None
+    feedback: Optional[dict] = None
+    skill: Optional[str] = None
+    time_spent: Optional[int] = None
 
 router = APIRouter(prefix="/student", tags=["Student"])
 
@@ -125,7 +128,7 @@ def _get_current_student(authorization: str = Header(...)):
         raise HTTPException(status_code=401, detail="Invalid or expired token")
 
     conn = get_db()
-    cursor = conn.execute("SELECT id, name, email, role, credits_ai, points FROM users WHERE id = ?", (payload["user_id"],))
+    cursor = conn.execute("SELECT id, name, email, role, credits_ai, points, target_goal, current_level FROM users WHERE id = ?", (payload["user_id"],))
     user = cursor.fetchone()
     conn.close()
     if not user:
@@ -135,7 +138,7 @@ def _get_current_student(authorization: str = Header(...)):
     return dict(user)
 
 
-def _check_usage_limit(user_id: int, feature: str, limit: int = 5):
+def _check_usage_limit(user_id: int, feature: str, limit: int = 50):
     """Check if user has exceeded usage limit for a feature. Returns remaining uses."""
     conn = get_db()
     try:
@@ -297,19 +300,18 @@ async def start_vocab_practice(req: VocabPracticeReq, authorization: str = Heade
         if not words:
             raise HTTPException(status_code=404, detail="No words found. Save some vocabulary first!")
             
-        async def gen():
-            async for chunk in llm_service.generate_vocab_practice_rich_stream(words):
-                yield f"data: {chunk}\n\n"
-            yield "data: [DONE]\n\n"
-        return StreamingResponse(gen(), media_type="text/event-stream")
+        result = await llm_service.generate_vocab_practice_rich(words)
+        if isinstance(result, list):
+            return result
+        return {"error": "Failed to generate practice"}
     except Exception as e:
         if conn: conn.close()
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/vocabulary/quiz/generate")
-async def generate_quiz(req: dict, authorization: str = Header(...)):
-    """Generate IELTS-style quiz from provided text (Streaming)."""
+def generate_quiz(req: dict, authorization: str = Header(...)):
+    """Generate IELTS-style quiz from provided text."""
     student = _get_current_student(authorization)
     text = req.get("text")
     num = req.get("num", 5)
@@ -320,11 +322,8 @@ async def generate_quiz(req: dict, authorization: str = Header(...)):
     _check_usage_limit(student["id"], "quiz_gen", limit=10)
     
     try:
-        async def gen():
-            async for chunk in llm_service.generate_exercises_from_text_stream(text, "quiz", num):
-                yield f"data: {chunk}\n\n"
-            yield "data: [DONE]\n\n"
-        return StreamingResponse(gen(), media_type="text/event-stream")
+        result = llm_service.generate_exercises_from_text(text, "quiz", num)
+        return result
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
@@ -380,7 +379,7 @@ async def handle_quiz_error(req: dict, authorization: str = Header(...)):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/vocabulary/practice/complete")
-async def complete_vocab_practice(req: VocabPracticeComplete, authorization: str = Header(...)):
+def complete_vocab_practice(req: VocabPracticeComplete, authorization: str = Header(...)):
     student = _get_current_student(authorization)
     conn = get_db()
     try:
@@ -475,11 +474,10 @@ async def start_grammar_practice(req: GrammarPracticeReq, authorization: str = H
         if not rule_names:
             raise HTTPException(status_code=404, detail="Rules not found")
             
-        async def gen():
-            async for chunk in llm_service.generate_grammar_practice_stream(rule_names, req.difficulty):
-                yield f"data: {chunk}\n\n"
-            yield "data: [DONE]\n\n"
-        return StreamingResponse(gen(), media_type="text/event-stream")
+        result = await llm_service.generate_grammar_practice(rule_names, req.difficulty)
+        if isinstance(result, list):
+            return result
+        return {"error": "Failed to generate grammar practice"}
     except Exception as e:
         if conn: conn.close()
         traceback.print_exc()
@@ -490,19 +488,24 @@ def save_exam(req: ExamSaveReq, authorization: str = Header(...)):
     student = _get_current_student(authorization)
     conn = get_db()
     try:
-        exam_data_json = json.dumps(req.exam_data)
+        exam_data_json = json.dumps(req.exam_data, ensure_ascii=False)
+        user_answers_json = json.dumps(req.user_answers, ensure_ascii=False) if req.user_answers else None
+        feedback_json = json.dumps(req.feedback, ensure_ascii=False) if req.feedback else None
+        
         conn.execute(
-            """INSERT INTO generated_exams (user_id, test_type, title, exam_data, score, max_score, completed)
-               VALUES (?, ?, ?, ?, ?, ?, ?)""",
-            (student["id"], req.test_type, req.title, exam_data_json, req.score, req.max_score, 1 if req.completed else 0)
+            """INSERT INTO generated_exams (user_id, test_type, title, exam_data, score, max_score, completed, user_answers, feedback, skill, time_spent)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (student["id"], req.test_type, req.title, exam_data_json, req.score, req.max_score, 
+             1 if req.completed else 0, user_answers_json, feedback_json, req.skill, req.time_spent)
         )
-        # Award points for finishing an exam
-        if req.completed:
-            conn.execute("UPDATE users SET points = points + 50 WHERE id = ?", (student["id"],))
+        # Award points proportionally based on score
+        if req.completed and req.max_score and req.max_score > 0:
+            points = int((req.score / req.max_score) * 100)
+            conn.execute("UPDATE users SET points = points + ? WHERE id = ?", (points, student["id"]))
             
         conn.commit()
         conn.close()
-        return {"message": "Exam saved successfully"}
+        return {"message": "Exam saved successfully", "points_earned": int((req.score / req.max_score) * 100) if req.max_score else 0}
     except Exception as e:
         if conn: conn.close()
         raise HTTPException(status_code=500, detail=str(e))
@@ -513,12 +516,39 @@ def list_exams(authorization: str = Header(...)):
     conn = get_db()
     try:
         cursor = conn.execute(
-            "SELECT id, test_type, title, score, max_score, completed, created_at FROM generated_exams WHERE user_id = ? ORDER BY created_at DESC",
+            "SELECT id, test_type, title, score, max_score, completed, skill, time_spent, created_at FROM generated_exams WHERE user_id = ? ORDER BY created_at DESC LIMIT 50",
             (student["id"],)
         )
         exams = [dict(row) for row in cursor.fetchall()]
         conn.close()
         return exams
+    except Exception as e:
+        if conn: conn.close()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/exams/{exam_id}")
+def get_exam_detail(exam_id: int, authorization: str = Header(...)):
+    """Get full exam detail for review (questions, user answers, feedback)."""
+    student = _get_current_student(authorization)
+    conn = get_db()
+    try:
+        row = conn.execute(
+            "SELECT * FROM generated_exams WHERE id = ? AND user_id = ?",
+            (exam_id, student["id"])
+        ).fetchone()
+        conn.close()
+        if not row:
+            raise HTTPException(status_code=404, detail="Exam not found")
+        result = dict(row)
+        # Parse JSON blobs
+        for key in ["exam_data", "user_answers", "feedback"]:
+            if result.get(key) and isinstance(result[key], str):
+                try:
+                    result[key] = json.loads(result[key])
+                except: pass
+        return result
+    except HTTPException:
+        raise
     except Exception as e:
         if conn: conn.close()
         raise HTTPException(status_code=500, detail=str(e))
@@ -772,8 +802,7 @@ class TextAnalysisRequest(BaseModel):
 
 
 @router.post("/analyze-text")
-async def analyze_text(req: TextAnalysisRequest, authorization: str = Header(...)):
-    from fastapi.responses import StreamingResponse
+def analyze_text(req: TextAnalysisRequest, authorization: str = Header(...)):
     user = _get_current_student(authorization)
     if user.get("credits_ai", 0) < 5:
         raise HTTPException(status_code=402, detail="Insufficient AI credits (5 required)")
@@ -786,12 +815,8 @@ async def analyze_text(req: TextAnalysisRequest, authorization: str = Header(...
     conn.commit()
     conn.close()
 
-    async def gen():
-        async for chunk in llm_service.generate_exercises_from_text_stream(req.text, "mixed", req.num_questions):
-            yield f"data: {chunk}\n\n"
-        yield "data: [DONE]\n\n"
-
-    return StreamingResponse(gen(), media_type="text/event-stream")
+    result = llm_service.generate_exercises_from_text(req.text, "mixed", req.num_questions)
+    return result
 
 
 # ─── DICTIONARY LOOKUP ────────────────────────────────────────────────────────
@@ -1171,26 +1196,78 @@ def sync_vocabulary(data: BulkVocabSync, authorization: str = Header(...)):
 # ─── PERSONALIZED ROADMAP ────────────────────────────────────────────────────
 
 @router.get("/roadmap")
-async def get_student_roadmap(authorization: str = Header(...)):
-    """Generate a personalized learning roadmap based on student's profile and vocabulary."""
+async def get_student_roadmap(authorization: str = Header(...), refresh: bool = Query(False)):
+    """Generate or retrieve a personalized learning roadmap."""
     student = _get_current_student(authorization)
+    user_id = student["id"]
     
-    # Fetch student's vocabulary to personalize the roadmap
     conn = get_db()
+    
+    # 1. Fetch current stats for "Progress Hash"
+    vocab_count_row = conn.execute("SELECT COUNT(*) FROM saved_vocabulary WHERE user_id = ?", (user_id,)).fetchone()
+    vocab_count = vocab_count_row[0] if vocab_count_row else 0
+    points = student.get("points", 0)
+    
+    # Significant change hash: 
+    # - New roadmap every 20 words
+    # - Or every 500 points
+    stats_hash = f"v{vocab_count // 20}_p{points // 500}"
+    
+    # 2. Check Cache (if not refreshing)
+    if not refresh:
+        cached_row = conn.execute(
+            "SELECT roadmap_data, last_stats_hash FROM student_roadmaps WHERE user_id = ?", 
+            (user_id,)
+        ).fetchone()
+        
+        if cached_row:
+            roadmap_data, last_hash = cached_row[0], cached_row[1]
+            if last_hash == stats_hash:
+                conn.close()
+                try:
+                    data = json.loads(roadmap_data)
+                    data["_from_cache"] = True
+                    data["user_stats"] = {
+                        "vocab_count": vocab_count, 
+                        "points": points,
+                        "target_goal": student.get("target_goal"),
+                        "current_level": student.get("current_level")
+                    }
+                    return data
+                except:
+                    pass # Fallback to AI if JSON is corrupt
+            else:
+                print(f"[ROADMAP] Progress detected ({last_hash} -> {stats_hash}). Regenerating...")
+
+    # 3. Generate with AI
+    # Fetch vocabulary for context
     vocab_rows = conn.execute(
         "SELECT word, meaning_en, level FROM saved_vocabulary WHERE user_id = ? LIMIT 30",
-        (student["id"],)
+        (user_id,)
     ).fetchall()
-    conn.close()
-    
     words = [dict(r) for r in vocab_rows]
     
-    # 3. Generate with AI (Streaming)
-    async def gen():
-        async for chunk in llm_service.generate_personalized_roadmap_stream(student, words):
-            yield f"data: {chunk}\n\n"
-        yield "data: [DONE]\n\n"
-    return StreamingResponse(gen(), media_type="text/event-stream")
+    # Pass stats to user_info for AI to acknowledge
+    student["vocab_count"] = vocab_count
+    
+    result = await llm_service.generate_personalized_roadmap(student, words)
+    
+    # 4. Save to Cache
+    if result and "error" not in result:
+        result["user_stats"] = {
+            "vocab_count": vocab_count, 
+            "points": points,
+            "target_goal": student.get("target_goal"),
+            "current_level": student.get("current_level")
+        }
+        conn.execute(
+            "INSERT OR REPLACE INTO student_roadmaps (user_id, roadmap_data, last_stats_hash, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)",
+            (user_id, json.dumps(result, ensure_ascii=False), stats_hash)
+        )
+        conn.commit()
+    
+    conn.close()
+    return result
 
 @router.get("/knowledge-graph")
 def student_knowledge_graph(
@@ -1209,14 +1286,11 @@ class IpaRequest(BaseModel):
     focus: str = "vowels"
 
 @router.post("/ipa/generate")
-async def generate_ipa(req: IpaRequest, authorization: str = Header(...)):
-    from fastapi.responses import StreamingResponse
+def generate_ipa(req: IpaRequest, authorization: str = Header(...)):
     user = _get_current_student(authorization)
     if user.get("credits_ai", 0) < 5:
         raise HTTPException(status_code=402, detail="Insufficient AI credits (5 required)")
     
-    # Check for legacy limit OR new credits
-    # In a real app we'd migrate fully to credits, but for now we'll check both
     _check_usage_limit(user["id"], "ipa")
     
     # Deduct credit
@@ -1225,12 +1299,8 @@ async def generate_ipa(req: IpaRequest, authorization: str = Header(...)):
     conn.commit()
     conn.close()
 
-    async def gen():
-        async for chunk in llm_service.generate_ipa_lesson_stream(req.words):
-            yield f"data: {chunk}\n\n"
-        yield "data: [DONE]\n\n"
-
-    return StreamingResponse(gen(), media_type="text/event-stream")
+    result = llm_service.generate_ipa_lesson(req.words, req.focus)
+    return result
 
 class PracticeRequest(BaseModel):
     test_type: str = "TOEIC"
@@ -1238,8 +1308,7 @@ class PracticeRequest(BaseModel):
     part: str = ""
 
 @router.post("/practice/generate")
-async def generate_practice(req: PracticeRequest, authorization: str = Header(...)):
-    from fastapi.responses import StreamingResponse
+def generate_practice(req: PracticeRequest, authorization: str = Header(...)):
     user = _get_current_student(authorization)
     if user.get("credits_ai", 0) < 5:
         raise HTTPException(status_code=402, detail="Insufficient AI credits (5 required)")
@@ -1251,20 +1320,15 @@ async def generate_practice(req: PracticeRequest, authorization: str = Header(..
     conn.commit()
     conn.close()
 
-    async def gen():
-        async for chunk in llm_service.generate_practice_test_stream(req.test_type, req.skill, req.part):
-            yield f"data: {chunk}\n\n"
-        yield "data: [DONE]\n\n"
-
-    return StreamingResponse(gen(), media_type="text/event-stream")
+    result = llm_service.generate_practice_test(req.test_type, req.skill, req.part)
+    return result
 
 class ReadingRequest(BaseModel):
     topic: str = ""
     level: str = "B1"
 
 @router.post("/reading/generate")
-async def generate_reading(req: ReadingRequest, authorization: str = Header(...)):
-    from fastapi.responses import StreamingResponse
+def generate_reading(req: ReadingRequest, authorization: str = Header(...)):
     user = _get_current_student(authorization)
     if user.get("credits_ai", 0) < 5:
         raise HTTPException(status_code=402, detail="Insufficient AI credits (5 required)")
@@ -1276,12 +1340,8 @@ async def generate_reading(req: ReadingRequest, authorization: str = Header(...)
     conn.commit()
     conn.close()
 
-    async def gen():
-        async for chunk in llm_service.generate_reading_passage_stream(req.topic, req.level):
-            yield f"data: {chunk}\n\n"
-        yield "data: [DONE]\n\n"
-
-    return StreamingResponse(gen(), media_type="text/event-stream")
+    result = llm_service.generate_reading_passage(req.topic, req.level)
+    return result
 
 class WritingRequest(BaseModel):
     text: str
@@ -1289,8 +1349,7 @@ class WritingRequest(BaseModel):
     target_test: str = "IELTS"
 
 @router.post("/writing/evaluate")
-async def evaluate_writing(req: WritingRequest, authorization: str = Header(...)):
-    from fastapi.responses import StreamingResponse
+def evaluate_writing(req: WritingRequest, authorization: str = Header(...)):
     user = _get_current_student(authorization)
     if user.get("credits_ai", 0) < 5:
         raise HTTPException(status_code=402, detail="Insufficient AI credits (5 required)")
@@ -1301,20 +1360,15 @@ async def evaluate_writing(req: WritingRequest, authorization: str = Header(...)
     conn.commit()
     conn.close()
 
-    async def gen():
-        async for chunk in llm_service.evaluate_writing_stream(req.text, req.task_type, req.target_test):
-            yield f"data: {chunk}\n\n"
-        yield "data: [DONE]\n\n"
-
-    return StreamingResponse(gen(), media_type="text/event-stream")
+    result = llm_service.evaluate_writing(req.text, req.task_type, req.target_test)
+    return result
 
 class SpeakingRequest(BaseModel):
     level: str = "B1"
     topic_type: str = "general"
 
 @router.post("/speaking/topic")
-async def generate_speaking(req: SpeakingRequest, authorization: str = Header(...)):
-    from fastapi.responses import StreamingResponse
+def generate_speaking(req: SpeakingRequest, authorization: str = Header(...)):
     user = _get_current_student(authorization)
     if user.get("credits_ai", 0) < 5:
         raise HTTPException(status_code=402, detail="Insufficient AI credits (5 required)")
@@ -1325,12 +1379,8 @@ async def generate_speaking(req: SpeakingRequest, authorization: str = Header(..
     conn.commit()
     conn.close()
 
-    async def gen():
-        async for chunk in llm_service.generate_speaking_topic_stream(req.level, req.topic_type):
-            yield f"data: {chunk}\n\n"
-        yield "data: [DONE]\n\n"
-
-    return StreamingResponse(gen(), media_type="text/event-stream")
+    result = llm_service.generate_speaking_topic(req.level, req.topic_type)
+    return result
 
 
 @router.post("/file/upload-analyze")
@@ -1340,7 +1390,6 @@ async def student_upload_analyze(
     num_questions: int = Form(5),
     authorization: str = Header(...)
 ):
-    from fastapi.responses import StreamingResponse
     user = _get_current_student(authorization)
     if user.get("credits_ai", 0) < 5:
         raise HTTPException(status_code=402, detail="Insufficient AI credits (5 required)")
@@ -1360,12 +1409,8 @@ async def student_upload_analyze(
     if not text or len(text.strip()) == 0:
         raise HTTPException(status_code=400, detail="Could not extract text from file")
 
-    async def gen():
-        async for chunk in llm_service.generate_exercises_from_text_stream(text, exercise_type, num_questions):
-            yield f"data: {chunk}\n\n"
-        yield "data: [DONE]\n\n"
-
-    return StreamingResponse(gen(), media_type="text/event-stream")
+    result = llm_service.generate_exercises_from_text(text, exercise_type, num_questions)
+    return result
 
 
 # ─── GRAMMAR ────────────────────────────────────────────────────────────────

@@ -87,9 +87,14 @@ class ConnectionWrapper:
         cursor.execute(*args, **kwargs)
         return CursorWrapper(cursor)
     def commit(self): self._conn.commit()
-    def close(self): self._conn.close()
+    def close(self):
+        # We are using thread-local pooling, so do not actually close the connection.
+        # This allows routers to safely call conn.close() without killing the shared connection.
+        pass
+    def really_close(self):
+        self._conn.close()
     def __enter__(self): return self
-    def __exit__(self, exc_type, exc_val, exc_tb): self._conn.close()
+    def __exit__(self, exc_type, exc_val, exc_tb): pass
     def __getattr__(self, name):
         return getattr(self._conn, name)
 
@@ -99,47 +104,65 @@ def get_db(retries=3):
     Connects to Turso if configured, otherwise falls back to local SQLite.
     Includes WAL mode and retry logic for robustness.
     """
+import threading
+
+_thread_local = threading.local()
+_settings_cache = {}
+_settings_lock = threading.Lock()
+SETTINGS_TTL = 300  # 5 minutes
+
+def get_db(retries=3):
+    """
+    Consolidated thread-safe database connection with pooling.
+    Connects to Turso if configured, otherwise falls back to local SQLite.
+    Reuses connections within the same thread/request for better performance.
+    """
+    # Check if we already have a connection in this thread
+    if hasattr(_thread_local, "db_conn") and _thread_local.db_conn:
+        try:
+            # Test if connection is still alive
+            _thread_local.db_conn.execute("SELECT 1")
+            return _thread_local.db_conn
+        except Exception:
+            # Connection dead, remove it
+            _thread_local.db_conn = None
+
     global TURSO_URL, TURSO_AUTH_TOKEN
-    # Refresh env vars in case they were set dynamically
-    TURSO_URL = (os.getenv("TURSO_URL") or "").strip()
-    TURSO_AUTH_TOKEN = (os.getenv("TURSO_AUTH_TOKEN") or "").strip()
+    # Refresh env vars only if not already set to save time
+    if not TURSO_URL:
+        TURSO_URL = (os.getenv("TURSO_URL") or "").strip()
+    if not TURSO_AUTH_TOKEN:
+        TURSO_AUTH_TOKEN = (os.getenv("TURSO_AUTH_TOKEN") or "").strip()
 
     for attempt in range(retries):
         try:
             if TURSO_URL and TURSO_AUTH_TOKEN:
-                # Direct Connection Strategy (Standard and safest for Render/Production)
+                # Direct Connection Strategy
                 try:
-                    url_to_use = TURSO_URL.strip()
+                    url_to_use = TURSO_URL
                     if not url_to_use.startswith(("https://", "libsql://")):
                         url_to_use = f"https://{url_to_use}"
                     else:
                         url_to_use = url_to_use.replace("libsql://", "https://")
                     
-                    # Try connecting with both auth_token (snake_case) and authToken (camelCase)
                     try:
                         conn = libsql.connect(url_to_use, auth_token=TURSO_AUTH_TOKEN)
                     except (TypeError, Exception):
                         try:
                             conn = libsql.connect(url_to_use, authToken=TURSO_AUTH_TOKEN)
                         except (TypeError, Exception):
-                            # Last resort: token in URL
                             token_url = f"{url_to_use}?authToken={TURSO_AUTH_TOKEN}"
                             conn = libsql.connect(token_url)
                     
-                    print(f"[DB] Connected to Turso (Verified Direct Strategy)")
                 except Exception as e:
-                    # Fallback to Local Replica only if absolutely needed and on non-production
                     if HAS_LIBSQL_EXPERIMENTAL and not os.getenv("RENDER"):
-                        print(f"[DB] Direct failed, trying replica: {e}")
                         conn = libsql.connect(database=DB_PATH, sync_url=TURSO_URL, auth_token=TURSO_AUTH_TOKEN)
                     else:
-                        print(f"[DB CONNECTION ERROR] Critical fail: {e}")
                         raise e
             else:
                 # Standard Local SQLite fallback
                 conn = libsql.connect(DB_PATH)
             
-            # Use standard Row for builtin sqlite3 if possible, but our wrapper is more consistent
             try:
                 conn.row_factory = dict_factory
             except Exception:
@@ -147,22 +170,23 @@ def get_db(retries=3):
             
             # Performance & Concurrency settings
             try:
-                # PRAGMAs only for local SQLite
                 is_remote = TURSO_URL and TURSO_AUTH_TOKEN and not HAS_LIBSQL_EXPERIMENTAL
                 if not is_remote:
                     conn.execute("PRAGMA journal_mode=WAL")
                     conn.execute("PRAGMA busy_timeout=10000")
+                    conn.execute("PRAGMA synchronous=NORMAL") # Faster but still safe
             except Exception:
                 pass
                 
-            return ConnectionWrapper(conn)
+            wrapper = ConnectionWrapper(conn)
+            # Store in thread-local for reuse
+            _thread_local.db_conn = wrapper
+            return wrapper
             
         except Exception as e:
             if attempt < retries - 1:
-                print(f"[DB] Connection attempt {attempt+1} failed: {e}, retrying...")
-                time.sleep(1.0 * (attempt + 1))
+                time.sleep(0.5 * (attempt + 1))
             else:
-                print(f"[DB] All {retries} connection attempts failed: {e}")
                 raise
 
 def init_db():
@@ -266,6 +290,11 @@ def init_db():
     except Exception as e:
         print(f"[DB MIGRATION] revoked_tokens error: {e}")
 
+    # --- PERFORMANCE INDEXES ---
+    try:
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_revoked_tokens_expires_at ON revoked_tokens(expires_at)")
+    except Exception: pass
+
     # -----------------------------------
 
     cursor.execute("""
@@ -339,6 +368,18 @@ def init_db():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
+    
+    # --- PERFORMANCE INDEXES ---
+    try:
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_generated_exams_user_id ON generated_exams(user_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_enrollments_student_id ON enrollments(student_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_assignments_class_id ON assignments(class_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_student_scores_student_id ON student_scores(student_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_saved_vocabulary_user_id ON saved_vocabulary(user_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_saved_vocabulary_scheduled_at ON saved_vocabulary(scheduled_at)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_study_logs_user_id ON study_logs(user_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_study_logs_word_id ON study_logs(word_id)")
+    except Exception: pass
 
     # --- ENROLLMENTS TABLE ---
     cursor.execute("""
@@ -426,6 +467,14 @@ def init_db():
     except SQLITE_OP_ERROR: pass
 
     try:
+        cursor.execute("ALTER TABLE users ADD COLUMN target_goal TEXT DEFAULT 'General English'")
+    except SQLITE_OP_ERROR: pass
+
+    try:
+        cursor.execute("ALTER TABLE users ADD COLUMN current_level TEXT DEFAULT 'B1'")
+    except SQLITE_OP_ERROR: pass
+
+    try:
         cursor.execute("ALTER TABLE saved_vocabulary ADD COLUMN last_reviewed_at TIMESTAMP")
     except SQLITE_OP_ERROR: pass
 
@@ -497,6 +546,23 @@ def init_db():
         cursor.execute("ALTER TABLE saved_vocabulary ADD COLUMN lapses INTEGER DEFAULT 0")
     except SQLITE_OP_ERROR: pass
 
+    # --- MIGRATION: Exam History Enhancement ---
+    try:
+        cursor.execute("ALTER TABLE generated_exams ADD COLUMN user_answers TEXT")
+    except SQLITE_OP_ERROR: pass
+    try:
+        cursor.execute("ALTER TABLE generated_exams ADD COLUMN feedback TEXT")
+    except SQLITE_OP_ERROR: pass
+    try:
+        cursor.execute("ALTER TABLE generated_exams ADD COLUMN skill TEXT")
+    except SQLITE_OP_ERROR: pass
+    try:
+        cursor.execute("ALTER TABLE generated_exams ADD COLUMN time_spent INTEGER")
+    except SQLITE_OP_ERROR: pass
+    try:
+        cursor.execute("ALTER TABLE student_scores ADD COLUMN submission_text TEXT")
+    except SQLITE_OP_ERROR: pass
+
     # --- STUDY LOGS TABLE (For FSRS review history) ---
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS study_logs (
@@ -511,6 +577,17 @@ def init_db():
             review_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (user_id) REFERENCES users(id),
             FOREIGN KEY (word_id) REFERENCES saved_vocabulary(id)
+        )
+    """)
+
+    # --- STUDENT ROADMAPS TABLE ---
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS student_roadmaps (
+            user_id INTEGER PRIMARY KEY,
+            roadmap_data TEXT NOT NULL,
+            last_stats_hash TEXT,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id)
         )
     """)
 
@@ -600,18 +677,36 @@ _thread_local = threading.local()
 # --- REMOVED DUPLICATE get_db ---
 
 def get_setting(key, default=None):
-    """Read a single setting: DB first, then env var."""
+    """Read a single setting with multi-layer caching: Memory -> DB -> Env."""
+    # 1. Memory Cache
+    now = time.time()
+    with _settings_lock:
+        if key in _settings_cache:
+            val, ts = _settings_cache[key]
+            if now - ts < SETTINGS_TTL:
+                return val
+
+    # 2. Database Cache
     try:
         conn = get_db()
         cursor = conn.cursor()
         cursor.execute("SELECT value FROM settings WHERE key = ?", (key,))
         row = cursor.fetchone()
-        conn.close()
+        
+        val = None
         if row and row['value']:
-            return row['value']
+            val = row['value']
+        else:
+            # 3. Environment Fallback
+            val = os.getenv(key, default)
+            
+        # Update memory cache
+        with _settings_lock:
+            _settings_cache[key] = (val, now)
+        return val
     except Exception as e:
         print(f"[DB SETTINGS] Error reading '{key}': {e}")
-    return os.getenv(key, default)
+        return os.getenv(key, default)
 
 def set_setting(key, value):
     """Upsert a setting."""

@@ -7,6 +7,7 @@ import {
   CheckCircle2, X, PlayCircle, BookText, AlertCircle, Info, Trash2, 
   BarChart3, Plus, ArrowLeft, Send, ExternalLink, Globe, Languages
 } from 'lucide-react';
+import { useNotification } from '../../context/NotificationContext';
 
 interface AIToolsTabProps {
   authFetch: any;
@@ -17,6 +18,7 @@ interface AIToolsTabProps {
 }
 
 export function AIToolsTab({ authFetch, user, API_URL, setShowCreditModal, handleTextareaDoubleClick }: AIToolsTabProps) {
+  const { showAlert } = useNotification();
   const [activeAI, setActiveAI] = useState<"vocab" | "dict" | "graph">("vocab");
   const [text, setText] = useState("");
   const [file, setFile] = useState<File | null>(null);
@@ -80,34 +82,14 @@ export function AIToolsTab({ authFetch, user, API_URL, setShowCreditModal, handl
       });
       if (!res.ok) throw new Error("API error");
       
-      const reader = res.body?.getReader();
-      if (!reader) throw new Error("No reader");
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n\n");
-        buffer = lines.pop() || "";
-        for (const line of lines) {
-          if (line.startsWith("data: ")) {
-            const dataStr = line.replace("data: ", "");
-            if (dataStr === "[DONE]") continue;
-            try {
-              const data = JSON.parse(dataStr);
-              if (data.vocabulary) {
-                setVocabResult(data.vocabulary);
-                setCurrentCardIdx(0);
-              }
-            } catch (e) {}
-          }
-        }
+      const data = await res.json();
+      if (data.vocabulary) {
+        setVocabResult(data.vocabulary);
+        setCurrentCardIdx(0);
       }
     } catch (err) {
       console.error(err);
-      alert("Extraction failed. Check Credits.");
+      showAlert("Extraction failed. Check Credits.", 'error');
     } finally {
       setLoading(false);
     }
@@ -127,34 +109,14 @@ export function AIToolsTab({ authFetch, user, API_URL, setShowCreditModal, handl
       if (res.status === 402) return setShowCreditModal(true);
       if (!res.ok) throw new Error("API failed");
       
-      const reader = res.body?.getReader();
-      if (!reader) throw new Error("No reader");
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n\n");
-        buffer = lines.pop() || "";
-        for (const line of lines) {
-          if (line.startsWith("data: ")) {
-            const dataStr = line.replace("data: ", "");
-            if (dataStr === "[DONE]") continue;
-            try {
-              const data = JSON.parse(dataStr);
-              if (data.vocabulary) {
-                setVocabResult(data.vocabulary);
-                setCurrentCardIdx(0);
-              }
-            } catch (e) {}
-          }
-        }
+      const data = await res.json();
+      if (data.vocabulary) {
+        setVocabResult(data.vocabulary);
+        setCurrentCardIdx(0);
       }
     } catch (err) {
       console.error(err);
-      alert("Error processing file");
+      showAlert("Error processing file", 'error');
     } finally {
       setLoading(false);
     }
@@ -171,36 +133,16 @@ export function AIToolsTab({ authFetch, user, API_URL, setShowCreditModal, handl
       });
       if (!res.ok) throw new Error("Quiz generation failed");
       
-      const reader = res.body?.getReader();
-      if (!reader) throw new Error("No reader");
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n\n");
-        buffer = lines.pop() || "";
-        for (const line of lines) {
-          if (line.startsWith("data: ")) {
-            const dataStr = line.replace("data: ", "");
-            if (dataStr === "[DONE]") continue;
-            try {
-              const data = JSON.parse(dataStr);
-              if (data.quiz) {
-                setQuizResult(data.quiz);
-                setCurrentQuizIdx(0);
-                setQuizAnswers({});
-                setQuizSubmitted(false);
-              }
-            } catch (e) {}
-          }
-        }
+      const data = await res.json();
+      if (data.quiz) {
+        setQuizResult(data.quiz);
+        setCurrentQuizIdx(0);
+        setQuizAnswers({});
+        setQuizSubmitted(false);
       }
     } catch (err) {
       console.error(err);
-      alert("Quiz failed. Check Credits");
+      showAlert("Quiz failed. Check Credits", 'error');
     } finally {
       setLoading(false);
     }
@@ -234,7 +176,7 @@ export function AIToolsTab({ authFetch, user, API_URL, setShowCreditModal, handl
       const data = await res.json();
       setGraphData(data);
     } catch {
-      alert("Graph failed");
+      showAlert("Graph failed", 'error');
     } finally {
       setGraphLoading(false);
     }
@@ -456,7 +398,7 @@ export function AIToolsTab({ authFetch, user, API_URL, setShowCreditModal, handl
                             method: "POST",
                             body: JSON.stringify({ word: w.word, phonetic: w.phonetic || w.phon || "", pos: w.pos || "", meaning_en: w.meaning_en || "", meaning_vn: w.meaning_vn || w.meaning, example: w.example, level: w.level || 'B2', source: "ai-extraction" })
                           });
-                          alert(`Đã lưu "${w.word}" vào kho từ vựng!`);
+                          showAlert(`Đã lưu "${w.word}" vào kho từ vựng!`, 'success');
                         } catch { }
                       }}
                       className="w-16 h-16 bg-white border border-gray-100 text-emerald-500 rounded-2xl flex items-center justify-center hover:bg-emerald-50 transition-all shadow-xl hover:scale-105 active:scale-95"

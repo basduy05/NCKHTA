@@ -31,11 +31,11 @@ function AuthorSlideshow() {
 
   return (
     <div
-      className="relative group"
+      className="relative group h-full"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      <div className="relative aspect-[4/5] overflow-hidden bg-gray-100 rounded-l-3xl lg:rounded-l-3xl lg:rounded-r-none rounded-t-3xl lg:rounded-t-none lg:rounded-tl-3xl">
+      <div className="relative aspect-[4/5] lg:aspect-auto lg:h-full overflow-hidden bg-gray-100 rounded-t-3xl lg:rounded-tr-none lg:rounded-l-3xl">
         {AUTHOR_PHOTOS.map((src, i) => (
           <div
             key={i}
@@ -52,7 +52,7 @@ function AuthorSlideshow() {
               alt={`Nguyễn Bá Duy - Ảnh ${i + 1}`}
               fill
               className="object-cover"
-              sizes="(max-width: 768px) 100vw, 40vw"
+              sizes="(max-width: 768px) 100vw, 50vw"
               priority={i === 0}
             />
           </div>
@@ -266,16 +266,15 @@ export default function AboutPage() {
           <h2 className="text-3xl font-bold text-gray-900 mb-4">Tác giả & Thông tin Dự án</h2>
         </div>
 
-        {/* Author Card */}
-        <div className="bg-white rounded-3xl shadow-xl overflow-hidden border border-gray-100 mb-16 hover:shadow-2xl transition-all duration-500">
+        <div className="bg-white rounded-3xl shadow-xl overflow-hidden border border-gray-100 mb-16 hover:shadow-2xl transition-all duration-500 max-w-5xl mx-auto">
           <div className="flex flex-col lg:flex-row">
             {/* Slideshow */}
-            <div className="lg:w-2/5">
+            <div className="lg:w-1/2">
               <AuthorSlideshow />
             </div>
 
             {/* Author Info */}
-            <div className="lg:w-3/5 p-8 lg:p-12 flex flex-col justify-center space-y-6">
+            <div className="lg:w-1/2 p-8 lg:p-12 flex flex-col justify-center space-y-6">
               <div>
                 <h3 className="text-3xl font-extrabold text-gray-900 mb-2">Nguyễn Bá Duy</h3>
                 <p className="text-blue-600 font-semibold text-lg"> AI Enthusiast</p>

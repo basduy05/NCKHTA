@@ -4,6 +4,7 @@ import {
   ClipboardList, Clock, CheckCircle2, Trophy, ChevronRight, Sparkles 
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
+import { useNotification } from "../../context/NotificationContext";
 
 interface AssignmentsTabProps {
   API_URL: string;
@@ -11,12 +12,25 @@ interface AssignmentsTabProps {
 
 export default function AssignmentsTab({ API_URL }: AssignmentsTabProps) {
   const { token, authFetch } = useAuth();
+  const { showAlert } = useNotification();
   const [assignments, setAssignments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [takingQuiz, setTakingQuiz] = useState<any>(null);
   const [quizAnswers, setQuizAnswers] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [quizResult, setQuizResult] = useState<any>(null);
+  
+  // Defensive rendering helper
+  const renderValue = (val: any) => {
+    if (val === null || val === undefined) return "";
+    if (typeof val === 'string') return val;
+    if (typeof val === 'object') {
+       return Object.entries(val)
+         .map(([k, v]) => `${k.charAt(0).toUpperCase() + k.slice(1)}: ${v}`)
+         .join(" | ");
+    }
+    return String(val);
+  };
 
   const fetchAssignments = async () => {
     try {
@@ -51,7 +65,7 @@ export default function AssignmentsTab({ API_URL }: AssignmentsTabProps) {
       } else if (assignmentType === "writing") {
         body = { text: quizAnswers["text"] || "" };
       } else {
-        alert("Unsupported assignment type");
+        showAlert("Unsupported assignment type", "warning");
         setSubmitting(false);
         return;
       }
@@ -65,10 +79,10 @@ export default function AssignmentsTab({ API_URL }: AssignmentsTabProps) {
         fetchAssignments();
       } else {
         const err = await res.json();
-        alert(err.detail || "Lỗi khi nộp bài");
+        showAlert(err.detail || "Lỗi khi nộp bài", "error");
       }
     } catch (e) {
-      alert("Lỗi kết nối");
+      showAlert("Lỗi kết nối", "error");
     }
     finally { setSubmitting(false); }
   };
@@ -105,7 +119,7 @@ export default function AssignmentsTab({ API_URL }: AssignmentsTabProps) {
                     <h3 className="font-bold text-gray-900 text-lg flex items-center gap-2"><Sparkles className="text-indigo-500" size={20}/> Đánh giá từ AI</h3>
                     <div className="bg-indigo-50 p-4 rounded-lg text-sm text-indigo-900 leading-relaxed">
                       <p className="font-bold mb-1">Nhận xét chung:</p>
-                      {takingQuiz.evaluation.feedback_summary}
+                      {renderValue(takingQuiz.evaluation.feedback_summary)}
                     </div>
                     
                     {takingQuiz.evaluation.criteria_scores && (
@@ -115,7 +129,7 @@ export default function AssignmentsTab({ API_URL }: AssignmentsTabProps) {
                           {Object.entries(takingQuiz.evaluation.criteria_scores).map(([k, v]) => (
                             <div key={k} className="bg-gray-50 p-2 rounded flex justify-between text-sm">
                               <span className="text-gray-600">{k}</span>
-                              <span className="font-bold text-indigo-700">{String(v)}</span>
+                              <span className="font-bold text-indigo-700">{renderValue(v)}</span>
                             </div>
                           ))}
                         </div>
@@ -126,7 +140,7 @@ export default function AssignmentsTab({ API_URL }: AssignmentsTabProps) {
                       <div key={idx} className="bg-gray-50 p-4 rounded-lg">
                         <p className={`font-bold mb-2 ${section.category?.includes('Strengths') ? 'text-green-700' : section.category?.includes('Weaknesses') ? 'text-red-700' : 'text-blue-700'}`}>{section.category}</p>
                         <ul className="list-disc pl-5 space-y-1 text-sm text-gray-700">
-                          {section.points?.map((pt: string, pidx: number) => <li key={pidx}>{pt}</li>)}
+                          {section.points?.map((pt: any, pidx: number) => <li key={pidx}>{renderValue(pt)}</li>)}
                         </ul>
                       </div>
                     ))}
@@ -135,7 +149,7 @@ export default function AssignmentsTab({ API_URL }: AssignmentsTabProps) {
                       <div>
                         <p className="font-bold text-gray-800 mb-2 mt-4">Bản sửa mẫu từ AI:</p>
                         <div className="bg-gray-50 border border-gray-200 p-4 rounded-lg text-sm text-gray-800 whitespace-pre-wrap font-serif leading-relaxed">
-                          {takingQuiz.evaluation.corrected_version}
+                          {renderValue(takingQuiz.evaluation.corrected_version)}
                         </div>
                       </div>
                     )}

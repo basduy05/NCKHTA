@@ -16,6 +16,7 @@ import { AIToolsTab } from "./AIToolsTab";
 import { GrammarTab } from "./GrammarTab";
 import { IpaTab } from "./IpaTab";
 import { PracticeTab } from "./PracticeTab";
+import { useNotification } from "../../context/NotificationContext";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://iedu-ksk7.onrender.com";
 
@@ -28,6 +29,7 @@ function TeacherDashboardContent() {
   const router = useRouter();
   const [showCreditModal, setShowCreditModal] = useState(false);
   const [selectedWordInfo, setSelectedWordInfo] = useState<WordDetail | null>(null);
+  const { showAlert, showConfirm } = useNotification();
 
   // Proactively refresh user data when entering key tabs
   useEffect(() => {
@@ -94,10 +96,10 @@ function TeacherDashboardContent() {
           };
           setSelectedWordInfo(formattedData);
         } else {
-          alert(`Không tìm thấy từ "${word}" trong từ điển.`);
+          showAlert(`Không tìm thấy từ "${word}" trong từ điển.`, 'error');
         }
       } catch (err) {
-        alert(`Không tìm thấy từ "${word}" và lỗi kết nối API.`);
+        showAlert(`Không tìm thấy từ "${word}" và lỗi kết nối API.`, 'error');
       }
     }
   };
@@ -272,6 +274,7 @@ function OverviewTab() {
 // ==================== CLASSES TAB ====================
 function ClassesTab() {
   const { authFetch, token } = useAuth();
+  const { showAlert, showConfirm } = useNotification();
   const [classes, setClasses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -290,7 +293,7 @@ function ClassesTab() {
   const handleSave = async () => {
     console.log("[DEBUG] Starting save operation");
     const startTime = Date.now();
-    if (!formName.trim()) return alert("Vui lòng nhập tên lớp");
+    if (!formName.trim()) return showAlert("Vui lòng nhập tên lớp", 'warning');
     const formData = new FormData();
     formData.append("name", formName);
     const url = editId ? `${API_URL}/teacher/my-classes/${editId}` : `${API_URL}/teacher/my-classes`;
@@ -303,16 +306,17 @@ function ClassesTab() {
         fetchClasses();
       } else {
         console.error(`[DEBUG] Save failed with status ${res.status}: ${await res.text()}`);
-        alert("Lỗi khi lưu lớp học");
+        showAlert("Lỗi khi lưu lớp học", 'error');
       }
     } catch (e) {
       console.error(`[DEBUG] Save error in ${Date.now() - startTime}ms:`, e);
-      alert("Lỗi kết nối khi lưu lớp học");
+      showAlert("Lỗi kết nối khi lưu lớp học", 'error');
     }
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm("Xoá lớp này sẽ xoá toàn bộ bài học, bài tập và danh sách học sinh!")) return;
+    const confirmed = await showConfirm("Xoá lớp này sẽ xoá toàn bộ bài học, bài tập và danh sách học sinh!");
+    if (!confirmed) return;
     console.log("[DEBUG] Starting delete operation");
     const startTime = Date.now();
     try {
@@ -322,11 +326,11 @@ function ClassesTab() {
         fetchClasses();
       } else {
         console.error(`[DEBUG] Delete failed with status ${res.status}: ${await res.text()}`);
-        alert("Lỗi khi xoá lớp học");
+        showAlert("Lỗi khi xoá lớp học", 'error');
       }
     } catch (e) {
       console.error(`[DEBUG] Delete error in ${Date.now() - startTime}ms:`, e);
-      alert("Lỗi kết nối khi xoá lớp học");
+      showAlert("Lỗi kết nối khi xoá lớp học", 'error');
     }
   };
 
@@ -386,6 +390,7 @@ function ClassesTab() {
 // ==================== STUDENTS TAB ====================
 function StudentsTab() {
   const { authFetch, token } = useAuth();
+  const { showAlert, showConfirm } = useNotification();
   const [classes, setClasses] = useState<any[]>([]);
   const [selectedClass, setSelectedClass] = useState<number | null>(null);
   const [students, setStudents] = useState<any[]>([]);
@@ -443,16 +448,17 @@ function StudentsTab() {
         fetchAvailable(selectedClass);
       } else {
         console.error(`[DEBUG] Enroll failed with status ${res.status}: ${await res.text()}`);
-        alert("Lỗi khi thêm học sinh");
+        showAlert("Lỗi khi thêm học sinh", 'error');
       }
     } catch (e) {
       console.error(`[DEBUG] Enroll error in ${Date.now() - startTime}ms:`, e);
-      alert("Lỗi kết nối khi thêm học sinh");
+      showAlert("Lỗi kết nối khi thêm học sinh", 'error');
     }
   };
 
   const handleRemove = async (studentId: number) => {
-    if (!selectedClass || !confirm("Xoá học sinh khỏi lớp?")) return;
+    const confirmed = await showConfirm("Xoá học sinh khỏi lớp?");
+    if (!selectedClass || !confirmed) return;
     console.log("[DEBUG] Starting remove student operation");
     const startTime = Date.now();
     try {
@@ -464,11 +470,11 @@ function StudentsTab() {
         fetchStudents(selectedClass);
       } else {
         console.error(`[DEBUG] Remove failed with status ${res.status}: ${await res.text()}`);
-        alert("Lỗi khi xoá học sinh");
+        showAlert("Lỗi khi xoá học sinh", 'error');
       }
     } catch (e) {
       console.error(`[DEBUG] Remove error in ${Date.now() - startTime}ms:`, e);
-      alert("Lỗi kết nối khi xoá học sinh");
+      showAlert("Lỗi kết nối khi xoá học sinh", 'error');
     }
   };
 
@@ -564,6 +570,7 @@ function StudentsTab() {
 // ==================== LESSONS TAB ====================
 function LessonsTab({ handleTextareaDoubleClick }: { handleTextareaDoubleClick: (e: React.MouseEvent<HTMLTextAreaElement>) => void }) {
   const { authFetch, token } = useAuth();
+  const { showAlert, showConfirm } = useNotification();
   const [classes, setClasses] = useState<any[]>([]);
   const [selectedClass, setSelectedClass] = useState<number | null>(null);
   const [lessons, setLessons] = useState<any[]>([]);
@@ -602,7 +609,7 @@ function LessonsTab({ handleTextareaDoubleClick }: { handleTextareaDoubleClick: 
   const handleSave = async () => {
     console.log("[DEBUG] Starting lesson save operation");
     const startTime = Date.now();
-    if (!formTitle.trim() || !selectedClass) return alert("Vui lòng nhập tiêu đề");
+    if (!formTitle.trim() || !selectedClass) return showAlert("Vui lòng nhập tiêu đề", 'warning');
     const formData = new FormData();
     formData.append("title", formTitle);
     formData.append("content", formContent);
@@ -619,16 +626,17 @@ function LessonsTab({ handleTextareaDoubleClick }: { handleTextareaDoubleClick: 
         fetchLessons(selectedClass!);
       } else {
         console.error(`[DEBUG] Lesson save failed with status ${res.status}: ${await res.text()}`);
-        alert("Lỗi khi lưu bài học");
+        showAlert("Lỗi khi lưu bài học", 'error');
       }
     } catch (e) {
       console.error(`[DEBUG] Lesson save error in ${Date.now() - startTime}ms:`, e);
-      alert("Lỗi kết nối khi lưu bài học");
+      showAlert("Lỗi kết nối khi lưu bài học", 'error');
     }
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm("Xoá bài học này?")) return;
+    const confirmed = await showConfirm("Xoá bài học này?");
+    if (!confirmed) return;
     console.log("[DEBUG] Starting lesson delete operation");
     const startTime = Date.now();
     try {
@@ -638,11 +646,11 @@ function LessonsTab({ handleTextareaDoubleClick }: { handleTextareaDoubleClick: 
         if (selectedClass) fetchLessons(selectedClass);
       } else {
         console.error(`[DEBUG] Lesson delete failed with status ${res.status}: ${await res.text()}`);
-        alert("Lỗi khi xoá bài học");
+        showAlert("Lỗi khi xoá bài học", 'error');
       }
     } catch (e) {
       console.error(`[DEBUG] Lesson delete error in ${Date.now() - startTime}ms:`, e);
-      alert("Lỗi kết nối khi xoá bài học");
+      showAlert("Lỗi kết nối khi xoá bài học", 'error');
     }
   };
 
@@ -736,6 +744,7 @@ function LessonsTab({ handleTextareaDoubleClick }: { handleTextareaDoubleClick: 
 // ==================== ASSIGNMENTS TAB ====================
 function AssignmentsTab({ handleTextareaDoubleClick }: { handleTextareaDoubleClick: (e: React.MouseEvent<HTMLTextAreaElement>) => void }) {
   const { refreshUser, authFetch, token } = useAuth();
+  const { showAlert, showConfirm } = useNotification();
   const [classes, setClasses] = useState<any[]>([]);
   const [selectedClass, setSelectedClass] = useState<number | null>(null);
   const [assignments, setAssignments] = useState<any[]>([]);
@@ -780,7 +789,7 @@ function AssignmentsTab({ handleTextareaDoubleClick }: { handleTextareaDoubleCli
   }, [selectedClass]);
 
   const handleGenerateQuiz = async () => {
-    if (!formQuizText.trim()) return alert("Vui lòng nhập nội dung để AI tạo quiz");
+    if (!formQuizText.trim()) return showAlert("Vui lòng nhập nội dung để AI tạo quiz", 'warning');
     setGenerating(true);
     try {
       const formData = new FormData();
@@ -794,7 +803,7 @@ function AssignmentsTab({ handleTextareaDoubleClick }: { handleTextareaDoubleCli
         refreshUser();
         setGeneratedQuiz(Array.isArray(data) ? data : []);
       }
-    } catch (e) { console.error(e); alert("Lỗi khi tạo quiz"); }
+    } catch (e) { console.error(e); showAlert("Lỗi khi tạo quiz", 'error'); }
     finally { setGenerating(false); }
   };
 
@@ -811,7 +820,7 @@ function AssignmentsTab({ handleTextareaDoubleClick }: { handleTextareaDoubleCli
   };
 
   const handleGenerateReading = async () => {
-    if (!selectedNews) return alert("Vui lòng chọn một bài báo");
+    if (!selectedNews) return showAlert("Vui lòng chọn một bài báo", 'warning');
     setGenerating(true);
     try {
       const res = await authFetch(`${API_URL}/teacher/news/generate-assignment`, {
@@ -828,16 +837,16 @@ function AssignmentsTab({ handleTextareaDoubleClick }: { handleTextareaDoubleCli
         refreshUser();
         setGeneratedQuiz(data.questions || []);
         if (data.passage) setFormQuizText(data.passage);
-        alert("Đã tạo bài tập Reading thành công!");
+        showAlert("Đã tạo bài tập Reading thành công!", 'success');
       } else {
-        alert("Lỗi khi tạo bài tập Reading");
+        showAlert("Lỗi khi tạo bài tập Reading", 'error');
       }
-    } catch(e) { console.error(e); alert("Lỗi kết nối"); }
+    } catch(e) { console.error(e); showAlert("Lỗi kết nối", 'error'); }
     finally { setGenerating(false); }
   };
 
   const handleSaveAssignment = async () => {
-    if (!formTitle.trim() || !selectedClass) return alert("Vui lòng nhập tiêu đề");
+    if (!formTitle.trim() || !selectedClass) return showAlert("Vui lòng nhập tiêu đề", 'warning');
     console.log("[DEBUG] Starting save assignment operation");
     const startTime = Date.now();
     const body = {
@@ -859,16 +868,17 @@ function AssignmentsTab({ handleTextareaDoubleClick }: { handleTextareaDoubleCli
         fetchAssignments(selectedClass!);
       } else {
         console.error(`[DEBUG] Assignment save failed with status ${res.status}: ${await res.text()}`);
-        alert("Lỗi khi lưu bài tập");
+        showAlert("Lỗi khi lưu bài tập", 'error');
       }
     } catch (e) {
       console.error(`[DEBUG] Assignment save error in ${Date.now() - startTime}ms:`, e);
-      alert("Lỗi kết nối khi lưu bài tập");
+      showAlert("Lỗi kết nối khi lưu bài tập", 'error');
     }
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm("Xoá bài tập này?")) return;
+    const confirmed = await showConfirm("Xoá bài tập này?");
+    if (!confirmed) return;
     console.log("[DEBUG] Starting delete assignment operation");
     const startTime = Date.now();
     try {
@@ -878,11 +888,11 @@ function AssignmentsTab({ handleTextareaDoubleClick }: { handleTextareaDoubleCli
         if (selectedClass) fetchAssignments(selectedClass);
       } else {
         console.error(`[DEBUG] Assignment delete failed with status ${res.status}: ${await res.text()}`);
-        alert("Lỗi khi xoá bài tập");
+        showAlert("Lỗi khi xoá bài tập", 'error');
       }
     } catch (e) {
       console.error(`[DEBUG] Assignment delete error in ${Date.now() - startTime}ms:`, e);
-      alert("Lỗi kết nối khi xoá bài tập");
+      showAlert("Lỗi kết nối khi xoá bài tập", 'error');
     }
   };
 

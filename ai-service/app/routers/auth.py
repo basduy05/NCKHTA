@@ -69,7 +69,7 @@ def _clear_login_attempts(email: str):
 # ---------------------------------------------------------------------------
 
 @router.post("/register", status_code=status.HTTP_201_CREATED)
-async def register(user: UserRegister, background_tasks: BackgroundTasks):
+def register(user: UserRegister, background_tasks: BackgroundTasks):
     try:
         conn = get_db()
         cursor = conn.cursor()
@@ -117,7 +117,7 @@ async def register(user: UserRegister, background_tasks: BackgroundTasks):
 
 
 @router.post("/verify-otp")
-async def verify_otp(data: OTPVerify, background_tasks: BackgroundTasks):
+def verify_otp(data: OTPVerify, background_tasks: BackgroundTasks):
     conn = get_db()
     cursor = conn.cursor()
 
@@ -159,7 +159,7 @@ async def verify_otp(data: OTPVerify, background_tasks: BackgroundTasks):
 
 
 @router.post("/login")
-async def login(data: UserLogin):
+def login(data: UserLogin):
     try:
         # Rate limit check before DB query
         _check_login_rate_limit(data.email)
@@ -210,7 +210,7 @@ async def login(data: UserLogin):
 
 # --- Login 2FA OTP endpoints ---
 @router.post("/login/send-otp")
-async def login_send_otp(data: LoginOTPRequest, background_tasks: BackgroundTasks):
+def login_send_otp(data: LoginOTPRequest, background_tasks: BackgroundTasks):
     """Send OTP for login 2FA verification."""
     conn = get_db()
     cursor = conn.cursor()
@@ -245,7 +245,7 @@ async def login_send_otp(data: LoginOTPRequest, background_tasks: BackgroundTask
 
 
 @router.post("/login/verify-otp")
-async def login_verify_otp(data: VerifyLoginOTP):
+def login_verify_otp(data: VerifyLoginOTP):
     """Verify OTP for login 2FA and return token."""
     conn = get_db()
     cursor = conn.cursor()
@@ -318,7 +318,7 @@ class ChangePasswordRequest(BaseModel):
 
 
 @router.get("/me")
-async def get_current_user_info(credentials: HTTPAuthorizationCredentials = Depends(security)):
+def get_current_user_info(credentials: HTTPAuthorizationCredentials = Depends(security)):
     """Get current user information"""
     token = credentials.credentials
     try:
@@ -348,7 +348,7 @@ async def get_current_user_info(credentials: HTTPAuthorizationCredentials = Depe
 
 
 @router.put("/profile")
-async def update_profile(data: UpdateProfileRequest, credentials: HTTPAuthorizationCredentials = Depends(security)):
+def update_profile(data: UpdateProfileRequest, credentials: HTTPAuthorizationCredentials = Depends(security)):
     """Update user profile"""
     token = credentials.credentials
     try:
@@ -407,7 +407,7 @@ async def update_profile(data: UpdateProfileRequest, credentials: HTTPAuthorizat
 
 
 @router.post("/change-password")
-async def change_password(data: ChangePasswordRequest, credentials: HTTPAuthorizationCredentials = Depends(security)):
+def change_password(data: ChangePasswordRequest, credentials: HTTPAuthorizationCredentials = Depends(security)):
     """Allow logged-in user to change their password. Revokes current token."""
     token = credentials.credentials
     conn = get_db()
@@ -450,7 +450,7 @@ async def change_password(data: ChangePasswordRequest, credentials: HTTPAuthoriz
         raise HTTPException(status_code=500, detail="Lỗi kết nối cơ sở dữ liệu")
 
 @router.post("/logout")
-async def logout(credentials: HTTPAuthorizationCredentials = Depends(security)):
+def logout(credentials: HTTPAuthorizationCredentials = Depends(security)):
     """Explicitly revoke the current access token."""
     token = credentials.credentials
     payload = auth_service.verify_access_token(token)
@@ -464,7 +464,7 @@ async def logout(credentials: HTTPAuthorizationCredentials = Depends(security)):
 
 
 @router.post("/resend-otp")
-async def resend_otp(data: ForgotPasswordRequest, background_tasks: BackgroundTasks):
+def resend_otp(data: ForgotPasswordRequest, background_tasks: BackgroundTasks):
     """Resend OTP to unverified user."""
     conn = get_db()
     cursor = conn.cursor()
@@ -493,7 +493,7 @@ async def resend_otp(data: ForgotPasswordRequest, background_tasks: BackgroundTa
 
 
 @router.post("/forgot-password")
-async def forgot_password(data: ForgotPasswordRequest, background_tasks: BackgroundTasks):
+def forgot_password(data: ForgotPasswordRequest, background_tasks: BackgroundTasks):
     """Send password reset email with reset token."""
     conn = get_db()
     cursor = conn.cursor()

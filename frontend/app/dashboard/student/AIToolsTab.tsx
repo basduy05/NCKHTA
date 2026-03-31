@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { ALL_WORDS_DATABASE, simulateSyllabify, WordDetail } from "../../components/DictionaryData";
+import { useNotification } from "../../context/NotificationContext";
 
 interface AIToolsTabProps {
   setShowCreditModal: (s: boolean) => void;
@@ -14,6 +15,7 @@ interface AIToolsTabProps {
 
 export default function AIToolsTab({ setShowCreditModal, API_URL }: AIToolsTabProps) {
   const { user, authFetch, refreshUser } = useAuth();
+  const { showAlert } = useNotification();
   const [text, setText] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [inputMode, setInputMode] = useState<"text" | "file">("text");
@@ -27,6 +29,30 @@ export default function AIToolsTab({ setShowCreditModal, API_URL }: AIToolsTabPr
   const [showRecallQuiz, setShowRecallQuiz] = useState(false);
   const [recallAnswers, setRecallAnswers] = useState<Record<number, string>>({});
   const [recallSubmitted, setRecallSubmitted] = useState(false);
+  const [tab, setTab] = useState<"analyze" | "grammar" | "reading" | "writing" | "speaking">("analyze");
+  
+  // Defensive rendering helpers to prevent "Objects are not valid as a React child"
+  const renderValue = (val: any): React.ReactNode => {
+    if (val === null || val === undefined) return "";
+    if (typeof val === "string" || typeof val === "number") return val;
+    if (Array.isArray(val)) return val.map(v => renderValue(v)).join(", ");
+    if (typeof val === "object") {
+      return Object.entries(val)
+        .map(([k, v]) => `${k}: ${renderValue(v)}`)
+        .join(" | ");
+    }
+    return String(val);
+  };
+
+  const getOptionsArray = (q: any) => {
+    if (!q || !q.options) return [];
+    if (Array.isArray(q.options)) return q.options;
+    if (typeof q.options === 'object' && q.options !== null) {
+      // Handle {A: "...", B: "..."} format
+      return Object.values(q.options);
+    }
+    return [];
+  };
 
   const analyze = async (type: "text" | "file") => {
     if (type === "text" && !text) return;
@@ -49,38 +75,12 @@ export default function AIToolsTab({ setShowCreditModal, API_URL }: AIToolsTabPr
           method: "POST",
           body: JSON.stringify({ text, num_questions: 5 }),
         });
-        if (!res.ok) throw new Error("API error");
+        if (res.status === 429) throw new Error("Vượt quá giới hạn sử dụng hàng ngày (50 lượt). Vui lòng quay lại sau.");
+        if (!res.ok) throw new Error("Lỗi hệ thống AI (API error)");
         
-        const reader = res.body?.getReader();
-        const decoder = new TextDecoder();
-        let done = false;
-        let buffer = "";
-        let finalData: any = { vocabulary: [], quiz: [] };
-
-        while (reader && !done) {
-          const { value, done: readerDone } = await reader.read();
-          done = readerDone;
-          if (value) {
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split('\n');
-            buffer = lines.pop() || "";
-
-            for (const line of lines) {
-              let rawJson = line.trim();
-              if (rawJson.startsWith("data: ")) rawJson = rawJson.replace("data: ", "");
-              if (rawJson === "[DONE]" || !rawJson) continue;
-
-              try {
-                const chunkData = JSON.parse(rawJson);
-                if (chunkData.status === "success" || !chunkData.status) {
-                  finalData = { ...finalData, ...chunkData };
-                }
-              } catch (e) { }
-            }
-          }
-        }
+        const jsonData = await res.json();
         refreshUser();
-        data = finalData;
+        data = jsonData;
       } else {
         const formData = new FormData();
         // @ts-ignore
@@ -93,71 +93,48 @@ export default function AIToolsTab({ setShowCreditModal, API_URL }: AIToolsTabPr
           body: formData,
         });
         
-        if (!res.ok) throw new Error("API error");
+        if (res.status === 429) throw new Error("Vượt quá giới hạn sử dụng hàng ngày (50 lượt). Vui lòng quay lại sau.");
+        if (!res.ok) throw new Error("Lỗi hệ thống AI (API error)");
 
-        const reader = res.body?.getReader();
-        const decoder = new TextDecoder();
-        let done = false;
-        let buffer = "";
-        let finalData: any = { vocabulary: [], quiz: [] };
-
-        while (reader && !done) {
-          const { value, done: readerDone } = await reader.read();
-          done = readerDone;
-          if (value) {
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split('\n');
-            buffer = lines.pop() || "";
-
-            for (const line of lines) {
-              let rawJson = line.trim();
-              if (rawJson.startsWith("data: ")) rawJson = rawJson.replace("data: ", "");
-              if (rawJson === "[DONE]" || !rawJson) continue;
-
-              try {
-                const chunkData = JSON.parse(rawJson);
-                if (chunkData.status === "success" || !chunkData.status) {
-                  finalData = { ...finalData, ...chunkData };
-                }
-              } catch (e) { }
-            }
-          }
-        }
+        const jsonData = await res.json();
         refreshUser();
-        data = finalData;
+        data = jsonData;
       }
 
-      const words = Array.isArray(data.vocabulary) ? data.vocabulary.map((w: any) => ({
-        word: w.word || "Unknown",
-        phon: w.phonetic || w.phon || "",
-        meaning: w.meaning_vn || w.meaning || w.vietnamese_meaning || "",
-        meaning_en: w.meaning_en || w.english_definition || "",
-        example: w.example || "",
-        level: w.level || "B1",
-        pos: w.pos || ""
+      const words = Array.isArray(data.vocabulary) ? data.vocabulary.filter((w: any) => w).map((w: any) => ({
+        word: renderValue(w.word || "Unknown"),
+        phon: renderValue(w.phonetic || w.phon || ""),
+        meaning: renderValue(w.meaning_vn || w.meaning || w.vietnamese_meaning || ""),
+        meaning_en: renderValue(w.meaning_en || w.english_definition || ""),
+        example: renderValue(w.example || ""),
+        level: renderValue(w.level || "B1"),
+        pos: renderValue(w.pos || "")
       })) : [];
 
-      const quiz = Array.isArray(data.quiz) ? data.quiz.map((q: any) => {
+      const quiz = Array.isArray(data.quiz || data.exercises) ? (data.quiz || data.exercises).map((q: any) => {
+        const options = getOptionsArray(q);
         let ansIndex = 0;
         if (typeof q.correct_answer === "number") ansIndex = q.correct_answer;
-        else if (typeof q.correct_answer === "string" && Array.isArray(q.options)) {
-          const idx = q.options.findIndex((o: string) => o.toLowerCase() === q.correct_answer.toLowerCase());
+        else if (q.correct_answer !== undefined && options.length > 0) {
+          const target = String(q.correct_answer).toLowerCase();
+          const idx = options.findIndex((o: any) => o && String(o).toLowerCase() === target);
           if (idx !== -1) ansIndex = idx;
         } else if (q.ans !== undefined) ansIndex = q.ans;
+
         return { 
-            question: q.question || q.q || "", 
-            options: q.options || [], 
-            answer: q.correct_answer || q.answer || "",
+            question: renderValue(q.question || q.q || ""), 
+            options: options.map((o: any) => renderValue(o)), 
+            answer: renderValue(q.correct_answer || q.answer || ""),
             ans: ansIndex,
             type: q.type || "mcq",
-            explanation: q.explanation || ""
+            explanation: renderValue(q.explanation || "")
         };
       }) : [];
 
       setResult({ words, quiz });
     } catch (e) {
       console.error(e);
-      alert("Lỗi khi phân tích nội dung. Vui lòng thử lại.");
+      showAlert("Lỗi khi phân tích nội dung. Vui lòng thử lại.", 'error');
     } finally {
       setLoading(false);
     }
@@ -214,10 +191,10 @@ export default function AIToolsTab({ setShowCreditModal, API_URL }: AIToolsTabPr
           };
           setSelectedWordInfo(formattedData);
         } else {
-          alert(`Không tìm thấy từ "${word}" trong từ điển.`);
+          showAlert(`Không tìm thấy từ "${word}" trong từ điển.`, 'warning');
         }
       } catch (err) {
-        alert(`Không tìm thấy từ "${word}" và lỗi kết nối API.`);
+        showAlert(`Không tìm thấy từ "${word}" và lỗi kết nối API.`, 'error');
       }
     }
   };
@@ -320,7 +297,7 @@ export default function AIToolsTab({ setShowCreditModal, API_URL }: AIToolsTabPr
                             method: "POST",
                             body: JSON.stringify({ word: w.word, phonetic: w.phon, pos: w.pos || "", meaning_en: w.meaning_en || "", meaning_vn: w.meaning, example: w.example, level: w.level, source: "ai-analysis" })
                           });
-                          if (res.ok) alert(`Đã lưu "${w.word}" vào kho từ vựng!`);
+                          if (res.ok) showAlert(`Đã lưu "${w.word}" vào kho từ vựng!`, 'success');
                         } catch { }
                       }}
                       className="absolute bottom-2 right-2 z-10 p-1.5 bg-white/90 hover:bg-green-50 border border-gray-200 rounded-lg transition shadow-sm" title="Lưu từ"
@@ -469,7 +446,7 @@ export default function AIToolsTab({ setShowCreditModal, API_URL }: AIToolsTabPr
                             });
                           } catch (e) {}
                         }
-                        alert("Đã thêm các từ bạn làm sai vào Flashcard để ôn tập!");
+                        showAlert("Đã thêm các từ bạn làm sai vào Flashcard để ôn tập!", 'success');
                       }}
                       className="bg-white text-blue-600 px-4 py-2 rounded-lg font-bold text-xs shadow-sm border border-blue-100 hover:bg-blue-50 transition"
                     >
@@ -595,7 +572,7 @@ export default function AIToolsTab({ setShowCreditModal, API_URL }: AIToolsTabPr
                         })
                       });
                       if (res.ok) {
-                        alert(`Đã thêm "${selectedWordInfo.word}" vào flashcards!`);
+                        showAlert(`Đã thêm "${selectedWordInfo.word}" vào flashcards!`, 'success');
                         setSelectedWordInfo(null);
                       }
                     } catch { }

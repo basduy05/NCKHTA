@@ -28,10 +28,7 @@ _cache_lock = threading.Lock()
 CACHE_TTL = 3600 * 24       # 24 hours
 CACHE_MAX_SIZE = 500
 
-# ─── IN-MEMORY CACHE for settings ──────────────────────────────────────────
-_settings_cache: dict = {}
-_settings_lock = threading.Lock()
-SETTINGS_TTL = 300  # 5 minutes
+from ..database import get_db, get_cached_dictionary, set_cached_dictionary, get_setting
 
 def _cache_get(word: str):
     """Get cached dictionary result if still valid (Memory -> DB)."""
@@ -132,7 +129,7 @@ def truncate_context(text: str, max_tokens: int = 5000) -> str:
 
 def rerank_results(query: str, documents: list, top_n: int = 3) -> list:
     """Use Cohere Rerank v3.0 to find the most relevant meanings/results."""
-    api_key = _get_setting("COHERE_API_KEY")
+    api_key = get_setting("COHERE_API_KEY")
     if not api_key or len(documents) <= 1:
         return documents[:top_n]
         
@@ -162,35 +159,7 @@ def rerank_results(query: str, documents: list, top_n: int = 3) -> list:
         print(f"[RERANK] Error: {e}")
         return documents[:top_n]
 
-def _get_setting(key, default=None):
-    # 1. Check in-memory cache
-    now = time.time()
-    with _settings_lock:
-        if key in _settings_cache:
-            val, ts = _settings_cache[key]
-            if now - ts < SETTINGS_TTL:
-                return val
-
-    # 2. Check DB using consolidated get_db
-    try:
-        conn = get_db()
-        cursor = conn.cursor()
-        cursor.execute("SELECT value FROM settings WHERE key = ?", (key,))
-        row = cursor.fetchone()
-        
-        val = None
-        if row and row["value"]:
-            val = row["value"]
-        else:
-            val = os.getenv(key, default)
-            
-        # Update cache
-        with _settings_lock:
-            _settings_cache[key] = (val, now)
-        return val
-    except Exception as e:
-        print(f"[LLM SETTING] Error fetching '{key}': {e}")
-        return os.getenv(key, default)
+# Redundant _get_setting removed, using database.get_setting directly
 
 
 def parse_json_response(text):
@@ -226,14 +195,14 @@ def get_llm(provider=None):
     Default order: Google Gemini → OpenAI → Cohere.
     """
     # Prioritize Cohere as requested by user
-    cohere_key = _get_setting("COHERE_API_KEY")
+    cohere_key = get_setting("COHERE_API_KEY")
     if cohere_key and provider in (None, "cohere"):
         os.environ["COHERE_API_KEY"] = cohere_key
         # Use a stable multilingual model for 2026 (tiny-aya-fire)
         return ChatCohere(model="tiny-aya-fire", temperature=0)
 
     if provider != "cohere" and provider != "openai":
-        google_key = _get_setting("GOOGLE_API_KEY")
+        google_key = get_setting("GOOGLE_API_KEY")
         if google_key and provider in (None, "google"):
             # Set environment variable for langchain
             os.environ["GOOGLE_API_KEY"] = google_key
@@ -241,7 +210,7 @@ def get_llm(provider=None):
             return ChatGoogleGenerativeAI(model="gemini-2.5-flash-lite", timeout=60, temperature=0)
 
     if provider != "google" and provider != "cohere":
-        openai_key = _get_setting("OPENAI_API_KEY")
+        openai_key = get_setting("OPENAI_API_KEY")
         if openai_key and provider in (None, "openai"):
             os.environ["OPENAI_API_KEY"] = openai_key
             # Increased timeout to 60s
@@ -429,10 +398,11 @@ def generate_quiz_from_text(text: str, num_questions: int = 5):
         "- Ensure the context is strictly based on the text.\n\n"
         "For EACH question, return these EXACT JSON keys:\n"
         '- "type": "MCQ", "TFNG", "MATCH", or "FIB"\n'
-        '- "question": the question or statement text\n'
-        '- "options": array of answer choices (for MATCH, these are the labels; for TFNG, [True, False, Not Given])\n'
-        '- "answer": the correct option (index or text)\n'
+        '- "question": the question or statement text (English only)\n'
+        '- "options": array of answer choices in English (for MATCH, these are the labels; for TFNG, [True, False, Not Given])\n'
+        '- "answer": the correct option text (English only, must match one of the options exactly)\n'
         '- "explanation": brief explanation of why it is correct based on the text\n\n'
+        "CRITICAL: ALL questions, options, and answers MUST be in English only. Do NOT include Vietnamese in any question, option, or answer field. Explanations may include Vietnamese translations.\n\n"
         "Return ONLY the JSON array."
     )
 
@@ -679,7 +649,7 @@ def translate_meanings_with_ai(word: str, meanings: list, estimate_level: bool =
         '  "collocations": ["..."],\n'
         '  "idioms": [{{"idiom": "...", "meaning_vn": "..."}}]\n'
         '}}\n\n'
-        "CRITICAL: Every English field must have a high-quality Vietnamese translation in 'definition_vn' and 'meaning_vn'. NEVER return English text in those fields.\n"
+        "CRITICAL: Every English field must have a high-quality Vietnamese translation in 'definition_vn' and 'meaning_vn'. These fields MUST be a plain string, NO nested objects.\n"
         "Return ONLY valid JSON. No markdown."
     )
     
@@ -1340,11 +1310,12 @@ def generate_exercises_from_text(text: str, exercise_type: str = "mixed", num_qu
         '  "pos": part of speech\n'
         '"exercises": array of exercise objects, each with:\n'
         '  "type": "mcq" or "fill_blank" or "true_false" or "matching"\n'
-        '  "question": the question/prompt\n'
-        '  "options": array of choices (for mcq, true_false)\n'
-        '  "correct_answer": the correct answer\n'
+        '  "question": the question/prompt (English only)\n'
+        '  "options": array of choices in English (for mcq, true_false)\n'
+        '  "correct_answer": the correct answer (must be EXACT TEXT of the correct option, English only)\n'
         '  "explanation": brief explanation why this is correct\n'
         '"summary_vn": Vietnamese summary of the text (2-3 sentences)\n\n'
+        "CRITICAL: ALL questions, options, and answers MUST be in English only. Do NOT use Vietnamese in questions or answer options. Only 'summary_vn' and 'meaning_vn' fields should be in Vietnamese.\n\n"
         "Return ONLY valid JSON. No markdown."
     )
     chain = prompt | llm
@@ -1357,6 +1328,9 @@ def generate_exercises_from_text(text: str, exercise_type: str = "mixed", num_qu
         })
         result = parse_json_response(response.content)
         if isinstance(result, dict):
+            # Normalize: ensure frontend-expected 'quiz' key exists
+            if "exercises" in result and "quiz" not in result:
+                result["quiz"] = result.pop("exercises")
             return result
         return {"error": "Could not generate exercises"}
     except Exception as e:
@@ -1428,37 +1402,77 @@ async def generate_exercises_from_text_stream(text: str, exercise_type: str = "m
 
 
 def generate_practice_test(test_type: str = "TOEIC", skill: str = "reading", part: str = ""):
-    """Generate TOEIC/IELTS practice test questions."""
+    """Generate TOEIC/IELTS practice test questions with realistic structure."""
     llm = get_llm()
     if not llm:
         return {"error": "LLM not configured"}
 
+    # Build context-aware prompt based on test type and part
+    toeic_parts_context = ""
+    ielts_context = ""
+
+    if test_type == "TOEIC":
+        toeic_parts_context = (
+            "TOEIC FORMAT RULES:\n"
+            "The TOEIC test has 7 parts:\n"
+            "- Part 1 (Listening - Photographs): Describe what you see in a photo. 4 options per question.\n"
+            "- Part 2 (Listening - Question-Response): Short questions with 3 response choices.\n"
+            "- Part 3 (Listening - Conversations): Dialogue between 2-3 people, then questions about the conversation.\n"
+            "- Part 4 (Listening - Talks): A monologue/announcement, then questions about it.\n"
+            "- Part 5 (Reading - Incomplete Sentences): Fill in the blank with correct word/grammar.\n"
+            "- Part 6 (Reading - Text Completion): A passage with blanks to fill in.\n"
+            "- Part 7 (Reading - Reading Comprehension): Single/double/triple passage with comprehension questions.\n\n"
+            f"Generate questions specifically for: {part if part else 'a mix of reading parts (5-7)'}\n"
+        )
+    elif test_type == "IELTS":
+        if skill == "writing":
+            ielts_context = (
+                "IELTS WRITING FORMAT:\n"
+                "Generate BOTH tasks in one response:\n"
+                "- Task 1 (20 min, 150+ words): Describe a graph, chart, table, diagram, or map. Provide a description of the visual and ask the student to summarize it.\n"
+                "- Task 2 (40 min, 250+ words): Write an essay on a given topic. Provide the essay prompt.\n\n"
+                "The response must include 'writing_tasks' array with 2 objects, each having: task_number, title, prompt, time_limit_minutes, min_words, scoring_criteria.\n"
+            )
+        else:
+            ielts_context = (
+                f"IELTS {skill.upper()} FORMAT:\n"
+                "Generate realistic IELTS-style questions.\n"
+            )
+
     prompt = PromptTemplate.from_template(
         "You are an expert {test_type} exam preparation tutor.\n"
         "Generate a practice section for: {test_type} - {skill} {part}\n\n"
+        "{format_context}"
+        "CRITICAL RULES:\n"
+        "1. ALL questions, options, and passage MUST be in English only. Do NOT use Vietnamese in questions or options.\n"
+        "2. 'correct_answer' MUST be the EXACT TEXT of the correct option, not a letter index.\n"
+        "3. Include 'explanation_vn' for EACH question with detailed Vietnamese explanation.\n"
+        "4. SKILL-SPECIFIC RULES:\n"
+        "   - If skill is WRITING: Return 'writing_tasks' array instead of 'questions'. Each task has task_number, title, prompt, time_limit_minutes, min_words, scoring_criteria.\n"
+        "   - If skill is SPEAKING: Set 'questions' to [] and provide 'passage' as topic, 'sub_questions' as guidance, 'model_answer', 'evaluation_criteria', and 'useful_vocabulary' with phrase/meaning_vn items.\n"
+        "   - If skill is LISTENING or READING: Provide 'passage' as transcript/text and 'questions' array.\n\n"
         "Return a JSON object with:\n"
         '"test_type": "{test_type}"\n'
         '"skill": "{skill}"\n'
         '"part": description of which part\n'
-        '"time_limit": suggested time in minutes\n'
-        '"instructions": brief instructions in Vietnamese\n'
-        '"passage": reading/listening passage text (if applicable, 150-300 words)\n'
-        '"questions": array of 5-8 question objects, each with:\n'
-        '  "number": question number\n'
-        '  "question": question text\n'
-        '  "type": "mcq" or "fill_blank" or "true_false_not_given"\n'
-        '  "options": array of 4 choices (for mcq)\n'
-        '  "correct_answer": correct answer\n'
-        '  "explanation": why this is correct (in Vietnamese)\n'
+        '"passage": the text passage/prompt/transcript\n'
+        '"questions": array of 5-8 question objects (for reading/listening)\n'
+        '"scoring_criteria": array of strings (for writing)\n'
+        '"sub_questions": array of strings (for speaking)\n'
+        '"useful_vocabulary": array of objects (for speaking)\n'
         '"tips": array of 2-3 exam tips in Vietnamese\n\n'
         "Return ONLY valid JSON. No markdown."
     )
+    # Combine contexts
+    format_context = f"{toeic_parts_context}\n{ielts_context}"
+
     chain = prompt | llm
     try:
         response = _safe_invoke(chain, {
             "test_type": test_type,
             "skill": skill,
             "part": part or "general",
+            "format_context": format_context
         })
         result = parse_json_response(response.content)
         if isinstance(result, dict):
@@ -1610,10 +1624,7 @@ def evaluate_writing(text: str, task_type: str = "essay", target_test: str = "IE
         '"strengths": array of 2-3 strengths in Vietnamese\n'
         '"improvements": array of 3-4 specific suggestions for improvement in Vietnamese\n'
         '"corrected_sentences": array of objects showing corrections:\n'
-        '  "original": student\'s sentence\n'
-        '  "corrected": corrected version\n'
-        '  "explanation_vn": explanation of the correction\n'
-        '"model_paragraph": a short model paragraph showing ideal writing for comparison\n\n'
+        "CRITICAL: 'explanation_vn', 'feedback_vn', and 'description_vn' MUST be plain strings, NOT objects.\n"
         "Return ONLY valid JSON. No markdown."
     )
     chain = prompt | llm
@@ -1760,7 +1771,7 @@ async def generate_grammar_rule_description(topic: str):
         "2. Structure/Formula (e.g. S + V3)\n"
         "3. 3-5 examples with Vietnamese translations (format: Example | Dịch)\n"
         "4. Common mistakes/Exceptions\n\n"
-        "Return as JSON: {{\"name\": \"...\", \"description\": \"...markdown...\"}}"
+        "Return as JSON: {{\"name\": \"...\", \"description\": \"...markdown string, NOT an object...\"}}"
     )
     chain = prompt | llm
     try:
@@ -1774,7 +1785,7 @@ async def generate_vocab_practice_rich(words: List[dict]):
     llm = get_llm()
     if not llm: return []
     
-    words_info = "\n".join([f"- {w['word']} ({w['meaning_en']})" for w in words])
+    words_info = "\n".join([f"- [ID: {w.get('id', i)}] {w['word']} ({w.get('meaning_en', '')})" for i, w in enumerate(words)])
     
     prompt = PromptTemplate.from_template(
         "You are a premium English language assessment designer.\n"
@@ -1783,14 +1794,18 @@ async def generate_vocab_practice_rich(words: List[dict]):
         "1. Create a MIX of these types: Multiple Choice (meaning), Synonym Match, Contextual Fill-in (sentence), and Scrambled Sentences.\n"
         "2. Ensure questions are NATURAL and reflect real-world usage.\n"
         "3. Avoid repetitive or 'robotic' question patterns.\n"
-        "4. Focus on the core meaning provided for each word.\n\n"
+        "4. Focus on the core meaning provided for each word.\n"
+        "5. CRITICAL: Each question MUST include the 'word_id' field matching the [ID: ...] provided in the word list above.\n"
+        "6. ALL questions, options, and answers MUST be in English only. Do NOT use Vietnamese in questions or answer options.\n"
+        "7. Hints and explanations may be bilingual (VN/EN).\n\n"
         "FOR EACH QUESTION, INCLUDE:\n"
+        "- 'word_id': the ID from the word list (REQUIRED)\n"
         "- 'question': the prompt (English only)\n"
         "- 'hint': a subtle, helpful clue (can be Vietnamese)\n"
         "- 'options': 4 distinct options if multiple choice, otherwise null\n"
         "- 'answer': the correct string (English only)\n"
         "- 'explanation': a clear, bilingual explanation (VN/EN) of why this is correct.\n\n"
-        "Return a JSON array of 10-15 questions. Return ONLY the JSON."
+        "Return a JSON array of 10-15 questions. Return ONLY the JSON array, no markdown."
     )
     print(f"[LLM VOCAB PRACTICE] Generating for {len(words)} words...", flush=True)
     chain = prompt | llm

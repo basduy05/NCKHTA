@@ -4,6 +4,7 @@ import './globals.css';
 import { AuthProvider } from './context/AuthContext';
 import ScreenTips from './components/ScreenTips';
 import ErrorBoundary from './components/ErrorBoundary';
+import { NotificationProvider } from './context/NotificationContext';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -29,13 +30,15 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
-      <body className={inter.className}>
+    <html lang="en" suppressHydrationWarning>
+      <body className={inter.className} suppressHydrationWarning>
         <ErrorBoundary>
-          <AuthProvider>
-            {children}
-            <ScreenTips />
-          </AuthProvider>
+          <NotificationProvider>
+            <AuthProvider>
+              {children}
+              <ScreenTips />
+            </AuthProvider>
+          </NotificationProvider>
         </ErrorBoundary>
       </body>
     </html>

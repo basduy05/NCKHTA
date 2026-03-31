@@ -143,7 +143,12 @@ def verify_access_token(token: str, conn=None):
         email = payload.get("email")
         if user_id is None or email is None:
             return None
-        return {"user_id": user_id, "email": email}
+        return {
+            "user_id": user_id, 
+            "email": email,
+            "jti": payload.get("jti"),
+            "exp": payload.get("exp")
+        }
     except JWTError:
         return None
 

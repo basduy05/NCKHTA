@@ -48,6 +48,18 @@ export default function IpaTab({ API_URL }: IpaTabProps) {
   const [quizAnswers, setQuizAnswers] = useState<Record<number, number>>({});
   const [quizSubmitted, setQuizSubmitted] = useState(false);
   const [quizScore, setQuizScore] = useState(0);
+  
+  // Defensive rendering helper
+  const renderValue = (val: any) => {
+    if (val === null || val === undefined) return "";
+    if (typeof val === 'string') return val;
+    if (typeof val === 'object') {
+       return Object.entries(val)
+         .map(([k, v]) => `${k.charAt(0).toUpperCase() + k.slice(1)}: ${v}`)
+         .join(" | ");
+    }
+    return String(val);
+  };
 
   const generateLesson = async () => {
     setLoading(true);
@@ -72,7 +84,18 @@ export default function IpaTab({ API_URL }: IpaTabProps) {
     if (!lesson?.quiz) return;
     let s = 0;
     lesson.quiz.forEach((q: any, i: number) => {
-      if (quizAnswers[i] === q.correct_index) s++;
+      const userAnswerIndex = quizAnswers[i];
+      if (userAnswerIndex === undefined) return;
+
+      // The AI returns correct_answer as a string, but we compare against the selected index
+      const correctAnswer = q.correct_answer || q.answer;
+      const correctIndex = q.options.findIndex((opt: string) => 
+        opt.toLowerCase().trim() === String(correctAnswer).toLowerCase().trim()
+      );
+
+      if (userAnswerIndex === correctIndex || userAnswerIndex === q.correct_index) {
+        s++;
+      }
     });
     setQuizScore(s);
     setQuizSubmitted(true);
@@ -138,7 +161,7 @@ export default function IpaTab({ API_URL }: IpaTabProps) {
                       <p className="text-blue-300 font-bold uppercase tracking-widest text-xs mb-2">AI Personalized Lesson</p>
                       <h3 className="text-3xl font-black mb-4">Luyện tập âm: /{lesson.target_ipa}/</h3>
                       <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/10 max-w-2xl">
-                          <p className="text-blue-100 leading-relaxed italic mb-4">&ldquo;{lesson.description_vn}&rdquo;</p>
+                          <p className="text-blue-100 leading-relaxed italic mb-4">&ldquo;{renderValue(lesson.description_vn)}&rdquo;</p>
                           <div className="flex items-center gap-4">
                               <button onClick={() => speak(lesson.target_ipa)} className="bg-white text-blue-900 w-12 h-12 rounded-full flex items-center justify-center hover:scale-110 transition"><Volume2 size={24} /></button>
                               <p className="font-mono text-xl">{lesson.transcription_tip}</p>
@@ -161,7 +184,7 @@ export default function IpaTab({ API_URL }: IpaTabProps) {
                                         <p className="text-xs text-blue-600 font-mono italic">{ex.ipa}</p>
                                     </div>
                                 </div>
-                                <p className="text-sm font-bold text-gray-500">{ex.meaning_vn}</p>
+                                <p className="text-sm font-bold text-gray-500">{renderValue(ex.meaning_vn)}</p>
                             </div>
                         ))}
                     </div>
@@ -170,12 +193,20 @@ export default function IpaTab({ API_URL }: IpaTabProps) {
                 <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
                     <h4 className="font-bold text-gray-900 mb-4 flex items-center gap-2"><CheckCircle2 size={18} className="text-green-500" /> Câu luyện tập</h4>
                     <div className="space-y-4">
-                        {lesson.practice_sentences?.map((s: string, i: number) => (
-                            <div key={i} className="p-4 bg-indigo-50/50 rounded-xl border border-indigo-100 italic text-indigo-900 relative group">
-                                &ldquo;{s}&rdquo;
-                                <button onClick={() => speak(s)} className="absolute right-3 top-3 opacity-0 group-hover:opacity-100 transition"><Volume2 size={14} /></button>
-                            </div>
-                        ))}
+                        {lesson.practice_sentences?.map((item: any, i: number) => {
+                            const sentence = typeof item === 'string' ? item : item.sentence;
+                            const ipa = typeof item === 'object' ? item.ipa : null;
+                            
+                            return (
+                                <div key={i} className="p-4 bg-indigo-50/50 rounded-xl border border-indigo-100 relative group">
+                                    <p className="text-indigo-900 font-medium italic">&ldquo;{sentence}&rdquo;</p>
+                                    {ipa && <p className="text-xs text-indigo-400 font-mono mt-1">{ipa}</p>}
+                                    <button onClick={() => speak(sentence)} className="absolute right-3 top-3 opacity-0 group-hover:opacity-100 transition">
+                                        <Volume2 size={14} />
+                                    </button>
+                                </div>
+                            );
+                        })}
                     </div>
                 </div>
               </div>
@@ -194,8 +225,11 @@ export default function IpaTab({ API_URL }: IpaTabProps) {
                                   </p>
                                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pl-11">
                                       {q.options.map((opt: string, oi: number) => {
-                                          const isSelected = quizAnswers[i] === oi;
-                                          const isCorrect = q.correct_index === oi;
+                                           const isSelected = quizAnswers[i] === oi;
+                                          const correctAnswer = q.correct_answer || q.answer;
+                                          const isCorrect = q.correct_index === oi || 
+                                                           (typeof correctAnswer === 'string' && q.options[oi]?.toLowerCase().trim() === correctAnswer.toLowerCase().trim());
+                                          
                                           let cls = "border-gray-100 bg-gray-50 hover:border-blue-300";
                                           if (quizSubmitted) {
                                               if (isCorrect) cls = "border-green-500 bg-green-50 text-green-700";

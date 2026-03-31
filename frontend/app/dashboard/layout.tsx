@@ -3,7 +3,7 @@ import React, { Suspense } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams, useRouter } from "next/navigation";
 import Image from "next/image";
-import { BookOpen, Users, LayoutDashboard, Component, Database, GraduationCap, BookText, FileSearch, LogOut, Settings, ClipboardList, Sparkles, Search, BookMarked, Mic, Award, Trophy } from "lucide-react";
+import { BookOpen, Users, LayoutDashboard, Component, Database, GraduationCap, BookText, FileSearch, LogOut, Settings, ClipboardList, Sparkles, Search, BookMarked, Mic, Award, Trophy, TrendingUp } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 
 function DashboardSidebar({ user, logout }: { user: any, logout: any }) {
@@ -51,6 +51,7 @@ function DashboardSidebar({ user, logout }: { user: any, logout: any }) {
       { name: "Kho Ngữ Pháp", href: "/dashboard/student?tab=grammar", icon: BookText, id: "grammar" },
       { name: "Kết quả học tập", href: "/dashboard/student?tab=scores", icon: Component, id: "scores" },
       { name: "Bảng xếp hạng", href: "/dashboard/student?tab=ranking", icon: Trophy, id: "ranking" },
+      { name: "Lộ trình học tập", href: "/dashboard/student?tab=roadmap", icon: TrendingUp, id: "roadmap" },
     ];
   } else {
     links = [];

@@ -29,155 +29,6 @@ function useScrollReveal() {
   return ref;
 }
 
-const AUTHOR_PHOTOS = [
-  "/author-1.jpg",
-  "/author-2.jpg",
-  "/author-3.jpg",
-  "/author-4.jpg",
-  "/author-5.jpg",
-];
-
-function AuthorCard() {
-  const [current, setCurrent] = useState(0);
-  const [isHovered, setIsHovered] = useState(false);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const goTo = useCallback((idx: number) => {
-    setCurrent((idx + AUTHOR_PHOTOS.length) % AUTHOR_PHOTOS.length);
-  }, []);
-
-  useEffect(() => {
-    if (isHovered) return;
-    timerRef.current = setInterval(() => {
-      setCurrent((p) => (p + 1) % AUTHOR_PHOTOS.length);
-    }, 4000);
-    return () => { if (timerRef.current) clearInterval(timerRef.current); };
-  }, [isHovered]);
-
-  return (
-    <div className="bg-white rounded-3xl shadow-xl overflow-hidden border border-gray-100 max-w-5xl mx-auto hover:shadow-2xl transition-all duration-500 animate-glow-pulse">
-      <div className="flex flex-col lg:flex-row">
-        {/* Slideshow */}
-        <div
-          className="lg:w-1/2 relative group"
-          onMouseEnter={() => setIsHovered(true)}
-          onMouseLeave={() => setIsHovered(false)}
-        >
-          <div className="relative h-full min-h-[500px] lg:min-h-0 overflow-hidden bg-gray-100">
-            {AUTHOR_PHOTOS.map((src, i) => (
-              <div
-                key={i}
-                className={`absolute inset-0 transition-all duration-700 ease-in-out ${i === current
-                    ? "opacity-100 scale-100"
-                    : i === (current - 1 + AUTHOR_PHOTOS.length) % AUTHOR_PHOTOS.length
-                      ? "opacity-0 scale-105 -translate-x-full"
-                      : "opacity-0 scale-105 translate-x-full"
-                  }`}
-              >
-                <Image
-                  src={src}
-                  alt={`Nguyễn Bá Duy - Ảnh ${i + 1}`}
-                  fill
-                  className="object-cover"
-                  sizes="(max-width: 768px) 100vw, 50vw"
-                  priority={i === 0}
-                />
-              </div>
-            ))}
-
-            {/* Gradient overlay */}
-            <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent" />
-
-            {/* Nav arrows */}
-            <button
-              onClick={() => goTo(current - 1)}
-              className="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/80 backdrop-blur-sm flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300 hover:bg-white hover:scale-110 shadow-lg"
-            >
-              <ChevronLeft size={20} className="text-gray-700" />
-            </button>
-            <button
-              onClick={() => goTo(current + 1)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/80 backdrop-blur-sm flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300 hover:bg-white hover:scale-110 shadow-lg"
-            >
-              <ChevronRight size={20} className="text-gray-700" />
-            </button>
-
-            {/* Dots indicator */}
-            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2">
-              {AUTHOR_PHOTOS.map((_, i) => (
-                <button
-                  key={i}
-                  onClick={() => goTo(i)}
-                  className={`rounded-full transition-all duration-500 ${i === current
-                      ? "w-8 h-2.5 bg-white shadow-lg"
-                      : "w-2.5 h-2.5 bg-white/50 hover:bg-white/80"
-                    }`}
-                />
-              ))}
-            </div>
-
-            {/* Photo counter */}
-            <div className="absolute top-4 right-4 bg-black/40 backdrop-blur-sm text-white text-xs font-medium px-3 py-1.5 rounded-full">
-              {current + 1} / {AUTHOR_PHOTOS.length}
-            </div>
-          </div>
-        </div>
-
-        {/* Info */}
-        <div className="lg:w-1/2 p-8 lg:p-12 flex flex-col justify-center space-y-6">
-          <div>
-            <h3 className="text-3xl font-extrabold text-gray-900 mb-2">Nguyễn Bá Duy</h3>
-            <p className="text-blue-600 font-semibold text-lg"> AI Enthusiast</p>
-          </div>
-
-          <div className="space-y-3 text-gray-600">
-            <div className="flex items-start gap-3 group">
-              <GraduationCap size={20} className="text-blue-500 mt-0.5 flex-shrink-0 group-hover:scale-110 transition-transform" />
-              <p>Sinh viên lớp <strong>74DCTT23</strong> — Khoa Công nghệ thông tin, Trường Đại học Công nghệ Giao thông vận tải</p>
-            </div>
-            <div className="flex items-start gap-3 group">
-              <Mail size={20} className="text-blue-500 mt-0.5 flex-shrink-0 group-hover:scale-110 transition-transform" />
-              <p>basduy05@gmail.com</p>
-            </div>
-          </div>
-
-          <p className="text-gray-600 leading-relaxed">
-            Một sinh viên trẻ đầy nhiệt huyết với niềm đam mê công nghệ cháy bỏng, luôn tìm tòi và ứng dụng những giải pháp sáng tạo vào thực tiễn.
-            Với tình yêu đặc biệt dành cho AI, phát triển web và các sản phẩm công nghệ giáo dục,
-            Duy không ngừng học hỏi, thử nghiệm và xây dựng những sản phẩm có giá trị thực tiễn cho cộng đồng sinh viên.
-          </p>
-
-          <div className="space-y-3">
-            <h4 className="font-bold text-gray-900 text-sm uppercase tracking-wider flex items-center gap-2">
-              <Award size={16} className="text-blue-500" /> Hoạt động nổi bật
-            </h4>
-            <div className="space-y-2">
-              <div className="flex items-center gap-3 px-4 py-3 bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl border border-blue-100 hover:shadow-md hover:-translate-y-0.5 transition-all duration-300">
-                <Star size={16} className="text-yellow-500 flex-shrink-0" />
-                <span className="text-sm font-semibold text-blue-800">Google Student Ambassador 2026</span>
-              </div>
-              <div className="flex items-center gap-3 px-4 py-3 bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl border border-blue-100 hover:shadow-md hover:-translate-y-0.5 transition-all duration-300">
-                <Star size={16} className="text-yellow-500 flex-shrink-0" />
-                <span className="text-sm font-semibold text-blue-800">Ủy viên Ban Chấp hành Đoàn Thanh niên Cộng sản Hồ Chí Minh — Trường Đại học Công nghệ Giao thông vận tải Khóa XI</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <h4 className="font-bold text-gray-900 text-sm uppercase tracking-wider">Kỹ năng</h4>
-            <div className="flex flex-wrap gap-2">
-              {["Next.js", "React", "FastAPI", "Python", "Neo4j", "AI/ML", "TypeScript", "Tailwind CSS"].map((skill, i) => (
-                <span key={i} className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-xs font-semibold hover:bg-blue-600 hover:text-white transition-all duration-300 cursor-default hover:scale-105 hover:shadow-md" style={{ animationDelay: `${i * 0.05}s` }}>
-                  {skill}
-                </span>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 export default function Home() {
   const revealRef = useScrollReveal();
@@ -194,10 +45,10 @@ export default function Home() {
             <Image src="/logo.png" alt="iEdu" width={90} height={36} priority />
           </Link>
           <div className="hidden md:flex items-center gap-8 text-sm font-medium text-gray-600">
-            <a href="#features" className="hover:text-blue-600 transition">Tính năng</a>
-            <a href="#how-it-works" className="hover:text-blue-600 transition">Cách hoạt động</a>
-            <a href="#tech" className="hover:text-blue-600 transition">Công nghệ</a>
-            <a href="#author" className="hover:text-blue-600 transition">Tác giả</a>
+            <Link href={user ? `${dashboardUrl}?tab=dictionary` : "/login"} className="hover:text-blue-600 transition">Tra từ điển với AI</Link>
+            <Link href={user ? `${dashboardUrl}?tab=practice` : "/login"} className="hover:text-blue-600 transition">Luyện thi Toeic/IELTS</Link>
+            <Link href={user ? `${dashboardUrl}?tab=ipa` : "/login"} className="hover:text-blue-600 transition">Luyện phát âm IPA</Link>
+            <Link href={user ? `${dashboardUrl}?tab=roadmap` : "/login"} className="hover:text-blue-600 transition">Cá nhân hoá</Link>
             <Link href="/about" className="hover:text-blue-600 transition">Giới thiệu</Link>
           </div>
           <div className="flex items-center gap-3">
@@ -316,8 +167,8 @@ export default function Home() {
       <section className="border-y border-gray-100 bg-gray-50/50">
         <div className="max-w-7xl mx-auto px-6 py-12 grid grid-cols-2 md:grid-cols-4 gap-8">
           {[
-            { value: "AI", label: "Tạo bài tập tự động" },
-            { value: "Graph", label: "Đồ thị tri thức" },
+            { value: "AI", label: "Tạo bài tập, tra cứu từ vựng, cá nhân hoá tự động" },
+            { value: "Graph", label: "Đồ thị tri thức, liên kết từ vựng" },
             { value: "CEFR", label: "Phân loại trình độ" },
             { value: "24/7", label: "Truy cập mọi lúc" },
           ].map((s, i) => (
@@ -329,49 +180,20 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ===== FEATURES ===== */}
-      <section id="features" className="max-w-7xl mx-auto px-6 py-24">
-        <div data-reveal className="opacity-0 translate-y-8 text-center mb-16">
-          <span className="text-sm font-semibold text-blue-600 uppercase tracking-wider">Tính năng nổi bật</span>
-          <h2 className="text-4xl font-extrabold text-gray-900 mt-3 mb-4">Tất cả trong một nền tảng</h2>
-          <p className="text-gray-600 max-w-2xl mx-auto text-lg">Công cụ toàn diện cho giáo viên và học sinh, được hỗ trợ bởi AI tiên tiến</p>
-        </div>
-        <div className="grid md:grid-cols-3 gap-8">
-          {[
-            { icon: Brain, title: "Phân tích Văn bản AI", desc: "Dán bất kỳ đoạn văn nào, AI tự động trích xuất từ vựng, phân loại CEFR và phân tích cấu trúc ngữ pháp.", gradient: "from-blue-500 to-blue-600" },
-            { icon: Network, title: "Đồ thị Tri thức", desc: "Trực quan hóa mạng lưới từ vựng: đồng nghĩa, trái nghĩa, collocation, word family trên đồ thị tương tác.", gradient: "from-cyan-500 to-blue-500" },
-            { icon: GraduationCap, title: "Trắc nghiệm AI", desc: "AI tự động tạo câu hỏi đa dạng từ nội dung bài học, đánh giá năng lực và đưa ra gợi ý cải thiện.", gradient: "from-purple-500 to-purple-600" },
-            { icon: Users, title: "Quản lý Lớp học", desc: "Giáo viên tạo lớp, giao bài tập, theo dõi tiến độ học tập theo thời gian thực.", gradient: "from-green-500 to-green-600" },
-            { icon: Zap, title: "Xử lý hàng đợi AI", desc: "Hệ thống hàng đợi thông minh giúp xử lý đồng thời nhiều yêu cầu mà không bị nghẽn mạng.", gradient: "from-yellow-500 to-orange-600" },
-            { icon: Target, title: "Semantic Reranking", desc: "Sử dụng Cohere Rerank v3.0 để tối ưu hóa độ chính xác của kết quả tra cứu gần như tuyệt đối.", gradient: "from-blue-700 to-indigo-800" },
-            { icon: BarChart3, title: "Theo dõi Kết quả", desc: "Dashboard chi tiết hiển thị điểm số, tiến độ hoàn thành bài tập, thống kê từ vựng.", gradient: "from-orange-500 to-orange-600" },
-            { icon: Sparkles, title: "Flashcard Thông minh", desc: "Hệ thống flashcard kết hợp spaced repetition, giúp ghi nhớ từ vựng lâu dài và hiệu quả.", gradient: "from-pink-500 to-pink-600" },
-            { icon: CheckCircle2, title: "Bảo mật & Tin cậy", desc: "Xác thực JWT đa tầng, thu hồi session tức thì và mã hóa dữ liệu chuẩn Enterprise.", gradient: "from-slate-700 to-slate-900" },
-          ].map((f, i) => (
-            <div key={i} data-reveal className="opacity-0 translate-y-8 group relative bg-white p-8 rounded-2xl border border-gray-100 hover:border-transparent hover:shadow-xl transition-all duration-300 hover:-translate-y-2" style={{ animationDelay: `${i * 0.1}s` }}>
-              <div className={`w-14 h-14 bg-gradient-to-br ${f.gradient} rounded-xl flex items-center justify-center mb-6 shadow-lg group-hover:scale-110 group-hover:rotate-3 transition-all duration-300`}>
-                <f.icon size={26} className="text-white" />
-              </div>
-              <h3 className="text-xl font-bold text-gray-900 mb-3">{f.title}</h3>
-              <p className="text-gray-600 leading-relaxed">{f.desc}</p>
-            </div>
-          ))}
-        </div>
-      </section>
 
       {/* ===== HOW IT WORKS ===== */}
       <section id="how-it-works" className="bg-gradient-to-b from-gray-50 to-white py-24">
         <div className="max-w-7xl mx-auto px-6">
           <div data-reveal className="opacity-0 translate-y-8 text-center mb-16">
-            <span className="text-sm font-semibold text-blue-600 uppercase tracking-wider">Quy trình</span>
+            <span className="text-sm font-semibold text-blue-600 uppercase tracking-wider">Truy nhập nhanh chóng và dễ dàng với</span>
             <h2 className="text-4xl font-extrabold text-gray-900 mt-3 mb-4">3 bước đơn giản</h2>
             <p className="text-gray-600 max-w-2xl mx-auto text-lg">Bắt đầu học tập thông minh chỉ trong vài phút</p>
           </div>
           <div className="grid md:grid-cols-3 gap-8">
             {[
               { step: "01", title: "Đăng ký tài khoản", desc: "Tạo tài khoản miễn phí với email, chọn vai trò Học sinh hoặc Giáo viên.", icon: Target },
-              { step: "02", title: "Nhập nội dung học", desc: "Dán văn bản tiếng Anh hoặc chọn bài học có sẵn. AI sẽ phân tích và trích xuất kiến thức.", icon: Zap },
-              { step: "03", title: "Học & Luyện tập", desc: "Khám phá đồ thị tri thức, làm bài trắc nghiệm AI, ôn tập với flashcard thông minh.", icon: TrendingUp },
+              { step: "02", title: "Lựa chọn tính năng mà bạn muốn học tập", desc: "Với các tính năng đa dạng iEdu sẽ giúp bạn tra cứu từ vựng, luyện thi Toeic/IELTS, luyện phát âm IPA, và hơn thế nữa.", icon: Zap },
+              { step: "03", title: "Học & Luyện tập với các tính năng thông minh", desc: "Làm bài trắc nghiệm AI, ôn tập với flashcard thông minh, bứt phá và làm chủ ngoại ngữ.", icon: TrendingUp },
             ].map((s, i) => (
               <div key={i} data-reveal className="opacity-0 translate-y-8 relative" style={{ animationDelay: `${i * 0.15}s` }}>
                 <div className="bg-white rounded-2xl p-8 border border-gray-100 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 h-full">
@@ -395,72 +217,52 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ===== TECH SECTION ===== */}
-      <section id="tech" className="max-w-7xl mx-auto px-6 py-24">
-        <div className="flex flex-col lg:flex-row items-center gap-16">
-          <div data-reveal className="opacity-0 translate-y-8 flex-1 space-y-8">
-            <span className="text-sm font-semibold text-blue-600 uppercase tracking-wider">Công nghệ</span>
-            <h2 className="text-4xl font-extrabold text-gray-900 leading-tight">
-              Xây dựng trên nền tảng<br />
-              <span className="text-blue-600">công nghệ hiện đại</span>
-            </h2>
-            <p className="text-gray-600 text-lg leading-relaxed">
-              iEdu sử dụng các công nghệ tiên tiến nhất trong lĩnh vực AI và phát triển web để mang lại trải nghiệm học tập tối ưu.
-            </p>
-            <div className="space-y-4">
-              {[
-                { label: "Google Gemini AI + Cohere", desc: "Mô hình ngôn ngữ lớn cho phân tích và tạo nội dung" },
-                { label: "Security & Data Integrity", desc: "JWT Revocation, Session Management & Role-based Access" },
-                { label: "Neo4j Knowledge Graph", desc: "Đồ thị tri thức lưu trữ quan hệ ngữ nghĩa" },
-                { label: "Next.js + FastAPI", desc: "Kiến trúc hiện đại, hiệu năng cao" },
-              ].map((t, i) => (
-                <div key={i} className="flex items-start gap-3 group">
-                  <CheckCircle2 size={22} className="text-blue-500 mt-0.5 flex-shrink-0 group-hover:scale-110 transition-transform" />
-                  <div>
-                    <p className="font-semibold text-gray-900">{t.label}</p>
-                    <p className="text-sm text-gray-500">{t.desc}</p>
-                  </div>
-                </div>
-              ))}
+      {/* ===== DEVELOPMENT ORIENTATION ===== */}
+      <section id="development" className="max-w-7xl mx-auto px-6 py-24 border-t border-gray-100">
+        <div data-reveal className="opacity-0 translate-y-8 text-center mb-16">
+          <span className="text-sm font-semibold text-blue-600 uppercase tracking-wider">Tầm nhìn tương lai</span>
+          <h2 className="text-4xl font-extrabold text-gray-900 mt-3 mb-4">Định hướng phát triển</h2>
+          <p className="text-gray-600 max-w-2xl mx-auto text-lg">iEdu không ngừng cải tiến để mang lại giải pháp giáo dục toàn diện nhất cho người Việt.</p>
+        </div>
+        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
+          {[
+            { 
+              icon: Sparkles, 
+              title: "Hệ sinh thái AI toàn diện", 
+              desc: "Tích hợp đa mô hình (Gemini, GPT-4, Claude) để tối ưu hóa khả năng phân tích và cá nhân hóa lộ trình học tập.",
+              color: "bg-blue-50 text-blue-600"
+            },
+            { 
+              icon: Globe, 
+              title: "Đa ngôn ngữ & Nền tảng", 
+              desc: "Mở rộng hỗ trợ nhiều ngôn ngữ khác bên cạnh tiếng Anh và phát triển ứng dụng di động cho iOS/Android.",
+              color: "bg-cyan-50 text-cyan-600"
+            },
+            { 
+              icon: Users, 
+              title: "Cộng đồng thông minh", 
+              desc: "Xây dựng mạng xã hội học tập, nơi người dùng có thể chia sẻ tài liệu, kinh nghiệm và cùng nhau tiến bộ.",
+              color: "bg-purple-50 text-purple-600"
+            },
+            { 
+              icon: TrendingUp, 
+              title: "AI Predictive Analytics", 
+              desc: "Sử dụng dữ liệu lớn để dự báo lỗ hổng kiến thức và tự động điều chỉnh độ khó bài tập theo thời gian thực.",
+              color: "bg-green-50 text-green-600"
+            },
+          ].map((item, i) => (
+            <div key={i} data-reveal className="opacity-0 translate-y-8 bg-white p-8 rounded-3xl border border-gray-100 hover:shadow-xl hover:-translate-y-2 transition-all duration-300" style={{ animationDelay: `${i * 0.1}s` }}>
+              <div className={`w-14 h-14 ${item.color} rounded-2xl flex items-center justify-center mb-6`}>
+                <item.icon size={28} />
+              </div>
+              <h3 className="text-xl font-bold text-gray-900 mb-3">{item.title}</h3>
+              <p className="text-gray-600 text-sm leading-relaxed">{item.desc}</p>
             </div>
-          </div>
-          <div data-reveal className="opacity-0 translate-y-8 flex-1">
-            <div className="grid grid-cols-2 gap-4">
-              {[
-                { name: "Next.js 14", cat: "Frontend", color: "bg-black text-white" },
-                { name: "FastAPI", cat: "Backend", color: "bg-green-600 text-white" },
-                { name: "Neo4j", cat: "Graph DB", color: "bg-blue-600 text-white" },
-                { name: "Gemini AI", cat: "LLM", color: "bg-purple-600 text-white" },
-                { name: "LangChain", cat: "AI Framework", color: "bg-cyan-600 text-white" },
-                { name: "Tailwind", cat: "UI", color: "bg-sky-500 text-white" },
-                { name: "TypeScript", cat: "Language", color: "bg-blue-700 text-white" },
-                { name: "Cohere Rerank", cat: "Accuracy", color: "bg-blue-800 text-white" },
-                { name: "SQLite", cat: "Database", color: "bg-orange-500 text-white" },
-                { name: "JWT Core", cat: "Security", color: "bg-rose-500 text-white" },
-              ].map((t, i) => (
-                <div key={i} className={`${t.color} rounded-2xl p-5 hover:scale-105 hover:-rotate-1 transition-all duration-300 cursor-default shadow-lg`}>
-                  <p className="font-bold text-lg">{t.name}</p>
-                  <p className="text-sm opacity-80">{t.cat}</p>
-                </div>
-              ))}
-            </div>
-          </div>
+          ))}
         </div>
       </section>
 
-      {/* ===== AUTHOR SECTION ===== */}
-      <section id="author" className="bg-gradient-to-b from-gray-50 to-white py-24 overflow-hidden">
-        <div className="max-w-7xl mx-auto px-6">
-          <div data-reveal className="opacity-0 translate-y-8 text-center mb-16">
-            <span className="text-sm font-semibold text-blue-600 uppercase tracking-wider">Tác giả</span>
-            <h2 className="text-4xl font-extrabold text-gray-900 mt-3 mb-4">Người phát triển</h2>
-            <p className="text-gray-600 max-w-2xl mx-auto text-lg">Đằng sau iEdu là niềm đam mê công nghệ và giáo dục</p>
-          </div>
-          <div data-reveal className="opacity-0 translate-y-8">
-            <AuthorCard />
-          </div>
-        </div>
-      </section>
+
 
       {/* ===== CTA SECTION ===== */}
       <section className="relative overflow-hidden">
@@ -502,7 +304,7 @@ export default function Home() {
               <p className="text-sm leading-relaxed max-w-sm">
                 Nền tảng học tập thông minh ứng dụng Đồ thị Tri thức và Trí tuệ Nhân tạo trong hỗ trợ học từ vựng và ngữ pháp tiếng Anh.
               </p>
-              <p className="text-xs text-gray-500">Phát triển bởi Nguyễn Bá Duy - Lớp 74DCTT23 - Khoa Công nghệ thông tin, Trường Đại học Công nghệ Giao thông vận tải</p>
+              <p className="text-xs text-gray-500">Dự án phát triển ứng dụng phục vụ nghiên cứu khoa học</p>
             </div>
             <div>
               <h4 className="text-white font-semibold mb-4">Truy cập</h4>

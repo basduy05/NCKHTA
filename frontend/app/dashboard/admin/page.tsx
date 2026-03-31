@@ -3,6 +3,7 @@ import { useState, Suspense, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Users, Database, Plus, UploadCloud, FileSpreadsheet, Save, Edit, Trash2, GraduationCap, X, Check, BookOpen, BookText, Settings, RefreshCw, Mail, Eye, EyeOff, Sparkles, ClipboardList } from "lucide-react";
 import { useAuth } from "@/app/context/AuthContext";
+import { useNotification } from "@/app/context/NotificationContext";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://iedu-ksk7.onrender.com";
 
@@ -112,6 +113,7 @@ function OverviewTab() {
 
 function UsersTab() {
   const { token, isInitialized, authFetch } = useAuth();
+  const { showAlert, showConfirm } = useNotification();
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState<number | null>(null);
@@ -137,7 +139,7 @@ function UsersTab() {
 
   const handleBulkUpdate = async () => {
     if (!token) return;
-    if (!confirm(`Cập nhật ${bulkCredits} AI Credits cho TẤT CẢ ${bulkRole}?`)) return;
+    if (!(await showConfirm(`Cập nhật ${bulkCredits} AI Credits cho TẤT CẢ ${bulkRole}?`))) return;
     setBulkLoading(true);
     try {
       const res = await authFetch(`${API_URL}/admin/bulk-update-credits`, {
@@ -145,13 +147,13 @@ function UsersTab() {
         body: JSON.stringify({ credits: bulkCredits, role: bulkRole })
       });
       if (res.ok) {
-        alert("Cập nhật hàng loạt thành công!");
+        showAlert("Cập nhật hàng loạt thành công!", 'success');
         fetchUsers();
       } else {
-        alert("Lỗi khi cập nhật hàng loạt");
+        showAlert("Lỗi khi cập nhật hàng loạt", 'error');
       }
     } catch (err) {
-      alert("Lỗi kết nối");
+      showAlert("Lỗi kết nối", 'error');
     } finally {
       setBulkLoading(false);
     }
@@ -163,8 +165,8 @@ function UsersTab() {
   }, [isInitialized, token]);
 
   const handleSaveUser = async () => {
-    if (!token) return alert("Chưa đăng nhập");
-    if (!formUser.name || !formUser.email) return alert("Vui lòng điền đủ thông tin!");
+    if (!token) return showAlert("Chưa đăng nhập", 'warning');
+    if (!formUser.name || !formUser.email) return showAlert("Vui lòng điền đủ thông tin!", 'warning');
     try {
       if (isEditing !== null) {
         await authFetch(
@@ -177,18 +179,18 @@ function UsersTab() {
           { method: "POST", body: JSON.stringify(formUser) }
         );
         const payload = await res.json();
-        if (!res.ok) return alert(payload.detail || "Lỗi tạo người dùng");
+        if (!res.ok) return showAlert(payload.detail || "Lỗi tạo người dùng", 'error');
       }
       resetForm();
       fetchUsers();
     } catch (err) {
-      alert("Có lỗi kết nối tới máy chủ.");
+      showAlert("Có lỗi kết nối tới máy chủ.", 'error');
     }
   };
 
   const handleDeleteUser = async (id: number) => {
     if (!token) return;
-    if (confirm("Bạn có chắc chắn xoá người dùng này?")) {
+    if (await showConfirm("Bạn có chắc chắn xoá người dùng này?")) {
       await authFetch(`${API_URL}/admin/users/${id}`, { method: "DELETE" });
       fetchUsers();
     }
@@ -319,6 +321,7 @@ function UsersTab() {
 
 function ClassesTab() {
   const { token, authFetch } = useAuth();
+  const { showAlert, showConfirm } = useNotification();
   const [classes, setClasses] = useState<any[]>([]);
   const [isEditing, setIsEditing] = useState<number | null>(null);
   const [formClass, setFormClass] = useState({ name: '', teacher_name: '', students_count: 0 });
@@ -341,8 +344,8 @@ function ClassesTab() {
   useEffect(() => { fetchClasses(); }, [token]);
 
   const handleSave = async () => {
-    if (!formClass.name || !formClass.teacher_name) return alert("Điền đủ thông tin!");
-    if (!token) return alert("Vui lòng đăng nhập lại!");
+    if (!formClass.name || !formClass.teacher_name) return showAlert("Điền đủ thông tin!", 'warning');
+    if (!token) return showAlert("Vui lòng đăng nhập lại!", 'warning');
     const url = isEditing ? `${API_URL}/admin/classes/${isEditing}` : `${API_URL}/admin/classes`;
     const method = isEditing ? 'PUT' : 'POST';
     try {
@@ -352,12 +355,12 @@ function ClassesTab() {
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({ detail: 'Lỗi không xác định' }));
-        alert(err.detail || 'Lỗi khi lưu');
+        showAlert(err.detail || 'Lỗi khi lưu', 'error');
         return;
       }
-      alert('Lưu thành công!');
+      showAlert('Lưu thành công!', 'success');
     } catch (e) {
-      alert('Lỗi kết nối: ' + (e as Error).message);
+      showAlert('Lỗi kết nối: ' + (e as Error).message, 'error');
     }
     resetForm();
     fetchClasses();
@@ -369,17 +372,17 @@ function ClassesTab() {
   };
 
   const handleDelete = async (id: number) => {
-    if (!token) return alert("Vui lòng đăng nhập lại!");
-    if (!confirm("Xoá lớp này?")) return;
+    if (!token) return showAlert("Vui lòng đăng nhập lại!", 'warning');
+    if (!(await showConfirm("Xoá lớp này?"))) return;
     try {
       const res = await authFetch(`${API_URL}/admin/classes/${id}`, { method: 'DELETE' });
       if (!res.ok) {
-        alert('Lỗi khi xóa');
+        showAlert('Lỗi khi xóa', 'error');
         return;
       }
       fetchClasses();
     } catch (e) {
-      alert('Lỗi kết nối');
+      showAlert('Lỗi kết nối', 'error');
     }
   };
 
@@ -426,6 +429,7 @@ function ClassesTab() {
 
 function LessonsTab() {
   const { token, authFetch } = useAuth();
+  const { showAlert, showConfirm } = useNotification();
   const [lessons, setLessons] = useState<any[]>([]);
   const [classes, setClasses] = useState<any[]>([]);
   const [file, setFile] = useState<File | null>(null);
@@ -437,7 +441,7 @@ function LessonsTab() {
   const [generatingAI, setGeneratingAI] = useState(false);
 
   const handleGenerateExercise = async () => {
-    if (!file) return alert("Vui lòng đính kèm file trước tiên!");
+    if (!file) return showAlert("Vui lòng đính kèm file trước tiên!", 'warning');
     setGeneratingAI(true);
     try {
       const fd = new FormData();
@@ -469,9 +473,9 @@ function LessonsTab() {
           });
         }
         setFormLesson({ ...formLesson, content: newContent });
-        alert("Tạo bài tập thành công! Kéo xuống để xem nội dung đã được tự động thêm vào.");
-      } else alert("Lỗi tạo bài tập AI");
-    } catch (e) { alert("Lỗi kết nối"); }
+        showAlert("Tạo bài tập thành công! Kéo xuống để xem nội dung đã được tự động thêm vào.", 'success');
+      } else showAlert("Lỗi tạo bài tập AI", 'error');
+    } catch (e) { showAlert("Lỗi kết nối", 'error'); }
     finally { setGeneratingAI(false); }
   };
 
@@ -485,7 +489,7 @@ function LessonsTab() {
   useEffect(() => { fetchLessons(); fetchClasses(); }, []);
 
   const handleSave = async () => {
-    if (!formLesson.class_id || !formLesson.title) return alert("Hãy chọn lớp và nhập tên bài học");
+    if (!formLesson.class_id || !formLesson.title) return showAlert("Hãy chọn lớp và nhập tên bài học", 'warning');
     setUploading(true);
     try {
       const fd = new FormData();
@@ -499,7 +503,7 @@ function LessonsTab() {
       if (!res.ok) { const e = await res.json(); throw new Error(e.detail || 'Error'); }
       resetForm();
       fetchLessons();
-    } catch (err: any) { alert(err.message); }
+    } catch (err: any) { showAlert(err.message, 'error'); }
     finally { setUploading(false); }
   };
 
@@ -510,7 +514,7 @@ function LessonsTab() {
   };
 
   const handleDelete = async (id: number) => {
-    if (confirm("Xóa bài học này?")) {
+    if (await showConfirm("Xóa bài học này?")) {
       await authFetch(`${API_URL}/admin/lessons/${id}`, { method: 'DELETE' });
       fetchLessons();
     }
@@ -594,6 +598,7 @@ function LessonsTab() {
 
 function VocabTab() {
   const { token, authFetch } = useAuth();
+  const { showAlert, showConfirm } = useNotification();
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [words, setWords] = useState<any[]>([]);
@@ -634,15 +639,15 @@ function VocabTab() {
       const res = await authFetch(`${API_URL}/admin/vocab/import`, { method: "POST", body: formData });
       const result = await res.json();
       if (!res.ok) throw new Error(result.detail || "Upload failed");
-      alert(result.message);
+      showAlert(result.message, 'success');
       setFile(null);
       fetchWords();
-    } catch (err: any) { alert("Lỗi: " + err.message); }
+    } catch (err: any) { showAlert("Lỗi: " + err.message, 'error'); }
     finally { setUploading(false); }
   };
 
   const handleDeleteWord = async (word: string) => {
-    if (!confirm(`Xoá từ "${word}"?`)) return;
+    if (!(await showConfirm(`Xoá từ "${word}"?`))) return;
     console.log("[DEBUG] Starting delete word operation");
     const startTime = Date.now();
     try {
@@ -652,11 +657,11 @@ function VocabTab() {
         fetchWords();
       } else {
         console.error(`[DEBUG] Delete word failed with status ${res.status}: ${await res.text()}`);
-        alert('Lỗi xoá từ');
+        showAlert('Lỗi xoá từ', 'error');
       }
     } catch (e) {
       console.error(`[DEBUG] Delete word error in ${Date.now() - startTime}ms:`, e);
-      alert('Lỗi kết nối');
+      showAlert('Lỗi kết nối', 'error');
     }
   };
 
@@ -689,7 +694,7 @@ function VocabTab() {
   const handleSaveWord = async () => {
     console.log("[DEBUG] Starting save word operation");
     const startTime = Date.now();
-    if (!formWord.word) return alert("Nhập từ vựng!");
+    if (!formWord.word) return showAlert("Nhập từ vựng!", 'warning');
     setSavingWord(true);
     try {
       const isNew = editingWord === '';
@@ -707,7 +712,7 @@ function VocabTab() {
       fetchWords();
     } catch (err: any) {
       console.error(`[DEBUG] Save word error in ${Date.now() - startTime}ms:`, err);
-      alert(err.message);
+      showAlert(err.message, 'error');
     }
     finally { setSavingWord(false); }
   };
@@ -836,6 +841,7 @@ function VocabTab() {
 
 function GrammarTab() {
   const { token, authFetch } = useAuth();
+  const { showAlert, showConfirm } = useNotification();
   const [rules, setRules] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [name, setName] = useState('');
@@ -853,7 +859,7 @@ function GrammarTab() {
   const [generatingAI, setGeneratingAI] = useState(false);
 
   const handleAIGenerate = async () => {
-    if (!name) return alert("Nhập tên cấu trúc ngữ pháp trước!");
+    if (!name) return showAlert("Nhập tên cấu trúc ngữ pháp trước!", 'warning');
     setGeneratingAI(true);
     try {
       const res = await authFetch(`${API_URL}/admin/grammar/ai-generate`, {
@@ -864,7 +870,7 @@ function GrammarTab() {
       const data = await res.json();
       setDescription(data.description || "");
     } catch (err) {
-      alert("AI không thể tạo mô tả ngay bây giờ.");
+      showAlert("AI không thể tạo mô tả ngay bây giờ.", 'error');
     } finally {
       setGeneratingAI(false);
     }
@@ -873,7 +879,7 @@ function GrammarTab() {
   useEffect(() => { fetchRules(); }, []);
 
   const handleSave = async () => {
-    if (!name) return alert("Nhập tên cấu trúc ngữ pháp");
+    if (!name) return showAlert("Nhập tên cấu trúc ngữ pháp", 'warning');
     setSaving(true);
     try {
       const fd = new FormData();
@@ -886,7 +892,7 @@ function GrammarTab() {
       if (!res.ok) throw new Error((await res.json()).detail || 'Error');
       resetForm();
       fetchRules();
-    } catch (err: any) { alert(err.message); }
+    } catch (err: any) { showAlert(err.message, 'error'); }
     finally { setSaving(false); }
   };
 
@@ -898,7 +904,7 @@ function GrammarTab() {
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm("Xoá cấu trúc ngữ pháp này?")) return;
+    if (!(await showConfirm("Xoá cấu trúc ngữ pháp này?"))) return;
     await authFetch(`${API_URL}/admin/grammar/${id}`, { method: 'DELETE' });
     fetchRules();
   };
@@ -990,6 +996,7 @@ function SettingsTab() {
   const [testingEmail, setTestingEmail] = useState(false);
   const [testingNeo4j, setTestingNeo4j] = useState(false);
   const { token, authFetch } = useAuth();
+  const { showAlert } = useNotification();
 
   const fetchSettings = async () => {
     try {
@@ -1016,12 +1023,12 @@ function SettingsTab() {
       });
       const data = await res.json();
       if (res.ok) {
-        alert(`Đã lưu ${data.updated_keys?.length || 0} cài đặt. Neo4j: ${data.neo4j_status}`);
+        showAlert(`Đã lưu ${data.updated_keys?.length || 0} cài đặt. Neo4j: ${data.neo4j_status}`, 'success');
         fetchSettings();
       } else {
-        alert(data.detail || 'Lỗi khi lưu cài đặt');
+        showAlert(data.detail || 'Lỗi khi lưu cài đặt', 'error');
       }
-    } catch (err) { alert('Lỗi kết nối tới server'); }
+    } catch (err) { showAlert('Lỗi kết nối tới server', 'error'); }
     finally { setSaving(false); }
   };
 
@@ -1033,11 +1040,11 @@ function SettingsTab() {
       const data = await res.json();
       const steps = data.steps ? '\n' + data.steps.join('\n') : '';
       if (data.success) {
-        alert(`✅ ${data.message}${steps}`);
+        showAlert(`✅ ${data.message}${steps}`, 'success');
       } else {
-        alert(`❌ ${data.error || 'Email test failed'}${steps}`);
+        showAlert(`❌ ${data.error || 'Email test failed'}${steps}`, 'error');
       }
-    } catch { alert('Lỗi kết nối'); }
+    } catch { showAlert('Lỗi kết nối', 'error'); }
     finally { setTestingEmail(false); }
   };
 
@@ -1047,8 +1054,8 @@ function SettingsTab() {
       // FIXED: include Bearer token
       const res = await authFetch(`${API_URL}/admin/settings/test-neo4j`, { method: 'POST' });
       const data = await res.json();
-      alert(res.ok ? data.message : (data.detail || 'Neo4j connection failed'));
-    } catch { alert('Lỗi kết nối'); }
+      showAlert(res.ok ? data.message : (data.detail || 'Neo4j connection failed'), res.ok ? 'success' : 'error');
+    } catch { showAlert('Lỗi kết nối', 'error'); }
     finally { setTestingNeo4j(false); }
   };
 
@@ -1174,6 +1181,7 @@ function SettingsTab() {
 
 function AssignmentsTab() {
   const { token, authFetch } = useAuth();
+  const { showAlert, showConfirm } = useNotification();
   const [assignments, setAssignments] = useState<any[]>([]);
   const [classes, setClasses] = useState<any[]>([]);
   const [form, setForm] = useState({ class_id: '', title: '', description: '', type: 'quiz', due_date: '', skill_type: '', bloom_level: '' });
@@ -1194,7 +1202,7 @@ function AssignmentsTab() {
   useEffect(() => { fetchData(); }, []);
 
   const handleSave = async () => {
-    if (!form.class_id || !form.title) return alert("Vui lòng nhập tên bài tập và chọn lớp.");
+    if (!form.class_id || !form.title) return showAlert("Vui lòng nhập tên bài tập và chọn lớp.", 'warning');
     try {
       const res = await authFetch(`${API_URL}/admin/assignments`, {
         method: 'POST',
@@ -1210,21 +1218,21 @@ function AssignmentsTab() {
         })
       });
       if (res.ok) {
-        alert("Tạo thành công!");
+        showAlert("Tạo thành công!", 'success');
         setForm({ class_id: '', title: '', description: '', type: 'quiz', due_date: '', skill_type: '', bloom_level: '' });
         fetchData();
       } else {
-        alert("Lỗi khi tạo.");
+        showAlert("Lỗi khi tạo.", 'error');
       }
-    } catch (e) { alert("Lỗi kết nối"); }
+    } catch (e) { showAlert("Lỗi kết nối", 'error'); }
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm("Bạn có chắc chắn xoá?")) return;
+    if (!(await showConfirm("Bạn có chắc chắn xoá?"))) return;
     try {
       await authFetch(`${API_URL}/admin/assignments/${id}`, { method: 'DELETE' });
       fetchData();
-    } catch (e) { alert("Lỗi xoá"); }
+    } catch (e) { showAlert("Lỗi xoá", 'error'); }
   };
 
   return (
