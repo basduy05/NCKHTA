@@ -13,12 +13,34 @@ export default function OverviewTab({ API_URL }: OverviewTabProps) {
   const { token, user, authFetch } = useAuth();
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const STATS_CACHE_KEY = "student_overview_stats_cache";
+  const STATS_CACHE_TTL_MS = 20 * 1000;
 
   useEffect(() => {
     (async () => {
+      const now = Date.now();
+      try {
+        const raw = typeof window !== "undefined" ? sessionStorage.getItem(STATS_CACHE_KEY) : null;
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed?.data && parsed?.ts && now - parsed.ts < STATS_CACHE_TTL_MS) {
+            setStats(parsed.data);
+            setLoading(false);
+          }
+        }
+      } catch {}
+
       try {
         const res = await authFetch(`${API_URL}/student/stats`);
-        if (res.ok) setStats(await res.json());
+        if (res.ok) {
+          const data = await res.json();
+          setStats(data);
+          try {
+            if (typeof window !== "undefined") {
+              sessionStorage.setItem(STATS_CACHE_KEY, JSON.stringify({ ts: now, data }));
+            }
+          } catch {}
+        }
       } catch (e) { console.error(e); }
       finally { setLoading(false); }
     })();

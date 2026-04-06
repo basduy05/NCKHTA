@@ -1,6 +1,14 @@
 import os
 import traceback
 import time
+from pathlib import Path
+
+try:
+    from dotenv import load_dotenv
+    _env_path = Path(__file__).resolve().parent.parent / ".env"
+    load_dotenv(dotenv_path=_env_path)
+except Exception:
+    pass
 
 try:
     import libsql_experimental as libsql
@@ -143,9 +151,13 @@ def get_db(retries=3):
         TURSO_AUTH_TOKEN = (os.getenv("TURSO_AUTH_TOKEN") or "").strip()
 
     is_render = bool(os.getenv("RENDER"))
-    force_turso = os.getenv("FORCE_TURSO", "0") == "1"
-    # Localhost default: prefer SQLite for low-latency admin + API development.
-    use_turso = bool(TURSO_URL and TURSO_AUTH_TOKEN and (is_render or force_turso))
+    force_local_db = os.getenv("FORCE_LOCAL_DB", "0") == "1"
+    online_db_only = os.getenv("ONLINE_DB_ONLY", "1") == "1"
+    # Online-first mode: use Turso whenever credentials are configured.
+    use_turso = bool(TURSO_URL and TURSO_AUTH_TOKEN and not force_local_db)
+
+    if online_db_only and not use_turso:
+        raise RuntimeError("ONLINE_DB_ONLY=1 but TURSO_URL/TURSO_AUTH_TOKEN are missing or FORCE_LOCAL_DB=1")
 
     for attempt in range(retries):
         try:
@@ -167,6 +179,8 @@ def get_db(retries=3):
                             token_url = f"{url_to_use}?authToken={TURSO_AUTH_TOKEN}"
                             conn = libsql.connect(token_url)
                 except Exception as e:
+                    if online_db_only:
+                        raise e
                     if HAS_LIBSQL_EXPERIMENTAL and not is_render:
                         try:
                             conn = libsql.connect(database=DB_PATH, sync_url=TURSO_URL, auth_token=TURSO_AUTH_TOKEN)
@@ -213,9 +227,12 @@ def get_db(retries=3):
 
 def init_db():
     print(f"[DB] Initializing database at {DB_PATH}")
-    is_render = bool(os.getenv("RENDER"))
-    force_turso = os.getenv("FORCE_TURSO", "0") == "1"
-    if TURSO_URL and TURSO_AUTH_TOKEN and (is_render or force_turso):
+    force_local_db = os.getenv("FORCE_LOCAL_DB", "0") == "1"
+    online_db_only = os.getenv("ONLINE_DB_ONLY", "1") == "1"
+    use_turso = bool(TURSO_URL and TURSO_AUTH_TOKEN and not force_local_db)
+    if online_db_only and not use_turso:
+        raise RuntimeError("ONLINE_DB_ONLY=1 but TURSO_URL/TURSO_AUTH_TOKEN are missing or FORCE_LOCAL_DB=1")
+    if use_turso:
         print("[DB] Using Turso External Connection")
     else:
         print("[DB] Using Local SQLite Connection")

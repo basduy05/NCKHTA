@@ -237,7 +237,11 @@ export default function GrammarTab({ API_URL }: GrammarTabProps) {
                                                   <p className={`font-black mt-1 text-xl ${String(answers[currentIdx] || "").toLowerCase().trim() === String(q.answer || "").toLowerCase().trim() ? "text-green-700" : "text-red-700"}`}>
                                                      Đáp án chuẩn: <span className="px-3 py-1 bg-white rounded-xl shadow-sm ml-2">{q.answer}</span>
                                                   </p>
-                                                  {q.explanation && <p className="text-base mt-2 font-bold opacity-70 text-gray-800 max-w-2xl">{q.explanation}</p>}
+                                                  {(q.explanation || q.explanation_vn || q.explanation_en) && (
+                                                    <p className="text-base mt-2 font-bold opacity-70 text-gray-800 max-w-2xl">
+                                                      {q.explanation || q.explanation_vn || q.explanation_en}
+                                                    </p>
+                                                  )}
                                                 </div>
                                              </div>
                                         )}

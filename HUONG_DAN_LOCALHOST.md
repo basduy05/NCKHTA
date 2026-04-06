@@ -19,12 +19,16 @@ python -m venv venv
 # Cài đặt thư viện cần thiết
 pip install -r requirements.txt
 
+# Bật chế độ chỉ dùng DB online (Turso)
+$env:ONLINE_DB_ONLY="1"
+
 # Chạy Backend (Cổng 8000)
 uvicorn app.main:app --reload --port 8000
 ```
 > [!NOTE]
 > Backend sẽ chạy tại: `http://localhost:8000`
 > Tài liệu API (Swagger UI): `http://localhost:8000/docs`
+> Đảm bảo `ai-service/.env` đã có `TURSO_URL` và `TURSO_AUTH_TOKEN` hợp lệ.
 
 ---
 
@@ -44,18 +48,18 @@ npm run dev
 ```
 > [!IMPORTANT]
 > Bạn cần sửa file `frontend/.env.local` thành:
-> `NEXT_PUBLIC_API_URL=http://localhost:8000`
-> Để frontend kết nối với backend local.
+> `NEXT_PUBLIC_API_URL=http://127.0.0.1:8000`
+> hoặc `NEXT_PUBLIC_API_URL=http://localhost:8000`
+> (chọn 1 giá trị và dùng thống nhất khi mở frontend).
 
 ---
 
-## 3. Đồng bộ dữ liệu từ API về Local
+## 3. Kiểm tra kết nối DB Online
 
-Tôi đã tạo một file `ai-service/sync_vocabulary.py`. File này sẽ lấy các từ vựng bạn đã lưu trên Server (Render) của tài khoản `admin@eam.edu.vn` và lưu vào file database local (`app.db`) để bạn có dữ liệu test.
+Sau khi backend chạy, kiểm tra health endpoint:
 
-**Cách chạy:**
 ```powershell
-# Trong terminal backend (đã activate venv)
-cd ai-service
-python sync_vocabulary.py
+Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8000/health
 ```
+
+Nếu kết nối DB online thành công, phần `dependencies.database` sẽ là `ok`.

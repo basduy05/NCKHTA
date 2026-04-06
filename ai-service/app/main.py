@@ -181,8 +181,15 @@ if student:
 
 # CORS: Allow specific origins
 # MUST BE ADDED LAST TO BE OUTERMOST IN FASTAPI (wraps all other middlewares)
-_raw_origins = os.getenv("ALLOWED_ORIGINS", "https://nckhta-1wfu.vercel.app,http://localhost:3000")
-origins = [o.strip() for o in _raw_origins.split(",") if o.strip()]
+_raw_origins = os.getenv(
+    "ALLOWED_ORIGINS",
+    "https://nckhta-1wfu.vercel.app,http://localhost:3000,http://127.0.0.1:3000",
+)
+origins = [o.strip().rstrip("/") for o in _raw_origins.split(",") if o.strip()]
+# Ensure common local frontend origins are accepted even if env is incomplete.
+for local_origin in ["http://localhost:3000", "http://127.0.0.1:3000"]:
+    if local_origin not in origins:
+        origins.append(local_origin)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,

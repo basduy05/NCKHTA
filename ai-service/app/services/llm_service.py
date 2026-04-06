@@ -237,15 +237,19 @@ def parse_json_response(text):
         # 2. Try standard json
         try:
             parsed = json.loads(clean_text)
-            if isinstance(parsed, dict): return parsed
+            if isinstance(parsed, (dict, list)):
+                return parsed
             return {"name": "Response", "description": str(parsed)}
         except Exception:
             # 3. Fallback to json_repair for truncated or messy responses
             try:
                 parsed = json_repair.repair_json(clean_text, return_objects=True)
-                if isinstance(parsed, dict):
+                if isinstance(parsed, (dict, list)):
+                    if isinstance(parsed, dict):
+                        if not parsed.get("description") and not parsed.get("content"):
+                             return {"name": "Response", "description": str(parsed)}
                     if not parsed.get("description") and not parsed.get("content"):
-                         return {"name": "Response", "description": str(parsed)}
+                        return {"name": "Response", "description": str(parsed)}
                     return parsed
                 
                 # If parsed is a string or list, use it as the description
@@ -438,7 +442,7 @@ def _safe_invoke(chain, params: dict, difficulty: str = "medium", retries: int =
             if is_auth_error or is_quota_error:
                 provider_name = "Gemini" if "google" in error_str or "gemini" in error_str else ("OpenAI" if "openai" in error_str else "Unknown")
                 reason = "Quota" if is_quota_error else "Auth"
-                print(f"[LLM ERROR] {provider_name} {reason} Failed. Error: {e}. Marking for {FAILURE_WINDOW}s.")
+                print(f"[LLM ERROR] {provider_name} {reason} Failed. Error: {e}. Marking provider as temporarily failed.")
                 mark_provider_failed(provider_name)
                 
                 # Fallback to Cohere immediately
@@ -448,8 +452,9 @@ def _safe_invoke(chain, params: dict, difficulty: str = "medium", retries: int =
                     # Reconstruct chain if it's a pipe-style sequence
                     fallback_chain = (chain.first | fallback_llm) if hasattr(chain, 'first') else fallback_llm
                     res = fallback_chain.invoke(params)
+                    fallback_latency = int((time.time() - start_time) * 1000)
                     
-                    log_ai_request(None, "invoke_fallback", "command-r-08-2024", difficulty, latency, "fallback", error_str, feature=feature, response_content=res.content)
+                    log_ai_request(None, "invoke_fallback", "command-r-08-2024", difficulty, fallback_latency, "fallback", error_str, feature=feature, response_content=res.content)
                     # TRIGGER REFEREE EVALUATION (Background)
                     trigger_evaluation(None, "invoke_fallback", params, res.content, "command-r-08-2024", feature)
                     return res
@@ -522,8 +527,9 @@ async def _safe_invoke_async(chain, params: dict, difficulty: str = "medium", re
                         res = await fallback_chain.ainvoke(params)
                     else:
                         res = await asyncio.to_thread(fallback_chain.invoke, params)
+                    fallback_latency = int((time.time() - start_time) * 1000)
                     
-                    log_ai_request(None, "ainvoke_fallback", "command-r-08-2024", difficulty, latency, "fallback", error_str, feature=feature, response_content=res.content)
+                    log_ai_request(None, "ainvoke_fallback", "command-r-08-2024", difficulty, fallback_latency, "fallback", error_str, feature=feature, response_content=res.content)
                     
                     # TRIGGER REFEREE EVALUATION (Background)
                     trigger_evaluation(None, "ainvoke_fallback", params, res.content, "command-r-08-2024", feature)
@@ -2282,17 +2288,43 @@ async def generate_grammar_practice(rules: List[str], difficulty: str = "Medium"
     if not llm: return []
     
     prompt = PromptTemplate.from_template(
+        "You are an expert English grammar test designer.\n"
         "Create a {difficulty} level grammar practice for these rules: {rules}.\n"
         "Include variety: Structure completion, Error correction, and Transformation.\n"
-        "Return a JSON array of 10 objects {{question, options, answer, explanation_vn}}."
+        "CRITICAL LANGUAGE RULES:\n"
+        "1) question MUST be English only.\n"
+        "2) options MUST be English only.\n"
+        "3) answer MUST be English only.\n"
+        "4) explanation should be concise Vietnamese to support learners.\n"
+        "Return ONLY a valid JSON array of 10 objects with exact keys:\n"
+        "{{question, options, answer, explanation}}"
     )
     print(f"[LLM GRAMMAR PRACTICE] Generating for {len(rules)} rules (Difficulty: {difficulty})...", flush=True)
     chain = prompt | llm
     try:
         response = await _safe_invoke_async(chain, {"difficulty": difficulty, "rules": ", ".join(rules)}, difficulty="medium", feature="Grammar Practice")
         result = parse_json_response(response.content)
-        print(f"[LLM GRAMMAR PRACTICE] Success: generated {len(result) if isinstance(result, list) else 0} questions", flush=True)
-        return result
+        if not isinstance(result, list):
+            return []
+
+        normalized = []
+        for item in result:
+            if not isinstance(item, dict):
+                continue
+            question = item.get("question") or item.get("q") or ""
+            options = item.get("options") if isinstance(item.get("options"), list) else []
+            answer = item.get("answer") or ""
+            explanation = item.get("explanation") or item.get("explanation_vn") or item.get("explanation_en") or ""
+            if question and answer:
+                normalized.append({
+                    "question": str(question).strip(),
+                    "options": [str(opt).strip() for opt in options if str(opt).strip()],
+                    "answer": str(answer).strip(),
+                    "explanation": str(explanation).strip(),
+                })
+
+        print(f"[LLM GRAMMAR PRACTICE] Success: generated {len(normalized)} questions", flush=True)
+        return normalized
     except Exception as e:
         print(f"[LLM GRAMMAR PRACTICE] ERROR: {e}", flush=True)
         return []
@@ -2305,16 +2337,20 @@ async def generate_grammar_practice_stream(rules: List[str], difficulty: str = "
         return
     
     prompt = PromptTemplate.from_template(
-        "You are an expert English teacher.\n"
+        "You are an expert English grammar test designer.\n"
         "Create a {difficulty} level grammar practice for these rules: {rules}.\n"
         "Include variety: Structure completion, Error correction, and Transformation.\n"
-        "Provide detailed explanations in Vietnamese.\n\n"
-        "Return a JSON array of 10-15 objects {{question, options, answer, explanation_vn}}."
+        "CRITICAL LANGUAGE RULES:\n"
+        "1) question MUST be English only.\n"
+        "2) options MUST be English only.\n"
+        "3) answer MUST be English only.\n"
+        "4) explanation should be concise Vietnamese.\n\n"
+        "Return a JSON array of 10-15 objects {{question, options, answer, explanation}}."
     )
     chain = prompt | llm
     
     full_content = ""
-    async for chunk in _safe_astream(chain, {"difficulty": difficulty_val, "rules": ", ".join(rules)}, difficulty="medium"):
+    async for chunk in _safe_astream(chain, {"difficulty": difficulty, "rules": ", ".join(rules)}, difficulty="medium"):
         full_content += chunk.content
         yield json.dumps({"status": "generating", "chunk": chunk.content}, ensure_ascii=False)
         

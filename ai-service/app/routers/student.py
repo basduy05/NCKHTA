@@ -117,6 +117,8 @@ class ExamSaveReq(BaseModel):
 
 router = APIRouter(prefix="/student", tags=["Student"])
 
+_stats_cache = {"data": {}, "ttl": 20}
+
 
 def _get_current_student(authorization: str = Header(...)):
     """Extract student from JWT token. Raises 401/403 if invalid."""
@@ -184,49 +186,54 @@ def _check_usage_limit(user_id: int, feature: str, limit: int = 50):
 @router.get("/stats")
 def student_stats(authorization: str = Header(...)):
     student = _get_current_student(authorization)
+
+    # Short-lived per-user cache to reduce repeated remote DB round-trips.
+    cached = _stats_cache["data"].get(student["id"])
+    now_ts = time.time()
+    if cached and now_ts - cached["ts"] < _stats_cache["ttl"]:
+        return cached["payload"]
+
     conn = get_db()
-
-    # Classes enrolled
-    classes_count = conn.execute(
-        "SELECT COUNT(*) FROM enrollments WHERE student_id = ?", (student["id"],)
-    ).fetchone()[0]
-
-    # Assignments for enrolled classes
-    assignments_total = conn.execute(
-        """SELECT COUNT(*) FROM assignments a
-           JOIN enrollments e ON a.class_id = e.class_id
-           WHERE e.student_id = ?""",
-        (student["id"],)
-    ).fetchone()[0]
-
-    # Submitted scores
-    scores_row = conn.execute(
-        """SELECT COUNT(*), COALESCE(SUM(score),0), COALESCE(SUM(max_score),0)
-           FROM student_scores WHERE student_id = ?""",
-        (student["id"],)
+    row = conn.execute(
+        """
+        SELECT
+          (SELECT COUNT(*) FROM enrollments WHERE student_id = ?) AS classes_enrolled,
+          (SELECT COUNT(*)
+             FROM assignments a
+             JOIN enrollments e ON a.class_id = e.class_id
+            WHERE e.student_id = ?) AS assignments_total,
+          (SELECT COUNT(*) FROM student_scores WHERE student_id = ?) AS assignments_submitted,
+          (SELECT COALESCE(SUM(score), 0) FROM student_scores WHERE student_id = ?) AS total_score,
+          (SELECT COALESCE(SUM(max_score), 0) FROM student_scores WHERE student_id = ?) AS total_max_score,
+          (SELECT COUNT(*) FROM saved_vocabulary WHERE user_id = ?) AS vocab_count,
+          (SELECT COUNT(*)
+             FROM saved_vocabulary
+            WHERE user_id = ? AND (scheduled_at IS NULL OR datetime(scheduled_at) <= CURRENT_TIMESTAMP)
+          ) AS review_needed
+        """,
+        (
+            student["id"],
+            student["id"],
+            student["id"],
+            student["id"],
+            student["id"],
+            student["id"],
+            student["id"],
+        ),
     ).fetchone()
-    submitted_count = scores_row[0]
-    total_score = scores_row[1]
-    total_max = scores_row[2]
-    avg_percent = round(total_score / total_max * 100, 1) if total_max > 0 else 0
-
-    # Vocabulary & Spaced Repetition
-    vocab_row = conn.execute(
-        "SELECT COUNT(*) FROM saved_vocabulary WHERE user_id = ?", (student["id"],)
-    ).fetchone()
-    vocab_count = vocab_row[0] if vocab_row else 0
-    
-    # Review needed: scheduled_at is NULL (new word) OR <= CURRENT_TIMESTAMP
-    review_needed_row = conn.execute(
-        """SELECT COUNT(*) FROM saved_vocabulary 
-           WHERE user_id = ? AND (scheduled_at IS NULL OR datetime(scheduled_at) <= CURRENT_TIMESTAMP)""",
-        (student["id"],)
-    ).fetchone()
-    review_needed_count = review_needed_row[0] if review_needed_row else 0
-
-    assignments_pending = assignments_total - submitted_count
     conn.close()
-    return {
+
+    classes_count = row["classes_enrolled"] if row else 0
+    assignments_total = row["assignments_total"] if row else 0
+    submitted_count = row["assignments_submitted"] if row else 0
+    total_score = row["total_score"] if row else 0
+    total_max = row["total_max_score"] if row else 0
+    vocab_count = row["vocab_count"] if row else 0
+    review_needed_count = row["review_needed"] if row else 0
+
+    avg_percent = round(total_score / total_max * 100, 1) if total_max > 0 else 0
+    assignments_pending = assignments_total - submitted_count
+    payload = {
         "classes_enrolled": classes_count,
         "assignments_total": assignments_total,
         "assignments_submitted": submitted_count,
@@ -239,6 +246,8 @@ def student_stats(authorization: str = Header(...)):
         "points": student.get("points", 0),
         "credits_ai": student.get("credits_ai", 0)
     }
+    _stats_cache["data"][student["id"]] = {"ts": now_ts, "payload": payload}
+    return payload
 
 import time
 _ranking_cache = {"data": None, "timestamp": 0}
@@ -1299,7 +1308,7 @@ async def get_student_roadmap(authorization: str = Header(...), refresh: bool = 
             "current_level": student.get("current_level")
         }
         conn.execute(
-            "INSERT OR REPLACE INTO student_roadmaps (user_id, roadmap_data, last_stats_hash, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)",
+            "INSERT OR REPLACE INTO student_roadmaps (user_id, roadmap_data, last_stats_hash) VALUES (?, ?, ?)",
             (user_id, json.dumps(result, ensure_ascii=False), stats_hash)
         )
         conn.commit()
