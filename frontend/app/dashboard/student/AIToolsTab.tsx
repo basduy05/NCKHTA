@@ -1,5 +1,5 @@
 "use client";
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { 
   Sparkles, Upload, Layers, PlayCircle, Bookmark, BookText, 
   Brain, Award, Trophy, CheckCircle2, XCircle, X, Volume2, 
@@ -38,6 +38,36 @@ export default function AIToolsTab({ setShowCreditModal, API_URL }: AIToolsTabPr
   const [currentQuizIdx, setCurrentQuizIdx] = useState(0);
   const [quizAnswers, setQuizAnswers] = useState<Record<number, string>>({});
   
+  // Randomize definitions for Matching exercises once per quiz
+  const shuffledDefs = useMemo(() => {
+    const currentEx = result?.quiz?.[currentQuizIdx];
+    if (currentEx?.type === 'MATCHING' && currentEx.matching_pairs) {
+      return [...currentEx.matching_pairs].map(p => p.def).sort(() => Math.random() - 0.5);
+    }
+    return [];
+  }, [result, currentQuizIdx]);
+  
+  const renderSentenceWithBlank = (text: string, currentIdx: number) => {
+    if (!text || !text.includes('[blank]')) return text;
+    
+    const parts = text.split('[blank]');
+    const answer = quizAnswers[currentIdx];
+    const currentEx = result.quiz[currentIdx];
+    const isCorrect = isQuizSubmitted && String(answer || "").toLowerCase().trim() === String(currentEx?.answer || "").toLowerCase().trim();
+    
+    return (
+      <span className="leading-relaxed">
+        {parts[0]}
+        <span className={`inline-flex items-center justify-center min-w-[140px] px-4 mx-2 border-b-4 font-black transition-all duration-300 ${
+          isQuizSubmitted ? (isCorrect ? "text-green-600 border-green-500 bg-green-50/50" : "text-red-600 border-red-500 bg-red-50/50") :
+          answer ? "text-blue-600 border-blue-400 bg-blue-50/50" : "text-gray-300 border-gray-200 bg-gray-50 animate-pulse"
+        } rounded-2xl py-2 -mb-2`}>
+          {answer || "........."}
+        </span>
+        {parts[1]}
+      </span>
+    );
+  };
   // Defensive rendering helpers to prevent "Objects are not valid as a React child"
   const renderValue = (val: any): React.ReactNode => {
     if (val === null || val === undefined) return "";
@@ -499,11 +529,15 @@ export default function AIToolsTab({ setShowCreditModal, API_URL }: AIToolsTabPr
                       {result.quiz[currentQuizIdx].type === 'FIB' ? 'Điền vào chỗ trống' : result.quiz[currentQuizIdx].type === 'SPELLING' ? 'Nghe và Viết' : result.quiz[currentQuizIdx].type === 'PARAPHRASE' ? 'Câu đồng nghĩa' : result.quiz[currentQuizIdx].type === 'MATCHING' ? 'Nối cặp từ' : 'Chọn đáp án đúng'}
                     </span>
                     
-                    <h2 className="text-3xl md:text-4xl font-black text-gray-800 leading-tight mb-6">
-                      {result.quiz[currentQuizIdx].type === 'MATCHING' ? "Ghép từ với định nghĩa tương ứng" : result.quiz[currentQuizIdx].question}
+                    <h2 className="text-3xl md:text-4xl font-black text-gray-800 leading-tight mb-6 px-4">
+                      {result.quiz[currentQuizIdx].type === 'MATCHING' 
+                        ? "Ghép từ với định nghĩa tương ứng" 
+                        : (result.quiz[currentQuizIdx].type === 'FIB' || result.quiz[currentQuizIdx].type === 'SPELLING')
+                          ? renderSentenceWithBlank(result.quiz[currentQuizIdx].question || result.quiz[currentQuizIdx].context || "", currentQuizIdx)
+                          : result.quiz[currentQuizIdx].question}
                     </h2>
                     
-                    {result.quiz[currentQuizIdx].type !== 'MATCHING' && (result.quiz[currentQuizIdx].type === 'FIB' || result.quiz[currentQuizIdx].context) && (
+                    {result.quiz[currentQuizIdx].type !== 'MATCHING' && result.quiz[currentQuizIdx].type !== 'FIB' && result.quiz[currentQuizIdx].type !== 'SPELLING' && result.quiz[currentQuizIdx].context && (
                       <div className="text-xl md:text-2xl font-medium text-gray-600 bg-gray-50 p-6 md:p-8 rounded-3xl border border-gray-100 leading-relaxed max-w-2xl mx-auto shadow-inner">
                         {result.quiz[currentQuizIdx].context}
                       </div>
@@ -519,70 +553,72 @@ export default function AIToolsTab({ setShowCreditModal, API_URL }: AIToolsTabPr
                     )}
                   </div>
 
-                  <div className="w-full max-w-4xl mx-auto space-y-4">
+                  <div className="w-full max-w-6xl mx-auto space-y-4">
                     {result.quiz[currentQuizIdx].type === 'MATCHING' ? (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
-                         <div className="space-y-3">
-                            <h4 className="text-center font-black text-blue-500 uppercase tracking-widest text-xs mb-4">Từ vựng</h4>
-                            {(result.quiz[currentQuizIdx].matching_pairs || []).map((pair: any, i: number) => {
-                               const isMatched = !!matches[pair.word];
-                               const isSelected = matchingSelections.word === pair.word;
-                               return (
-                                  <button 
-                                    key={i}
-                                    disabled={isQuizSubmitted || isMatched}
-                                    onClick={() => setMatchingSelections(prev => ({ ...prev, word: pair.word }))}
-                                    className={`w-full p-6 md:p-8 rounded-3xl border-2 text-center font-black text-xl md:text-2xl transition-all ${
-                                      isMatched ? "bg-green-50 border-green-200 text-green-600 opacity-50" :
-                                      isSelected ? "bg-blue-100 border-blue-500 text-blue-700 shadow-md scale-[1.02] ring-4 ring-blue-500/20" :
-                                      "bg-white border-gray-100 hover:border-blue-200 text-gray-700 shadow-sm"
-                                    }`}
-                                  >
-                                     {pair.word}
-                                  </button>
-                               )
-                            })}
-                         </div>
-                         <div className="space-y-3">
-                            <h4 className="text-center font-black text-purple-500 uppercase tracking-widest text-xs mb-4">Định nghĩa</h4>
-                            {(result.quiz[currentQuizIdx].matching_pairs || []).map((pair: any, i: number) => {
-                               const def = pair.def;
-                               const matchedWord = Object.keys(matches).find(k => matches[k] === def);
-                               const isSelected = matchingSelections.def === def;
-                               return (
-                                  <button 
-                                    key={i}
-                                    disabled={isQuizSubmitted || !!matchedWord}
-                                    onClick={() => {
-                                       if (matchingSelections.word) {
-                                          const correctPair = result.quiz[currentQuizIdx].matching_pairs.find((p: any) => p.word === matchingSelections.word);
-                                          if (correctPair && correctPair.def === def) {
-                                             const newMatches = { ...matches, [matchingSelections.word!]: def };
-                                             setMatches(newMatches);
-                                             setMatchingSelections({ word: null, def: null });
-                                             if (Object.keys(newMatches).length === result.quiz[currentQuizIdx].matching_pairs.length) {
-                                                setQuizAnswers({...quizAnswers, [currentQuizIdx]: "MATCHED"});
-                                                setIsQuizSubmitted(true);
-                                             }
-                                          } else {
-                                             showAlert("Không khớp! Thử lại nhé.", 'warning');
-                                             setMatchingSelections({ word: null, def: null });
-                                          }
-                                       } else {
-                                          setMatchingSelections(prev => ({ ...prev, def: def }));
-                                       }
-                                    }}
-                                    className={`w-full p-6 md:p-8 rounded-3xl border-2 text-left text-lg md:text-xl font-bold transition-all leading-tight ${
-                                      matchedWord ? "bg-green-50 border-green-200 text-green-600 opacity-50" :
-                                      isSelected ? "bg-purple-100 border-purple-500 text-purple-700 shadow-md scale-[1.02] ring-4 ring-purple-500/20" :
-                                      "bg-white border-gray-100 hover:border-purple-200 text-gray-600 shadow-sm"
-                                    }`}
-                                  >
-                                     {def}
-                                  </button>
-                               )
-                            })}
-                         </div>
+                      <div className="space-y-6">
+                        <div className="grid grid-cols-[1fr_2.5fr] gap-4 mb-2 px-4">
+                          <h4 className="font-black text-blue-500 uppercase tracking-widest text-[10px]">Từ vựng</h4>
+                          <h4 className="font-black text-purple-500 uppercase tracking-widest text-[10px]">Định nghĩa</h4>
+                        </div>
+                        
+                        <div className="grid grid-cols-[1fr_2.5fr] gap-x-6 gap-y-3 items-stretch">
+                          {(result.quiz[currentQuizIdx].matching_pairs || []).map((pair: any, i: number) => {
+                             const word = pair.word;
+                             const def = shuffledDefs[i];
+                             
+                             const isWordMatched = !!matches[word];
+                             const isWordSelected = matchingSelections.word === word;
+                             
+                             const matchedWordForDef = Object.keys(matches).find(k => matches[k] === def);
+                             const isDefSelected = matchingSelections.def === def;
+
+                             return (
+                              <React.Fragment key={i}>
+                                 <button 
+                                   disabled={isQuizSubmitted || isWordMatched}
+                                   onClick={() => setMatchingSelections(prev => ({ ...prev, word: word }))}
+                                   className={`p-4 md:p-5 rounded-2xl border-2 text-center font-black text-lg transition-all flex items-center justify-center ${
+                                     isWordMatched ? "bg-green-50 border-green-200 text-green-600 opacity-50" :
+                                     isWordSelected ? "bg-blue-50 border-blue-500 text-blue-700 shadow-sm ring-2 ring-blue-500/10" :
+                                     "bg-white border-gray-100 hover:border-blue-200 text-gray-700 shadow-sm hover:shadow-md"
+                                   }`}
+                                 >
+                                    {word}
+                                 </button>
+
+                                 <button 
+                                   disabled={isQuizSubmitted || !!matchedWordForDef}
+                                   onClick={() => {
+                                      if (matchingSelections.word) {
+                                         const correctPair = result.quiz[currentQuizIdx].matching_pairs.find((p: any) => p.word === matchingSelections.word);
+                                         if (correctPair && correctPair.def === def) {
+                                            const newMatches = { ...matches, [matchingSelections.word!]: def };
+                                            setMatches(newMatches);
+                                            setMatchingSelections({ word: null, def: null });
+                                            if (Object.keys(newMatches).length === result.quiz[currentQuizIdx].matching_pairs.length) {
+                                               setQuizAnswers({...quizAnswers, [currentQuizIdx]: "MATCHED"});
+                                               setIsQuizSubmitted(true);
+                                            }
+                                         } else {
+                                            showAlert("Không khớp! Thử lại nhé.", 'warning');
+                                            setMatchingSelections({ word: null, def: null });
+                                         }
+                                      } else {
+                                         setMatchingSelections(prev => ({ ...prev, def: def }));
+                                      }
+                                   }}
+                                   className={`p-4 md:p-5 rounded-2xl border-2 text-left text-base font-bold transition-all leading-snug flex items-center ${
+                                     matchedWordForDef ? "bg-green-50 border-green-200 text-green-600 opacity-50" :
+                                     isDefSelected ? "bg-purple-50 border-purple-500 text-purple-700 shadow-sm ring-2 ring-purple-500/10" :
+                                     "bg-white border-gray-100 hover:border-purple-200 text-gray-600 shadow-sm hover:shadow-md"
+                                   }`}
+                                 >
+                                    {def}
+                                 </button>
+                              </React.Fragment>
+                             );
+                          })}
+                        </div>
                       </div>
                     ) : result.quiz[currentQuizIdx].options && result.quiz[currentQuizIdx].type !== 'SPELLING' ? (
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -623,7 +659,7 @@ export default function AIToolsTab({ setShowCreditModal, API_URL }: AIToolsTabPr
                           value={quizAnswers[currentQuizIdx] || ""}
                           disabled={isQuizSubmitted}
                           placeholder={result.quiz[currentQuizIdx].type === 'SPELLING' ? "Nghe và nhập chính xác..." : "Nhập đáp án..."}
-                          className={`w-full text-3xl font-black text-center p-8 border-b-4 rounded-3xl outline-none transition-all shadow-sm ${isQuizSubmitted ? ((quizAnswers[currentQuizIdx] || "").toLowerCase().trim() === result.quiz[currentQuizIdx].answer.toLowerCase() ? "border-green-500 bg-green-50 text-green-700" : "border-red-500 bg-red-50 text-red-700") : "border-gray-300 bg-gray-50 focus:border-blue-500 focus:bg-white focus:shadow-xl"}`}
+                          className={`w-full text-3xl font-black text-center p-8 border-b-4 rounded-3xl outline-none transition-all shadow-sm ${isQuizSubmitted ? ((quizAnswers[currentQuizIdx] || "").toLowerCase().trim() === String(result.quiz[currentQuizIdx].answer || "").toLowerCase().trim() ? "border-green-500 bg-green-50 text-green-700" : "border-red-500 bg-red-50 text-red-700") : "border-gray-300 bg-gray-50 focus:border-blue-500 focus:bg-white focus:shadow-xl"}`}
                           onChange={(e) => setQuizAnswers({...quizAnswers, [currentQuizIdx]: e.target.value})}
                           onKeyDown={(e) => {
                              if (e.key === 'Enter' && quizAnswers[currentQuizIdx] && !isQuizSubmitted) { setIsQuizSubmitted(true); }

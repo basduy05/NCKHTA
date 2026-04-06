@@ -1,6 +1,6 @@
 from langchain_neo4j import Neo4jGraph
 
-from typing import List, Dict
+from typing import List, Dict, Optional
 import os
 import sqlite3
 import time
@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from ..database import get_setting
+from ..database import get_setting, log_ai_request
 from ..utils.resilience import retry
 
 # Read settings from DB (via database.py handles Turso/SQLite) first, then env vars
@@ -58,16 +58,39 @@ def get_graph():
         return None
 
 @retry(tries=3, delay=1.0)
-def _safe_query(query: str, params: dict = None):
-    """Execute a Cypher query with auto-reconnect and retry logic."""
+def _safe_query(query: str, params: dict = None, endpoint: str = "graph_query", difficulty: str = "easy"):
+    """Execute a Cypher query with auto-reconnect and retry logic, then log performance."""
     global graph
+    start_time = time.time()
     g = get_graph()
     if not g:
         return None
     try:
-        return g.query(query, params=params or {})
+        res = g.query(query, params=params or {})
+        latency = int((time.time() - start_time) * 1000)
+        
+        # Log to AI Monitoring
+        try:
+            log_ai_request(
+                user_id=None,
+                endpoint=endpoint,
+                model="KnowledgeGraph",
+                difficulty=difficulty,
+                latency_ms=latency,
+                status="success",
+                feature="Dictionary Lookup"
+            )
+        except Exception as log_err:
+            print(f"[GRAPH LOG ERROR] {log_err}")
+            
+        return res
     except Exception as e:
+        latency = int((time.time() - start_time) * 1000)
         error_str = str(e).lower()
+        
+        # Log failure
+        log_ai_request(None, endpoint, "KnowledgeGraph", difficulty, latency, "error", str(e), feature="Dictionary Lookup")
+        
         # If it's a connection error, reset and retry once
         if any(k in error_str for k in ["connection", "refused", "timeout", "closed", "reset", "unavailable"]):
             print(f"[Neo4j] Connection lost, reconnecting... ({e})")
@@ -98,7 +121,7 @@ def extract_entities_and_relations(text: str) -> Dict[str, list]:
     RETURN t, c
     """
     try:
-        _safe_query(cypher_query, {"topic": topic_name, "summary": text[:200]})
+        _safe_query(cypher_query, {"topic": topic_name, "summary": text[:200]}, endpoint="extract_entities")
         return {"status": "success"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
@@ -115,7 +138,7 @@ def find_word_in_graph(word: str) -> Dict:
             OPTIONAL MATCH (w)-[r]-(related)
             RETURN w, type(r) as rel_type, related.text as related_word,
                    labels(related) as related_labels
-        """, {"word": word.lower().strip()})
+        """, {"word": word.lower().strip()}, endpoint="find_word_in_graph")
 
         if not results:
             return None
@@ -169,7 +192,8 @@ def get_dictionary_cache(word: str) -> Dict:
     if not g:
         return None
     try:
-        results = _safe_query("MATCH (w:Word {text: $word}) RETURN w.data_json as data_json", {"word": word.lower().strip()})
+        results = _safe_query("MATCH (w:Word {text: $word}) RETURN w.data_json as data_json", 
+                            {"word": word.lower().strip()}, endpoint="get_dict_cache")
         if results and results[0].get("data_json"):
             import json
             return json.loads(results[0]["data_json"])
@@ -189,7 +213,7 @@ def set_dictionary_cache(word: str, data: dict):
         _safe_query(query, {
             "word": word.lower().strip(),
             "data_json": json.dumps(data, ensure_ascii=False)
-        })
+        }, endpoint="set_dict_cache")
     except Exception as e:
         print(f"Neo4j set_dictionary_cache error: {e}")
 
@@ -291,7 +315,7 @@ def get_knowledge_subgraph(topic: str = "all", limit: int = 100) -> Dict:
             OPTIONAL MATCH (w)-[r]-(related)
             RETURN w, type(r) as rel_type, related, labels(related) as related_labels
             """
-            results = _safe_query(query, {"topic": topic, "limit": limit})
+            results = _safe_query(query, {"topic": topic, "limit": limit}, endpoint="get_subgraph_by_topic")
         else:
             query = """
             MATCH (w:Word)
@@ -299,7 +323,7 @@ def get_knowledge_subgraph(topic: str = "all", limit: int = 100) -> Dict:
             OPTIONAL MATCH (w)-[r]-(related)
             RETURN w, type(r) as rel_type, related, labels(related) as related_labels
             """
-            results = _safe_query(query, {"limit": limit})
+            results = _safe_query(query, {"limit": limit}, endpoint="get_subgraph_latest")
 
         if not results:
             return {"nodes": [], "links": []}
@@ -360,7 +384,7 @@ def get_word_connections(word: str) -> Dict:
                related.meaning_vn as meaning, labels(related) as labels
         LIMIT 20
         """
-        results = _safe_query(query, {"word": word_lower})
+        results = _safe_query(query, {"word": word_lower}, endpoint="get_word_connections_exact")
         connections = []
         if results:
             for record in results:
@@ -381,7 +405,7 @@ def get_word_connections(word: str) -> Dict:
                    related.meaning_vn as meaning, labels(related) as labels
             LIMIT 20
             """
-            results = _safe_query(query, {"word_lower": word_lower})
+            results = _safe_query(query, {"word_lower": word_lower}, endpoint="get_word_connections_fuzzy")
             if results:
                 for record in results:
                     connections.append({
@@ -401,7 +425,7 @@ def get_word_connections(word: str) -> Dict:
                    related.text as related_word, related.meaning_vn as meaning
             LIMIT 20
             """
-            results = _safe_query(query, {"word_lower": word_lower})
+            results = _safe_query(query, {"word_lower": word_lower}, endpoint="get_word_connections_partial")
             if results:
                 for record in results:
                     connections.append({
@@ -434,7 +458,7 @@ def save_grammar_to_graph(name: str, description: str):
     RETURN g
     """
     try:
-        _safe_query(query, {"name": name, "description": description})
+        _safe_query(query, {"name": name, "description": description}, endpoint="save_grammar")
         return {"status": "success"}
     except Exception as e:
         print(f"save_grammar_to_graph error: {e}")
@@ -446,7 +470,7 @@ def delete_grammar_from_graph(name: str):
     if not g:
         return
     try:
-        _safe_query("MATCH (g:GrammarRule {name: $name}) DETACH DELETE g", {"name": name})
+        _safe_query("MATCH (g:GrammarRule {name: $name}) DETACH DELETE g", {"name": name}, endpoint="delete_grammar")
     except Exception as e:
         print(f"delete_grammar_from_graph error: {e}")
 
@@ -461,7 +485,7 @@ def link_word_to_grammar(word: str, grammar_name: str):
     MERGE (w)-[:USES_GRAMMAR]->(g)
     """
     try:
-        _safe_query(query, {"word": word.lower().strip(), "grammar_name": grammar_name})
+        _safe_query(query, {"word": word.lower().strip(), "grammar_name": grammar_name}, endpoint="link_word_to_grammar")
     except Exception as e:
         print(f"link_word_to_grammar error: {e}")
 
@@ -477,7 +501,7 @@ def get_relevant_grammar_rules(text: str) -> List[Dict]:
             WHERE toLower($text) CONTAINS toLower(g.name)
             RETURN g.name as name, g.description as description
             LIMIT 5
-        """, {"text": text})
+        """, {"text": text}, endpoint="get_relevant_grammar")
         return results if results else []
     except Exception as e:
         print(f"get_relevant_grammar_rules error: {e}")

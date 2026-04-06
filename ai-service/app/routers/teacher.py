@@ -10,6 +10,19 @@ import traceback
 
 router = APIRouter(prefix="/teacher", tags=["Teacher"])
 
+class GrammarAIGen(BaseModel):
+    topic: str
+
+@router.post("/grammar/ai-generate")
+async def teacher_ai_generate_grammar(data: GrammarAIGen, authorization: str = Header(...)):
+    """Allow teachers to use the AI grammar generation tool."""
+    _get_current_teacher(authorization)
+    try:
+        result = await llm_service.generate_grammar_rule_description(data.topic)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 def _get_current_teacher(authorization: str = Header(...)):
     """Extract teacher from JWT token. Raises 401/403 if invalid."""
@@ -662,8 +675,7 @@ def get_grammar_rules(authorization: str = Header(...)):
     _get_current_teacher(authorization)
     conn = get_db()
     cursor = conn.execute("SELECT id, name, description, file_name, created_at FROM grammar_rules ORDER BY id DESC")
-    columns = [column[0] for column in cursor.description]
-    results = [dict(zip(columns, row)) for row in cursor.fetchall()]
+    results = cursor.fetchall()
     conn.close()
     return results
 
@@ -687,6 +699,67 @@ def get_grammar_file(rule_id: int):
     return Response(content=file_data, media_type=media_type, headers={
         "Content-Disposition": f'inline; filename="{file_name}"'
     })
+
+@router.post("/grammar")
+async def create_grammar_rule(
+    authorization: str = Header(...),
+    name: str = Form(...),
+    description: str = Form(""),
+    file: Optional[UploadFile] = File(None)
+):
+    teacher = _get_current_teacher(authorization)
+    conn = get_db()
+    
+    file_name = None
+    file_data = None
+    if file and file.filename:
+        file_name = file.filename
+        file_data = await file.read()
+        
+    conn.execute(
+        "INSERT INTO grammar_rules (name, description, file_name, file_data) VALUES (?, ?, ?, ?)",
+        (name, description, file_name, file_data)
+    )
+    conn.commit()
+    conn.close()
+    return {"message": "Tạo quy tắc ngữ pháp thành công"}
+
+@router.put("/grammar/{rule_id}")
+async def update_grammar_rule(
+    rule_id: int,
+    authorization: str = Header(...),
+    name: str = Form(...),
+    description: str = Form(""),
+    file: Optional[UploadFile] = File(None)
+):
+    teacher = _get_current_teacher(authorization)
+    conn = get_db()
+    
+    if file and file.filename:
+        file_name = file.filename
+        file_data = await file.read()
+        conn.execute(
+            "UPDATE grammar_rules SET name = ?, description = ?, file_name = ?, file_data = ? WHERE id = ?",
+            (name, description, file_name, file_data, rule_id)
+        )
+    else:
+        conn.execute(
+            "UPDATE grammar_rules SET name = ?, description = ? WHERE id = ?",
+            (name, description, rule_id)
+        )
+        
+    conn.commit()
+    conn.close()
+    return {"message": "Cập nhật quy tắc ngữ pháp thành công"}
+
+@router.delete("/grammar/{rule_id}")
+def delete_grammar_rule(rule_id: int, authorization: str = Header(...)):
+    teacher = _get_current_teacher(authorization)
+    conn = get_db()
+    conn.execute("DELETE FROM grammar_rules WHERE id = ?", (rule_id,))
+    conn.commit()
+    conn.close()
+    return {"message": "Xoá quy tắc ngữ pháp thành công"}
 
 # ─── NEWS (READING COMPREHENSION) ──────────────────────────────────────────
 

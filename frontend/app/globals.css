@@ -1,4 +1,4 @@
-﻿@tailwind base;
+@tailwind base;
 @tailwind components;
 @tailwind utilities;
 
@@ -143,4 +143,29 @@
 
 .animate-slide-in {
   animation: slide-in-right 0.3s ease-out;
+}
+
+/* ===== RICH TEXT CONTENT STYLES ===== */
+.rich-text h1, .rich-text h2 {
+  @apply font-black text-gray-900 mb-4 mt-6;
+}
+.rich-text h1 { @apply text-3xl; }
+.rich-text h2 { @apply text-2xl; }
+.rich-text p {
+  @apply mb-4 leading-relaxed;
+}
+.rich-text b, .rich-text strong {
+  @apply font-black text-gray-900;
+}
+.rich-text i, .rich-text em {
+  @apply italic;
+}
+.rich-text ul {
+  @apply list-disc ml-6 mb-4 space-y-2;
+}
+.rich-text ol {
+  @apply list-decimal ml-6 mb-4 space-y-2;
+}
+.rich-text li {
+  @apply pl-1;
 }

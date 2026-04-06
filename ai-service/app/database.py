@@ -142,9 +142,14 @@ def get_db(retries=3):
     if not TURSO_AUTH_TOKEN:
         TURSO_AUTH_TOKEN = (os.getenv("TURSO_AUTH_TOKEN") or "").strip()
 
+    is_render = bool(os.getenv("RENDER"))
+    force_turso = os.getenv("FORCE_TURSO", "0") == "1"
+    # Localhost default: prefer SQLite for low-latency admin + API development.
+    use_turso = bool(TURSO_URL and TURSO_AUTH_TOKEN and (is_render or force_turso))
+
     for attempt in range(retries):
         try:
-            if TURSO_URL and TURSO_AUTH_TOKEN:
+            if use_turso:
                 # Direct Connection Strategy
                 try:
                     url_to_use = TURSO_URL
@@ -161,10 +166,17 @@ def get_db(retries=3):
                         except (TypeError, Exception):
                             token_url = f"{url_to_use}?authToken={TURSO_AUTH_TOKEN}"
                             conn = libsql.connect(token_url)
-                    
                 except Exception as e:
-                    if HAS_LIBSQL_EXPERIMENTAL and not os.getenv("RENDER"):
-                        conn = libsql.connect(database=DB_PATH, sync_url=TURSO_URL, auth_token=TURSO_AUTH_TOKEN)
+                    if HAS_LIBSQL_EXPERIMENTAL and not is_render:
+                        try:
+                            conn = libsql.connect(database=DB_PATH, sync_url=TURSO_URL, auth_token=TURSO_AUTH_TOKEN)
+                        except Exception:
+                            print(f"[DB ERROR] Turso sync failed, falling back to local: {e}")
+                            conn = libsql.connect(DB_PATH)
+                    elif not is_render:
+                        # DEVELOPMENT FALLBACK: Use local if Turso fails
+                        print(f"[DB ERROR] Turso connection failed, falling back to local: {e}")
+                        conn = libsql.connect(DB_PATH)
                     else:
                         raise e
             else:
@@ -178,11 +190,13 @@ def get_db(retries=3):
             
             # Performance & Concurrency settings
             try:
-                is_remote = TURSO_URL and TURSO_AUTH_TOKEN and not HAS_LIBSQL_EXPERIMENTAL
+                is_remote = use_turso and not HAS_LIBSQL_EXPERIMENTAL
                 if not is_remote:
                     conn.execute("PRAGMA journal_mode=WAL")
                     conn.execute("PRAGMA busy_timeout=10000")
                     conn.execute("PRAGMA synchronous=NORMAL") # Faster but still safe
+                    conn.execute("PRAGMA cache_size=10000") # ~10MB to 40MB cache
+                    conn.execute("PRAGMA mmap_size=268435456") # 256MB mmap
             except Exception:
                 pass
                 
@@ -199,8 +213,12 @@ def get_db(retries=3):
 
 def init_db():
     print(f"[DB] Initializing database at {DB_PATH}")
-    if TURSO_URL and TURSO_AUTH_TOKEN:
+    is_render = bool(os.getenv("RENDER"))
+    force_turso = os.getenv("FORCE_TURSO", "0") == "1"
+    if TURSO_URL and TURSO_AUTH_TOKEN and (is_render or force_turso):
         print("[DB] Using Turso External Connection")
+    else:
+        print("[DB] Using Local SQLite Connection")
     conn = get_db()
     
     # Check if we are using libsql or standard sqlite3
@@ -414,6 +432,7 @@ def init_db():
             teacher_id INTEGER NOT NULL,
             title TEXT NOT NULL,
             description TEXT,
+            type TEXT DEFAULT 'quiz',
             quiz_data TEXT,
             due_date TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -533,7 +552,11 @@ def init_db():
     try:
         cursor.execute("ALTER TABLE assignments ADD COLUMN bloom_level TEXT")
     except SQLITE_OP_ERROR: pass
-    
+
+    try:
+        cursor.execute("ALTER TABLE assignments ADD COLUMN type TEXT DEFAULT 'quiz'")
+    except SQLITE_OP_ERROR: pass
+
     try:
         cursor.execute("ALTER TABLE student_scores ADD COLUMN bloom_evaluation JSON")
     except SQLITE_OP_ERROR: pass
@@ -597,11 +620,68 @@ def init_db():
         CREATE TABLE IF NOT EXISTS student_roadmaps (
             user_id INTEGER PRIMARY KEY,
             roadmap_data TEXT NOT NULL,
-            last_stats_hash TEXT,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users(id)
+            last_stats_hash TEXT
         )
     """)
+
+    # --- AI LOGS TABLE (For Performance Monitoring) ---
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS ai_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            endpoint TEXT,
+            model TEXT,
+            difficulty TEXT,
+            latency_ms INTEGER,
+            status TEXT,
+            error_message TEXT,
+            feature TEXT DEFAULT 'Unknown',
+            response_content TEXT,
+            eval_score INTEGER,
+            eval_feedback TEXT,
+            created_at TIMESTAMP DEFAULT (DATETIME('now', '+7 hours'))
+        )
+    """)
+    
+    # --- MIGRATIONS FOR AI LOGS ---
+    try:
+        cursor.execute("ALTER TABLE ai_logs ADD COLUMN feature TEXT DEFAULT 'Unknown'")
+    except SQLITE_OP_ERROR: pass # Already exists
+    
+    try:
+        cursor.execute("ALTER TABLE ai_logs ADD COLUMN response_content TEXT")
+    except SQLITE_OP_ERROR: pass
+    try:
+        cursor.execute("ALTER TABLE ai_logs ADD COLUMN eval_score INTEGER")
+    except SQLITE_OP_ERROR: pass
+    try:
+        cursor.execute("ALTER TABLE ai_logs ADD COLUMN eval_feedback TEXT")
+    except SQLITE_OP_ERROR: pass
+
+    # --- PERFORMANCE INDEXES FOR AI MONITORING ---
+    try:
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_ai_logs_created_at ON ai_logs(created_at DESC)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_ai_logs_feature ON ai_logs(feature)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_ai_logs_model_difficulty ON ai_logs(model, difficulty)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_ai_logs_status ON ai_logs(status)")
+    except Exception:
+        pass
+
+    # --- PROVIDER STATUS TABLE (For Fallback Management) ---
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS provider_status (
+            provider_name TEXT PRIMARY KEY,
+            last_failed_at TIMESTAMP DEFAULT (DATETIME('now', '+7 hours')),
+            failure_count INTEGER DEFAULT 0
+        )
+    """)
+    
+    # --- MIGRATIONS FOR DICTIONARY CACHE ---
+    try:
+        cursor.execute("ALTER TABLE dictionary_cache ADD COLUMN word_original TEXT")
+    except SQLITE_OP_ERROR: pass
+
+    conn.commit()
 
     # --- MIGRATION: Recreate saved_vocabulary with UNIQUE(user_id, word, pos) ---
     # SQLite can't alter constraints, so we recreate the table if needed
@@ -775,20 +855,22 @@ def get_cached_dictionary(word: str):
         if row and row['data_json']:
             import json
             return json.loads(row['data_json'])
+        return None
     except Exception as e:
-        # Fallback check for old 'data' column if it still exists somehow
-        try:
-             conn = get_db()
-             cursor = conn.cursor()
-             cursor.execute("SELECT data FROM dictionary_cache WHERE word = ?", (word.lower().strip(),))
-             row = cursor.fetchone()
-             conn.close()
-             if row and row['data']:
-                 import json
-                 return json.loads(row['data'])
-        except Exception: pass
         # print(f"[DB CACHE] Get error for '{word}': {e}")
-    return None
+        return None
+
+def log_ai_request(user_id, endpoint, model, difficulty, latency_ms, status, error="", feature="Unknown", response_content=None, eval_score=None, eval_feedback=None):
+    """Enhanced logging for AI performance monitoring with evaluation data and GMT+7 timestamps."""
+    conn = get_db()
+    try:
+        conn.execute("""
+            INSERT INTO ai_logs (user_id, endpoint, model, difficulty, latency_ms, status, error_message, feature, response_content, eval_score, eval_feedback, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, DATETIME('now', '+7 hours'))
+        """, (user_id, endpoint, model, difficulty, latency_ms, status, error, feature, response_content, eval_score, eval_feedback))
+        conn.commit()
+    except Exception as e:
+        print(f"[DB ERROR] log_ai_request: {e}")
 
 def set_cached_dictionary(word: str, data: dict):
     """Save dictionary data to DB cache (matches router schema)."""
@@ -838,6 +920,7 @@ class LessonCreate(BaseModel):
     title: str
     content: Optional[str] = None
 
+
 class AssignmentCreate(BaseModel):
     class_id: int
     title: str
@@ -847,5 +930,40 @@ class AssignmentCreate(BaseModel):
     due_date: str = ""
     skill_type: Optional[str] = None
     bloom_level: Optional[str] = None
+
+def mark_provider_failed(provider_name: str):
+    """Mark an AI provider as failed in the database."""
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO provider_status (provider_name, last_failed_at, failure_count)
+            VALUES (?, CURRENT_TIMESTAMP, 1)
+            ON CONFLICT(provider_name) DO UPDATE SET
+                last_failed_at = CURRENT_TIMESTAMP,
+                failure_count = failure_count + 1
+        """, (provider_name,))
+        conn.commit()
+        print(f"[DB] Provider {provider_name} marked as FAILED")
+    except Exception as e:
+        print(f"[DB LOG ERROR] {e}")
+
+def is_provider_failed(provider_name: str, window_minutes: int = 10) -> bool:
+    """Check if an AI provider has failed recently."""
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        # Note: SQLite datetime strings are 'YYYY-MM-DD HH:MM:SS'
+        # We check if (last_failed_at + window_minutes) > CURRENT_TIMESTAMP
+        cursor.execute("""
+            SELECT last_failed_at FROM provider_status 
+            WHERE provider_name = ? 
+            AND last_failed_at > datetime('now', '-' || ? || ' minutes')
+        """, (provider_name, window_minutes))
+        result = cursor.fetchone()
+        return result is not None
+    except Exception as e:
+        # print(f"[DB LOG ERROR] {e}")
+        return False
 
 

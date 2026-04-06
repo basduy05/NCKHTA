@@ -277,22 +277,22 @@ def visualize_graph(topic: str = "General"):
     return graph_service.get_knowledge_subgraph(topic)
 
 @app.post("/flashcard/generate")
-def generate_flashcard(word: str, level: str = "A1"):
-    return llm_service.generate_flashcard_content(word, level)
+async def generate_flashcard(word: str, level: str = "A1"):
+    return await llm_service.generate_flashcard_content(word, level)
 
 @app.post("/vocabulary/extract")
-def extract_vocabulary(request: TextRequest):
+async def extract_vocabulary(request: TextRequest):
     """
     Core Feature: Extracts vocabulary list from input text with meanings and phonetics.
     """
-    return llm_service.extract_vocabulary_from_text(request.text)
+    return await llm_service.extract_vocabulary_from_text(request.text)
 
 @app.post("/quiz/generate")
-def generate_quiz(request: TextRequest):
+async def generate_quiz_endpoint(request: TextRequest):
     """
     Core Feature: Generates a quiz based on the input text to test comprehension.
     """
-    return llm_service.generate_quiz_from_text(request.text, request.num_questions)
+    return await llm_service.generate_quiz_from_text(request.text, request.num_questions)
 
 @app.post("/speech/analyze")
 async def analyze_speech(audio_file: UploadFile = File(...)):
@@ -310,4 +310,3 @@ if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=port)
 
 # Force reload
-

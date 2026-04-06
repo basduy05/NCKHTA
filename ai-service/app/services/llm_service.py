@@ -17,28 +17,8 @@ import json_repair
 import cohere
 from pydantic import BaseModel, Field
 
-# Global cache for failed providers to avoid repeated timeouts/auth delays
-# Format: { provider_name: timestamp_of_failure }
-PROVIDER_ERRORS = {}
-PROVIDER_ERRORS_LOCK = threading.Lock()
-FAILURE_WINDOW = 600  # 10 minutes
+# AI Provider fallback management is now handled in app.database
 
-def is_provider_failed(provider: str) -> bool:
-    """Check if a provider is in a recent failure state."""
-    with PROVIDER_ERRORS_LOCK:
-        if provider not in PROVIDER_ERRORS:
-            return False
-        fail_time = PROVIDER_ERRORS[provider]
-        if time.time() - fail_time > FAILURE_WINDOW:
-            del PROVIDER_ERRORS[provider]
-            return False
-        return True
-
-def mark_provider_failed(provider: str):
-    """Mark a provider as failed."""
-    with PROVIDER_ERRORS_LOCK:
-        PROVIDER_ERRORS[provider] = time.time()
-        print(f"[LLM] Marking {provider} as FAILED. Will skip for {FAILURE_WINDOW/60: .1f} mins.")
 
 # --- Pydantic Schemas for Strict AI Outputs ---
 class FlashcardSchema(BaseModel):
@@ -84,8 +64,10 @@ class FSRSQuizListSchema(BaseModel):
     items: List[FSRSQuestionSchema]
 # ----------------------------------------------
 print("[LLM] Core imports done, loading database...")
-from ..database import get_db, get_cached_dictionary, set_cached_dictionary
+from ..database import get_db, get_cached_dictionary, set_cached_dictionary, get_setting, mark_provider_failed, is_provider_failed, log_ai_request
+from .referee_service import trigger_evaluation, fast_repair_json
 from ..utils.resilience import retry
+from ..utils.json_utils import clean_json_string
 
 print("[LLM] Loading dotenv...")
 load_dotenv()
@@ -96,8 +78,6 @@ _dict_cache: dict = {}      # word -> {"data": ..., "ts": timestamp}
 _cache_lock = threading.Lock()
 CACHE_TTL = 3600 * 24       # 24 hours
 CACHE_MAX_SIZE = 500
-
-from ..database import get_db, get_cached_dictionary, set_cached_dictionary, get_setting
 
 def _cache_get(word: str):
     """Get cached dictionary result if still valid (Memory -> DB)."""
@@ -170,10 +150,10 @@ def is_data_complete(data: dict) -> bool:
 
 # ─── REQUEST QUEUING (SEMAPHORE) ───────────────────────────────────────────
 
-# Limit concurrent AI requests to 5 to prevent OOM on Render free tier (512MB) while allowing some overlap
-print("[LLM] Initializing semaphore...")
-ai_semaphore = asyncio.Semaphore(5)
-print("[LLM] Semaphore initialized.")
+# Limit concurrent AI requests to 15 (Optimized for high RPM Gemma/Flash Lite models)
+print("[LLM] Initializing semaphore (v2 - concurrency boost)...")
+ai_semaphore = asyncio.Semaphore(15)
+print("[LLM] Semaphore initialized with 15 slots.")
 
 def get_queue_status():
     """Returns the current number of active and waiting requests."""
@@ -193,6 +173,13 @@ def truncate_context(text: str, max_tokens: int = 5000) -> str:
         print(f"[CONTEXT] Truncating text from {len(text)} to {char_limit} chars.")
         return text[:char_limit] + "... [truncated]"
     return text
+
+
+def _is_local_fast_mode() -> bool:
+    """Prefer lower-latency model routing in local development by default."""
+    if os.getenv("RENDER"):
+        return False
+    return os.getenv("FAST_AI_MODE", "1") == "1"
 
 # ─── COHERE RERANK INTEGRATION ──────────────────────────────────────────────
 
@@ -228,15 +215,16 @@ def rerank_results(query: str, documents: list, top_n: int = 3) -> list:
         print(f"[RERANK] Error: {e}")
         return documents[:top_n]
 
-# Redundant _get_setting removed, using database.get_setting directly
-
-
 def parse_json_response(text):
     if not text:
-        return []
+        return {"name": "Error", "description": "AI không phản hồi nội dung. Vui lòng thử lại."}
+    
+    # 1. Clean up potential markdown wrappers
+    clean_text = text.strip()
+    if not clean_text:
+        return {"name": "Error", "description": "AI phản hồi nội dung rỗng. Vui lòng thử lại."}
+
     try:
-        # 1. Clean up potential markdown wrappers
-        clean_text = text.strip()
         if "```json" in clean_text:
             match = re.search(r"```json\s*(.*?)\s*```", clean_text, re.DOTALL)
             if match:
@@ -248,129 +236,367 @@ def parse_json_response(text):
         
         # 2. Try standard json
         try:
-            return json.loads(clean_text)
-        except:
+            parsed = json.loads(clean_text)
+            if isinstance(parsed, dict): return parsed
+            return {"name": "Response", "description": str(parsed)}
+        except Exception:
             # 3. Fallback to json_repair for truncated or messy responses
-            return json_repair.repair_json(clean_text, return_objects=True)
+            try:
+                parsed = json_repair.repair_json(clean_text, return_objects=True)
+                if isinstance(parsed, dict):
+                    if not parsed.get("description") and not parsed.get("content"):
+                         return {"name": "Response", "description": str(parsed)}
+                    return parsed
+                
+                # If parsed is a string or list, use it as the description
+                return {"name": "Response", "description": str(parsed) if parsed else clean_text}
+            except Exception:
+                # Absolute fallback: treat the whole thing as plain text
+                return {"name": "Response", "description": clean_text}
     except Exception as e:
         print(f"[LLM PARSE] Critical Error: {e}")
-        return []
+        return {"name": "Error", "description": str(e)}
 
-def get_llm(provider: Optional[str] = None):
+
+def _parse_json_strict(text: str):
+    """Fast strict JSON parse helper used by self-healing paths."""
+    try:
+        return json.loads(clean_json_string(text or ""))
+    except Exception:
+        return None
+
+
+def _is_valid_quiz_payload(payload: Any) -> bool:
+    if isinstance(payload, list):
+        items = payload
+    elif isinstance(payload, dict) and isinstance(payload.get("items"), list):
+        items = payload["items"]
+    else:
+        return False
+    if not items:
+        return False
+    for item in items:
+        if not isinstance(item, dict):
+            return False
+        if not all(k in item for k in ("question", "options", "answer")):
+            return False
+        if not isinstance(item.get("options"), list) or len(item.get("options")) < 2:
+            return False
+    return True
+
+
+def _is_valid_ipa_payload(payload: Any) -> bool:
+    if not isinstance(payload, dict):
+        return False
+    required = ["lesson_title", "sounds", "minimal_pairs", "practice_sentences", "quiz"]
+    if any(k not in payload for k in required):
+        return False
+    if not isinstance(payload.get("sounds"), list) or len(payload.get("sounds")) < 3:
+        return False
+    if not isinstance(payload.get("quiz"), list) or len(payload.get("quiz")) < 2:
+        return False
+    return True
+
+
+def _is_valid_exercises_payload(payload: Any) -> bool:
+    if not isinstance(payload, dict):
+        return False
+    has_exercises = isinstance(payload.get("exercises"), list)
+    has_quiz = isinstance(payload.get("quiz"), list)
+    if not (has_exercises or has_quiz):
+        return False
+    if not isinstance(payload.get("vocabulary"), list):
+        return False
+    if "summary_vn" not in payload:
+        return False
+    return True
+
+def get_llm(difficulty: str = "medium", provider: Optional[str] = None):
     """
     Factory to return the configured LLM instance.
-    Reads API key from DB settings first.
-    Skips providers in a recent failure state (cached globally).
+    Routes to different models based on 'difficulty' level.
+    Uses only VERIFIED WORKING model names from Google AI Studio.
+    - HARD: gemini-2.5-flash (best quality, 5 RPM free)
+    - MEDIUM: gemini-2.5-flash-lite (fast, 10 RPM free)
+    - EASY: gemini-2.5-flash-lite (fastest, 10 RPM free)
+    Fallback: Cohere command-a-03-2025 (675ms, no Gemini key needed)
     """
-    import app.database as db # Local import to avoid circular dependency if any
-    
     if provider is None:
-        # Priority 1: Google Gemini (Currently expired, so we want to skip it quickly)
+        # Priority 1: Google Gemini (Optimized Routing)
         if not is_provider_failed("Gemini"):
-            gemini_key = db.get_setting("GOOGLE_API_KEY")
+            gemini_key = get_setting("GOOGLE_API_KEY")
+            print(f"[LLM DEBUG] Gemini Key exists: {bool(gemini_key and gemini_key.strip())}", flush=True)
             if gemini_key and gemini_key.strip():
-                try:
-                    print(f"[LLM] Selecting Google (gemini-1.5-flash)", flush=True)
-                    return ChatGoogleGenerativeAI(model="gemini-1.5-flash", google_api_key=gemini_key, timeout=20, temperature=0.7)
-                except Exception as e:
-                    print(f"[LLM] Gemini Init Failed: {e}")
-                    mark_provider_failed("Gemini")
+                # Use ONLY verified model names from Google AI Studio (User's Quota List)
+                if difficulty == "hard":
+                    model_names = ["gemini-3.1-pro", "gemini-3-flash", "gemini-2.5-pro", "gemini-1.5-pro"]
+                elif difficulty == "easy":
+                    model_names = ["gemini-3.1-flash-lite", "gemini-2.5-flash-lite", "gemma-3-12b", "gemma-3-27b"]
+                else: # medium
+                    model_names = ["gemini-3.1-flash-lite", "gemini-3-flash", "gemini-2.5-flash", "gemini-1.5-flash"]
+                
+                print(f"[LLM DEBUG] Trying Gemini/Gemma models: {model_names}", flush=True)
+                for m in model_names:
+                    try:
+                        print(f"[LLM] Selecting Google ({m}) | Difficulty: {difficulty}", flush=True)
+                        return ChatGoogleGenerativeAI(model=m, google_api_key=gemini_key, timeout=20, temperature=0.7)
+                    except Exception as e:
+                        print(f"[LLM] Gemini {m} Init Failed: {e}", flush=True)
+                        continue
+                
+                # Ultimate fallback for Google
+                return ChatGoogleGenerativeAI(model="gemini-3.1-flash-lite", google_api_key=gemini_key, timeout=20)
         
         # Priority 2: OpenAI
         if not is_provider_failed("OpenAI"):
-            openai_key = db.get_setting("OPENAI_API_KEY")
+            openai_key = get_setting("OPENAI_API_KEY")
             if openai_key and openai_key.strip():
                 try:
                     print(f"[LLM] Selecting OpenAI (gpt-4o-mini)", flush=True)
-                    return ChatOpenAI(model="gpt-4o-mini", openai_api_key=openai_key, timeout=20, temperature=0.7)
+                    return ChatOpenAI(model="gpt-4o-mini", openai_api_key=openai_key, request_timeout=20, temperature=0.7)
                 except Exception as e:
                     print(f"[LLM] OpenAI Init Failed: {e}")
                     mark_provider_failed("OpenAI")
         
-        # Priority 3: Cohere (Reliable Fallback)
-        cohere_key = db.get_setting("COHERE_API_KEY")
+        # Priority 3: Cohere (Reliable Fallback - VERIFIED WORKING)
+        cohere_key = get_setting("COHERE_API_KEY")
         if cohere_key and cohere_key.strip():
-            print(f"[LLM] Selecting Cohere (fallback)", flush=True)
-            return ChatCohere(model="command-nightly", cohere_api_key=cohere_key, temperature=0.7)
+            # Prioritize command-a-03-2025 for speed as requested
+            cohere_models = ["command-a-03-2025", "command-r-08-2024", "command-r"]
+            for cm in cohere_models:
+                try:
+                    print(f"[LLM] Selecting Cohere ({cm})", flush=True)
+                    return ChatCohere(model=cm, cohere_api_key=cohere_key, temperature=0.7)
+                except Exception as e:
+                    print(f"[LLM] Cohere {cm} Init Failed: {e}", flush=True)
+                    continue
+            return ChatCohere(model="command-r-08-2024", cohere_api_key=cohere_key)
             
         print("[LLM] NO PROVIDERS CONFIGURED OR AVAILABLE.")
         return None
     
     # Specific provider requested
     if provider == "gemini":
-        key = db.get_setting("GOOGLE_API_KEY")
-        return ChatGoogleGenerativeAI(model="gemini-1.5-flash", google_api_key=key) if key else None
+        key = get_setting("GOOGLE_API_KEY")
+        return ChatGoogleGenerativeAI(model="gemini-3.1-flash-lite", google_api_key=key, timeout=20) if key else None
     if provider == "openai":
-        key = db.get_setting("OPENAI_API_KEY")
-        return ChatOpenAI(model="gpt-4o-mini", openai_api_key=key) if key else None
+        key = get_setting("OPENAI_API_KEY")
+        return ChatOpenAI(model="gpt-4o-mini", openai_api_key=key, request_timeout=20) if key else None
     if provider == "cohere":
-        key = db.get_setting("COHERE_API_KEY")
-        return ChatCohere(model="command-nightly", cohere_api_key=key) if key else None
+        key = get_setting("COHERE_API_KEY")
+        return ChatCohere(model="command-a-03-2025", cohere_api_key=key) if key else None
     return None
 
 # ─── SAFE LLM INVOKE with retry ──────────────────────────────────────────────
 MAX_RETRIES = 1
 RETRY_DELAY = 0.5
 
-def _safe_invoke(chain, params: dict, retries: int = MAX_RETRIES):
-    """Invoke LLM chain with automatic retry and failure caching."""
+def _safe_invoke(chain, params: dict, difficulty: str = "medium", retries: int = MAX_RETRIES, feature: str = "Unknown"):
+    """
+    Wraps chain.invoke with retry logic, failure caching, and latency logging.
+    """
+    start_time = time.time()
     last_error = None
+    model_name = "unknown"
+    
+    # Attempt to extract model name from chain for logging
+    try:
+        if hasattr(chain, 'last'): model_name = str(getattr(chain.last, 'model_name', 'unknown'))
+        elif hasattr(chain, 'model_name'): model_name = chain.model_name
+    except: pass
+
     for attempt in range(retries + 1):
         try:
-            return chain.invoke(params)
+            res = chain.invoke(params)
+            latency = int((time.time() - start_time) * 1000)
+            
+            # Log successful request
+            try:
+                log_ai_request(
+                    user_id=None,
+                    endpoint="invoke",
+                    model=model_name,
+                    difficulty=difficulty,
+                    latency_ms=latency,
+                    status="success",
+                    feature=feature,
+                    response_content=res.content
+                )
+                # TRIGGER REFEREE EVALUATION (Background)
+                trigger_evaluation(None, "invoke", params, res.content, model_name, feature)
+            except Exception as e: print(f"[LLM LOG ERROR] {e}")
+            
+            return res
         except Exception as e:
             last_error = e
             error_str = str(e).lower()
-            is_auth_error = any(k in error_str for k in ["api_key", "unauthorized", "expired", "401", "403", "forbidden"])
             
-            if is_auth_error:
-                # Detect provider
-                provider_name = "Gemini" if "google" in error_str or "gemini" in error_str else "OpenAI"
-                print(f"[LLM ERROR] {provider_name} Auth Failed. Marking as failed for {FAILURE_WINDOW}s.")
+            # 429 = Quota, 401/403 = Auth, INVALID_ARGUMENT = expired key
+            is_quota_error = any(k in error_str for k in ["quota", "rate_limit", "429", "too many requests", "resource_exhausted"])
+            is_auth_error = any(k in error_str for k in ["api_key", "unauthorized", "expired", "401", "403", "forbidden", "invalid_argument", "api key expired"])
+            
+            if is_auth_error or is_quota_error:
+                provider_name = "Gemini" if "google" in error_str or "gemini" in error_str else ("OpenAI" if "openai" in error_str else "Unknown")
+                reason = "Quota" if is_quota_error else "Auth"
+                print(f"[LLM ERROR] {provider_name} {reason} Failed. Error: {e}. Marking for {FAILURE_WINDOW}s.")
                 mark_provider_failed(provider_name)
                 
                 # Fallback to Cohere immediately
                 fallback_llm = get_llm(provider="cohere")
-                if fallback_llm and hasattr(chain, 'first'):
-                    return (chain.first | fallback_llm).invoke(params)
+                if fallback_llm:
+                    print(f"[LLM] Falling back to Cohere due to {reason} error...")
+                    # Reconstruct chain if it's a pipe-style sequence
+                    fallback_chain = (chain.first | fallback_llm) if hasattr(chain, 'first') else fallback_llm
+                    res = fallback_chain.invoke(params)
+                    
+                    log_ai_request(None, "invoke_fallback", "command-r-08-2024", difficulty, latency, "fallback", error_str, feature=feature, response_content=res.content)
+                    # TRIGGER REFEREE EVALUATION (Background)
+                    trigger_evaluation(None, "invoke_fallback", params, res.content, "command-r-08-2024", feature)
+                    return res
+            else:
+                print(f"[LLM ERROR] Unexpected error on attempt {attempt+1}: {e}")
             
             if attempt < retries:
                 time.sleep(RETRY_DELAY)
+    latency = int((time.time() - start_time) * 1000)
+    log_ai_request(None, "invoke_error", model_name, difficulty, latency, "error", str(last_error), feature=feature)
+    print(f"[LLM ERROR] All retries failed for safe_invoke. Final error: {last_error}")
     raise last_error
 
-async def _safe_invoke_async(chain, params: dict, retries: int = MAX_RETRIES):
-    """Async version of _safe_invoke with failure caching."""
+async def _safe_invoke_async(chain, params: dict, difficulty: str = "medium", retries: int = MAX_RETRIES, feature: str = "Unknown"):
+    """Async version of _safe_invoke with failure caching and latency logging."""
+    start_time = time.time()
     last_error = None
+    model_name = "unknown"
+    
+    # Attempt to extract model name from chain for logging
+    try:
+        if hasattr(chain, 'last'): model_name = str(getattr(chain.last, 'model_name', 'unknown'))
+        elif hasattr(chain, 'model_name'): model_name = chain.model_name
+    except: pass
+
     for attempt in range(retries + 1):
         try:
             if hasattr(chain, 'ainvoke'):
-                return await chain.ainvoke(params)
-            return await asyncio.to_thread(chain.invoke, params)
+                res = await chain.ainvoke(params)
+            else:
+                res = await asyncio.to_thread(chain.invoke, params)
+            
+            latency = int((time.time() - start_time) * 1000)
+            
+            # Log successful async request
+            try:
+                log_ai_request(
+                    user_id=None,
+                    endpoint="ainvoke",
+                    model=model_name,
+                    difficulty=difficulty,
+                    latency_ms=latency,
+                    status="success",
+                    feature=feature,
+                    response_content=res.content
+                )
+                # TRIGGER REFEREE EVALUATION (Background)
+                trigger_evaluation(None, "ainvoke", params, res.content, model_name, feature)
+            except Exception as e: print(f"[LLM LOG ERROR] {e}")
+            
+            return res
         except Exception as e:
             last_error = e
             error_str = str(e).lower()
-            is_auth_error = any(k in error_str for k in ["api_key", "unauthorized", "expired", "401", "403", "forbidden"])
+            is_auth_error = any(k in error_str for k in ["api_key", "unauthorized", "expired", "401", "403", "forbidden", "404", "not_found", "not found"])
+            is_quota_error = any(k in error_str for k in ["quota", "rate_limit", "429", "too many requests", "resource_exhausted", "limit exceeded"])
             
-            if is_auth_error:
-                provider_name = "Gemini" if "google" in error_str or "gemini" in error_str else "OpenAI"
-                print(f"[LLM ERROR] {provider_name} Auth Failed. Marking as failed.")
+            if is_auth_error or is_quota_error:
+                provider_name = "Gemini" if "google" in error_str or "gemini" in error_str else ("OpenAI" if "openai" in error_str else "Unknown")
+                reason = "Quota" if is_quota_error else "Auth"
+                print(f"[LLM ERROR] {provider_name} {reason} Failed (Async). Error: {e}. Marking as failed.")
                 mark_provider_failed(provider_name)
                 
                 fallback_llm = get_llm(provider="cohere")
-                if fallback_llm and hasattr(chain, 'first'):
-                    fallback_chain = chain.first | fallback_llm
+                if fallback_llm:
+                    print(f"[LLM] Falling back to Cohere (Async) due to {reason} error...")
+                    fallback_chain = (chain.first | fallback_llm) if hasattr(chain, 'first') else fallback_llm
+                    res = None
                     if hasattr(fallback_chain, 'ainvoke'):
-                        return await fallback_chain.ainvoke(params)
-                    return await asyncio.to_thread(fallback_chain.invoke, params)
+                        res = await fallback_chain.ainvoke(params)
+                    else:
+                        res = await asyncio.to_thread(fallback_chain.invoke, params)
+                    
+                    log_ai_request(None, "ainvoke_fallback", "command-r-08-2024", difficulty, latency, "fallback", error_str, feature=feature, response_content=res.content)
+                    
+                    # TRIGGER REFEREE EVALUATION (Background)
+                    trigger_evaluation(None, "ainvoke_fallback", params, res.content, "command-r-08-2024", feature)
+                    
+                    # Store warning
+                    warning = "> [!CAUTION]\n> **Cảnh báo:** API Key Gemini của bạn đã hết hạn hoặc hết hạn mức. Hệ thống sử dụng AI dự phòng với chất lượng thấp hơn. Vui lòng cập nhật API Key mới.\n\n"
+                    if res:
+                        setattr(res, '_warning', warning)
+                    return res
+            else:
+                print(f"[LLM ERROR] Unexpected async error on attempt {attempt+1}: {e}")
             
             if attempt < retries:
                 await asyncio.sleep(RETRY_DELAY)
+
+    latency = int((time.time() - start_time) * 1000)
+    log_ai_request(None, "ainvoke_error", model_name, difficulty, latency, "error", str(last_error), feature=feature)
+    print(f"[LLM ERROR] All retries failed for safe_invoke_async. Final error: {last_error}")
     raise last_error
 
+async def _safe_astream(chain, params, difficulty: str = "medium", feature: str = "Unknown"):
+    """
+    Async generator that wraps chain.astream with fallback logic and latency logging.
+    """
+    start_time = time.time()
+    model_name = "unknown"
+    
+    try:
+        if hasattr(chain, 'last'): model_name = str(getattr(chain.last, 'model_name', 'unknown'))
+        elif hasattr(chain, 'model_name'): model_name = chain.model_name
+    except: pass
+
+    try:
+        async for chunk in chain.astream(params):
+            yield chunk
+        
+        latency = int((time.time() - start_time) * 1000)
+        try:
+            log_ai_request(None, "astream", model_name, difficulty, latency, "success", feature=feature)
+        except Exception as e: print(f"[LLM LOG ERROR] {e}")
+            
+    except Exception as e:
+        error_str = str(e).lower()
+        # 404 NOT_FOUND can happen if model name is wrong or unavailable
+        is_auth_error = any(k in error_str for k in ["api_key", "unauthorized", "expired", "401", "403", "forbidden", "404", "not_found", "not found", "invalid_argument", "api key expired"])
+        is_quota_error = any(k in error_str for k in ["quota", "429", "rate_limit", "resource_exhausted", "limit exceeded"])
+        
+        if is_auth_error or is_quota_error:
+            reason = "Auth/404" if is_auth_error else "Quota"
+            provider_name = "Gemini" if "google" in error_str or "gemini" in error_str else "OpenAI"
+            mark_provider_failed(provider_name)
+            
+            fallback_llm = get_llm(provider="cohere")
+            if fallback_llm:
+                print(f"[LLM] Falling back to Cohere (Stream) due to {reason} error: {e}")
+                # Reconstruct chain
+                fallback_chain = (chain.first | fallback_llm) if hasattr(chain, 'first') else fallback_llm
+                async for chunk in fallback_chain.astream(params):
+                    yield chunk
+                
+                latency = int((time.time() - start_time) * 1000)
+                log_ai_request(None, "astream_fallback", "command-r-08-2024", difficulty, latency, "fallback", error_str, feature=feature)
+                return
+        
+        latency = int((time.time() - start_time) * 1000)
+        log_ai_request(None, "astream_error", model_name, difficulty, latency, "error", str(e), feature=feature)
+        print(f"[LLM STREAM ERROR] {e}")
+        raise e
 
 
-def generate_flashcard_content(word: str, level: str = "A1"):
-    llm = get_llm()
+
+async def generate_flashcard_content(word: str, level: str = "A1"):
+    llm = get_llm(difficulty="easy")
     if not llm:
         return {
             "word": word,
@@ -391,9 +617,10 @@ def generate_flashcard_content(word: str, level: str = "A1"):
     
     chain = prompt | llm
     try:
-        response = _safe_invoke(chain, {"word": word, "level": level})
-        result = parser.invoke(response)
-        return result.model_dump()
+        async with ai_semaphore:
+            response = await _safe_invoke_async(chain, {"word": word, "level": level}, difficulty="easy", feature="Flashcard")
+            result = parser.invoke(response)
+            return result.model_dump()
     except Exception as e:
         print(f"generate_flashcard_content error: {e}")
         if 'response' in locals() and hasattr(response, 'content'):
@@ -408,13 +635,13 @@ def generate_flashcard_content(word: str, level: str = "A1"):
 
 from langchain_core.output_parsers import PydanticOutputParser
 
-def extract_vocabulary_from_text(text: str):
+async def extract_vocabulary_from_text(text: str):
     """
     Uses LLM to analyse text and extract key vocabulary words with metadata.
     Essential for the 'Input Text -> Learn' feature.
     Guaranteed JSON schema output via PydanticOutputParser.
     """
-    llm = get_llm()
+    llm = get_llm(difficulty="easy")
     if not llm:
         return [{"word": "Error", "meaning": "LLM not configured"}]
         
@@ -438,11 +665,12 @@ def extract_vocabulary_from_text(text: str):
 
     chain = prompt | llm
     try:
-        response = _safe_invoke(chain, {"text": text, "num": num})
-        # Parse text into Pydantic model
-        result = parser.invoke(response)
-        # Convert List[VocabItemSchema] -> List[dict]
-        return [item.model_dump() for item in result.items]
+        async with ai_semaphore:
+            response = await _safe_invoke_async(chain, {"text": text, "num": num}, difficulty="easy", feature="Vocab Extraction")
+            # Parse text into Pydantic model
+            result = parser.invoke(response)
+            # Convert List[VocabItemSchema] -> List[dict]
+            return [item.model_dump() for item in result.items]
     except Exception as e:
         print(f"extract_vocabulary error: {e}")
         # Fallback to old parsing if OutputParser fails due to hallucination
@@ -457,13 +685,14 @@ def extract_vocabulary_from_text(text: str):
                 except: pass
         return [{"word": "Error", "meaning_vn": str(e), "pos": "", "meaning_en": "", "example": "", "level": "", "phonetic": ""}]
 
-def generate_quiz_from_text(text: str, num_questions: int = 5):
+async def generate_quiz_from_text(text: str, num_questions: int = 5):
     """
     Generates dynamic IELTS-style questions (MCQ, T/F/NG, Matching, Fill-in-blanks)
     based on the specific text context.
     Ensured strict format with PydanticOutputParser.
     """
-    llm = get_llm()
+    difficulty = "easy" if _is_local_fast_mode() else "medium"
+    llm = get_llm(difficulty=difficulty)
     if not llm:
         return []
         
@@ -490,10 +719,31 @@ def generate_quiz_from_text(text: str, num_questions: int = 5):
     )
 
     chain = prompt | llm
+    repair_context = f"Quiz from text ({num_questions} questions): {text[:220]}"
     try:
-        response = _safe_invoke(chain, {"text": text, "num": num_questions})
-        result = parser.invoke(response)
-        return [item.model_dump() for item in result.items]
+        async with ai_semaphore:
+            response = await _safe_invoke_async(chain, {"text": text, "num": num_questions}, difficulty=difficulty, feature="Quiz Generation")
+            # Fast path: strict parser first.
+            try:
+                result = parser.invoke(response)
+                return [item.model_dump() for item in result.items]
+            except Exception:
+                # Slow path: one-shot repair only when format is invalid.
+                repaired = await fast_repair_json(repair_context, getattr(response, "content", ""), feature="Quiz Generation")
+                if repaired:
+                    repaired_obj = _parse_json_strict(repaired)
+                    if _is_valid_quiz_payload(repaired_obj):
+                        if isinstance(repaired_obj, dict):
+                            items = repaired_obj.get("items", [])
+                        else:
+                            items = repaired_obj
+                        return items
+
+                # Last fallback: old tolerant parser.
+                res = parse_json_response(getattr(response, "content", ""))
+                if _is_valid_quiz_payload(res):
+                    return res if isinstance(res, list) else res.get("items", [])
+                return []
     except Exception as e:
         print(f"generate_quiz error: {e}")
         if 'response' in locals() and hasattr(response, 'content'):
@@ -507,7 +757,7 @@ def generate_fsrs_review_quiz(words: list):
     Generates a contextual review quiz for a list of words due for SRS review.
     Ensures strict format consistency with Pydantic schemas.
     """
-    llm = get_llm()
+    llm = get_llm(difficulty="medium")
     if not llm or not words:
         return []
 
@@ -536,7 +786,7 @@ def generate_fsrs_review_quiz(words: list):
     # Note: frontend needs to handle word_id mapping if we want to auto-update FSRS after these quizzes.
     chain = prompt | llm
     try:
-        response = _safe_invoke(chain, {"words": words_str})
+        response = _safe_invoke(chain, {"words": words_str}, feature="FSRS Quiz")
         result = parser.invoke(response)
         return [item.model_dump() for item in result.items]
     except Exception as e:
@@ -548,7 +798,7 @@ def generate_fsrs_review_quiz(words: list):
         return []
 
 def generate_example_sentence(word: str, meaning: str = "", level: str = "B1"):
-    llm = get_llm()
+    llm = get_llm(difficulty="easy")
     if not llm:
         return f"Example for {word} (Auto-generated placeholder)"
 
@@ -558,7 +808,7 @@ def generate_example_sentence(word: str, meaning: str = "", level: str = "B1"):
 
     chain = prompt | llm
     try:
-        response = _safe_invoke(chain, {"word": word, "meaning": meaning, "level": level})
+        response = _safe_invoke(chain, {"word": word, "meaning": meaning, "level": level}, feature="Example Sentence")
         return response.content
     except Exception as e:
         print(f"LLM Error: {e}")
@@ -704,7 +954,7 @@ def translate_meanings_with_ai(word: str, meanings: list, estimate_level: bool =
     to translate, consolidate, and enrich raw Free Dictionary API data.
     Adds: register (formal/informal/slang), frequency, usage_notes, idioms.
     """
-    llm = get_llm()
+    llm = get_llm(difficulty="easy")
     if not llm:
         return meanings, "B1", [], [], []
     
@@ -758,7 +1008,7 @@ def translate_meanings_with_ai(word: str, meanings: list, estimate_level: bool =
     @retry(tries=2, delay=2.0)
     def _invoke_with_retry():
         try:
-            return _safe_invoke(chain, {"word": word, "definitions": definitions_text})
+            return _safe_invoke(chain, {"word": word, "definitions": definitions_text}, difficulty="easy", feature="Dictionary Translation")
         except Exception as e:
             raise e
 
@@ -797,7 +1047,7 @@ async def translate_meanings_with_ai_stream(word: str, meanings: list, free_data
     Takes optional free_data to preserve phonetics and other metadata from Free Dictionary API.
     """
     start_time = time.time()
-    llm = get_llm()
+    llm = get_llm(difficulty="easy")
     if not llm:
         yield json.dumps({"error": "LLM not configured"})
         return
@@ -974,7 +1224,7 @@ def lookup_dictionary_full_ai(word: str):
     Used for abbreviations, slang, proper nouns, etc.
     Multi-source: Cambridge, Oxford, Merriam-Webster, Longman, Urban Dictionary.
     """
-    llm = get_llm()
+    llm = get_llm(difficulty="easy")
     if not llm:
         return {"word": word, "error": "LLM not configured"}
 
@@ -1013,8 +1263,9 @@ def lookup_dictionary_full_ai(word: str):
     chain = prompt | llm
     try:
         try:
-            response = _safe_invoke(chain, {"word": word})
+            response = _safe_invoke(chain, {"word": word}, difficulty="easy", feature="Full Dictionary Lookup")
         except Exception as e:
+            error_str = str(e).lower()
             is_quota = any(k in error_str for k in ["quota", "rate_limit", "resource_exhausted", "429", "too many requests", "403", "404", "forbidden", "not found"])
             is_auth = any(k in error_str for k in ["api_key", "unauthorized", "invalid", "api key", "expired"])
             
@@ -1024,7 +1275,7 @@ def lookup_dictionary_full_ai(word: str):
                 fallback_llm = get_llm(provider="cohere")
                 if fallback_llm:
                     chain = prompt | fallback_llm
-                    response = _safe_invoke(chain, {"word": word})
+                    response = _safe_invoke(chain, {"word": word}, feature="Full Dictionary Lookup")
                 else:
                     raise e
             else:
@@ -1045,7 +1296,7 @@ async def lookup_dictionary_full_ai_stream(word: str):
     """
     Streaming AI dictionary lookup. Yields JSON strings.
     """
-    llm = get_llm()
+    llm = get_llm(difficulty="easy")
     if not llm:
         yield json.dumps({"word": word, "error": "LLM not configured"})
         return
@@ -1290,9 +1541,10 @@ async def lookup_dictionary_stream(word: str, free_data: dict = None, wikipedia_
 # NEW FEATURES: IPA, File Exercises, TOEIC/IELTS, Reading, Writing, Speaking
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def generate_ipa_lesson(words: list = None, focus: str = "vowels"):
+async def generate_ipa_lesson(words: list = None, focus: str = "vowels"):
     """Generate an IPA learning lesson with interactive exercises."""
-    llm = get_llm()
+    difficulty = "easy" if _is_local_fast_mode() else "medium"
+    llm = get_llm(difficulty=difficulty)
     if not llm:
         return {"error": "LLM not configured"}
 
@@ -1317,7 +1569,8 @@ def generate_ipa_lesson(words: list = None, focus: str = "vowels"):
         '  "ipa2": IPA of word2\n'
         '  "sound_difference": which sound changes\n'
         '"practice_sentences": array of 3-4 sentences focused on target sounds, each with:\n'
-        '  "sentence": the sentence text\n'
+        '  "sentence": the sentence text with the target word replaced by [blank] (e.g. "I [blank] the bird." if target is "saw")\n'
+        '  "answer": the correct word for the [blank]\n'
         '  "ipa": full IPA transcription\n'
         '  "focus_words": array of words containing target sounds\n'
         '"quiz": array of 5 MCQ questions testing IPA knowledge, each with:\n"question": question text\n'
@@ -1327,12 +1580,25 @@ def generate_ipa_lesson(words: list = None, focus: str = "vowels"):
     )
     words_context = f"Include these words in examples if possible: {words_text}" if words_text else ""
     chain = prompt | llm
+    repair_context = f"IPA lesson focus={focus}; words={words_text[:180]}"
     try:
-        response = _safe_invoke(chain, {"focus": focus, "words_context": words_context})
-        result = parse_json_response(response.content)
-        if isinstance(result, dict):
-            return result
-        return {"error": "Could not parse IPA lesson"}
+        async with ai_semaphore:
+            response = await _safe_invoke_async(chain, {"focus": focus, "words_context": words_context}, difficulty=difficulty, feature="IPA Lesson")
+            parsed = _parse_json_strict(getattr(response, "content", ""))
+            if _is_valid_ipa_payload(parsed):
+                return parsed
+
+            repaired = await fast_repair_json(repair_context, getattr(response, "content", ""), feature="IPA Lesson")
+            if repaired:
+                repaired_obj = _parse_json_strict(repaired)
+                if _is_valid_ipa_payload(repaired_obj):
+                    return repaired_obj
+
+            # Keep backward-compatible fallback behavior.
+            result = parse_json_response(getattr(response, "content", ""))
+            if _is_valid_ipa_payload(result):
+                return result
+            return {"error": "Could not parse IPA lesson"}
     except Exception as e:
         print(f"generate_ipa_lesson error: {e}")
         return {"error": str(e)}
@@ -1340,7 +1606,7 @@ def generate_ipa_lesson(words: list = None, focus: str = "vowels"):
 
 async def generate_ipa_lesson_stream(text: str):
     """Streaming version of generate_ipa_lesson."""
-    llm = get_llm()
+    llm = get_llm(difficulty="medium")
     if not llm:
         yield json.dumps({"error": "LLM not configured"})
         return
@@ -1358,7 +1624,7 @@ async def generate_ipa_lesson_stream(text: str):
     chain = prompt | llm
     
     full_content = ""
-    async for chunk in chain.astream({"text": text}):
+    async for chunk in _safe_astream(chain, {"text": text}, difficulty="medium"):
         full_content += chunk.content
         yield json.dumps({"status": "generating", "chunk": chunk.content}, ensure_ascii=False)
     
@@ -1370,14 +1636,16 @@ async def generate_ipa_lesson_stream(text: str):
         yield json.dumps({"error": "Failed to parse AI response"}, ensure_ascii=False)
 
 
-def generate_exercises_from_text(text: str, exercise_type: str = "mixed", num_questions: int = 10):
+async def generate_exercises_from_text(text: str, exercise_type: str = "mixed", num_questions: int = 10):
     """Generate exercises from extracted file text. Supports: quiz, fill-blanks, matching, mixed."""
-    llm = get_llm()
+    llm = get_llm(difficulty="easy")
     if not llm:
         return {"error": "LLM not configured"}
 
     # Truncate long texts
-    text_truncated = text[:3000] if len(text) > 3000 else text
+    # Slightly shorter context in local-fast mode to reduce latency spikes.
+    max_chars = 2200 if _is_local_fast_mode() else 3000
+    text_truncated = text[:max_chars] if len(text) > max_chars else text
 
     # Fetch grammar rules from database
     grammar_context = ""
@@ -1420,20 +1688,34 @@ def generate_exercises_from_text(text: str, exercise_type: str = "mixed", num_qu
         "Return ONLY valid JSON. No markdown."
     )
     chain = prompt | llm
+    repair_context = f"Text Exercises type={exercise_type}, num={num_questions}, text={text_truncated[:220]}"
     try:
-        response = _safe_invoke(chain, {
-            "text": text_truncated,
-            "exercise_type": exercise_type,
-            "num": num_questions,
-            "grammar_context": grammar_context
-        })
-        result = parse_json_response(response.content)
-        if isinstance(result, dict):
-            # Normalize: ensure frontend-expected 'quiz' key exists
-            if "exercises" in result and "quiz" not in result:
-                result["quiz"] = result.pop("exercises")
-            return result
-        return {"error": "Could not generate exercises"}
+        async with ai_semaphore:
+            response = await _safe_invoke_async(chain, {
+                "text": text_truncated,
+                "exercise_type": exercise_type,
+                "num": num_questions,
+                "grammar_context": grammar_context
+            }, difficulty="easy", feature="Text Exercises")
+            parsed = _parse_json_strict(getattr(response, "content", ""))
+            if not _is_valid_exercises_payload(parsed):
+                repaired = await fast_repair_json(repair_context, getattr(response, "content", ""), feature="Text Exercises")
+                if repaired:
+                    parsed = _parse_json_strict(repaired)
+
+            if _is_valid_exercises_payload(parsed):
+                # Normalize: ensure frontend-expected 'quiz' key exists
+                if "exercises" in parsed and "quiz" not in parsed:
+                    parsed["quiz"] = parsed.pop("exercises")
+                return parsed
+
+            result = parse_json_response(getattr(response, "content", ""))
+            if isinstance(result, dict):
+                if "exercises" in result and "quiz" not in result:
+                    result["quiz"] = result.pop("exercises")
+                if _is_valid_exercises_payload(result):
+                    return result
+            return {"error": "Could not generate exercises"}
     except Exception as e:
         print(f"generate_exercises_from_text error: {e}")
         return {"error": str(e)}
@@ -1441,7 +1723,7 @@ def generate_exercises_from_text(text: str, exercise_type: str = "mixed", num_qu
 
 async def generate_exercises_from_text_stream(text: str, exercise_type: str = "mixed", num_questions: int = 10):
     """Streaming version of generate_exercises_from_text."""
-    llm = get_llm()
+    llm = get_llm(difficulty="medium")
     if not llm:
         yield json.dumps({"error": "LLM not configured"})
         return
@@ -1485,12 +1767,12 @@ async def generate_exercises_from_text_stream(text: str, exercise_type: str = "m
     chain = prompt | llm
     
     full_content = ""
-    async for chunk in chain.astream({
+    async for chunk in _safe_astream(chain, {
         "text": text_truncated,
         "exercise_type": exercise_type,
         "num": num_questions,
         "grammar_context": grammar_context
-    }):
+    }, difficulty="medium"):
         full_content += chunk.content
         yield json.dumps({"status": "generating", "chunk": chunk.content}, ensure_ascii=False)
         
@@ -1502,9 +1784,9 @@ async def generate_exercises_from_text_stream(text: str, exercise_type: str = "m
         yield json.dumps({"error": "Failed to parse AI response"}, ensure_ascii=False)
 
 
-def generate_practice_test(test_type: str = "TOEIC", skill: str = "reading", part: str = ""):
+async def generate_practice_test(test_type: str = "TOEIC", skill: str = "reading", part: str = ""):
     """Generate TOEIC/IELTS practice test questions with realistic structure."""
-    llm = get_llm()
+    llm = get_llm(difficulty="medium")
     if not llm:
         return {"error": "LLM not configured"}
 
@@ -1569,16 +1851,17 @@ def generate_practice_test(test_type: str = "TOEIC", skill: str = "reading", par
 
     chain = prompt | llm
     try:
-        response = _safe_invoke(chain, {
-            "test_type": test_type,
-            "skill": skill,
-            "part": part or "general",
-            "format_context": format_context
-        })
-        result = parse_json_response(response.content)
-        if isinstance(result, dict):
-            return result
-        return {"error": "Could not generate practice test"}
+        async with ai_semaphore:
+            response = await _safe_invoke_async(chain, {
+                "test_type": test_type,
+                "skill": skill,
+                "part": part or "general",
+                "format_context": format_context
+            }, difficulty="medium", feature="Practice Test")
+            result = parse_json_response(response.content)
+            if isinstance(result, dict):
+                return result
+            return {"error": "Could not generate practice test"}
     except Exception as e:
         print(f"generate_practice_test error: {e}")
         return {"error": str(e)}
@@ -1586,7 +1869,7 @@ def generate_practice_test(test_type: str = "TOEIC", skill: str = "reading", par
 
 async def generate_practice_test_stream(test_type: str = "TOEIC", skill: str = "reading", part: str = ""):
     """Streaming version of generate_practice_test."""
-    llm = get_llm()
+    llm = get_llm(difficulty="medium")
     if not llm:
         yield json.dumps({"error": "LLM not configured"})
         return
@@ -1616,11 +1899,11 @@ async def generate_practice_test_stream(test_type: str = "TOEIC", skill: str = "
     chain = prompt | llm
     
     full_content = ""
-    async for chunk in chain.astream({
+    async for chunk in _safe_astream(chain, {
         "test_type": test_type,
         "skill": skill,
         "part": part or "general",
-    }):
+    }, difficulty="medium"):
         full_content += chunk.content
         yield json.dumps({"status": "generating", "chunk": chunk.content}, ensure_ascii=False)
         
@@ -1632,9 +1915,9 @@ async def generate_practice_test_stream(test_type: str = "TOEIC", skill: str = "
         yield json.dumps({"error": "Failed to parse AI response"}, ensure_ascii=False)
 
 
-def generate_reading_passage(topic: str = "", level: str = "B1"):
+async def generate_reading_passage(topic: str = "", level: str = "B1"):
     """Generate a reading passage with comprehension questions."""
-    llm = get_llm()
+    llm = get_llm(difficulty="medium")
     if not llm:
         return {"error": "LLM not configured"}
 
@@ -1660,14 +1943,15 @@ def generate_reading_passage(topic: str = "", level: str = "B1"):
     )
     chain = prompt | llm
     try:
-        response = _safe_invoke(chain, {
-            "level": level,
-            "topic": topic or "an interesting general topic",
-        })
-        result = parse_json_response(response.content)
-        if isinstance(result, dict):
-            return result
-        return {"error": "Could not generate reading passage"}
+        async with ai_semaphore:
+            response = await _safe_invoke_async(chain, {
+                "level": level,
+                "topic": topic or "an interesting general topic",
+            }, difficulty="medium", feature="Reading Passage")
+            result = parse_json_response(response.content)
+            if isinstance(result, dict):
+                return result
+            return {"error": "Could not generate reading passage"}
     except Exception as e:
         print(f"generate_reading_passage error: {e}")
         return {"error": str(e)}
@@ -1675,7 +1959,7 @@ def generate_reading_passage(topic: str = "", level: str = "B1"):
 
 async def generate_reading_passage_stream(topic: str = "", level: str = "B1"):
     """Streaming version of generate_reading_passage."""
-    llm = get_llm()
+    llm = get_llm(difficulty="medium")
     if not llm:
         yield json.dumps({"error": "LLM not configured"})
         return
@@ -1689,10 +1973,10 @@ async def generate_reading_passage_stream(topic: str = "", level: str = "B1"):
     chain = prompt | llm
     
     full_content = ""
-    async for chunk in chain.astream({
+    async for chunk in _safe_astream(chain, {
         "level": level,
         "topic": topic or "an interesting general topic",
-    }):
+    }, difficulty="medium"):
         full_content += chunk.content
         yield json.dumps({"status": "generating", "chunk": chunk.content}, ensure_ascii=False)
         
@@ -1704,9 +1988,9 @@ async def generate_reading_passage_stream(topic: str = "", level: str = "B1"):
         yield json.dumps({"error": "Failed to parse AI response"}, ensure_ascii=False)
 
 
-def evaluate_writing(text: str, task_type: str = "essay", target_test: str = "IELTS"):
+async def evaluate_writing(text: str, task_type: str = "essay", target_test: str = "IELTS"):
     """Evaluate writing using IELTS/TOEIC criteria. Returns band score + detailed feedback."""
-    llm = get_llm()
+    llm = get_llm(difficulty="hard")
     if not llm:
         return {"error": "LLM not configured"}
 
@@ -1730,15 +2014,16 @@ def evaluate_writing(text: str, task_type: str = "essay", target_test: str = "IE
     )
     chain = prompt | llm
     try:
-        response = _safe_invoke(chain, {
-            "text": text[:2000],
-            "task_type": task_type,
-            "target_test": target_test,
-        })
-        result = parse_json_response(response.content)
-        if isinstance(result, dict):
-            return result
-        return {"error": "Could not evaluate writing"}
+        async with ai_semaphore:
+            response = await _safe_invoke_async(chain, {
+                "text": text[:2000],
+                "task_type": task_type,
+                "target_test": target_test,
+            }, difficulty="hard", feature="Writing Evaluation")
+            result = parse_json_response(response.content)
+            if isinstance(result, dict):
+                return result
+            return {"error": "Could not evaluate writing"}
     except Exception as e:
         print(f"evaluate_writing error: {e}")
         return {"error": str(e)}
@@ -1746,7 +2031,7 @@ def evaluate_writing(text: str, task_type: str = "essay", target_test: str = "IE
 
 async def evaluate_writing_stream(text: str, task_type: str = "essay", target_test: str = "IELTS"):
     """Streaming version of evaluate_writing."""
-    llm = get_llm()
+    llm = get_llm(difficulty="hard")
     if not llm:
         yield json.dumps({"error": "LLM not configured"})
         return
@@ -1774,11 +2059,11 @@ async def evaluate_writing_stream(text: str, task_type: str = "essay", target_te
     chain = prompt | llm
     
     full_content = ""
-    async for chunk in chain.astream({
+    async for chunk in _safe_astream(chain, {
         "target_test": target_test,
         "task_type": task_type,
         "text": text,
-    }):
+    }, difficulty="hard"):
         full_content += chunk.content
         yield json.dumps({"status": "generating", "chunk": chunk.content}, ensure_ascii=False)
         
@@ -1790,9 +2075,9 @@ async def evaluate_writing_stream(text: str, task_type: str = "essay", target_te
         yield json.dumps({"error": "Failed to parse AI response"}, ensure_ascii=False)
 
 
-def generate_speaking_topic(level: str = "B1", topic_type: str = "general"):
+async def generate_speaking_topic(level: str = "B1", topic_type: str = "general"):
     """Generate speaking practice topics with model answers."""
-    llm = get_llm()
+    llm = get_llm(difficulty="medium")
     if not llm:
         return {"error": "LLM not configured"}
 
@@ -1817,11 +2102,12 @@ def generate_speaking_topic(level: str = "B1", topic_type: str = "general"):
     )
     chain = prompt | llm
     try:
-        response = _safe_invoke(chain, {"level": level, "topic_type": topic_type})
-        result = parse_json_response(response.content)
-        if isinstance(result, dict):
-            return result
-        return {"error": "Could not generate speaking topic"}
+        async with ai_semaphore:
+            response = await _safe_invoke_async(chain, {"level": level, "topic_type": topic_type}, difficulty="medium", feature="Speaking Topic")
+            result = parse_json_response(response.content)
+            if isinstance(result, dict):
+                return result
+            return {"error": "Could not generate speaking topic"}
     except Exception as e:
         print(f"generate_speaking_topic error: {e}")
         return {"error": str(e)}
@@ -1829,7 +2115,7 @@ def generate_speaking_topic(level: str = "B1", topic_type: str = "general"):
 
 async def generate_speaking_topic_stream(level: str = "B1", topic_type: str = "general"):
     """Streaming version of generate_speaking_topic."""
-    llm = get_llm()
+    llm = get_llm(difficulty="medium")
     if not llm:
         yield json.dumps({"error": "LLM not configured"})
         return
@@ -1843,10 +2129,10 @@ async def generate_speaking_topic_stream(level: str = "B1", topic_type: str = "g
     chain = prompt | llm
     
     full_content = ""
-    async for chunk in chain.astream({
+    async for chunk in _safe_astream(chain, {
         "level": level,
         "topic_type": topic_type,
-    }):
+    }, difficulty="medium"):
         full_content += chunk.content
         yield json.dumps({"status": "generating", "chunk": chunk.content}, ensure_ascii=False)
         
@@ -1861,29 +2147,60 @@ async def generate_speaking_topic_stream(level: str = "B1", topic_type: str = "g
 
 async def generate_grammar_rule_description(topic: str):
     """Generate a high-quality grammar rule explanation for Admins."""
-    llm = get_llm()
+    llm = get_llm(difficulty="hard")
     if not llm:
         return {"name": topic, "description": "LLM not configured"}
-    
+    # Pre-emptively detect if we are using a fallback because Gemini is failed
+    persistent_warning = ""
+    if is_provider_failed("Gemini"):
+        persistent_warning = "> [!CAUTION]\n> **Cảnh báo:** API Key Gemini của bạn đã hết hạn hoặc không khả dụng. Hệ thống đang sử dụng AI dự phòng với chất lượng thấp hơn. Vui lòng cập nhật API Key mới.\n\n"
+
     prompt = PromptTemplate.from_template(
-        "You are an expert English teacher. Topic: '{topic}'.\n"
-        "Generate a comprehensive explanation including:\n"
-        "1. Clear definition and usage\n"
-        "2. Structure/Formula (e.g. S + V3)\n"
-        "3. 3-5 examples with Vietnamese translations (format: Example | Dịch)\n"
-        "4. Common mistakes/Exceptions\n\n"
-        "Return as JSON: {{\"name\": \"...\", \"description\": \"...markdown string, NOT an object...\"}}"
+        "Bạn là một chuyên gia giảng dạy tiếng Anh đầy nhiệt huyết, nổi tiếng với phong cách truyền cảm hứng.\n"
+        "Hãy soạn một bài giảng SÂU SẮC và CHI TIẾT về chủ đề: '{topic}'.\n\n"
+        "BÀI GIẢNG PHẢI BAO GỒM:\n"
+        "1. TỔNG QUAN: Giải thích bản chất một cách thú vị, dễ hiểu.\n"
+        "2. CÔNG THỨC: Trình bày rõ ràng, sử dụng bảng hoặc in đậm (bold).\n"
+        "3. CÁCH DÙNG: Ít nhất 3-4 tình huống thực tế khác nhau.\n"
+        "4. VÍ DỤ: 5 câu ví dụ đa dạng, kèm dịch nghĩa tiếng Việt trau chuốt.\n"
+        "5. LƯU Ý: Những 'mẹo' nhỏ và lỗi người Việt hay mắc phải.\n\n"
+        "YÊU CẦU: Viết ít nhất 1000-1500 ký tự. Hãy trình bày bằng Markdown chuyên nghiệp.\n\n"
+        "ĐỊNH DẠNG: Chỉ trả về duy nhất 1 khối JSON:\n"
+        "{{\"name\": \"Tên bài học\", \"description\": \"...Nội dung bài giảng tại đây...\"}}\n"
     )
     chain = prompt | llm
     try:
-        response = await _safe_invoke_async(chain, {"topic": topic})
-        return parse_json_response(response.content)
+        response = await _safe_invoke_async(chain, {"topic": topic}, difficulty="hard", feature="Grammar Rule")
+        if not response or not response.content:
+            print(f"[LLM ERROR] Empty response for topic: {topic}")
+            return {"name": topic, "description": f"{persistent_warning}AI không phản hồi nội dung. Vui lòng thử lại."}
+            
+        print(f"[LLM DEBUG] Raw AI response for '{topic}': {response.content[:200]}...")
+        result = parse_json_response(response.content)
+        
+        # QUALITY CONTROL: If description is too short (under 500 chars), the AI was "lazy". Retry ONCE.
+        if isinstance(result, dict) and len(result.get("description", "")) < 500:
+             print(f"[LLM QUALITY] Result too short ({len(result['description'])} chars). Retrying with aggressive prompt...")
+             aggressive_msg = prompt.template + "\n\nCRITICAL: PREVIOUS RESPONSE WAS TOO SHORT. YOU MUST BE EXTREMELY DETAILED AND WRITE OVER 1000 CHARACTERS."
+             new_prompt = PromptTemplate.from_template(aggressive_msg)
+             response = await _safe_invoke_async(new_prompt | llm, {"topic": topic}, feature="Grammar Rule")
+             if response and response.content:
+                 result = parse_json_response(response.content)
+
+        # Prepend warning (from current call OR persistent cache)
+        warning = persistent_warning or getattr(response, "_warning", "")
+        if warning and isinstance(result, dict) and "description" in result:
+            if warning not in result["description"]:
+                result["description"] = warning + result["description"]
+            
+        return result
     except Exception as e:
-        return {"name": topic, "description": f"Failed to generate for '{topic}': {e}"}
+        print(f"[LLM ERROR] Exception during generation for {topic}: {e}")
+        return {"name": topic, "description": f"Lỗi hệ thống AI: {str(e)}"}
 
 async def generate_vocab_practice_rich(words: List[dict]):
     """Generate professional vocabulary exercises with hints and diverse types."""
-    llm = get_llm()
+    llm = get_llm(difficulty="medium")
     if not llm:
         return []
     
@@ -1913,20 +2230,22 @@ async def generate_vocab_practice_rich(words: List[dict]):
     )
     chain = prompt | llm
     try:
-        # Added num: 10 as a safety measure for mysterious 'num' requirement
-        response = await _safe_invoke_async(chain, {"words": words_info, "num": 10})
-        result = parse_json_response(response.content)
-        # Ensure it's always an array wrapper if it's just a raw list
-        if isinstance(result, list):
-            return {"exercises": result}
-        return result
+        async with ai_semaphore:
+            # Optimize: explicitly ask for a concise but high-quality response to reduce latency
+            response = await _safe_invoke_async(chain, {"words": words_info, "num": 10}, difficulty="medium", feature="Vocab Practice")
+            result = parse_json_response(response.content)
+            
+            # Ensure it's always an array wrapper if it's just a raw list
+            if isinstance(result, list):
+                return {"exercises": result}
+            return result
     except Exception as e:
         print(f"[LLM VOCAB PRACTICE] ERROR: {e}", flush=True)
         return []
 
 async def generate_vocab_practice_rich_stream(words: List[dict]):
     """Streaming version of generate_vocab_practice_rich."""
-    llm = get_llm()
+    llm = get_llm(difficulty="medium")
     if not llm:
         yield json.dumps({"error": "LLM not configured"})
         return
@@ -1946,7 +2265,7 @@ async def generate_vocab_practice_rich_stream(words: List[dict]):
     chain = prompt | llm
     
     full_content = ""
-    async for chunk in chain.astream({"words": words_info}):
+    async for chunk in _safe_astream(chain, {"words": words_info}, difficulty="medium"):
         full_content += chunk.content
         yield json.dumps({"status": "generating", "chunk": chunk.content}, ensure_ascii=False)
         
@@ -1959,7 +2278,7 @@ async def generate_vocab_practice_rich_stream(words: List[dict]):
 
 async def generate_grammar_practice(rules: List[str], difficulty: str = "Medium"):
     """Generate tailored grammar practice based on specific rules."""
-    llm = get_llm()
+    llm = get_llm(difficulty="medium")
     if not llm: return []
     
     prompt = PromptTemplate.from_template(
@@ -1970,7 +2289,7 @@ async def generate_grammar_practice(rules: List[str], difficulty: str = "Medium"
     print(f"[LLM GRAMMAR PRACTICE] Generating for {len(rules)} rules (Difficulty: {difficulty})...", flush=True)
     chain = prompt | llm
     try:
-        response = await _safe_invoke_async(chain, {"difficulty": difficulty, "rules": ", ".join(rules)})
+        response = await _safe_invoke_async(chain, {"difficulty": difficulty, "rules": ", ".join(rules)}, difficulty="medium", feature="Grammar Practice")
         result = parse_json_response(response.content)
         print(f"[LLM GRAMMAR PRACTICE] Success: generated {len(result) if isinstance(result, list) else 0} questions", flush=True)
         return result
@@ -1980,7 +2299,7 @@ async def generate_grammar_practice(rules: List[str], difficulty: str = "Medium"
 
 async def generate_grammar_practice_stream(rules: List[str], difficulty: str = "Medium"):
     """Streaming version of generate_grammar_practice."""
-    llm = get_llm()
+    llm = get_llm(difficulty="medium")
     if not llm:
         yield json.dumps({"error": "LLM not configured"})
         return
@@ -1995,7 +2314,7 @@ async def generate_grammar_practice_stream(rules: List[str], difficulty: str = "
     chain = prompt | llm
     
     full_content = ""
-    async for chunk in chain.astream({"difficulty": difficulty, "rules": ", ".join(rules)}):
+    async for chunk in _safe_astream(chain, {"difficulty": difficulty_val, "rules": ", ".join(rules)}, difficulty="medium"):
         full_content += chunk.content
         yield json.dumps({"status": "generating", "chunk": chunk.content}, ensure_ascii=False)
         
@@ -2007,7 +2326,7 @@ async def generate_grammar_practice_stream(rules: List[str], difficulty: str = "
 
 async def generate_personalized_roadmap_stream(user_info: dict, words: List[dict]):
     """Streaming version of generate_personalized_roadmap."""
-    llm = get_llm()
+    llm = get_llm(difficulty="hard")
     if not llm:
         yield json.dumps({"error": "LLM not configured"})
         return
@@ -2028,11 +2347,11 @@ async def generate_personalized_roadmap_stream(user_info: dict, words: List[dict
     chain = prompt | llm
     
     full_content = ""
-    async for chunk in chain.astream({
+    async for chunk in _safe_astream(chain, {
         "level": level,
         "goal": goal,
         "words": words_summary,
-    }):
+    }, difficulty="hard"):
         full_content += chunk.content
         yield json.dumps({"status": "generating", "chunk": chunk.content}, ensure_ascii=False)
         
@@ -2045,7 +2364,7 @@ async def generate_personalized_roadmap_stream(user_info: dict, words: List[dict
 
 async def generate_exam_content(test_type: str, part: Optional[str] = None):
     """Generate realistic TOEIC/IELTS content (full or specific parts)."""
-    llm = get_llm()
+    llm = get_llm(difficulty="hard")
     if not llm: return {"id": "error", "error": "LLM not configured"}
     
     part_context = f"specifically for {part}" if part else "full-length"
@@ -2057,13 +2376,13 @@ async def generate_exam_content(test_type: str, part: Optional[str] = None):
     )
     chain = prompt | llm
     try:
-        response = await _safe_invoke_async(chain, {"test_type": test_type, "part_context": part_context})
+        response = await _safe_invoke_async(chain, {"test_type": test_type, "part_context": part_context}, difficulty="hard", feature="Exam Practice")
         return parse_json_response(response.content)
     except: return {"id": "error"}
 
 async def generate_reading_comprehension(article_title: str, article_content: str, difficulty: str = "Medium", num_questions: int = 5):
     """Generate a reading comprehension test from a news article."""
-    llm = get_llm()
+    llm = get_llm(difficulty="medium")
     if not llm: return {"error": "LLM not configured"}
     
     prompt = PromptTemplate.from_template(
@@ -2094,9 +2413,9 @@ async def generate_reading_comprehension(article_title: str, article_content: st
         response = await _safe_invoke_async(chain, {
             "title": article_title, 
             "content": article_content, 
-            "difficulty": difficulty,
+            "difficulty": difficulty_param,
             "num_questions": num_questions
-        })
+        }, difficulty="medium", feature="Reading Comprehension")
         result = parse_json_response(response.content)
         print(f"[LLM READING COMPREHENSION] Success", flush=True)
         return result
@@ -2106,7 +2425,7 @@ async def generate_reading_comprehension(article_title: str, article_content: st
 
 async def generate_reading_comprehension_stream(article_title: str, article_content: str, difficulty: str = "Medium", num_questions: int = 5):
     """Streaming version of generate_reading_comprehension."""
-    llm = get_llm()
+    llm = get_llm(difficulty="medium")
     if not llm:
         yield json.dumps({"error": "LLM not configured"})
         return
@@ -2124,12 +2443,12 @@ async def generate_reading_comprehension_stream(article_title: str, article_cont
     chain = prompt | llm
     
     full_content = ""
-    async for chunk in chain.astream({
+    async for chunk in _safe_astream(chain, {
         "title": article_title, 
         "content": article_content, 
-        "difficulty": difficulty, 
+        "difficulty": difficulty_param, 
         "num_questions": num_questions
-    }):
+    }, difficulty="medium"):
         full_content += chunk.content
         yield json.dumps({"status": "generating", "chunk": chunk.content}, ensure_ascii=False)
         
@@ -2141,7 +2460,7 @@ async def generate_reading_comprehension_stream(article_title: str, article_cont
 
 async def grade_writing_assignment(prompt_text: str, student_answer: str, test_type: str = "IELTS"):
     """Grade a writing assignment (IELTS or TOEIC) and return detailed feedback."""
-    llm = get_llm()
+    llm = get_llm(difficulty="hard")
     if not llm: return {"id": "error", "error": "LLM not configured"}
     
     prompt = PromptTemplate.from_template(
@@ -2169,7 +2488,7 @@ async def grade_writing_assignment(prompt_text: str, student_answer: str, test_t
     chain = prompt | llm
     print(f"[LLM WRITING GRADING] Grading {test_type} essay...", flush=True)
     try:
-        response = await _safe_invoke_async(chain, {"test_type": test_type, "prompt_text": prompt_text, "student_answer": student_answer})
+        response = await _safe_invoke_async(chain, {"test_type": test_type, "prompt_text": prompt_text, "student_answer": student_answer}, difficulty="hard", feature="Writing Grading")
         result = parse_json_response(response.content)
         print(f"[LLM WRITING GRADING] Success", flush=True)
         return result
@@ -2179,7 +2498,7 @@ async def grade_writing_assignment(prompt_text: str, student_answer: str, test_t
 
 async def generate_personalized_roadmap(user_info: dict, words: List[dict]):
     """Generate a custom learning roadmap based on user's vocabulary and goals."""
-    llm = get_llm()
+    llm = get_llm(difficulty="hard")
     if not llm: return {"error": "LLM not configured"}
     
     goal = user_info.get("target_goal", "General English")
@@ -2214,7 +2533,11 @@ async def generate_personalized_roadmap(user_info: dict, words: List[dict]):
     chain = prompt | llm
     print(f"[LLM ROADMAP] Generating for goal: {goal}...", flush=True)
     try:
-        response = await _safe_invoke_async(chain, {"level": level, "goal": goal, "words": words_summary})
+        response = await _safe_invoke_async(chain, {
+            "level": level,
+            "goal": goal,
+            "words": words_summary,
+        }, difficulty="hard", feature="Personalized Roadmap")
         return parse_json_response(response.content)
     except Exception as e:
         print(f"[LLM ROADMAP] Error: {e}")

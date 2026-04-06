@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { 
   BookMarked, Clock, Search, PlayCircle, Volume2, Edit3, Trash2, 
   Brain, X, Sparkles, CheckCircle2, ArrowRight, Lightbulb 
@@ -32,6 +32,36 @@ export default function VocabularyTab({ API_URL }: VocabularyTabProps) {
   const [matchingSelections, setMatchingSelections] = useState<{ word: string | null, def: string | null }>({ word: null, def: null });
   const [matches, setMatches] = useState<Record<string, string>>({});
   
+  // Randomize definitions for Matching exercises once per exercise
+  const shuffledDefs = useMemo(() => {
+    const currentEx = practiceExercises[currentExerciseIdx];
+    if (currentEx?.type === 'MATCHING' && currentEx.matching_pairs) {
+      return [...currentEx.matching_pairs].map(p => p.def).sort(() => Math.random() - 0.5);
+    }
+    return [];
+  }, [practiceExercises, currentExerciseIdx]);
+  
+  const renderSentenceWithBlank = (text: string, currentIdx: number) => {
+    if (!text || !text.includes('[blank]')) return text;
+    
+    const parts = text.split('[blank]');
+    const answer = practiceAnswers[currentIdx];
+    const currentEx = practiceExercises[currentIdx];
+    const isCorrect = exerciseSubmitted && String(answer || "").toLowerCase().trim() === String(currentEx?.answer || "").toLowerCase().trim();
+    
+    return (
+      <span className="leading-relaxed">
+        {parts[0]}
+        <span className={`inline-flex items-center justify-center min-w-[140px] px-4 mx-2 border-b-4 font-black transition-all duration-300 ${
+          exerciseSubmitted ? (isCorrect ? "text-green-600 border-green-500 bg-green-50/50" : "text-red-600 border-red-500 bg-red-50/50") :
+          answer ? "text-blue-600 border-blue-400 bg-blue-50/50" : "text-gray-300 border-gray-200 bg-gray-50 animate-pulse"
+        } rounded-2xl py-2 -mb-2`}>
+          {answer || "........."}
+        </span>
+        {parts[1]}
+      </span>
+    );
+  };
 
   
   // Edit Vocabulary states
@@ -350,11 +380,15 @@ export default function VocabularyTab({ API_URL }: VocabularyTabProps) {
                 {currentEx.type === 'FIB' ? 'Điền vào chỗ trống' : currentEx.type === 'SPELLING' ? 'Nghe và Viết' : currentEx.type === 'PARAPHRASE' ? 'Cụm từ đồng nghĩa' : 'Chọn đáp án đúng'}
               </span>
               
-              <h2 className="text-3xl md:text-4xl font-black text-gray-800 leading-tight mb-6">
-                {currentEx.type === 'MATCHING' ? "Ghép từ với định nghĩa tương ứng" : currentEx.question}
+              <h2 className="text-3xl md:text-4xl font-black text-gray-800 leading-tight mb-6 px-4">
+                {currentEx.type === 'MATCHING' 
+                  ? "Ghép từ với định nghĩa tương ứng" 
+                  : (currentEx.type === 'FIB' || currentEx.type === 'SPELLING')
+                    ? renderSentenceWithBlank(currentEx.question || currentEx.context || "", currentExerciseIdx)
+                    : currentEx.question}
               </h2>
               
-              {currentEx.type !== 'MATCHING' && (currentEx.type === 'FIB' || currentEx.context) && (
+              {currentEx.type !== 'MATCHING' && currentEx.type !== 'FIB' && currentEx.type !== 'SPELLING' && currentEx.context && (
                 <div className="text-xl md:text-2xl font-medium text-gray-600 bg-gray-50 p-6 md:p-8 rounded-3xl border border-gray-100 leading-relaxed max-w-2xl mx-auto shadow-inner">
                   {currentEx.context}
                 </div>
@@ -370,74 +404,70 @@ export default function VocabularyTab({ API_URL }: VocabularyTabProps) {
               )}
             </div>
 
-            <div className="w-full max-w-4xl mx-auto space-y-4">
+            <div className="w-full max-w-6xl mx-auto space-y-4">
               {currentEx.type === 'MATCHING' ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
-                   {/* Words Column */}
-                   <div className="space-y-3">
-                      <h4 className="text-center font-black text-blue-500 uppercase tracking-widest text-xs mb-4">Từ vựng</h4>
-                      {(currentEx.matching_pairs || []).map((pair: any, i: number) => {
-                         const isMatched = !!matches[pair.word];
-                         const isSelected = matchingSelections.word === pair.word;
-                         return (
-                            <button 
-                              key={i}
-                              disabled={exerciseSubmitted || isMatched}
-                              onClick={() => setMatchingSelections(prev => ({ ...prev, word: pair.word }))}
-                              className={`w-full p-6 md:p-8 rounded-3xl border-2 text-center font-black text-xl md:text-2xl transition-all ${
-                                isMatched ? "bg-green-50 border-green-200 text-green-600 opacity-50" :
-                                isSelected ? "bg-blue-100 border-blue-500 text-blue-700 shadow-md scale-[1.02] ring-4 ring-blue-500/20" :
-                                "bg-white border-gray-100 hover:border-blue-200 text-gray-700 shadow-sm"
-                              }`}
-                            >
-                               {pair.word}
-                            </button>
-                         )
-                      })}
-                   </div>
-                   {/* Definitions Column */}
-                   <div className="space-y-3">
-                      <h4 className="text-center font-black text-purple-500 uppercase tracking-widest text-xs mb-4">Định nghĩa</h4>
-                      {/* Shuffle definitions once if needed, but for simplicity here we just render them */}
-                      {(currentEx.matching_pairs || []).map((pair: any, i: number) => {
-                         // Find which word this definition belongs to
-                         const def = pair.def;
-                         const matchedWord = Object.keys(matches).find(k => matches[k] === def);
-                         const isSelected = matchingSelections.def === def;
-                         
-                         return (
-                            <button 
-                              key={i}
-                              disabled={exerciseSubmitted || !!matchedWord}
-                              onClick={() => {
-                                 if (matchingSelections.word) {
-                                    // Check if correct match
-                                    const correctPair = currentEx.matching_pairs.find((p: any) => p.word === matchingSelections.word);
-                                    if (correctPair && correctPair.def === def) {
-                                       setMatches(prev => ({ ...prev, [matchingSelections.word!]: def }));
-                                       setMatchingSelections({ word: null, def: null });
-                                       if (Object.keys(matches).length + 1 === currentEx.matching_pairs.length) {
-                                          submitCurrentExercise(4); // Perfect score for matching
-                                       }
-                                    } else {
-                                       showAlert("Không khớp! Thử lại nhé.", 'warning');
-                                       setMatchingSelections({ word: null, def: null });
-                                    }
-                                 } else {
-                                    setMatchingSelections(prev => ({ ...prev, def: def }));
-                                 }
-                              }}
-                              className={`w-full p-6 md:p-8 rounded-3xl border-2 text-left text-lg md:text-xl font-bold transition-all leading-tight ${
-                                matchedWord ? "bg-green-50 border-green-200 text-green-600 opacity-50" :
-                                isSelected ? "bg-purple-100 border-purple-500 text-purple-700 shadow-md scale-[1.02] ring-4 ring-purple-500/20" :
-                                "bg-white border-gray-100 hover:border-purple-200 text-gray-600 shadow-sm"
-                              }`}
-                            >
-                               {def}
-                            </button>
-                         )
-                      })}
-                   </div>
+                <div className="space-y-6">
+                  <div className="grid grid-cols-[1fr_2.5fr] gap-4 mb-2 px-4">
+                    <h4 className="font-black text-blue-500 uppercase tracking-widest text-[10px]">Từ vựng</h4>
+                    <h4 className="font-black text-purple-500 uppercase tracking-widest text-[10px]">Định nghĩa</h4>
+                  </div>
+                  
+                  <div className="grid grid-cols-[1fr_2.5fr] gap-x-6 gap-y-3 items-stretch">
+                    {(currentEx.matching_pairs || []).map((pair: any, i: number) => {
+                       const word = pair.word;
+                       const def = shuffledDefs[i];
+                       
+                       const isWordMatched = !!matches[word];
+                       const isWordSelected = matchingSelections.word === word;
+                       
+                       const matchedWordForDef = Object.keys(matches).find(k => matches[k] === def);
+                       const isDefSelected = matchingSelections.def === def;
+
+                       return (
+                        <React.Fragment key={i}>
+                           <button 
+                             disabled={exerciseSubmitted || isWordMatched}
+                             onClick={() => setMatchingSelections(prev => ({ ...prev, word: word }))}
+                             className={`p-4 md:p-5 rounded-2xl border-2 text-center font-black text-lg transition-all flex items-center justify-center ${
+                               isWordMatched ? "bg-green-50 border-green-200 text-green-600 opacity-50" :
+                               isWordSelected ? "bg-blue-50 border-blue-500 text-blue-700 shadow-sm ring-2 ring-blue-500/10" :
+                               "bg-white border-gray-100 hover:border-blue-200 text-gray-700 shadow-sm hover:shadow-md"
+                             }`}
+                           >
+                              {word}
+                           </button>
+
+                           <button 
+                             disabled={exerciseSubmitted || !!matchedWordForDef}
+                             onClick={() => {
+                                if (matchingSelections.word) {
+                                   const correctPair = currentEx.matching_pairs.find((p: any) => p.word === matchingSelections.word);
+                                   if (correctPair && correctPair.def === def) {
+                                      setMatches(prev => ({ ...prev, [matchingSelections.word!]: def }));
+                                      setMatchingSelections({ word: null, def: null });
+                                      if (Object.keys(matches).length + 1 === currentEx.matching_pairs.length) {
+                                         submitCurrentExercise(4);
+                                      }
+                                   } else {
+                                      showAlert("Không khớp! Thử lại nhé.", 'warning');
+                                      setMatchingSelections({ word: null, def: null });
+                                   }
+                                } else {
+                                   setMatchingSelections(prev => ({ ...prev, def: def }));
+                                }
+                             }}
+                             className={`p-4 md:p-5 rounded-2xl border-2 text-left text-base font-bold transition-all leading-snug flex items-center ${
+                               matchedWordForDef ? "bg-green-50 border-green-200 text-green-600 opacity-50" :
+                               isDefSelected ? "bg-purple-50 border-purple-500 text-purple-700 shadow-sm ring-2 ring-purple-500/10" :
+                               "bg-white border-gray-100 hover:border-purple-200 text-gray-600 shadow-sm hover:shadow-md"
+                             }`}
+                           >
+                              {def}
+                           </button>
+                        </React.Fragment>
+                       );
+                    })}
+                  </div>
                 </div>
               ) : currentEx.options && currentEx.type !== 'SPELLING' ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -477,7 +507,7 @@ export default function VocabularyTab({ API_URL }: VocabularyTabProps) {
                     onChange={e => setPracticeAnswers({ ...practiceAnswers, [currentExerciseIdx]: e.target.value })}
                     onKeyDown={e => { if (e.key === 'Enter' && !exerciseSubmitted && practiceAnswers[currentExerciseIdx]) submitCurrentExercise(); }}
                     placeholder={currentEx.type === 'SPELLING' ? "Nghe và nhập chính xác từ..." : "Nhập đáp án..."}
-                    className={`w-full text-3xl font-black text-center p-8 border-b-4 rounded-3xl outline-none transition-all shadow-sm ${exerciseSubmitted ? (practiceAnswers[currentExerciseIdx]?.toLowerCase().trim() === currentEx.answer.toLowerCase() ? "border-green-500 bg-green-50 text-green-700" : "border-red-500 bg-red-50 text-red-700") : "border-gray-300 bg-gray-50 focus:border-blue-500 focus:bg-white focus:shadow-xl"}`}
+                    className={`w-full text-3xl font-black text-center p-8 border-b-4 rounded-3xl outline-none transition-all shadow-sm ${exerciseSubmitted ? (String(practiceAnswers[currentExerciseIdx] || "").toLowerCase().trim() === String(currentEx.answer || "").toLowerCase().trim() ? "border-green-500 bg-green-50 text-green-700" : "border-red-500 bg-red-50 text-red-700") : "border-gray-300 bg-gray-50 focus:border-blue-500 focus:bg-white focus:shadow-xl"}`}
                     disabled={exerciseSubmitted}
                   />
                   {currentEx.type === 'SPELLING' && !exerciseSubmitted && (

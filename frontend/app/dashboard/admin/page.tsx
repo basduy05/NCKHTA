@@ -1,7 +1,7 @@
 "use client";
-import { useState, Suspense, useEffect } from "react";
+import { useState, Suspense, useEffect, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { Users, Database, Plus, UploadCloud, FileSpreadsheet, Save, Edit, Trash2, GraduationCap, X, Check, BookOpen, BookText, Settings, RefreshCw, Mail, Eye, EyeOff, Sparkles, ClipboardList } from "lucide-react";
+import { Users, Database, Plus, UploadCloud, FileSpreadsheet, Save, Edit, Trash2, GraduationCap, X, Check, BookOpen, BookText, Settings, RefreshCw, Mail, Eye, EyeOff, Sparkles, ClipboardList, Bold, Italic, Underline, Heading1, Heading2, List, ListOrdered, TrendingUp, Network, Activity } from "lucide-react";
 import { useAuth } from "@/app/context/AuthContext";
 import { useNotification } from "@/app/context/NotificationContext";
 
@@ -46,6 +46,7 @@ function AdminDashboardContent() {
           {activeTab === 'lessons' && 'Quản lý Bài Học'}
           {activeTab === 'assignments' && 'Quản lý Bài tập & Đề thi'}
           {activeTab === 'grammar' && 'Kho Ngữ Pháp (AI)'}
+          {activeTab === 'ai_monitoring' && 'Giám sát hiệu năng AI'}
           {activeTab === 'settings' && 'Cài đặt hệ thống'}
         </h1>
       </div>
@@ -57,6 +58,7 @@ function AdminDashboardContent() {
       {activeTab === 'lessons' && <LessonsTab />}
       {activeTab === 'assignments' && <AssignmentsTab />}
       {activeTab === 'grammar' && <GrammarTab />}
+      {activeTab === 'ai_monitoring' && <AILogsTab />}
       {activeTab === 'settings' && <SettingsTab />}
     </div>
   );
@@ -845,18 +847,45 @@ function GrammarTab() {
   const [rules, setRules] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
+  const editorRef = useRef<HTMLDivElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
   const [isEditing, setIsEditing] = useState<number | null>(null);
+  const [generatingAI, setGeneratingAI] = useState(false);
+
+  // Formatting Helper
+  const handleEditorCommand = (command: string, value: string = "") => {
+    document.execCommand(command, false, value);
+    if (editorRef.current) editorRef.current.focus();
+  };
+
+  const parseMarkdown = (text: string) => {
+    if (!text) return "";
+    if (/<[a-z][\s\S]*>/i.test(text)) return text;
+    return text
+      .replace(/###\s?(.*?)(?=\n|$|###|##|#|\*\*)/g, '<h3>$1</h3>')
+      .replace(/##\s?(.*?)(?=\n|$|###|##|#|\*\*)/g, '<h2>$1</h2>')
+      .replace(/#\s?(.*?)(?=\n|$|###|##|#|\*\*)/g, '<h1>$1</h1>')
+      .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')
+      .replace(/\*(.*?)\*/g, '<i>$1</i>')
+      .replace(/__(.*?)__/g, '<u>$1</u>')
+      .replace(/^\d+\.\s(.*$)/gim, '<li>$1</li>')
+      .replace(/^\- (.*$)/gim, '<li>$1</li>')
+      .replace(/\|/g, '<span class="mx-2 opacity-30">|</span>')
+      .replace(/\n\n/g, '<br/><br/>')
+      .replace(/\n/g, '<br/>');
+  };
 
   const fetchRules = async () => {
     setLoading(true);
-    try { const res = await authFetch(`${API_URL}/admin/grammar`); if (!res.ok) throw new Error(`API error ${res.status}`); const data = await res.json(); setRules(Array.isArray(data) ? data : []); } catch { }
+    try { 
+      const res = await authFetch(`${API_URL}/admin/grammar`); 
+      if (!res.ok) throw new Error(`API error ${res.status}`); 
+      const data = await res.json(); 
+      setRules(Array.isArray(data) ? data : []); 
+    } catch { }
     finally { setLoading(false); }
   };
-
-  const [generatingAI, setGeneratingAI] = useState(false);
 
   const handleAIGenerate = async () => {
     if (!name) return showAlert("Nhập tên cấu trúc ngữ pháp trước!", 'warning');
@@ -866,11 +895,30 @@ function GrammarTab() {
         method: "POST",
         body: JSON.stringify({ topic: name })
       });
-      if (!res.ok) throw new Error("AI failed");
+      if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.detail || "AI failed to respond");
+      }
       const data = await res.json();
-      setDescription(data.description || "");
-    } catch (err) {
-      showAlert("AI không thể tạo mô tả ngay bây giờ.", 'error');
+      
+      let description = "";
+      if (typeof data === 'string') {
+          description = data;
+      } else if (data && typeof data === 'object') {
+          description = data.description || data.content || (data.name && JSON.stringify(data)) || "AI không trả về nội dung mô tả.";
+      }
+
+      if (description && description !== "{}") {
+          if (editorRef.current) {
+              editorRef.current.innerHTML = parseMarkdown(description);
+              if (data.name && (!name || name === "")) setName(data.name);
+          }
+      } else {
+          throw new Error("AI trả về dữ liệu rỗng. Vui lòng thử lại.");
+      }
+    } catch (err: any) {
+      console.error("[AI GENERATE ERROR]", err);
+      showAlert(`Lỗi AI: ${err.message || "Không thể tạo nội dung"}`, 'error');
     } finally {
       setGeneratingAI(false);
     }
@@ -884,7 +932,7 @@ function GrammarTab() {
     try {
       const fd = new FormData();
       fd.append("name", name);
-      fd.append("description", description);
+      fd.append("description", editorRef.current?.innerHTML || "");
       if (file) fd.append("file", file);
       const url = isEditing ? `${API_URL}/admin/grammar/${isEditing}` : `${API_URL}/admin/grammar`;
       const method = isEditing ? 'PUT' : 'POST';
@@ -892,6 +940,7 @@ function GrammarTab() {
       if (!res.ok) throw new Error((await res.json()).detail || 'Error');
       resetForm();
       fetchRules();
+      showAlert("Đã lưu thành công!", "success");
     } catch (err: any) { showAlert(err.message, 'error'); }
     finally { setSaving(false); }
   };
@@ -899,8 +948,12 @@ function GrammarTab() {
   const handleEdit = (r: any) => {
     setIsEditing(r.id);
     setName(r.name);
-    setDescription(r.description || '');
     setFile(null);
+    setTimeout(() => {
+        if (editorRef.current) {
+            editorRef.current.innerHTML = r.description || '';
+        }
+    }, 50);
   };
 
   const handleDelete = async (id: number) => {
@@ -912,70 +965,135 @@ function GrammarTab() {
   const resetForm = () => {
     setIsEditing(null);
     setName('');
-    setDescription('');
+    if (editorRef.current) editorRef.current.innerHTML = '';
     setFile(null);
   };
 
   return (
     <div className="animate-in fade-in duration-300">
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 mb-6">
-        <h2 className="text-lg font-bold text-gray-900 mb-2 flex items-center"><BookText className="mr-2 text-teal-600" /> Kho Ngữ Pháp (Grammar Rules)</h2>
-        <p className="text-gray-500 text-sm">Quản lý các cấu trúc ngữ pháp để AI sử dụng khi tạo bài tập. Có thể đính kèm file tài liệu.</p>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="font-bold flex items-center"><Plus className="mr-2 text-teal-600" size={18} /> {isEditing ? 'Sửa Cấu Trúc' : 'Thêm Cấu Trúc Mới'}</h3>
-            {isEditing && <button onClick={resetForm} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>}
-          </div>
-          <div className="space-y-4">
-             <div>
-              <label className="block text-sm font-medium mb-1">Tên cấu trúc (VD: Hiện tại đơn)</label>
-              <div className="flex gap-2">
-                <input type="text" value={name} onChange={e => setName(e.target.value)} className="flex-1 border rounded-lg p-2 outline-none focus:ring-2" placeholder="Tên cấu trúc..." />
-                <button onClick={handleAIGenerate} disabled={generatingAI} className="px-3 py-2 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 flex items-center whitespace-nowrap">
-                   {generatingAI ? <RefreshCw className="animate-spin" size={16} /> : <Sparkles size={16} className="mr-1" />} AI Tạo
-                </button>
-              </div>
+      <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-8 mb-8">
+        <div className="flex items-center gap-4">
+            <div className="bg-teal-50 p-3 rounded-2xl">
+                <BookText className="text-teal-600" size={32} />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1">Mô tả cấu trúc (Markdown support)</label>
-              <textarea value={description} onChange={e => setDescription(e.target.value)} className="w-full border p-2 rounded-lg h-48 focus:ring-2 outline-none font-mono text-sm" placeholder="Mô tả / Công thức..." />
+                <h2 className="text-2xl font-black text-gray-900 leading-none">Kho Ngữ Pháp (AI)</h2>
+                <p className="text-gray-500 text-sm mt-1 font-medium italic italic">Quản lý cấu trúc ngữ pháp hệ thống.</p>
             </div>
-            <div className="border-2 border-dashed rounded-xl p-4 text-center hover:border-teal-400 hover:bg-teal-50 transition">
-              <input type="file" className="hidden" id="grammar-file" onChange={e => { if (e.target.files) setFile(e.target.files[0]); }} />
-              <label htmlFor="grammar-file" className="cursor-pointer text-gray-500 flex flex-col items-center text-sm">
-                <UploadCloud size={28} className={file ? "text-teal-600" : ""} />
-                <span className="mt-1 font-medium">{file ? file.name : "Đính kèm file (tuỳ chọn)"}</span>
-              </label>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+        <div className="xl:col-span-2 space-y-6">
+          <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
+            <div className="flex justify-between items-center mb-8">
+              <h3 className="text-xl font-black flex items-center gap-2">
+                <Plus className="text-teal-600" size={24} /> 
+                {isEditing ? 'Cập nhật Cấu trúc' : 'Soạn thảo Ngữ pháp mới'}
+              </h3>
+              {isEditing && <button onClick={resetForm} className="p-2 hover:bg-gray-100 rounded-xl transition"><X size={20} /></button>}
             </div>
-            <button onClick={handleSave} disabled={saving} className="w-full bg-teal-600 text-white py-2 rounded-lg hover:bg-teal-700 disabled:opacity-50 transition">
-              {saving ? "Đang lưu..." : isEditing ? <><Check size={18} className="inline mr-1" /> Lưu thay đổi</> : "Lưu Cấu Trúc"}
-            </button>
+            
+            <div className="space-y-6">
+               <div className="space-y-2">
+                <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-1">Tên cấu trúc (VD: Hiện tại tiếp diễn)</label>
+                <div className="flex gap-3">
+                  <input type="text" value={name} onChange={e => setName(e.target.value)} className="flex-1 bg-gray-50 border-2 border-gray-200 focus:border-teal-500 rounded-xl p-4 outline-none transition-all font-bold text-lg" placeholder="Tên cấu trúc..." />
+                  <button onClick={handleAIGenerate} disabled={generatingAI} className="px-6 py-4 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition-all font-black flex items-center gap-2 shadow-sm">
+                     {generatingAI ? <RefreshCw className="animate-spin" size={20} /> : <Sparkles size={20} />} 
+                     AI Tạo Mô tả
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-1">Nội dung chi tiết & Cấu trúc</label>
+                <div className="border-2 border-gray-200 rounded-2xl overflow-hidden focus-within:border-teal-500 transition-all bg-white shadow-sm">
+                    {/* Toolbar */}
+                    <div className="bg-white border-b-4 border-teal-500 p-4 flex flex-wrap gap-2.5 items-center sticky top-0 z-20 shadow-md">
+                        <EditorToolbarButton onClick={() => handleEditorCommand('bold')} icon={<Bold size={20}/>} tooltip="In đậm" label="Bold" />
+                        <EditorToolbarButton onClick={() => handleEditorCommand('italic')} icon={<Italic size={20}/>} tooltip="In nghiêng" label="Italic" />
+                        <EditorToolbarButton onClick={() => handleEditorCommand('underline')} icon={<Underline size={20}/>} tooltip="Gạch chân" label="Under" />
+                        <div className="w-[3px] h-8 bg-gray-200 mx-2"></div>
+                        <EditorToolbarButton onClick={() => handleEditorCommand('formatBlock', 'h1')} icon={<Heading1 size={20}/>} tooltip="Tiêu đề 1" label="H1" />
+                        <EditorToolbarButton onClick={() => handleEditorCommand('formatBlock', 'h2')} icon={<Heading2 size={20}/>} tooltip="Tiêu đề 2" label="H2" />
+                        <div className="w-[3px] h-8 bg-gray-200 mx-2"></div>
+                        <EditorToolbarButton onClick={() => handleEditorCommand('insertUnorderedList')} icon={<List size={20}/>} tooltip="Danh sách chấm" label="Bul" />
+                        <EditorToolbarButton onClick={() => handleEditorCommand('insertOrderedList')} icon={<ListOrdered size={20}/>} tooltip="Danh sách số" label="Num" />
+                        <div className="w-[3px] h-8 bg-gray-200 mx-2"></div>
+                        <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-black uppercase text-gray-400">Font:</span>
+                            <select onChange={(e) => handleEditorCommand('fontName', e.target.value)} className="bg-white border-2 border-gray-100 rounded-lg px-2 py-1 text-xs font-bold outline-none focus:border-teal-400 transition">
+                                <option value="Inter, sans-serif">Sans</option>
+                                <option value="'Roboto Slab', serif">Serif</option>
+                                <option value="'Fira Code', monospace">Mono</option>
+                            </select>
+                        </div>
+                    </div>
+                    {/* Content area */}
+                    <div 
+                        ref={editorRef}
+                        contentEditable 
+                        className="min-h-[400px] p-8 outline-none rich-text max-w-none bg-white font-medium text-lg leading-relaxed"
+                        spellCheck={false}
+                    />
+                </div>
+              </div>
+
+              <div className="border-2 border-dashed border-gray-200 rounded-2xl p-6 text-center hover:border-teal-400 hover:bg-teal-50/30 transition-all group">
+                <input type="file" className="hidden" id="admin-grammar-file" onChange={e => { if (e.target.files) setFile(e.target.files[0]); }} />
+                <label htmlFor="admin-grammar-file" className="cursor-pointer text-gray-500 flex flex-col items-center gap-3">
+                  <UploadCloud size={40} className={`transition ${file ? "text-teal-600 scale-110" : "group-hover:-translate-y-2"}`} />
+                  <span className="font-black text-lg">{file ? file.name : "Đính kèm tài liệu học tập (.pdf, .docx, .png)"}</span>
+                  <span className="text-xs font-bold uppercase tracking-widest text-gray-400 italic">Dung lượng tối đa 10MB</span>
+                </label>
+              </div>
+
+              <button onClick={handleSave} disabled={saving} className="w-full bg-teal-600 text-white py-5 rounded-xl font-black text-xl hover:bg-teal-700 disabled:opacity-50 transition-all shadow-sm active:scale-[0.98] flex items-center justify-center gap-3">
+                {saving ? <RefreshCw className="animate-spin" size={24} /> : isEditing ? <><Save size={24} /> Lưu thay đổi</> : <Plus size={24} />} 
+                {saving ? "Đang xử lý..." : isEditing ? "Cập nhật Kho Ngữ Pháp" : "Tạo mới bài Ngữ Pháp"}
+              </button>
+            </div>
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
-          <h3 className="font-bold mb-4">Danh sách hiện có</h3>
-          {loading ? <p className="text-gray-400 text-sm">Đang tải...</p> : rules.length === 0 ? <p className="text-gray-400 text-sm">Chưa có cấu trúc ngữ pháp nào.</p> : (
-            <ul className="space-y-2 max-h-[500px] overflow-y-auto">
+        <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm flex flex-col h-fit">
+          <h3 className="text-2xl font-black mb-6 flex justify-between items-center">
+            Danh sách
+            <span className="text-xs bg-gray-100 text-gray-400 px-3 py-1 rounded-full">{rules.length} tài liệu</span>
+          </h3>
+          {loading ? (
+             <div className="space-y-4">
+                {Array(3).fill(0).map((_, i) => <div key={i} className="h-24 bg-gray-50 rounded-xl animate-pulse"></div>)}
+             </div>
+          ) : rules.length === 0 ? (
+            <div className="py-20 text-center">
+                <BookText size={64} className="mx-auto text-gray-100 mb-4" />
+                <p className="text-gray-400 font-bold uppercase tracking-widest">Trống</p>
+            </div>
+          ) : (
+            <ul className="space-y-4 max-h-[800px] overflow-y-auto pr-2 custom-scrollbar">
               {rules.map((r: any) => (
-                <li key={r.id} className="p-3 bg-gray-50 rounded-lg border border-gray-200">
-                  <div className="flex justify-between items-start">
+                <li key={r.id} className="p-5 bg-gray-50/30 rounded-xl border border-gray-100 hover:border-teal-200 transition-all group">
+                  <div className="flex justify-between items-start gap-4">
                     <div className="flex-1">
-                      <p className="font-semibold text-teal-700">{r.name}</p>
-                      {r.description && <p className="text-xs text-gray-500 mt-1 line-clamp-2">{r.description}</p>}
+                      <p className="font-black text-teal-900 text-lg group-hover:text-teal-600 transition-colors leading-tight mb-2">{r.name}</p>
+                      {r.description && (
+                        <div 
+                          className="text-xs text-gray-500 font-bold line-clamp-2 leading-relaxed rich-text"
+                          dangerouslySetInnerHTML={{ __html: parseMarkdown(r.description) }}
+                        />
+                      )}
                       {r.file_name && (
                         <a href={`${API_URL}/admin/grammar/${r.id}/file`} target="_blank" rel="noopener noreferrer"
-                          className="inline-flex items-center mt-2 text-xs text-indigo-600 hover:underline">
-                          <FileSpreadsheet size={14} className="mr-1" /> {r.file_name}
+                          className="inline-flex items-center mt-3 text-xs text-indigo-600 font-black hover:underline gap-1">
+                          <FileSpreadsheet size={14} /> {r.file_name}
                         </a>
                       )}
                     </div>
-                    <div className="flex gap-1 ml-2">
-                      <button onClick={() => handleEdit(r)} className="text-blue-500 bg-blue-50 p-1.5 rounded hover:bg-blue-100"><Edit size={16} /></button>
-                      <button onClick={() => handleDelete(r.id)} className="text-red-500 bg-red-50 p-1.5 rounded hover:bg-red-100"><Trash2 size={16} /></button>
+                    <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button onClick={() => handleEdit(r)} className="text-blue-500 bg-white p-3 rounded-2xl shadow-sm hover:shadow-md transition"><Edit size={18} /></button>
+                      <button onClick={() => handleDelete(r.id)} className="text-red-500 bg-white p-3 rounded-2xl shadow-sm hover:shadow-md transition"><Trash2 size={18} /></button>
                     </div>
                   </div>
                 </li>
@@ -986,6 +1104,24 @@ function GrammarTab() {
       </div>
     </div>
   )
+}
+
+// Sub-component for Toolbar Buttons
+function EditorToolbarButton({ onClick, icon, tooltip, label }: { onClick: () => void, icon: React.ReactNode, tooltip: string, label?: string }) {
+    return (
+        <button 
+            type="button"
+            onMouseDown={(e) => { 
+                e.preventDefault(); 
+                onClick(); 
+            }}
+            className="px-3 py-2 bg-white hover:bg-teal-50 text-gray-900 border-2 border-gray-100 hover:border-teal-400 rounded-xl transition shadow-sm hover:shadow-md active:scale-95 flex items-center gap-2 min-w-[50px] justify-center"
+            title={tooltip}
+        >
+            {icon}
+            {label && <span className="text-[10px] font-black uppercase tracking-widest hidden lg:inline">{label}</span>}
+        </button>
+    );
 }
 
 function SettingsTab() {
@@ -1293,6 +1429,257 @@ function AssignmentsTab() {
             ))}
           </ul>
         )}
+      </div>
+    </div>
+  );
+}
+
+function AILogsTab() {
+  const { token, authFetch } = useAuth();
+  const [logs, setLogs] = useState<any[]>([]);
+  const [stats, setStats] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(0);
+  const PAGE_SIZE = 50;
+
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const [logsRes, statsRes] = await Promise.all([
+        authFetch(`${API_URL}/admin/ai-logs?limit=${PAGE_SIZE}&offset=${page * PAGE_SIZE}`),
+        authFetch(`${API_URL}/admin/ai-stats`)
+      ]);
+      
+      if (logsRes.ok) {
+        const logsData = await logsRes.json();
+        setLogs(logsData.logs || []);
+        setTotal(logsData.total || 0);
+      }
+      
+      if (statsRes.ok) {
+        const statsData = await statsRes.json();
+        setStats(statsData);
+      }
+    } catch (err) {
+      console.error("Error fetching AI logs/stats:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, [token, page]);
+
+  return (
+    <div className="space-y-6 animate-in fade-in duration-300">
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-sm font-bold text-gray-400 uppercase tracking-widest">Tổng yêu cầu</p>
+            <div className="p-2 bg-blue-50 rounded-lg text-blue-600"><Sparkles size={20} /></div>
+          </div>
+          <h3 className="text-3xl font-black text-gray-900">{total.toLocaleString()}</h3>
+          <p className="text-xs text-gray-500 mt-2">Dữ liệu từ lúc triển khai monitoring</p>
+        </div>
+
+        <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-sm font-bold text-gray-400 uppercase tracking-widest">Tốc độ TB (Latency)</p>
+            <div className="p-2 bg-orange-50 rounded-lg text-orange-600"><TrendingUp size={20} /></div>
+          </div>
+          <h3 className="text-3xl font-black text-gray-900">
+            {stats?.model_performance?.length > 0
+              ? Math.round(stats.model_performance.filter(s => s.model !== 'KnowledgeGraph').reduce((acc, s) => acc + s.avg_latency, 0) / Math.max(1, stats.model_performance.filter(s => s.model !== 'KnowledgeGraph').length))
+              : 0} ms
+          </h3>
+          <p className="text-xs text-gray-500 mt-2">Trung bình cộng của tất cả LLM</p>
+        </div>
+        
+        <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-sm font-bold text-gray-400 uppercase tracking-widest">Truy vấn Graph</p>
+            <div className="p-2 bg-purple-50 rounded-lg text-purple-600"><Network size={20} /></div>
+          </div>
+          <h3 className="text-3xl font-black text-gray-900">
+            {stats?.model_performance?.find(s => s.model === 'KnowledgeGraph')?.avg_latency 
+                ? Math.round(stats.model_performance.find(s => s.model === 'KnowledgeGraph').avg_latency) 
+                : 0} ms
+          </h3>
+          <p className="text-xs text-gray-500 mt-2">Tốc độ tìm kiếm tri thức (Neo4j)</p>
+        </div>
+
+        <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-sm font-bold text-gray-400 uppercase tracking-widest">Chất lượng AI</p>
+            <div className="p-2 bg-green-50 rounded-lg text-green-600"><GraduationCap size={20} /></div>
+          </div>
+          <h3 className="text-3xl font-black text-gray-900">
+            {stats?.feature_performance?.length > 0
+              ? (stats.feature_performance.reduce((acc, f) => acc + (f.avg_score || 0), 0) / stats.feature_performance.filter(f => f.avg_score).length || 0).toFixed(1)
+              : 0} / 10
+          </h3>
+          <p className="text-xs text-gray-500 mt-2">Điểm trung bình từ Giám khảo AI</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Model Performance Table */}
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+          <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center"><Database className="mr-2 text-indigo-600" /> Hiệu năng theo Model</h2>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-gray-100 text-gray-400 uppercase text-[10px] font-black tracking-widest">
+                  <th className="pb-3">Model</th>
+                  <th className="pb-3">Độ khó</th>
+                  <th className="pb-3">Latency TB</th>
+                  <th className="pb-3">Số lượng</th>
+                </tr>
+              </thead>
+              <tbody>
+                {stats?.model_performance?.map((s, i) => (
+                  <tr key={i} className="border-b border-gray-50 hover:bg-gray-50 transition">
+                    <td className="py-3 font-black text-gray-700">
+                      {s.model === 'KnowledgeGraph' ? (
+                        <span className="flex items-center text-purple-600"><Network size={14} className="mr-1" /> Knowledge Graph</span>
+                      ) : s.model}
+                    </td>
+                    <td className="py-3 capitalize text-gray-500 font-bold">{s.difficulty || "N/A"}</td>
+                    <td className="py-3">
+                      <span className={`font-black ${s.avg_latency > 5000 ? 'text-red-500' : s.avg_latency > 2000 ? 'text-orange-500' : 'text-green-500'}`}>
+                        {Math.round(s.avg_latency).toLocaleString()} ms
+                      </span>
+                    </td>
+                    <td className="py-3 font-bold text-gray-400">{s.total_requests}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* NEW: Feature Performance Table */}
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+          <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center"><Activity className="mr-2 text-indigo-600" /> Hiệu năng theo Tính năng</h2>
+          <div className="overflow-y-auto max-h-64">
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-gray-100 text-gray-400 uppercase text-[10px] font-black tracking-widest">
+                  <th className="pb-3">Tính năng</th>
+                  <th className="pb-3">Latency TB</th>
+                  <th className="pb-3">Tỷ lệ OK</th>
+                  <th className="pb-3">Số lượng</th>
+                </tr>
+              </thead>
+              <tbody>
+                {stats?.feature_performance?.map((f, i) => (
+                  <tr key={i} className="border-b border-gray-50 hover:bg-gray-50 transition">
+                    <td className="py-3 font-black text-gray-700">{f.feature}</td>
+                    <td className="py-3">
+                      <span className={`font-black ${f.avg_latency > 10000 ? 'text-red-500' : f.avg_latency > 3000 ? 'text-orange-500' : 'text-green-500'}`}>
+                        {Math.round(f.avg_latency).toLocaleString()} ms
+                      </span>
+                    </td>
+                    <td className="py-3 font-bold">
+                       <span className={f.success_count / f.total_requests < 0.8 ? 'text-red-500' : 'text-gray-600'}>
+                        {Math.round((f.success_count / f.total_requests) * 100)}%
+                       </span>
+                    </td>
+                    <td className="py-3 font-bold text-gray-400">{f.total_requests}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      {/* Detailed Log Table */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-lg font-bold text-gray-900 flex items-center"><ClipboardList className="mr-2 text-indigo-600" /> Log chi tiết gần đây</h2>
+          <button onClick={fetchData} className="text-indigo-600 hover:text-indigo-800 text-sm font-bold flex items-center gap-1">
+             <RefreshCw size={14} className={loading ? "animate-spin" : ""} /> Làm mới
+          </button>
+        </div>
+        
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm border-collapse">
+            <thead>
+              <tr className="border-b border-gray-200 text-gray-400 font-black uppercase text-[10px] tracking-widest">
+                <th className="pb-3">Thời gian</th>
+                <th className="pb-3">Tính năng</th>
+                <th className="pb-3">Model</th>
+                <th className="pb-3 text-center">Referee</th>
+                <th className="pb-3">Feedback</th>
+                <th className="pb-3">Latency</th>
+                <th className="pb-3">Trạng thái</th>
+              </tr>
+            </thead>
+            <tbody>
+              {logs.map((l) => (
+                <tr key={l.id} className="border-b border-gray-50 hover:bg-gray-50 group">
+                  <td className="py-4 text-gray-400 text-xs">{l.created_at}</td>
+                  <td className="py-4">
+                    <span className="bg-indigo-50 px-2 py-1 rounded text-[10px] font-black text-indigo-700 uppercase tracking-tight">
+                      {l.feature || "N/A"}
+                    </span>
+                  </td>
+                  <td className="py-4 font-black text-gray-700 text-xs">{l.model}</td>
+                  <td className="py-4 text-center">
+                    {l.eval_score ? (
+                      <span className={`px-2 py-1 rounded font-black text-xs ${
+                        l.eval_score >= 8 ? 'bg-green-100 text-green-700' : 
+                        l.eval_score >= 5 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'
+                      }`}>
+                        {l.eval_score}/10
+                      </span>
+                    ) : <span className="text-gray-300">-</span>}
+                  </td>
+                  <td className="py-4">
+                    <p className="text-[10px] text-gray-500 max-w-[200px] truncate leading-tight" title={l.eval_feedback}>
+                      {l.eval_feedback || (l.error_message ? <span className="text-red-400 italic">Error: {l.error_message}</span> : "-")}
+                    </p>
+                  </td>
+                  <td className="py-4 font-black">{l.latency_ms.toLocaleString()} ms</td>
+                  <td className="py-4">
+                    <span className={`px-2 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter ${
+                      l.status === 'success' ? 'bg-green-100 text-green-700' : 
+                      l.status === 'evaluated' ? 'bg-blue-100 text-blue-700' :
+                      l.status === 'fallback' ? 'bg-orange-100 text-orange-700' : 'bg-red-100 text-red-700'
+                    }`}>
+                      {l.status}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Pagination */}
+        <div className="mt-6 flex justify-between items-center bg-gray-50 p-4 rounded-xl">
+          <p className="text-xs font-black text-gray-400 uppercase tracking-widest">Trang {page + 1} / {Math.ceil(total / PAGE_SIZE)}</p>
+          <div className="flex gap-2">
+            <button 
+              onClick={() => setPage(p => Math.max(0, p - 1))}
+              disabled={page === 0}
+              className="px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-bold hover:bg-gray-100 disabled:opacity-50"
+            >
+              Trước
+            </button>
+            <button 
+              onClick={() => setPage(p => p + 1)}
+              disabled={(page + 1) * PAGE_SIZE >= total}
+              className="px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-bold hover:bg-gray-100 disabled:opacity-50"
+            >
+              Sau
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -275,30 +275,28 @@ async def start_vocab_practice(req: VocabPracticeReq, authorization: str = Heade
     if student.get("credits_ai", 0) < 5:
         raise HTTPException(status_code=402, detail="Insufficient AI credits (5 required)")
     
-    conn = get_db()
     try:
-        # Deduct credits
-        conn.execute("UPDATE users SET credits_ai = credits_ai - 5 WHERE id = ?", (student["id"],))
-        conn.commit()
-        
         # Fetch words from database
         if not req.word_ids:
             # FSRS-based: select words never reviewed (scheduled_at IS NULL) OR due now
+            conn = get_db()
             cursor = conn.execute(
                 """SELECT id, word, meaning_en, meaning_vn FROM saved_vocabulary 
                    WHERE user_id = ? AND (scheduled_at IS NULL OR datetime(scheduled_at) <= CURRENT_TIMESTAMP)
                    ORDER BY stability ASC LIMIT 10""",
                 (student["id"],)
             )
+            words = [dict(row) for row in cursor.fetchall()]
+            conn.close()
         else:
+            conn = get_db()
             placeholders = ', '.join(['?'] * len(req.word_ids))
             cursor = conn.execute(
                 f"SELECT id, word, meaning_en, meaning_vn FROM saved_vocabulary WHERE user_id = ? AND id IN ({placeholders})",
                 (student["id"], *req.word_ids)
             )
-        
-        words = [dict(row) for row in cursor.fetchall()]
-        conn.close()
+            words = [dict(row) for row in cursor.fetchall()]
+            conn.close()
         
         if not words:
             # Fallback: if no words need review, just take the 10 oldest ones
@@ -314,16 +312,22 @@ async def start_vocab_practice(req: VocabPracticeReq, authorization: str = Heade
             raise HTTPException(status_code=404, detail="No words found. Save some vocabulary first!")
             
         result = await llm_service.generate_vocab_practice_rich(words)
-        if result:
+        
+        if result and isinstance(result, dict) and (result.get("exercises") or result.get("quiz")):
+            # Deduct credits only on success with safety check
+            conn = get_db()
+            conn.execute("UPDATE users SET credits_ai = MAX(0, credits_ai - 5) WHERE id = ?", (student["id"],))
+            conn.commit()
+            conn.close()
             return result
-        return {"error": "Failed to generate practice"}
+            
+        return {"error": "Failed to generate practice", "detail": "AI service returned no valid exercises."}
     except Exception as e:
-        if conn: conn.close()
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/vocabulary/quiz/generate")
-def generate_quiz(req: dict, authorization: str = Header(...)):
+async def generate_quiz_async(req: dict, authorization: str = Header(...)):
     """Generate IELTS-style quiz from provided text."""
     student = _get_current_student(authorization)
     text = req.get("text")
@@ -335,7 +339,8 @@ def generate_quiz(req: dict, authorization: str = Header(...)):
     _check_usage_limit(student["id"], "quiz_gen", limit=10)
     
     try:
-        result = llm_service.generate_exercises_from_text(text, "quiz", num)
+        # Assuming we have an async version or can wrap it
+        result = await llm_service.generate_exercises_from_text(text, "quiz", num)
         return result
     except Exception as e:
         traceback.print_exc()
@@ -485,13 +490,9 @@ async def start_grammar_practice(req: GrammarPracticeReq, authorization: str = H
     if student.get("credits_ai", 0) < 5:
         raise HTTPException(status_code=402, detail="Insufficient AI credits (5 required)")
         
-    conn = get_db()
     try:
-        # Deduct credits
-        conn.execute("UPDATE users SET credits_ai = credits_ai - 5 WHERE id = ?", (student["id"],))
-        conn.commit()
-        
         placeholders = ', '.join(['?'] * len(req.rule_ids))
+        conn = get_db()
         cursor = conn.execute(
             f"SELECT name FROM grammar_rules WHERE id IN ({placeholders})",
             tuple(req.rule_ids)
@@ -503,11 +504,17 @@ async def start_grammar_practice(req: GrammarPracticeReq, authorization: str = H
             raise HTTPException(status_code=404, detail="Rules not found")
             
         result = await llm_service.generate_grammar_practice(rule_names, req.difficulty)
-        if isinstance(result, list):
+        
+        if result and isinstance(result, list) and len(result) > 0:
+            # Deduct credits only on success
+            conn = get_db()
+            conn.execute("UPDATE users SET credits_ai = credits_ai - 5 WHERE id = ?", (student["id"],))
+            conn.commit()
+            conn.close()
             return result
-        return {"error": "Failed to generate grammar practice"}
+            
+        return {"error": "Failed to generate grammar practice", "detail": result.get("error") if isinstance(result, dict) else "Unknown error"}
     except Exception as e:
-        if conn: conn.close()
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -830,21 +837,24 @@ class TextAnalysisRequest(BaseModel):
 
 
 @router.post("/analyze-text")
-def analyze_text(req: TextAnalysisRequest, authorization: str = Header(...)):
+async def analyze_text(req: TextAnalysisRequest, authorization: str = Header(...)):
     user = _get_current_student(authorization)
     if user.get("credits_ai", 0) < 5:
         raise HTTPException(status_code=402, detail="Insufficient AI credits (5 required)")
     
     _check_usage_limit(user["id"], "ai-tools")
     
-    # Deduct credit
-    conn = get_db()
-    conn.execute("UPDATE users SET credits_ai = MAX(0, credits_ai - 5) WHERE id = ?", (user["id"],))
-    conn.commit()
-    conn.close()
-
-    result = llm_service.generate_exercises_from_text(req.text, "mixed", req.num_questions)
-    return result
+    result = await llm_service.generate_exercises_from_text(req.text, "mixed", req.num_questions)
+    
+    if result and isinstance(result, dict) and "error" not in result:
+        # Deduct credits only on success
+        conn = get_db()
+        conn.execute("UPDATE users SET credits_ai = MAX(0, credits_ai - 5) WHERE id = ?", (user["id"],))
+        conn.commit()
+        conn.close()
+        return result
+        
+    return {"error": "Failed to analyze text", "detail": result.get("error") if isinstance(result, dict) else "Unknown error"}
 
 
 # ─── DICTIONARY LOOKUP ────────────────────────────────────────────────────────
@@ -1314,21 +1324,24 @@ class IpaRequest(BaseModel):
     focus: str = "vowels"
 
 @router.post("/ipa/generate")
-def generate_ipa(req: IpaRequest, authorization: str = Header(...)):
+async def generate_ipa(req: IpaRequest, authorization: str = Header(...)):
     user = _get_current_student(authorization)
     if user.get("credits_ai", 0) < 5:
         raise HTTPException(status_code=402, detail="Insufficient AI credits (5 required)")
     
     _check_usage_limit(user["id"], "ipa")
     
-    # Deduct credit
-    conn = get_db()
-    conn.execute("UPDATE users SET credits_ai = MAX(0, credits_ai - 5) WHERE id = ?", (user["id"],))
-    conn.commit()
-    conn.close()
-
-    result = llm_service.generate_ipa_lesson(req.words, req.focus)
-    return result
+    result = await llm_service.generate_ipa_lesson(req.words, req.focus)
+    
+    if result and isinstance(result, dict) and "error" not in result:
+        # Deduct credits only on success
+        conn = get_db()
+        conn.execute("UPDATE users SET credits_ai = MAX(0, credits_ai - 5) WHERE id = ?", (user["id"],))
+        conn.commit()
+        conn.close()
+        return result
+        
+    return {"error": "Failed to generate IPA lesson", "detail": result.get("error") if isinstance(result, dict) else "Unknown error"}
 
 class PracticeRequest(BaseModel):
     test_type: str = "TOEIC"
@@ -1336,40 +1349,46 @@ class PracticeRequest(BaseModel):
     part: str = ""
 
 @router.post("/practice/generate")
-def generate_practice(req: PracticeRequest, authorization: str = Header(...)):
+async def generate_practice(req: PracticeRequest, authorization: str = Header(...)):
     user = _get_current_student(authorization)
     if user.get("credits_ai", 0) < 5:
         raise HTTPException(status_code=402, detail="Insufficient AI credits (5 required)")
     _check_usage_limit(user["id"], f"practice_{req.test_type}")
     
-    # Deduct credit
-    conn = get_db()
-    conn.execute("UPDATE users SET credits_ai = MAX(0, credits_ai - 5) WHERE id = ?", (user["id"],))
-    conn.commit()
-    conn.close()
-
-    result = llm_service.generate_practice_test(req.test_type, req.skill, req.part)
-    return result
+    result = await llm_service.generate_practice_test(req.test_type, req.skill, req.part)
+    
+    if result and isinstance(result, dict) and "error" not in result:
+        # Deduct credits only on success
+        conn = get_db()
+        conn.execute("UPDATE users SET credits_ai = MAX(0, credits_ai - 5) WHERE id = ?", (user["id"],))
+        conn.commit()
+        conn.close()
+        return result
+        
+    return {"error": "Failed to generate practice test", "detail": result.get("error") if isinstance(result, dict) else "Unknown error"}
 
 class ReadingRequest(BaseModel):
     topic: str = ""
     level: str = "B1"
 
 @router.post("/reading/generate")
-def generate_reading(req: ReadingRequest, authorization: str = Header(...)):
+async def generate_reading(req: ReadingRequest, authorization: str = Header(...)):
     user = _get_current_student(authorization)
     if user.get("credits_ai", 0) < 5:
         raise HTTPException(status_code=402, detail="Insufficient AI credits (5 required)")
     _check_usage_limit(user["id"], "reading")
     
-    # Deduct credit
-    conn = get_db()
-    conn.execute("UPDATE users SET credits_ai = MAX(0, credits_ai - 5) WHERE id = ?", (user["id"],))
-    conn.commit()
-    conn.close()
-
-    result = llm_service.generate_reading_passage(req.topic, req.level)
-    return result
+    result = await llm_service.generate_reading_passage(req.topic, req.level)
+    
+    if result and isinstance(result, dict) and "error" not in result:
+        # Deduct credits only on success
+        conn = get_db()
+        conn.execute("UPDATE users SET credits_ai = MAX(0, credits_ai - 5) WHERE id = ?", (user["id"],))
+        conn.commit()
+        conn.close()
+        return result
+        
+    return {"error": "Failed to generate reading passage", "detail": result.get("error") if isinstance(result, dict) else "Unknown error"}
 
 class WritingRequest(BaseModel):
     text: str
@@ -1377,38 +1396,44 @@ class WritingRequest(BaseModel):
     target_test: str = "IELTS"
 
 @router.post("/writing/evaluate")
-def evaluate_writing(req: WritingRequest, authorization: str = Header(...)):
+async def evaluate_writing(req: WritingRequest, authorization: str = Header(...)):
     user = _get_current_student(authorization)
     if user.get("credits_ai", 0) < 5:
         raise HTTPException(status_code=402, detail="Insufficient AI credits (5 required)")
     
-    # Deduct credit
-    conn = get_db()
-    conn.execute("UPDATE users SET credits_ai = MAX(0, credits_ai - 5) WHERE id = ?", (user["id"],))
-    conn.commit()
-    conn.close()
-
-    result = llm_service.evaluate_writing(req.text, req.task_type, req.target_test)
-    return result
+    result = await llm_service.evaluate_writing(req.text, req.task_type, req.target_test)
+    
+    if result and isinstance(result, dict) and "error" not in result:
+        # Deduct credits only on success
+        conn = get_db()
+        conn.execute("UPDATE users SET credits_ai = MAX(0, credits_ai - 5) WHERE id = ?", (user["id"],))
+        conn.commit()
+        conn.close()
+        return result
+        
+    return {"error": "Failed to evaluate writing", "detail": result.get("error") if isinstance(result, dict) else "Unknown error"}
 
 class SpeakingRequest(BaseModel):
     level: str = "B1"
     topic_type: str = "general"
 
 @router.post("/speaking/topic")
-def generate_speaking(req: SpeakingRequest, authorization: str = Header(...)):
+async def generate_speaking(req: SpeakingRequest, authorization: str = Header(...)):
     user = _get_current_student(authorization)
     if user.get("credits_ai", 0) < 5:
         raise HTTPException(status_code=402, detail="Insufficient AI credits (5 required)")
     
-    # Deduct credit
-    conn = get_db()
-    conn.execute("UPDATE users SET credits_ai = MAX(0, credits_ai - 5) WHERE id = ?", (user["id"],))
-    conn.commit()
-    conn.close()
-
-    result = llm_service.generate_speaking_topic(req.level, req.topic_type)
-    return result
+    result = await llm_service.generate_speaking_topic(req.level, req.topic_type)
+    
+    if result and isinstance(result, dict) and "error" not in result:
+        # Deduct credits only on success
+        conn = get_db()
+        conn.execute("UPDATE users SET credits_ai = MAX(0, credits_ai - 5) WHERE id = ?", (user["id"],))
+        conn.commit()
+        conn.close()
+        return result
+        
+    return {"error": "Failed to generate speaking topic", "detail": result.get("error") if isinstance(result, dict) else "Unknown error"}
 
 
 @router.post("/file/upload-analyze")
@@ -1425,12 +1450,6 @@ async def student_upload_analyze(
     if hasattr(file, 'size') and file.size > 10 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="File too large. Maximum size is 10MB.")
 
-    # Deduct credits
-    conn = get_db()
-    conn.execute("UPDATE users SET credits_ai = MAX(0, credits_ai - 5) WHERE id = ?", (user["id"],))
-    conn.commit()
-    conn.close()
-
     content = await file.read()
     text = file_service.extract_text_from_file(content, file.filename)
     
@@ -1438,7 +1457,16 @@ async def student_upload_analyze(
         raise HTTPException(status_code=400, detail="Could not extract text from file")
 
     result = llm_service.generate_exercises_from_text(text, exercise_type, num_questions)
-    return result
+    
+    if result and isinstance(result, dict) and "error" not in result:
+        # Deduct credits only on success
+        conn = get_db()
+        conn.execute("UPDATE users SET credits_ai = MAX(0, credits_ai - 5) WHERE id = ?", (user["id"],))
+        conn.commit()
+        conn.close()
+        return result
+        
+    return {"error": "Failed to analyze uploaded file", "detail": result.get("error") if isinstance(result, dict) else "Unknown error"}
 
 
 # ─── GRAMMAR ────────────────────────────────────────────────────────────────

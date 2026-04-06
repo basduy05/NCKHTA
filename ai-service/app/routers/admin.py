@@ -8,6 +8,7 @@ import csv
 import io
 import base64
 import asyncio
+import time
 from pydantic import BaseModel
 from typing import Dict, Optional, List
 
@@ -19,6 +20,9 @@ class GrammarAIGen(BaseModel):
     topic: str
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
+
+_AI_STATS_CACHE = {"data": None, "expires_at": 0.0}
+_AI_STATS_CACHE_TTL_SECONDS = 15
 
 class BulkCreditUpdate(BaseModel):
     credits: int
@@ -86,6 +90,98 @@ async def get_admin_stats():
             except: pass
         print(f"[ADMIN STATS ERROR] {e}", flush=True)
         raise HTTPException(status_code=500, detail=f"Admin stats retrieval error: {str(e)}")
+
+# --- AI MONITORING ---
+
+@router.get("/ai-logs")
+def get_ai_logs(limit: int = 100, offset: int = 0, include_response_content: bool = False):
+    """Retrieve detailed AI execution logs."""
+    # Bound expensive scans and large payloads.
+    limit = max(1, min(limit, 200))
+    offset = max(0, offset)
+
+    conn = get_db()
+    try:
+        content_col = ", response_content" if include_response_content else ""
+        cursor = conn.execute("""
+            SELECT id, user_id, endpoint, model, difficulty, latency_ms, status, error_message, feature, eval_score, eval_feedback, created_at
+            FROM ai_logs
+            ORDER BY created_at DESC
+            LIMIT ? OFFSET ?
+        """.replace("eval_feedback, created_at", f"eval_feedback{content_col}, created_at"), (limit, offset))
+        logs = [dict(row) for row in cursor.fetchall()]
+        
+        # Get total count
+        cursor.execute("SELECT COUNT(*) FROM ai_logs")
+        total = cursor.fetchone()[0]
+        
+        conn.close()
+        return {"logs": logs, "total": total}
+    except Exception as e:
+        if conn: conn.close()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/ai-stats")
+def get_ai_stats():
+    """Aggregate statistics for AI model performance."""
+    now = time.time()
+    if _AI_STATS_CACHE["data"] is not None and now < _AI_STATS_CACHE["expires_at"]:
+        return _AI_STATS_CACHE["data"]
+
+    conn = get_db()
+    try:
+        cursor = conn.cursor()
+        
+        # Average latency by model and difficulty
+        cursor.execute("""
+            SELECT model, difficulty, feature,
+                   AVG(latency_ms) as avg_latency, 
+                   COUNT(*) as total_requests,
+                   AVG(eval_score) as avg_score,
+                   SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) as success_count
+            FROM ai_logs
+            GROUP BY model, difficulty, feature
+        """)
+        model_stats = [dict(row) for row in cursor.fetchall()]
+        
+        # New: Stats grouped specifically by feature for the dashboard
+        cursor.execute("""
+            SELECT feature,
+                   AVG(latency_ms) as avg_latency, 
+                   COUNT(*) as total_requests,
+                   AVG(eval_score) as avg_score,
+                   SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) as success_count,
+                   MAX(latency_ms) as max_latency
+            FROM ai_logs
+            GROUP BY feature
+            ORDER BY total_requests DESC
+        """)
+        feature_stats = [dict(row) for row in cursor.fetchall()]
+        
+        # Success/Error over time (last 7 days)
+        cursor.execute("""
+            SELECT date(created_at) as date, 
+                   COUNT(*) as requests,
+                   SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) as success_count
+            FROM ai_logs
+            WHERE created_at >= date('now', '-7 days')
+            GROUP BY date(created_at)
+            ORDER BY date ASC
+        """)
+        stats_over_time = [dict(row) for row in cursor.fetchall()]
+        
+        conn.close()
+        payload = {
+            "model_performance": model_stats,
+            "feature_performance": feature_stats,
+            "success_over_time": stats_over_time
+        }
+        _AI_STATS_CACHE["data"] = payload
+        _AI_STATS_CACHE["expires_at"] = now + _AI_STATS_CACHE_TTL_SECONDS
+        return payload
+    except Exception as e:
+        if conn: conn.close()
+        raise HTTPException(status_code=500, detail=str(e))
 
 # --- USERS CRUD ---
 
@@ -465,13 +561,41 @@ def update_vocab(word: str, data: VocabUpdate):
 
 @router.delete("/vocab/{word}")
 def delete_vocab(word: str):
+    # 1. Clear from Neo4j (Global storage)
     g = graph_service.get_graph()
     if not g:
         raise HTTPException(status_code=500, detail="Graph DB not connected")
     try:
-        # Sử dụng so khớp không phân biệt hoa thường để đảm bảo xoá chính xác
+        # DETACH DELETE removes the node and all its relationships
         g.query("MATCH (w:Word) WHERE toLower(w.text) = toLower($word) DETACH DELETE w", params={"word": word})
-        return {"message": f"Deleted '{word}'"}
+        
+        # 2. Clear from SQLite (Local Cache, Student Lists, and Logs)
+        conn = get_db()
+        try:
+            cursor = conn.cursor()
+            word_lower = word.lower()
+            
+            # Delete study logs first (foreign key dependency)
+            cursor.execute("""
+                DELETE FROM study_logs 
+                WHERE word_id IN (SELECT id FROM saved_vocabulary WHERE toLower(word) = ?)
+            """, (word_lower,))
+            
+            # Delete from student's saved lists
+            cursor.execute("DELETE FROM saved_vocabulary WHERE toLower(word) = ?", (word_lower,))
+            
+            # Delete from dictionary cache
+            cursor.execute("DELETE FROM dictionary_cache WHERE toLower(word) = ?", (word_lower,))
+            
+            conn.commit()
+            print(f"[ADMIN VOCAB] Deleted '{word}' completely from Neo4j and SQLite.", flush=True)
+            conn.close()
+        except Exception as sqlite_err:
+            if conn: conn.close()
+            print(f"[ADMIN VOCAB DELETE ERROR] SQLite: {sqlite_err}")
+            # Continue anyway as Neo4j might have succeeded
+            
+        return {"message": f"Deleted '{word}' completely from the system."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

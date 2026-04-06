@@ -24,8 +24,9 @@ function DashboardSidebar({ user, logout }: { user: any, logout: any }) {
       { name: "Quản lý Lớp học", href: "/dashboard/admin?tab=classes", icon: GraduationCap, id: "classes" },
       { name: "Quản lý Bài học", href: "/dashboard/admin?tab=lessons", icon: BookOpen, id: "lessons" },
       { name: "Bài tập & Đề thi", href: "/dashboard/admin?tab=assignments", icon: ClipboardList, id: "assignments" },
-      { name: "Kho Từ Vựng (Graph)", href: "/dashboard/admin?tab=vocab", icon: Database, id: "vocab" },
+      { name: "Sổ tay Từ Vựng (Graph)", href: "/dashboard/admin?tab=vocab", icon: Database, id: "vocab" },
       { name: "Kho Ngữ Pháp (AI)", href: "/dashboard/admin?tab=grammar", icon: BookText, id: "grammar" },
+      { name: "Giám sát hiệu năng AI", href: "/dashboard/admin?tab=ai_monitoring", icon: TrendingUp, id: "ai_monitoring" },
       { name: "Cài đặt hệ thống", href: "/dashboard/admin?tab=settings", icon: Settings, id: "settings" },
     ];
   } else if (isTeacher) {

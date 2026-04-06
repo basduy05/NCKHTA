@@ -1,0 +1,56 @@
+[
+  {
+    "p": "Gemini",
+    "m": "gemini-2.5-flash",
+    "s": "FAIL",
+    "e": "Error calling model 'gemini-2.5-flash' (INVALID_ARGUMENT): 400 INVALID_ARGUMENT."
+  },
+  {
+    "p": "Gemini",
+    "m": "gemini-2.5-flash-lite",
+    "s": "FAIL",
+    "e": "Error calling model 'gemini-2.5-flash-lite' (INVALID_ARGUMENT): 400 INVALID_ARGU"
+  },
+  {
+    "p": "Gemini",
+    "m": "gemini-2.0-flash",
+    "s": "FAIL",
+    "e": "Error calling model 'gemini-2.0-flash' (INVALID_ARGUMENT): 400 INVALID_ARGUMENT."
+  },
+  {
+    "p": "Gemini",
+    "m": "gemini-1.5-flash",
+    "s": "FAIL",
+    "e": "Error calling model 'gemini-1.5-flash' (INVALID_ARGUMENT): 400 INVALID_ARGUMENT."
+  },
+  {
+    "p": "Cohere",
+    "m": "command-nightly",
+    "s": "OK",
+    "ms": 1238
+  },
+  {
+    "p": "Cohere",
+    "m": "command-a-03-2025",
+    "s": "OK",
+    "ms": 675
+  },
+  {
+    "p": "Cohere",
+    "m": "command-r",
+    "s": "FAIL",
+    "e": "headers: {'access-control-expose-headers': 'X-Debug-Trace-ID', 'cache-control': "
+  },
+  {
+    "p": "Cohere",
+    "m": "command-light",
+    "s": "FAIL",
+    "e": "headers: {'access-control-expose-headers': 'X-Debug-Trace-ID', 'cache-control': "
+  },
+  {
+    "p": "Cohere",
+    "m": "command-r-plus",
+    "s": "FAIL",
+    "e": "headers: {'access-control-expose-headers': 'X-Debug-Trace-ID', 'cache-control': "
+  }
+]
