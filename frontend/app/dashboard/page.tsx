@@ -16,7 +16,7 @@ export default function DashboardRedirect() {
       return;
     }
 
-    const { role } = user;
+    const role = String(user.role).toUpperCase();
     if (role === "STUDENT") {
       router.replace("/dashboard/student");
     } else if (role === "TEACHER") {
