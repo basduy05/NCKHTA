@@ -125,9 +125,9 @@ def get_db(retries=3):
     Connects to Turso if configured, otherwise falls back to local SQLite.
     Reuses connections within the same thread/request for better performance.
     """
+    import time
     # Check if we already have a connection in this thread
     if hasattr(_thread_local, "db_conn") and _thread_local.db_conn:
-        import time
         now = time.time()
         last_check = getattr(_thread_local, "last_check", 0)
         

@@ -63,3 +63,15 @@ Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8000/health
 ```
 
 Nếu kết nối DB online thành công, phần `dependencies.database` sẽ là `ok`.
+
+
+Get-Process -Name "node" | Stop-Process -Force; If (Test-Path "frontend\.next") { Remove-Item -Recurse -Force "frontend\.next" }; cd frontend; npm run dev
+
+
+cd C:\Users\basdu\Downloads\NCKHTA\frontend
+
+Remove-Item -Recurse -Force .next
+
+
+
+npm run dev
