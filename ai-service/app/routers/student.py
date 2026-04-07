@@ -202,9 +202,18 @@ def student_stats(authorization: str = Header(...)):
              FROM assignments a
              JOIN enrollments e ON a.class_id = e.class_id
             WHERE e.student_id = ?) AS assignments_total,
-          (SELECT COUNT(*) FROM student_scores WHERE student_id = ?) AS assignments_submitted,
-          (SELECT COALESCE(SUM(score), 0) FROM student_scores WHERE student_id = ?) AS total_score,
-          (SELECT COALESCE(SUM(max_score), 0) FROM student_scores WHERE student_id = ?) AS total_max_score,
+          (
+            (SELECT COUNT(*) FROM student_scores WHERE student_id = ?) +
+            (SELECT COUNT(*) FROM ai_practice_history WHERE student_id = ?)
+          ) AS assignments_submitted,
+          (
+            (SELECT COALESCE(SUM(score), 0) FROM student_scores WHERE student_id = ?) +
+            (SELECT COALESCE(SUM(score), 0) FROM ai_practice_history WHERE student_id = ?)
+          ) AS total_score,
+          (
+            (SELECT COALESCE(SUM(max_score), 0) FROM student_scores WHERE student_id = ?) +
+            (SELECT COALESCE(SUM(max_score), 0) FROM ai_practice_history WHERE student_id = ?)
+          ) AS total_max_score,
           (SELECT COUNT(*) FROM saved_vocabulary WHERE user_id = ?) AS vocab_count,
           (SELECT COUNT(*)
              FROM saved_vocabulary
@@ -212,13 +221,13 @@ def student_stats(authorization: str = Header(...)):
           ) AS review_needed
         """,
         (
-            student["id"],
-            student["id"],
-            student["id"],
-            student["id"],
-            student["id"],
-            student["id"],
-            student["id"],
+            student["id"], # classes_enrolled
+            student["id"], # assignments_total
+            student["id"], student["id"], # assignments_submitted
+            student["id"], student["id"], # total_score
+            student["id"], student["id"], # total_max_score
+            student["id"], # vocab_count
+            student["id"], # review_needed
         ),
     ).fetchone()
     conn.close()
