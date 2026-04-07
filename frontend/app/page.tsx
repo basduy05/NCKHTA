@@ -42,7 +42,7 @@ export default function Home() {
       <nav className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-lg border-b border-gray-100 animate-slide-down">
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
           <Link href="/" className="flex items-center">
-            <Image src="/logo.png" alt="iEdu" width={90} height={36} priority />
+            <Image src="/logo.png" alt="iEdu" width={90} height={36} priority style={{ height: "auto" }} />
           </Link>
           <div className="hidden md:flex items-center gap-8 text-sm font-medium text-gray-600">
             <Link href={user ? `${dashboardUrl}?tab=dictionary` : "/login"} className="hover:text-blue-600 transition">Tra từ điển với AI</Link>
@@ -216,7 +216,6 @@ export default function Home() {
           </div>
         </div>
       </section>
-
       {/* ===== DEVELOPMENT ORIENTATION ===== */}
       <section id="development" className="max-w-7xl mx-auto px-6 py-24 border-t border-gray-100">
         <div data-reveal className="opacity-0 translate-y-8 text-center mb-16">
@@ -300,7 +299,7 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-6 py-16">
           <div className="grid md:grid-cols-4 gap-10">
             <div className="md:col-span-2 space-y-4">
-              <Image src="/logo.png" alt="iEdu" width={100} height={40} className="brightness-0 invert" />
+              <Image src="/logo.png" alt="iEdu" width={100} height={40} className="brightness-0 invert" style={{ height: "auto" }} />
               <p className="text-sm leading-relaxed max-w-sm">
                 Nền tảng học tập thông minh ứng dụng Đồ thị Tri thức và Trí tuệ Nhân tạo trong hỗ trợ học từ vựng và ngữ pháp tiếng Anh.
               </p>

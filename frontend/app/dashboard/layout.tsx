@@ -66,7 +66,7 @@ function DashboardSidebar({ user, logout }: { user: any, logout: any }) {
   return (
     <aside className="w-64 bg-white border-r border-gray-200 p-6 flex flex-col">
       <Link href="/" className="flex items-center mb-10">
-        <Image src="/logo.png" alt="iEdu" width={100} height={40} />
+        <Image src="/logo.png" alt="iEdu" width={100} height={40} style={{ height: "auto" }} />
         <span className="ml-2 text-sm font-medium text-gray-500">{isAdmin ? "Admin" : isTeacher ? "Teacher" : isStudent ? "Student" : ""}</span>
       </Link>
       <nav className="space-y-2 flex-grow">

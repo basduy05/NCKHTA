@@ -1,5 +1,70 @@
 export const MOCK_PRACTICE_TESTS = [
   {
+    id: "toeic-listening-1",
+    title: "TOEIC Listening Part 3: Conversations",
+    test_type: "TOEIC",
+    skill: "listening",
+    time_limit: 10,
+    instructions: "Listen to the conversation and answer the questions.",
+    passage: "[Audio Transcript] \nM: Hi Sarah, do you know what time the marketing meeting starts?\nF: It was originally scheduled for 10:00 AM, but the director asked to push it back to 1:00 PM because of a scheduling conflict with the sales team.\nM: Oh, I see. In that case, I'll have time to finish the Q3 report and print some copies before we meet.\nF: That's a good idea. Oh, by the way, make sure to bring the new promotional materials. The director wants to review them together.",
+    questions: [
+      {
+        number: 1,
+        question: "When is the meeting taking place?",
+        options: [
+          "At 10:00 AM",
+          "At 1:00 PM",
+          "At 3:00 PM",
+          "Tomorrow morning"
+        ],
+        correct_answer: 1,
+        explanation: "The woman says 'push it back to 1:00 PM'."
+      },
+      {
+        number: 2,
+        question: "What will the man do before the meeting?",
+        options: [
+          "Call the sales team",
+          "Meet with the director",
+          "Print a report",
+          "Buy some lunch"
+        ],
+        correct_answer: 2,
+        explanation: "The man says 'I'll have time to finish the Q3 report and print some copies'."
+      },
+      {
+        number: 3,
+        question: "What is the man asked to bring?",
+        options: [
+          "Promotional materials",
+          "His laptop",
+          "Meeting agenda",
+          "Sales figures"
+        ],
+        correct_answer: 0,
+        explanation: "The woman says 'make sure to bring the new promotional materials'."
+      }
+    ],
+    tips: [
+      "In Part 3, always read the questions before listening to the audio.",
+      "Listen for keywords and synonyms instead of exact matching phrases."
+    ]
+  },
+  {
+    id: "ielts-writing-1",
+    title: "IELTS Writing Task 2: Environment",
+    test_type: "IELTS",
+    skill: "writing",
+    time_limit: 40,
+    instructions: "Write at least 250 words.",
+    passage: "Some people think that the best way to solve environmental problems is to increase the cost of fuel for cars and other vehicles. To what extent do you agree or disagree?",
+    questions: [],
+    tips: [
+      "Structure your essay clearly: Introduction, Body Paragraphs, and Conclusion.",
+      "Make sure you clearly state your opinion in the introduction and support it in the body."
+    ]
+  },
+  {
     id: "ielts-reading-1",
     title: "The Impact of Artificial Intelligence on Modern Society",
     test_type: "IELTS",

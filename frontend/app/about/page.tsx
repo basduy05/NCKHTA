@@ -115,7 +115,7 @@ export default function AboutPage() {
               </p>
             </div>
             <div className="flex-shrink-0 bg-white rounded-3xl p-6 shadow-2xl">
-              <Image src="/logo.png" alt="iEdu Logo" width={220} height={88} priority />
+              <Image src="/logo.png" alt="iEdu Logo" width={220} height={88} priority style={{ height: "auto" }} />
             </div>
           </div>
         </div>
@@ -382,7 +382,7 @@ export default function AboutPage() {
       <footer className="bg-gray-900 text-gray-400 py-10">
         <div className="max-w-6xl mx-auto px-6 flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <Image src="/logo.png" alt="iEdu" width={80} height={32} className="brightness-0 invert" />
+            <Image src="/logo.png" alt="iEdu" width={80} height={32} className="brightness-0 invert" style={{ height: "auto" }} />
             <span className="text-sm">Nền tảng Học tập Thông minh</span>
           </div>
           <p className="text-sm">&copy; 2025 iEdu - Nguyễn Bá Duy - Lớp 74DCTT23</p>

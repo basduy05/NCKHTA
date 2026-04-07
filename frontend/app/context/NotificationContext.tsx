@@ -107,7 +107,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
       {/* Global Modal */}
       {modal.isOpen && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+        <div className="fixed inset-0 !mt-0 z-[110] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm animate-fade-in" onClick={handleClose} />
           <div className="relative bg-white rounded-[2rem] shadow-2xl w-full max-w-md overflow-hidden animate-scale-in border border-gray-100">
             <div className={`h-2.5 w-full ${

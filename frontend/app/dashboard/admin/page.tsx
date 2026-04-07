@@ -1,7 +1,7 @@
 "use client";
 import { useState, Suspense, useEffect, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { Users, Database, Plus, UploadCloud, FileSpreadsheet, Save, Edit, Trash2, GraduationCap, X, Check, BookOpen, BookText, Settings, RefreshCw, Mail, Eye, EyeOff, Sparkles, ClipboardList, Bold, Italic, Underline, Heading1, Heading2, List, ListOrdered, TrendingUp, Network, Activity } from "lucide-react";
+import { Users, Database, Plus, UploadCloud, FileSpreadsheet, Save, Edit, Trash2, GraduationCap, X, Check, Copy, BookOpen, BookText, Settings, RefreshCw, Mail, Eye, EyeOff, Sparkles, ClipboardList, Bold, Italic, Underline, Heading1, Heading2, List, ListOrdered, TrendingUp, Network, Activity } from "lucide-react";
 import { useAuth } from "@/app/context/AuthContext";
 import { useNotification } from "@/app/context/NotificationContext";
 
@@ -1131,6 +1131,14 @@ function SettingsTab() {
   const [showPasswords, setShowPasswords] = useState<Record<string, boolean>>({});
   const [testingEmail, setTestingEmail] = useState(false);
   const [testingNeo4j, setTestingNeo4j] = useState(false);
+  const [testingGeminiModels, setTestingGeminiModels] = useState(false);
+  const [geminiModelsOutput, setGeminiModelsOutput] = useState("");
+  const [showGeminiModelsModal, setShowGeminiModelsModal] = useState(false);
+  const [copiedGeminiModels, setCopiedGeminiModels] = useState(false);
+  const [testingCohereModels, setTestingCohereModels] = useState(false);
+  const [cohereModelsOutput, setCohereModelsOutput] = useState("");
+  const [showCohereModelsModal, setShowCohereModelsModal] = useState(false);
+  const [copiedCohereModels, setCopiedCohereModels] = useState(false);
   const { token, authFetch } = useAuth();
   const { showAlert } = useNotification();
 
@@ -1195,6 +1203,64 @@ function SettingsTab() {
     finally { setTestingNeo4j(false); }
   };
 
+  const handleListGeminiModels = async () => {
+    setTestingGeminiModels(true);
+    setCopiedGeminiModels(false);
+    try {
+      const res = await authFetch(`${API_URL}/admin/settings/gemini-models`, { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) {
+        showAlert(data.detail || 'Khong the lay danh sach Gemini models', 'error');
+        return;
+      }
+      setGeminiModelsOutput(data.formatted_output || '');
+      setShowGeminiModelsModal(true);
+    } catch {
+      showAlert('Loi ket noi toi server', 'error');
+    } finally {
+      setTestingGeminiModels(false);
+    }
+  };
+
+  const handleCopyGeminiModels = async () => {
+    try {
+      await navigator.clipboard.writeText(geminiModelsOutput);
+      setCopiedGeminiModels(true);
+      setTimeout(() => setCopiedGeminiModels(false), 2000);
+    } catch {
+      showAlert('Khong the copy ket qua', 'error');
+    }
+  };
+
+  const handleListCohereModels = async () => {
+    setTestingCohereModels(true);
+    setCopiedCohereModels(false);
+    try {
+      const res = await authFetch(`${API_URL}/admin/settings/cohere-models`, { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) {
+        showAlert(data.detail || 'Khong the lay danh sach Cohere models', 'error');
+        return;
+      }
+      setCohereModelsOutput(data.formatted_output || '');
+      setShowCohereModelsModal(true);
+    } catch {
+      showAlert('Loi ket noi toi server', 'error');
+    } finally {
+      setTestingCohereModels(false);
+    }
+  };
+
+  const handleCopyCohereModels = async () => {
+    try {
+      await navigator.clipboard.writeText(cohereModelsOutput);
+      setCopiedCohereModels(true);
+      setTimeout(() => setCopiedCohereModels(false), 2000);
+    } catch {
+      showAlert('Khong the copy ket qua', 'error');
+    }
+  };
+
   const toggleShow = (key: string) => setShowPasswords(p => ({ ...p, [key]: !p[key] }));
 
   const sensitiveKeys = ['GOOGLE_API_KEY', 'OPENAI_API_KEY', 'COHERE_API_KEY', 'NEO4J_PASSWORD', 'SMTP_PASSWORD', 'RESEND_API_KEY', 'BREVO_API_KEY'];
@@ -1228,9 +1294,19 @@ function SettingsTab() {
     <div className="space-y-6 animate-in fade-in duration-300">
       {/* AI API Keys */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-        <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center">
-          <Settings className="mr-2 text-indigo-600" size={20} /> API Keys (AI)
-        </h2>
+        <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <h2 className="text-lg font-bold text-gray-900 flex items-center">
+            <Settings className="mr-2 text-indigo-600" size={20} /> API Keys (AI)
+          </h2>
+          <div className="flex flex-wrap gap-2">
+            <button onClick={handleListGeminiModels} disabled={testingGeminiModels} className="px-4 py-2 bg-indigo-100 text-indigo-700 rounded-lg text-sm font-medium hover:bg-indigo-200 disabled:opacity-50 flex items-center">
+              <Sparkles size={14} className={`mr-1.5 ${testingGeminiModels ? 'animate-pulse' : ''}`} /> {testingGeminiModels ? 'Dang lay Gemini...' : 'List Gemini models'}
+            </button>
+            <button onClick={handleListCohereModels} disabled={testingCohereModels} className="px-4 py-2 bg-emerald-100 text-emerald-700 rounded-lg text-sm font-medium hover:bg-emerald-200 disabled:opacity-50 flex items-center">
+              <Sparkles size={14} className={`mr-1.5 ${testingCohereModels ? 'animate-pulse' : ''}`} /> {testingCohereModels ? 'Dang lay Cohere...' : 'List Cohere models'}
+            </button>
+          </div>
+        </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {renderField('GOOGLE_API_KEY', 'Google Gemini API Key', 'AIzaSy...')}
           {renderField('OPENAI_API_KEY', 'OpenAI API Key (optional)', 'sk-...')}
@@ -1311,6 +1387,62 @@ function SettingsTab() {
           <Save size={18} className="mr-2" /> {saving ? 'Saving...' : 'Save all settings'}
         </button>
       </div>
+
+      {showGeminiModelsModal && (
+        <div className="fixed inset-0 !mt-0 z-[9999] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm" onClick={() => setShowGeminiModelsModal(false)}>
+          <div className="w-full max-w-3xl overflow-hidden rounded-2xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
+              <h3 className="text-lg font-black text-gray-900 flex items-center">
+                <Sparkles size={18} className="mr-2 text-indigo-600" /> Gemini Models
+              </h3>
+              <button onClick={() => setShowGeminiModelsModal(false)} className="rounded-full p-2 text-gray-400 hover:bg-red-50 hover:text-red-500">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="max-h-[60vh] overflow-auto bg-slate-950 px-6 py-5">
+              <pre className="whitespace-pre-wrap break-words text-sm leading-6 text-cyan-100">
+                {geminiModelsOutput || 'Khong co du lieu'}
+              </pre>
+            </div>
+            <div className="flex justify-end gap-3 border-t border-gray-100 px-6 py-4">
+              <button onClick={handleCopyGeminiModels} className={`min-w-[140px] rounded-lg px-4 py-2.5 text-sm font-bold transition ${copiedGeminiModels ? 'bg-green-100 text-green-700' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}>
+                {copiedGeminiModels ? <><Check size={16} className="mr-2 inline" />Da copy</> : <><Copy size={16} className="mr-2 inline" />Copy ket qua</>}
+              </button>
+              <button onClick={() => setShowGeminiModelsModal(false)} className="rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-bold text-gray-700 hover:bg-gray-50">
+                Dong
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showCohereModelsModal && (
+        <div className="fixed inset-0 !mt-0 z-[9999] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm" onClick={() => setShowCohereModelsModal(false)}>
+          <div className="w-full max-w-3xl overflow-hidden rounded-2xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
+              <h3 className="text-lg font-black text-gray-900 flex items-center">
+                <Sparkles size={18} className="mr-2 text-emerald-600" /> Cohere Models
+              </h3>
+              <button onClick={() => setShowCohereModelsModal(false)} className="rounded-full p-2 text-gray-400 hover:bg-red-50 hover:text-red-500">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="max-h-[60vh] overflow-auto bg-slate-950 px-6 py-5">
+              <pre className="whitespace-pre-wrap break-words text-sm leading-6 text-emerald-100">
+                {cohereModelsOutput || 'Khong co du lieu'}
+              </pre>
+            </div>
+            <div className="flex justify-end gap-3 border-t border-gray-100 px-6 py-4">
+              <button onClick={handleCopyCohereModels} className={`min-w-[140px] rounded-lg px-4 py-2.5 text-sm font-bold transition ${copiedCohereModels ? 'bg-green-100 text-green-700' : 'bg-emerald-600 text-white hover:bg-emerald-700'}`}>
+                {copiedCohereModels ? <><Check size={16} className="mr-2 inline" />Da copy</> : <><Copy size={16} className="mr-2 inline" />Copy ket qua</>}
+              </button>
+              <button onClick={() => setShowCohereModelsModal(false)} className="rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-bold text-gray-700 hover:bg-gray-50">
+                Dong
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1439,12 +1571,27 @@ function AILogsTab() {
   const [logs, setLogs] = useState<any[]>([]);
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(0);
+  const [selectedFeedback, setSelectedFeedback] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
   const PAGE_SIZE = 50;
 
-  const fetchData = async () => {
-    setLoading(true);
+  const handleCopyFeedback = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy', err);
+    }
+  };
+
+  const fetchData = async (isBackground = false) => {
+    if (!isBackground) setLoading(true);
+    else setRefreshing(true);
+    
     try {
       const [logsRes, statsRes] = await Promise.all([
         authFetch(`${API_URL}/admin/ai-logs?limit=${PAGE_SIZE}&offset=${page * PAGE_SIZE}`),
@@ -1464,16 +1611,23 @@ function AILogsTab() {
     } catch (err) {
       console.error("Error fetching AI logs/stats:", err);
     } finally {
-      setLoading(false);
+      if (!isBackground) setLoading(false);
+      else setRefreshing(false);
     }
   };
 
   useEffect(() => {
     fetchData();
+    // Auto-refresh interval (10 seconds)
+    const interval = setInterval(() => {
+      fetchData(true);
+    }, 10000);
+    
+    return () => clearInterval(interval);
   }, [token, page]);
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-300">
+    <div className="space-y-6 animate-in fade-in duration-300 pb-12">
       {/* Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
@@ -1527,21 +1681,21 @@ function AILogsTab() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Model Performance Table */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-          <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center"><Database className="mr-2 text-indigo-600" /> Hiệu năng theo Model</h2>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead>
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 h-full max-h-[350px] flex flex-col flex-1">
+          <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center shrink-0"><Database className="mr-2 text-indigo-600" /> Hiệu năng theo Model</h2>
+          <div className="overflow-auto flex-1 custom-scrollbar">
+            <table className="w-full text-left text-sm relative">
+              <thead className="sticky top-0 bg-white shadow-sm z-10">
                 <tr className="border-b border-gray-100 text-gray-400 uppercase text-[10px] font-black tracking-widest">
-                  <th className="pb-3">Model</th>
-                  <th className="pb-3">Độ khó</th>
-                  <th className="pb-3">Latency TB</th>
-                  <th className="pb-3">Số lượng</th>
+                  <th className="pb-3 pt-2">Model</th>
+                  <th className="pb-3 pt-2">Độ khó</th>
+                  <th className="pb-3 pt-2">Latency TB</th>
+                  <th className="pb-3 pt-2">Số lượng</th>
                 </tr>
               </thead>
               <tbody>
                 {stats?.model_performance?.map((s, i) => (
-                  <tr key={i} className="border-b border-gray-50 hover:bg-gray-50 transition">
+                  <tr key={i} className="border-b border-gray-50 hover:bg-gray-50 transition min-h-[40px]">
                     <td className="py-3 font-black text-gray-700">
                       {s.model === 'KnowledgeGraph' ? (
                         <span className="flex items-center text-purple-600"><Network size={14} className="mr-1" /> Knowledge Graph</span>
@@ -1561,22 +1715,22 @@ function AILogsTab() {
           </div>
         </div>
 
-        {/* NEW: Feature Performance Table */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-          <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center"><Activity className="mr-2 text-indigo-600" /> Hiệu năng theo Tính năng</h2>
-          <div className="overflow-y-auto max-h-64">
-            <table className="w-full text-left text-sm">
-              <thead>
+        {/* Feature Performance Table */}
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 h-full max-h-[350px] flex flex-col flex-1">
+          <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center shrink-0"><Activity className="mr-2 text-indigo-600" /> Hiệu năng theo Tính năng</h2>
+          <div className="overflow-auto flex-1 custom-scrollbar">
+            <table className="w-full text-left text-sm relative">
+              <thead className="sticky top-0 bg-white shadow-sm z-10">
                 <tr className="border-b border-gray-100 text-gray-400 uppercase text-[10px] font-black tracking-widest">
-                  <th className="pb-3">Tính năng</th>
-                  <th className="pb-3">Latency TB</th>
-                  <th className="pb-3">Tỷ lệ OK</th>
-                  <th className="pb-3">Số lượng</th>
+                  <th className="pb-3 pt-2">Tính năng</th>
+                  <th className="pb-3 pt-2">Latency TB</th>
+                  <th className="pb-3 pt-2">Tỷ lệ OK</th>
+                  <th className="pb-3 pt-2">Số lượng</th>
                 </tr>
               </thead>
               <tbody>
                 {stats?.feature_performance?.map((f, i) => (
-                  <tr key={i} className="border-b border-gray-50 hover:bg-gray-50 transition">
+                  <tr key={i} className="border-b border-gray-50 hover:bg-gray-50 transition min-h-[40px]">
                     <td className="py-3 font-black text-gray-700">{f.feature}</td>
                     <td className="py-3">
                       <span className={`font-black ${f.avg_latency > 10000 ? 'text-red-500' : f.avg_latency > 3000 ? 'text-orange-500' : 'text-green-500'}`}>
@@ -1584,8 +1738,8 @@ function AILogsTab() {
                       </span>
                     </td>
                     <td className="py-3 font-bold">
-                       <span className={f.success_count / f.total_requests < 0.8 ? 'text-red-500' : 'text-gray-600'}>
-                        {Math.round((f.success_count / f.total_requests) * 100)}%
+                       <span className={f.success_count / (f.total_requests || 1) < 0.8 ? 'text-red-500' : 'text-gray-600'}>
+                        {Math.round((f.success_count / (f.total_requests || 1)) * 100)}%
                        </span>
                     </td>
                     <td className="py-3 font-bold text-gray-400">{f.total_requests}</td>
@@ -1598,89 +1752,144 @@ function AILogsTab() {
       </div>
 
       {/* Detailed Log Table */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-lg font-bold text-gray-900 flex items-center"><ClipboardList className="mr-2 text-indigo-600" /> Log chi tiết gần đây</h2>
-          <button onClick={fetchData} className="text-indigo-600 hover:text-indigo-800 text-sm font-bold flex items-center gap-1">
-             <RefreshCw size={14} className={loading ? "animate-spin" : ""} /> Làm mới
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 flex flex-col flex-1">
+        <div className="flex justify-between items-center mb-6 shrink-0">
+          <h2 className="text-lg font-bold text-gray-900 flex items-center">
+            <ClipboardList className="mr-2 text-indigo-600" /> Log chi tiết gần đây 
+            {refreshing && <span className="ml-3 text-[10px] bg-green-100 text-green-700 font-bold px-2 flex items-center rounded-full animate-pulse transition"><RefreshCw size={10} className="mr-1 animate-spin" /> Live Data</span>}
+          </h2>
+          <button onClick={() => fetchData(false)} disabled={loading || refreshing} className="text-indigo-600 hover:text-indigo-800 text-sm font-bold flex items-center gap-1 border border-indigo-100 bg-indigo-50 px-3 py-1.5 rounded-lg transition-colors">
+             <RefreshCw size={14} className={loading || refreshing ? "animate-spin" : ""} /> Làm mới ngay
           </button>
         </div>
         
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm border-collapse">
-            <thead>
-              <tr className="border-b border-gray-200 text-gray-400 font-black uppercase text-[10px] tracking-widest">
-                <th className="pb-3">Thời gian</th>
-                <th className="pb-3">Tính năng</th>
-                <th className="pb-3">Model</th>
-                <th className="pb-3 text-center">Referee</th>
-                <th className="pb-3">Feedback</th>
-                <th className="pb-3">Latency</th>
-                <th className="pb-3">Trạng thái</th>
-              </tr>
-            </thead>
-            <tbody>
-              {logs.map((l) => (
-                <tr key={l.id} className="border-b border-gray-50 hover:bg-gray-50 group">
-                  <td className="py-4 text-gray-400 text-xs">{l.created_at}</td>
-                  <td className="py-4">
-                    <span className="bg-indigo-50 px-2 py-1 rounded text-[10px] font-black text-indigo-700 uppercase tracking-tight">
-                      {l.feature || "N/A"}
-                    </span>
-                  </td>
-                  <td className="py-4 font-black text-gray-700 text-xs">{l.model}</td>
-                  <td className="py-4 text-center">
-                    {l.eval_score ? (
-                      <span className={`px-2 py-1 rounded font-black text-xs ${
-                        l.eval_score >= 8 ? 'bg-green-100 text-green-700' : 
-                        l.eval_score >= 5 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'
-                      }`}>
-                        {l.eval_score}/10
-                      </span>
-                    ) : <span className="text-gray-300">-</span>}
-                  </td>
-                  <td className="py-4">
-                    <p className="text-[10px] text-gray-500 max-w-[200px] truncate leading-tight" title={l.eval_feedback}>
-                      {l.eval_feedback || (l.error_message ? <span className="text-red-400 italic">Error: {l.error_message}</span> : "-")}
-                    </p>
-                  </td>
-                  <td className="py-4 font-black">{l.latency_ms.toLocaleString()} ms</td>
-                  <td className="py-4">
-                    <span className={`px-2 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter ${
-                      l.status === 'success' ? 'bg-green-100 text-green-700' : 
-                      l.status === 'evaluated' ? 'bg-blue-100 text-blue-700' :
-                      l.status === 'fallback' ? 'bg-orange-100 text-orange-700' : 'bg-red-100 text-red-700'
-                    }`}>
-                      {l.status}
-                    </span>
-                  </td>
+        <div className="overflow-y-auto overflow-x-auto max-h-[500px] flex-1 custom-scrollbar bg-gray-50/30 rounded-xl border border-gray-50">
+          {loading && logs.length === 0 ? (
+             <div className="flex items-center justify-center h-48 text-indigo-400">Đang tải dữ liệu...</div>
+          ) : (
+            <table className="w-full text-left text-sm border-collapse relative min-w-[800px]">
+              <thead className="sticky top-0 bg-white shadow-sm z-20 outline outline-1 outline-gray-100">
+                <tr className="border-b border-gray-200 text-gray-400 font-black uppercase text-[10px] tracking-widest">
+                  <th className="py-3 px-4 w-32">Thời gian</th>
+                  <th className="py-3 px-4 w-40">Tính năng</th>
+                  <th className="py-3 px-4 w-36">Model</th>
+                  <th className="py-3 px-4 w-20 text-center">Referee</th>
+                  <th className="py-3 px-4 w-1/3">Feedback</th>
+                  <th className="py-3 px-4 w-28">Latency</th>
+                  <th className="py-3 px-4 w-28 text-center">Trạng thái</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {logs.map((l) => (
+                  <tr key={l.id} className="border-b border-gray-100 bg-white hover:bg-gray-50 transition-colors">
+                    <td className="py-3 px-4 text-gray-400 text-[11px] whitespace-nowrap">{l.created_at}</td>
+                    <td className="py-3 px-4 whitespace-nowrap">
+                      <span className="bg-indigo-50 px-2.5 py-1 rounded-md text-[10px] font-bold text-indigo-700 tracking-tight">
+                        {l.feature || "N/A"}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 font-black text-gray-700 text-[11px] truncate max-w-[150px]">{l.model}</td>
+                    <td className="py-3 px-4 text-center">
+                      {l.eval_score ? (
+                        <span className={`px-2.5 py-1 rounded-md font-black text-[10px] ${
+                          l.eval_score >= 8 ? 'bg-green-100 text-green-800' : 
+                          l.eval_score >= 5 ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'
+                        }`}>
+                          {l.eval_score}/10
+                        </span>
+                      ) : <span className="text-gray-300 font-bold">-</span>}
+                    </td>
+                    <td className="py-3 px-4">
+                      <div 
+                        className="text-[11px] text-gray-600 line-clamp-2 leading-tight cursor-pointer hover:text-indigo-600 transition-colors" 
+                        title="Click to view full feedback"
+                        onClick={() => setSelectedFeedback(l.eval_feedback || l.error_message)}
+                      >
+                        {l.eval_feedback || (l.error_message ? <span className="text-red-500 font-medium cursor-pointer">Error: {l.error_message}</span> : "-")}
+                      </div>
+                    </td>
+                    <td className="py-3 px-4 whitespace-nowrap">
+                      <span className={`font-bold text-[11px] ${l.latency_ms > 8000 ? 'text-red-500' : l.latency_ms > 3000 ? 'text-orange-500' : 'text-gray-700'}`}>
+                        {l.latency_ms.toLocaleString()} ms
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 text-center whitespace-nowrap">
+                      <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-wider ${
+                        l.status === 'success' ? 'bg-green-100 text-green-700' : 
+                        l.status === 'evaluated' ? 'bg-blue-100 text-blue-700' : 
+                        l.status === 'fallback' ? 'bg-orange-100 text-orange-700' : 
+                        'bg-red-100 text-red-700'
+                      }`}>
+                        {l.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
-
+        
         {/* Pagination */}
-        <div className="mt-6 flex justify-between items-center bg-gray-50 p-4 rounded-xl">
-          <p className="text-xs font-black text-gray-400 uppercase tracking-widest">Trang {page + 1} / {Math.ceil(total / PAGE_SIZE)}</p>
-          <div className="flex gap-2">
-            <button 
-              onClick={() => setPage(p => Math.max(0, p - 1))}
-              disabled={page === 0}
-              className="px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-bold hover:bg-gray-100 disabled:opacity-50"
-            >
-              Trước
-            </button>
-            <button 
-              onClick={() => setPage(p => p + 1)}
-              disabled={(page + 1) * PAGE_SIZE >= total}
-              className="px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-bold hover:bg-gray-100 disabled:opacity-50"
-            >
-              Sau
-            </button>
-          </div>
+        <div className="flex justify-between items-center mt-6 shrink-0 border-t border-gray-100 pt-4">
+          <button 
+            disabled={page === 0} 
+            onClick={() => setPage(page - 1)}
+            className="px-4 py-2 border border-gray-200 rounded-lg text-sm font-medium hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            Trang trước
+          </button>
+          <span className="text-sm font-medium text-gray-500 bg-gray-50 px-4 py-1.5 rounded-lg border border-gray-100">
+            {page + 1} / {Math.max(1, Math.ceil(total / PAGE_SIZE))}
+          </span>
+          <button 
+            disabled={(page + 1) * PAGE_SIZE >= total} 
+            onClick={() => setPage(page + 1)}
+            className="px-4 py-2 border border-gray-200 rounded-lg text-sm font-medium hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            Trang sau
+          </button>
         </div>
       </div>
+
+      {/* Feedback Modal */}
+      {selectedFeedback && (
+        <div className="!m-0 fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-sm animate-in fade-in duration-200" style={{ margin: 0, top: 0, left: 0 }} onClick={() => setSelectedFeedback(null)}>
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[80vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-center p-5 border-b border-gray-100 bg-gray-50/50">
+              <h3 className="text-lg font-black text-gray-900 flex items-center">
+                <ClipboardList className="mr-2 text-indigo-600" size={20} />
+                Chi tiết Feedback
+              </h3>
+              <button 
+                onClick={() => setSelectedFeedback(null)} 
+                className="text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors p-2 rounded-full"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="p-6 overflow-y-auto flex-1 text-sm text-gray-700 whitespace-pre-wrap font-mono custom-scrollbar">
+              {selectedFeedback}
+            </div>
+            
+            <div className="p-4 border-t border-gray-100 flex justify-end gap-3 bg-gray-50">
+              <button 
+                onClick={() => handleCopyFeedback(selectedFeedback)}
+                className={`px-5 py-2.5 rounded-lg font-black text-[13px] uppercase tracking-wider flex items-center justify-center min-w-[140px] transition-all duration-300 ${copied ? 'bg-green-100 text-green-700 scale-95' : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-md hover:shadow-lg'}`}
+              >
+                {copied ? <><Check size={16} className="mr-2" /> Đã Copy</> : <><Copy size={16} className="mr-2" /> Copy Text</>}
+              </button>
+              <button 
+                onClick={() => setSelectedFeedback(null)}
+                className="px-5 py-2.5 border border-gray-200 text-gray-600 font-bold text-[13px] uppercase tracking-wider rounded-lg hover:bg-white hover:border-gray-300 transition-colors shadow-sm"
+              >
+                Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

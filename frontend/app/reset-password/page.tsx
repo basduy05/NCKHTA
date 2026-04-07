@@ -142,7 +142,7 @@ export default function ResetPasswordPage() {
           <div className="absolute bottom-0 right-0 w-24 h-24 bg-blue-400/20 rounded-full translate-x-1/3 translate-y-1/3" />
           
           <div className="inline-flex items-center justify-center bg-white rounded-2xl p-2 mb-6 relative shadow-lg">
-            <Image src="/logo.png" alt="iEdu" width={100} height={40} />
+            <Image src="/logo.png" alt="iEdu" width={100} height={40} style={{ height: "auto" }} />
           </div>
           <h1 className="text-3xl font-extrabold text-white mb-2 relative">Đặt lại Mật khẩu</h1>
           <p className="text-blue-100 relative opacity-90">An toàn và bảo mật cho tài khoản của bạn</p>

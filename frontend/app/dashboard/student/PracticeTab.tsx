@@ -63,6 +63,47 @@ export default function PracticeTab({ API_URL, setShowCreditModal }: PracticeTab
     return String(val);
   };
 
+  const stringifyValue = (val: any): string => {
+    if (val === null || val === undefined) return "";
+    if (typeof val === "string" || typeof val === "number" || typeof val === "boolean") return String(val);
+    if (Array.isArray(val)) return val.map((item) => stringifyValue(item)).filter(Boolean).join(", ");
+    if (typeof val === "object") {
+      const preferredKeys = [
+        "text",
+        "content",
+        "value",
+        "label",
+        "name",
+        "title",
+        "prompt",
+        "question",
+        "transcript",
+        "passage",
+        "description",
+        "meaning_vn",
+        "meaning_en",
+      ];
+      for (const key of preferredKeys) {
+        if (key in val) {
+          const preferred = stringifyValue(val[key]);
+          if (preferred) return preferred;
+        }
+      }
+      return Object.entries(val)
+        .map(([k, v]) => `${k.charAt(0).toUpperCase() + k.slice(1)}: ${stringifyValue(v)}`)
+        .join(" | ");
+    }
+    return String(val);
+  };
+
+  const toStringArray = (val: any): string[] => {
+    if (Array.isArray(val)) {
+      return val.map((item) => stringifyValue(item).trim()).filter(Boolean);
+    }
+    const single = stringifyValue(val).trim();
+    return single ? [single] : [];
+  };
+
   const getOptionsArray = (q: any): any[] => {
     if (!q || !q.options) return [];
     if (Array.isArray(q.options)) return q.options;
@@ -73,12 +114,396 @@ export default function PracticeTab({ API_URL, setShowCreditModal }: PracticeTab
     return [];
   };
 
+  const normalizeQuestion = (question: any, index: number) => {
+    if (!question || typeof question !== "object") return null;
+
+    const optionSource =
+      question.options ??
+      question.choices ??
+      question.answers ??
+      question.selections ??
+      question.answer_options ??
+      question.answer_choices ??
+      question.answerChoices ??
+      question.candidates ??
+      question.variants;
+
+    let options: string[] = [];
+    if (Array.isArray(optionSource)) {
+      options = optionSource.map((item) => stringifyValue(item).trim()).filter(Boolean);
+    } else if (optionSource && typeof optionSource === "object") {
+      options = Object.entries(optionSource)
+        .sort(([a], [b]) => String(a).localeCompare(String(b)))
+        .map(([, value]) => stringifyValue(value).trim())
+        .filter(Boolean);
+    }
+
+    const correctSource =
+      question.correct_answer ??
+      question.correctAnswer ??
+      question.correct_option ??
+      question.correctOption ??
+      question.correct_text ??
+      question.correctText ??
+      question.correct_choice ??
+      question.correctChoice ??
+      question.answer ??
+      question.ans ??
+      question.solution ??
+      question.best_answer ??
+      question.correct;
+
+    let correctAnswer = correctSource;
+    if (typeof correctSource === "number") {
+      correctAnswer = correctSource;
+    } else if (typeof correctSource === "string" && /^\d+$/.test(correctSource.trim())) {
+      correctAnswer = Number.parseInt(correctSource.trim(), 10);
+    } else {
+      correctAnswer = stringifyValue(correctSource).trim();
+    }
+
+    const normalized = {
+      ...question,
+      number: Number(question.number ?? question.no ?? question.index ?? question.id) || index + 1,
+      question: stringifyValue(
+        question.question ??
+        question.q ??
+        question.prompt ??
+        question.question_text ??
+        question.text ??
+        question.instruction ??
+        question.stem ??
+        question.query ??
+        question.content ??
+        question.ask ??
+        question.sentence ??
+        question.blank_sentence
+      ).trim(),
+      options,
+      correct_answer: correctAnswer,
+      type: stringifyValue(question.type ?? question.question_type ?? question.kind).trim(),
+      explanation_vn: stringifyValue(
+        question.explanation_vn ??
+        question.explanation ??
+        question.explanation_vi ??
+        question.rationale_vn ??
+        question.rationale ??
+        question.feedback_vn ??
+        question.feedback
+      ).trim(),
+    };
+
+    if (!normalized.question && normalized.options.length === 0) return null;
+    return normalized;
+  };
+
+  const normalizeEvaluationCriteria = (criteria: any) => {
+    if (!Array.isArray(criteria)) return [];
+
+    return criteria
+      .map((item: any, index: number) => {
+        if (item && typeof item === "object" && !Array.isArray(item)) {
+          return {
+            criterion: stringifyValue(item.criterion || item.name || item.title || item.aspect || `Criterion ${index + 1}`),
+            description_vn: stringifyValue(
+              item.description_vn ||
+              item.description ||
+              item.feedback_vn ||
+              item.feedback ||
+              item.detail ||
+              item.notes ||
+              item.criterion ||
+              item.name ||
+              item.title
+            ),
+          };
+        }
+
+        const text = stringifyValue(item).trim();
+        if (!text) return null;
+        return {
+          criterion: `Criterion ${index + 1}`,
+          description_vn: text,
+        };
+      })
+      .filter(Boolean);
+  };
+
+  const normalizeUsefulVocabulary = (items: any) => {
+    if (!Array.isArray(items)) return [];
+
+    return items
+      .map((item: any) => {
+        if (item && typeof item === "object" && !Array.isArray(item)) {
+          return {
+            ...item,
+            phrase: stringifyValue(item.phrase || item.word || item.term || item.vocabulary || item.text).trim(),
+            meaning_vn: stringifyValue(item.meaning_vn || item.meaning || item.definition_vn || item.translation).trim(),
+          };
+        }
+
+        const phrase = stringifyValue(item).trim();
+        return phrase ? { phrase, meaning_vn: "" } : null;
+      })
+      .filter((item: any) => item?.phrase);
+  };
+
+  const extractPracticeQuestionData = (payload: any) => {
+    const sectionPassages: string[] = [];
+    const sectionInstructions: string[] = [];
+    const rawQuestions: any[] = [];
+
+    const addUniqueText = (bucket: string[], value: any) => {
+      const text = stringifyValue(value).trim();
+      if (text && !bucket.includes(text)) bucket.push(text);
+    };
+
+    const collectQuestions = (entry: any, meta?: { passage?: string; instructions?: string }) => {
+      if (!entry) return;
+
+      if (Array.isArray(entry)) {
+        entry.forEach((item) => collectQuestions(item, meta));
+        return;
+      }
+
+      if (typeof entry !== "object") return;
+
+      const nestedQuestions = Array.isArray(entry.questions)
+        ? entry.questions
+        : Array.isArray(entry.items)
+        ? entry.items
+        : Array.isArray(entry.exercises)
+        ? entry.exercises
+        : Array.isArray(entry.quiz)
+        ? entry.quiz
+        : Array.isArray(entry.sub_questions)
+        ? entry.sub_questions
+        : Array.isArray(entry.question_groups)
+        ? entry.question_groups
+        : Array.isArray(entry.questionGroups)
+        ? entry.questionGroups
+        : [];
+
+      const entryPassage = stringifyValue(
+        entry.passage ??
+        entry.transcript ??
+        entry.text ??
+        entry.article ??
+        entry.content ??
+        entry.prompt
+      ).trim();
+      const entryInstructions = stringifyValue(
+        entry.instructions ??
+        entry.description ??
+        entry.intro ??
+        entry.note
+      ).trim();
+
+      const nextMeta = {
+        passage: entryPassage || meta?.passage || "",
+        instructions: entryInstructions || meta?.instructions || "",
+      };
+
+      if (entryPassage) addUniqueText(sectionPassages, entryPassage);
+      if (entryInstructions) addUniqueText(sectionInstructions, entryInstructions);
+
+      if (nestedQuestions.length) {
+        nestedQuestions.forEach((item: any) => collectQuestions(item, nextMeta));
+        return;
+      }
+
+      const looksLikeQuestion =
+        "question" in entry ||
+        "q" in entry ||
+        "prompt" in entry ||
+        "question_text" in entry ||
+        "text" in entry ||
+        "instruction" in entry ||
+        "stem" in entry ||
+        "options" in entry ||
+        "choices" in entry ||
+        "answers" in entry ||
+        "answer_choices" in entry ||
+        "answerChoices" in entry ||
+        "candidates" in entry ||
+        "sentence" in entry ||
+        "blank_sentence" in entry ||
+        "variants" in entry;
+
+      if (!looksLikeQuestion) return;
+
+      rawQuestions.push({
+        ...entry,
+        passage: entry.passage ?? nextMeta.passage,
+        instructions: entry.instructions ?? nextMeta.instructions,
+      });
+    };
+
+    [
+      payload.questions,
+      payload.quiz,
+      payload.items,
+      payload.exercises,
+      payload.sections,
+      payload.question_groups,
+      payload.questionGroups,
+      payload.parts,
+    ].forEach((source) => collectQuestions(source));
+
+    return {
+      rawQuestions,
+      sectionPassages,
+      sectionInstructions,
+    };
+  };
+
+  const normalizePracticePayload = (payload: any) => {
+    if (!payload || typeof payload !== "object") return payload;
+
+    const effectiveSkill = String(payload.skill || skill || "").toLowerCase();
+    const effectiveTestType = stringifyValue(payload.test_type || testType).trim() || testType;
+
+    if (effectiveSkill !== "writing") {
+      const { rawQuestions, sectionPassages, sectionInstructions } = extractPracticeQuestionData(payload);
+
+      const normalizedQuestions = rawQuestions
+        .map((question: any, index: number) => normalizeQuestion(question, index))
+        .filter(Boolean);
+
+      const fallbackPassage = sectionPassages.join("\n\n").trim();
+      const fallbackInstructions = sectionInstructions.join(" ").trim();
+
+      const normalized = {
+        ...payload,
+        test_type: effectiveTestType,
+        skill: effectiveSkill || skill,
+        title: stringifyValue(
+          payload.title ||
+          payload.topic ||
+          payload.section_title ||
+          payload.part ||
+          `${effectiveTestType} ${effectiveSkill || skill} Practice`
+        ).trim(),
+        part: stringifyValue(payload.part || toeicPart || "").trim(),
+        passage: stringifyValue(
+          payload.passage ??
+          payload.transcript ??
+          payload.text ??
+          payload.article ??
+          payload.topic ??
+          payload.prompt ??
+          fallbackPassage
+        ).trim(),
+        instructions: stringifyValue(payload.instructions ?? payload.description ?? payload.intro ?? fallbackInstructions).trim(),
+        tips_vn: toStringArray(payload.tips_vn ?? payload.tips ?? payload.exam_tips),
+        questions: normalizedQuestions,
+        sub_questions: toStringArray(payload.sub_questions ?? payload.prompts ?? payload.follow_up_questions),
+        prompts: toStringArray(payload.prompts ?? payload.sub_questions ?? payload.follow_up_questions),
+        useful_vocabulary: normalizeUsefulVocabulary(payload.useful_vocabulary ?? payload.vocabulary ?? payload.key_vocabulary),
+        evaluation_criteria: normalizeEvaluationCriteria(payload.evaluation_criteria ?? payload.scoring_criteria),
+        model_answer: stringifyValue(payload.model_answer ?? payload.sample_answer ?? payload.reference_answer).trim(),
+        topic: stringifyValue(payload.topic ?? payload.passage ?? payload.prompt ?? payload.title).trim(),
+        description: stringifyValue(payload.description ?? payload.instructions ?? payload.part).trim(),
+      };
+
+      if (effectiveSkill === "speaking") {
+        return {
+          ...normalized,
+          topic: normalized.topic || normalized.title,
+          passage: normalized.passage || normalized.topic,
+          description: normalized.description || normalized.instructions || `${effectiveTestType} speaking practice`,
+          sub_questions: normalized.sub_questions.length
+            ? normalized.sub_questions
+            : normalizedQuestions.map((question: any) => question.question).filter(Boolean),
+        };
+      }
+
+      return normalized;
+    }
+
+    const writingTasks = Array.isArray(payload.writing_tasks)
+      ? payload.writing_tasks
+          .filter((task: any) => task && typeof task === "object")
+          .map((task: any, index: number) => {
+            const scoringCriteria = Array.isArray(task.scoring_criteria)
+              ? task.scoring_criteria.filter(Boolean)
+              : task.scoring_criteria
+              ? [task.scoring_criteria]
+              : [];
+
+            return {
+              ...task,
+              task_number: Number(task.task_number) || index + 1,
+              title:
+                typeof task.title === "string" && task.title.trim()
+                  ? task.title.trim()
+                  : `Task ${index + 1}`,
+              prompt: typeof task.prompt === "string" ? task.prompt.trim() : "",
+              time_limit_minutes: Number(task.time_limit_minutes) || (index === 0 ? 20 : 40),
+              min_words: Number(task.min_words) || (index === 0 ? 150 : 250),
+              scoring_criteria: scoringCriteria,
+            };
+          })
+          .filter((task: any) => task.prompt)
+      : [];
+
+    if (!writingTasks.length) return payload;
+
+    const firstTask = writingTasks[0];
+    const payloadCriteria = Array.isArray(payload.scoring_criteria) ? payload.scoring_criteria.filter(Boolean) : [];
+
+    return {
+      ...payload,
+      title: payload.title || `${payload.test_type || testType} Writing Practice`,
+      part: payload.part || firstTask.title || "essay",
+      prompt:
+        typeof payload.prompt === "string" && payload.prompt.trim()
+          ? payload.prompt.trim()
+          : firstTask.prompt,
+      passage:
+        typeof payload.passage === "string" && payload.passage.trim()
+          ? payload.passage.trim()
+          : firstTask.prompt,
+      scoring_criteria: payloadCriteria.length ? payloadCriteria : firstTask.scoring_criteria,
+      writing_tasks: writingTasks,
+    };
+  };
+
   // --- STATES FOR FULL SKILLS ---
   const [writingText, setWritingText] = useState("");
   const [evalResult, setEvalResult] = useState<any>(null);
   const [speakingStage, setSpeakingStage] = useState<"idle" | "prep" | "speaking" | "result">("idle");
   const [timer, setTimer] = useState(0);
   const [showTranscript, setShowTranscript] = useState(false);
+  const writingTasks = Array.isArray(practice?.writing_tasks) ? practice.writing_tasks : [];
+  const currentWritingTask = writingTasks[activeWritingTask] || null;
+  const currentWritingPrompt = currentWritingTask?.prompt || practice?.prompt || practice?.passage || "";
+  const currentWritingCriteria =
+    Array.isArray(currentWritingTask?.scoring_criteria) && currentWritingTask.scoring_criteria.length
+      ? currentWritingTask.scoring_criteria
+      : Array.isArray(practice?.scoring_criteria)
+      ? practice.scoring_criteria
+      : [];
+  const currentWritingText = writingTasks.length ? (writingTexts[activeWritingTask] ?? writingText) : writingText;
+  const currentWritingWordCount = currentWritingText.trim() ? currentWritingText.trim().split(/\s+/).length : 0;
+
+  useEffect(() => {
+    if (!writingTasks.length && activeWritingTask !== 0) {
+      setActiveWritingTask(0);
+      return;
+    }
+    if (writingTasks.length && activeWritingTask > writingTasks.length - 1) {
+      setActiveWritingTask(0);
+    }
+  }, [writingTasks.length, activeWritingTask]);
+
+  useEffect(() => {
+    if (skill !== "writing" || !writingTasks.length) return;
+    const nextText = writingTexts[activeWritingTask] ?? "";
+    if (nextText !== writingText) {
+      setWritingText(nextText);
+    }
+  }, [skill, writingTasks.length, activeWritingTask, writingTexts, writingText]);
 
   // --- EXAM HISTORY ---
   const fetchExamHistory = useCallback(async () => {
@@ -122,9 +547,15 @@ export default function PracticeTab({ API_URL, setShowCreditModal }: PracticeTab
 
   const generatePractice = async () => {
     if (source === "official") {
-      const filtered = MOCK_PRACTICE_TESTS.filter(t => t.test_type === testType && t.skill === skill);
-      if (filtered.length > 0) {
-        setPractice(filtered[0]);
+      const baseMatches = MOCK_PRACTICE_TESTS.filter((t: any) => t.test_type === testType && t.skill === skill);
+      const toeicPartMatches =
+        testType === "TOEIC" && toeicPart
+          ? baseMatches.filter((t: any) => stringifyValue(t.part || t.title).toLowerCase().includes(toeicPart.toLowerCase()))
+          : baseMatches;
+      const selectedMock = testType === "TOEIC" && toeicPart ? toeicPartMatches[0] : baseMatches[0];
+
+      if (selectedMock) {
+        setPractice(normalizePracticePayload(selectedMock));
         setAnswers({});
         setSubmitted(false);
         setScore(0);
@@ -155,14 +586,8 @@ export default function PracticeTab({ API_URL, setShowCreditModal }: PracticeTab
     setExamStartTime(Date.now());
 
     try {
-      const endpoint =
-        skill === "reading" ? "/student/reading/generate" :
-          skill === "writing" ? "/student/writing/evaluate" :
-            skill === "speaking" ? "/student/speaking/topic" :
-              "/student/practice/generate";
-
-      const isWritingOrSpeaking = skill === "writing" || skill === "speaking";
-      const finalEndpoint = isWritingOrSpeaking ? "/student/practice/generate" : endpoint;
+      // Always use practice/generate for TOEIC/IELTS
+      const finalEndpoint = "/student/practice/generate";
 
       const bodyPayload: any = { test_type: testType, skill };
       if (testType === "TOEIC" && toeicPart) bodyPayload.part = toeicPart;
@@ -171,52 +596,137 @@ export default function PracticeTab({ API_URL, setShowCreditModal }: PracticeTab
         method: "POST",
         body: JSON.stringify(bodyPayload)
       });
-      
-      if (!res.ok) throw new Error("API Error");
+
+      if (!res.ok) {
+        let detail = "";
+        try {
+          const responseText = await res.text();
+          detail = responseText;
+          try {
+            const parsed = JSON.parse(responseText);
+            detail = parsed?.detail || parsed?.error || responseText;
+          } catch {}
+        } catch {}
+
+        if (res.status === 504) throw new Error("PRACTICE_TIMEOUT");
+        if (res.status === 502 || res.status === 503) throw new Error("AI_UNAVAILABLE");
+        if (res.status === 402) throw new Error("INSUFFICIENT_CREDITS");
+        throw new Error(detail || `REQUEST_FAILED_${res.status}`);
+      }
 
       const jsonData = await res.json();
       refreshUser();
-      
-      if (jsonData && Array.isArray(jsonData.questions)) {
-        jsonData.questions = jsonData.questions.filter((q: any) => q && (q.question || q.q));
+
+      const normalizedPractice = normalizePracticePayload(jsonData);
+      const requiresQuestions = skill === "reading" || skill === "listening" || (testType === "TOEIC" && !!toeicPart);
+
+      if (requiresQuestions && (!normalizedPractice?.questions || normalizedPractice.questions.length === 0)) {
+        throw new Error("INVALID_PRACTICE_PAYLOAD");
       }
-      setPractice(jsonData);
-    } catch (e) {
-      showAlert("Lỗi khi tạo bài luyện tập", 'error');
+
+      setPractice(normalizedPractice);
+    } catch (e: any) {
+      const message =
+        e?.message === "PRACTICE_TIMEOUT"
+          ? "Tao de AI bi timeout. Thu lai sau it phut hoac chon dang de nhe hon."
+          : e?.message === "AI_UNAVAILABLE"
+          ? "Dich vu AI tam thoi khong san sang. Thu lai sau."
+          : e?.message === "INSUFFICIENT_CREDITS"
+          ? "Ban khong du AI credits de tao bai luyen tap."
+          : e?.message === "INVALID_PRACTICE_PAYLOAD"
+          ? "AI tra ve de thi chua dung dinh dang cho giao dien hien tai. Thu tao lai de khac."
+          : "Loi khi tao bai luyen tap";
+      showAlert(message, 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleWritingSubmit = async () => {
+    const textToEvaluate = currentWritingText.trim();
+    const wordCount = textToEvaluate ? textToEvaluate.split(/\s+/).length : 0;
+
+    if (wordCount < 50) {
+      showAlert("Bai viet qua ngan. Vui long viet it nhat 50 tu.", 'warning');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const res = await authFetch(`${API_URL}/student/writing/evaluate`, {
+        method: "POST",
+        body: JSON.stringify({
+          text: textToEvaluate,
+          task_type: currentWritingTask?.title || practice?.part || "essay",
+          target_test: testType,
+        })
+      });
+
+      if (!res.ok) {
+        let detail = "";
+        try {
+          const responseText = await res.text();
+          detail = responseText;
+          try {
+            const parsed = JSON.parse(responseText);
+            detail = parsed?.detail || parsed?.error || responseText;
+          } catch {}
+        } catch {}
+
+        if (res.status === 504) throw new Error("WRITING_TIMEOUT");
+        if (res.status === 502 || res.status === 503) throw new Error("AI_UNAVAILABLE");
+        if (res.status === 402) {
+          setShowCreditModal(true);
+          throw new Error("INSUFFICIENT_CREDITS");
+        }
+        throw new Error(detail || `WRITING_EVAL_FAILED_${res.status}`);
+      }
+
+      const evalData = await res.json();
+      if (!evalData || typeof evalData !== "object" || evalData.error) {
+        throw new Error(evalData?.detail || evalData?.error || "WRITING_EVAL_FAILED");
+      }
+
+      setEvalResult(evalData);
+      setSubmitted(true);
+
+      const numericBand = Number.parseFloat(String(evalData.overall_band || 0)) || 0;
+      const pts = Math.round((numericBand / 9) * 100);
+      setPointsEarned(pts);
+
+      const savedWritingTexts = writingTasks.length
+        ? { ...writingTexts, [activeWritingTask]: textToEvaluate }
+        : { 0: textToEvaluate };
+
+      await saveExam(
+        practice,
+        {
+          writing_text: textToEvaluate,
+          writing_texts: savedWritingTexts,
+          active_task: currentWritingTask?.task_number || 1,
+          prompt: currentWritingPrompt,
+        },
+        Math.round(numericBand * 10),
+        90,
+        evalData
+      );
+    } catch (e: any) {
+      const message =
+        e?.message === "WRITING_TIMEOUT"
+          ? "Cham bai AI bi timeout. Thu lai sau it phut."
+          : e?.message === "AI_UNAVAILABLE"
+          ? "Dich vu cham bai tam thoi khong san sang. Thu lai sau."
+          : e?.message === "INSUFFICIENT_CREDITS"
+          ? "Ban khong du AI credits de cham bai viet."
+          : "Loi khi cham diem bai viet";
+      showAlert(message, 'error');
     } finally {
       setLoading(false);
     }
   };
 
   const submitWriting = async () => {
-    if (writingText.length < 50) {
-        showAlert("Bài viết quá ngắn. Vui lòng viết ít nhất 50 từ.", 'warning');
-        return;
-    }
-    setLoading(true);
-    try {
-        const res = await authFetch(`${API_URL}/student/writing/evaluate`, {
-            method: "POST",
-            body: JSON.stringify({ 
-                text: writingText, 
-                task_type: practice?.part || "essay",
-                target_test: testType 
-            })
-        });
-        if (res.ok) {
-            const evalData = await res.json();
-            setEvalResult(evalData);
-            setSubmitted(true);
-            const band = evalData.overall_band || 0;
-            const pts = Math.round((Number(band) / 9) * 100);
-            setPointsEarned(pts);
-            await saveExam(practice, { writing_text: writingText }, Math.round(Number(band) * 10), 90, evalData);
-        }
-    } catch (e) {
-        showAlert("Lỗi khi chấm điểm bài viết", 'error');
-    } finally {
-        setLoading(false);
-    }
+    return handleWritingSubmit();
   };
 
   // Timer logic for Speaking
@@ -330,9 +840,9 @@ export default function PracticeTab({ API_URL, setShowCreditModal }: PracticeTab
                       );
                     })}
                   </div>
-                  {q.explanation_vn && <div className="text-sm font-medium text-blue-700 bg-blue-50/50 rounded-2xl p-5 border border-blue-100 flex gap-3 italic">
+                  {(q.explanation_vn || q.explanation) && <div className="text-sm font-medium text-blue-700 bg-blue-50/50 rounded-2xl p-5 border border-blue-100 flex gap-3 italic">
                     <Sparkles size={18} className="shrink-0 text-blue-500" />
-                    {renderValue(q.explanation_vn)}
+                    {renderValue(q.explanation_vn || q.explanation)}
                   </div>}
                 </div>
               );
@@ -505,6 +1015,10 @@ export default function PracticeTab({ API_URL, setShowCreditModal }: PracticeTab
              <h3 className="text-3xl font-black text-slate-900 tracking-tight leading-tight">{renderValue(practice.title || "Luyện tập tổng hợp")}</h3>
           </div>
 
+             {practice.instructions && (
+               <p className="px-10 pt-4 text-sm font-bold text-slate-500 leading-relaxed max-w-4xl">{renderValue(practice.instructions)}</p>
+             )}
+
           <div className="p-10">
             {practice.passage && (
               <div className="bg-slate-50/50 p-8 rounded-[2rem] mb-10 border border-slate-100 whitespace-pre-wrap leading-relaxed text-slate-700 text-lg shadow-inner">
@@ -512,6 +1026,16 @@ export default function PracticeTab({ API_URL, setShowCreditModal }: PracticeTab
                   <FileText size={18} className="text-indigo-500" /> Nội dung bài đọc / Transcript:
                 </h4>
                 {renderValue(practice.passage)}
+              </div>
+            )}
+
+            {practice.tips_vn?.length > 0 && (
+              <div className="mb-8 flex flex-wrap gap-2">
+                {practice.tips_vn.map((tip: string, index: number) => (
+                  <span key={index} className="px-3 py-2 bg-indigo-50 text-indigo-700 rounded-xl text-xs font-bold border border-indigo-100">
+                    {renderValue(tip)}
+                  </span>
+                ))}
               </div>
             )}
 
@@ -562,8 +1086,8 @@ export default function PracticeTab({ API_URL, setShowCreditModal }: PracticeTab
             <div className="inline-flex p-6 bg-purple-50 text-purple-600 rounded-[2rem] mb-8 shadow-inner border border-purple-100">
                 <Mic size={56} className={speakingStage === "speaking" ? "animate-pulse" : ""} />
             </div>
-            <h3 className="font-black text-4xl mb-4 text-slate-900 tracking-tight">{renderValue(practice.topic || practice.title)}</h3>
-            <p className="text-slate-400 mb-12 text-xl font-medium leading-relaxed max-w-2xl mx-auto">{renderValue(practice.description || practice.instructions)}</p>
+            <h3 className="font-black text-4xl mb-4 text-slate-900 tracking-tight">{renderValue(practice.topic || practice.passage || practice.title)}</h3>
+            <p className="text-slate-400 mb-12 text-xl font-medium leading-relaxed max-w-2xl mx-auto">{renderValue(practice.description || practice.instructions || practice.part)}</p>
 
             {speakingStage === "idle" && (
                 <button 
@@ -667,33 +1191,94 @@ export default function PracticeTab({ API_URL, setShowCreditModal }: PracticeTab
             </div>
           </div>
           
+          {writingTasks.length > 1 && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+              {writingTasks.map((task: any, index: number) => {
+                const isActive = activeWritingTask === index;
+                return (
+                  <button
+                    key={`${task.task_number}-${index}`}
+                    type="button"
+                    onClick={() => setActiveWritingTask(index)}
+                    className={`text-left rounded-[2rem] border-2 p-5 transition-all ${
+                      isActive
+                        ? "border-blue-600 bg-blue-50 shadow-lg shadow-blue-100"
+                        : "border-slate-100 bg-white hover:border-blue-100"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-3 mb-2">
+                      <span className={`text-[10px] font-black uppercase tracking-widest ${isActive ? "text-blue-600" : "text-slate-400"}`}>
+                        Task {renderValue(task.task_number || index + 1)}
+                      </span>
+                      <span className="text-[11px] font-bold text-slate-400">
+                        {renderValue(task.min_words || 0)}+ words
+                      </span>
+                    </div>
+                    <p className={`font-black text-base leading-tight ${isActive ? "text-slate-900" : "text-slate-700"}`}>
+                      {renderValue(task.title || `Task ${index + 1}`)}
+                    </p>
+                    <p className="text-xs font-bold text-slate-400 mt-2">
+                      {renderValue(task.time_limit_minutes || 0)} min
+                    </p>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
           <div className="bg-slate-50 p-8 rounded-[2rem] border border-slate-100 mb-10">
             <h4 className="font-black text-slate-400 mb-4 uppercase text-[10px] tracking-widest flex items-center gap-2">
                <Sparkles size={14} className="text-amber-500" /> Đề bài / Nhiệm vụ:
             </h4>
-            <p className="text-slate-800 font-bold text-xl leading-relaxed italic">&ldquo;{renderValue(practice.passage || practice.prompt)}&rdquo;</p>
+            <p className="text-slate-800 font-bold text-xl leading-relaxed italic">&ldquo;{renderValue(currentWritingPrompt)}&rdquo;</p>
+            {currentWritingTask && (
+              <div className="mt-6 flex flex-wrap gap-2">
+                <span className="px-3 py-2 bg-white rounded-xl border border-slate-200 text-[11px] font-black text-slate-500">
+                  {renderValue(currentWritingTask.min_words)}+ words
+                </span>
+                <span className="px-3 py-2 bg-white rounded-xl border border-slate-200 text-[11px] font-black text-slate-500">
+                  {renderValue(currentWritingTask.time_limit_minutes)} min
+                </span>
+                {currentWritingCriteria.map((criterion: any, index: number) => (
+                  <span key={index} className="px-3 py-2 bg-white rounded-xl border border-slate-200 text-[11px] font-bold text-slate-500">
+                    {renderValue(criterion)}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="relative">
             <textarea 
               className="w-full h-96 p-8 border-2 border-slate-100 rounded-[2.5rem] outline-none focus:border-blue-500 focus:ring-8 focus:ring-blue-500/5 transition-all font-serif text-xl leading-relaxed bg-white shadow-inner"
               placeholder="Bắt đầu viết bài của bạn tại đây..."
-              value={writingText}
-              onChange={(e) => setWritingText(e.target.value)}
+              value={currentWritingText}
+              onChange={(e) => {
+                const nextText = e.target.value;
+                setWritingText(nextText);
+                if (writingTasks.length) {
+                  setWritingTexts((prev) => ({ ...prev, [activeWritingTask]: nextText }));
+                }
+              }}
             />
             <div className="absolute bottom-6 right-8 bg-slate-900 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg">
-               Số từ: {writingText.trim() ? writingText.trim().split(/\s+/).length : 0}
+               Số từ: {currentWritingWordCount}
             </div>
           </div>
           
-          <div className="mt-10 flex justify-center">
+          <div className="mt-10 flex flex-col items-center gap-3">
             <button 
               onClick={submitWriting}
-              disabled={writingText.trim().split(/\s+/).length < 20}
+              disabled={!currentWritingPrompt || currentWritingWordCount < 20}
               className="bg-blue-600 text-white py-5 px-16 rounded-[2rem] font-black text-xl shadow-2xl shadow-blue-500/20 hover:scale-105 active:scale-95 transition-all disabled:opacity-30"
             >
               NỘP BÀI CHẤM ĐIỂM AI ✨
             </button>
+            {currentWritingTask?.min_words ? (
+              <p className="text-xs font-bold text-slate-400">
+                Khuyen nghi toi thieu {renderValue(currentWritingTask.min_words)} tu cho bai nay.
+              </p>
+            ) : null}
           </div>
         </div>
       )}
@@ -802,5 +1387,3 @@ export default function PracticeTab({ API_URL, setShowCreditModal }: PracticeTab
     </div>
   );
 }
-
-

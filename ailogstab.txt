@@ -1,0 +1,250 @@
+function AILogsTab() {
+  const { token, authFetch } = useAuth();
+  const [logs, setLogs] = useState<any[]>([]);
+  const [stats, setStats] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(0);
+  const PAGE_SIZE = 50;
+
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const [logsRes, statsRes] = await Promise.all([
+        authFetch(`${API_URL}/admin/ai-logs?limit=${PAGE_SIZE}&offset=${page * PAGE_SIZE}`),
+        authFetch(`${API_URL}/admin/ai-stats`)
+      ]);
+      
+      if (logsRes.ok) {
+        const logsData = await logsRes.json();
+        setLogs(logsData.logs || []);
+        setTotal(logsData.total || 0);
+      }
+      
+      if (statsRes.ok) {
+        const statsData = await statsRes.json();
+        setStats(statsData);
+      }
+    } catch (err) {
+      console.error("Error fetching AI logs/stats:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, [token, page]);
+
+  return (
+    <div className="space-y-6 animate-in fade-in duration-300">
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-sm font-bold text-gray-400 uppercase tracking-widest">Tổng yêu cầu</p>
+            <div className="p-2 bg-blue-50 rounded-lg text-blue-600"><Sparkles size={20} /></div>
+          </div>
+          <h3 className="text-3xl font-black text-gray-900">{total.toLocaleString()}</h3>
+          <p className="text-xs text-gray-500 mt-2">Dữ liệu từ lúc triển khai monitoring</p>
+        </div>
+
+        <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-sm font-bold text-gray-400 uppercase tracking-widest">Tốc độ TB (Latency)</p>
+            <div className="p-2 bg-orange-50 rounded-lg text-orange-600"><TrendingUp size={20} /></div>
+          </div>
+          <h3 className="text-3xl font-black text-gray-900">
+            {stats?.model_performance?.length > 0
+              ? Math.round(stats.model_performance.filter(s => s.model !== 'KnowledgeGraph').reduce((acc, s) => acc + s.avg_latency, 0) / Math.max(1, stats.model_performance.filter(s => s.model !== 'KnowledgeGraph').length))
+              : 0} ms
+          </h3>
+          <p className="text-xs text-gray-500 mt-2">Trung bình cộng của tất cả LLM</p>
+        </div>
+        
+        <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-sm font-bold text-gray-400 uppercase tracking-widest">Truy vấn Graph</p>
+            <div className="p-2 bg-purple-50 rounded-lg text-purple-600"><Network size={20} /></div>
+          </div>
+          <h3 className="text-3xl font-black text-gray-900">
+            {stats?.model_performance?.find(s => s.model === 'KnowledgeGraph')?.avg_latency 
+                ? Math.round(stats.model_performance.find(s => s.model === 'KnowledgeGraph').avg_latency) 
+                : 0} ms
+          </h3>
+          <p className="text-xs text-gray-500 mt-2">Tốc độ tìm kiếm tri thức (Neo4j)</p>
+        </div>
+
+        <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-sm font-bold text-gray-400 uppercase tracking-widest">Chất lượng AI</p>
+            <div className="p-2 bg-green-50 rounded-lg text-green-600"><GraduationCap size={20} /></div>
+          </div>
+          <h3 className="text-3xl font-black text-gray-900">
+            {stats?.feature_performance?.length > 0
+              ? (stats.feature_performance.reduce((acc, f) => acc + (f.avg_score || 0), 0) / stats.feature_performance.filter(f => f.avg_score).length || 0).toFixed(1)
+              : 0} / 10
+          </h3>
+          <p className="text-xs text-gray-500 mt-2">Điểm trung bình từ Giám khảo AI</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Model Performance Table */}
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+          <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center"><Database className="mr-2 text-indigo-600" /> Hiệu năng theo Model</h2>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-gray-100 text-gray-400 uppercase text-[10px] font-black tracking-widest">
+                  <th className="pb-3">Model</th>
+                  <th className="pb-3">Độ khó</th>
+                  <th className="pb-3">Latency TB</th>
+                  <th className="pb-3">Số lượng</th>
+                </tr>
+              </thead>
+              <tbody>
+                {stats?.model_performance?.map((s, i) => (
+                  <tr key={i} className="border-b border-gray-50 hover:bg-gray-50 transition">
+                    <td className="py-3 font-black text-gray-700">
+                      {s.model === 'KnowledgeGraph' ? (
+                        <span className="flex items-center text-purple-600"><Network size={14} className="mr-1" /> Knowledge Graph</span>
+                      ) : s.model}
+                    </td>
+                    <td className="py-3 capitalize text-gray-500 font-bold">{s.difficulty || "N/A"}</td>
+                    <td className="py-3">
+                      <span className={`font-black ${s.avg_latency > 5000 ? 'text-red-500' : s.avg_latency > 2000 ? 'text-orange-500' : 'text-green-500'}`}>
+                        {Math.round(s.avg_latency).toLocaleString()} ms
+                      </span>
+                    </td>
+                    <td className="py-3 font-bold text-gray-400">{s.total_requests}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* NEW: Feature Performance Table */}
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+          <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center"><Activity className="mr-2 text-indigo-600" /> Hiệu năng theo Tính năng</h2>
+          <div className="overflow-y-auto max-h-64">
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-gray-100 text-gray-400 uppercase text-[10px] font-black tracking-widest">
+                  <th className="pb-3">Tính năng</th>
+                  <th className="pb-3">Latency TB</th>
+                  <th className="pb-3">Tỷ lệ OK</th>
+                  <th className="pb-3">Số lượng</th>
+                </tr>
+              </thead>
+              <tbody>
+                {stats?.feature_performance?.map((f, i) => (
+                  <tr key={i} className="border-b border-gray-50 hover:bg-gray-50 transition">
+                    <td className="py-3 font-black text-gray-700">{f.feature}</td>
+                    <td className="py-3">
+                      <span className={`font-black ${f.avg_latency > 10000 ? 'text-red-500' : f.avg_latency > 3000 ? 'text-orange-500' : 'text-green-500'}`}>
+                        {Math.round(f.avg_latency).toLocaleString()} ms
+                      </span>
+                    </td>
+                    <td className="py-3 font-bold">
+                       <span className={f.success_count / f.total_requests < 0.8 ? 'text-red-500' : 'text-gray-600'}>
+                        {Math.round((f.success_count / f.total_requests) * 100)}%
+                       </span>
+                    </td>
+                    <td className="py-3 font-bold text-gray-400">{f.total_requests}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      {/* Detailed Log Table */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-lg font-bold text-gray-900 flex items-center"><ClipboardList className="mr-2 text-indigo-600" /> Log chi tiết gần đây</h2>
+          <button onClick={fetchData} className="text-indigo-600 hover:text-indigo-800 text-sm font-bold flex items-center gap-1">
+             <RefreshCw size={14} className={loading ? "animate-spin" : ""} /> Làm mới
+          </button>
+        </div>
+        
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm border-collapse">
+            <thead>
+              <tr className="border-b border-gray-200 text-gray-400 font-black uppercase text-[10px] tracking-widest">
+                <th className="pb-3">Thời gian</th>
+                <th className="pb-3">Tính năng</th>
+                <th className="pb-3">Model</th>
+                <th className="pb-3 text-center">Referee</th>
+                <th className="pb-3">Feedback</th>
+                <th className="pb-3">Latency</th>
+                <th className="pb-3">Trạng thái</th>
+              </tr>
+            </thead>
+            <tbody>
+              {logs.map((l) => (
+                <tr key={l.id} className="border-b border-gray-50 hover:bg-gray-50 group">
+                  <td className="py-4 text-gray-400 text-xs">{l.created_at}</td>
+                  <td className="py-4">
+                    <span className="bg-indigo-50 px-2 py-1 rounded text-[10px] font-black text-indigo-700 uppercase tracking-tight">
+                      {l.feature || "N/A"}
+                    </span>
+                  </td>
+                  <td className="py-4 font-black text-gray-700 text-xs">{l.model}</td>
+                  <td className="py-4 text-center">
+                    {l.eval_score ? (
+                      <span className={`px-2 py-1 rounded font-black text-xs ${
+                        l.eval_score >= 8 ? 'bg-green-100 text-green-700' : 
+                        l.eval_score >= 5 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'
+                      }`}>
+                        {l.eval_score}/10
+                      </span>
+                    ) : <span className="text-gray-300">-</span>}
+                  </td>
+                  <td className="py-4">
+                    <p className="text-[10px] text-gray-500 max-w-[200px] truncate leading-tight" title={l.eval_feedback}>
+                      {l.eval_feedback || (l.error_message ? <span className="text-red-400 italic">Error: {l.error_message}</span> : "-")}
+                    </p>
+                  </td>
+                  <td className="py-4 font-black">{l.latency_ms.toLocaleString()} ms</td>
+                  <td className="py-4">
+                    <span className={`px-2 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter ${
+                      l.status === 'success' ? 'bg-green-100 text-green-700' : 
+                      l.status === 'evaluated' ? 'bg-blue-100 text-blue-700' :
+                      l.status === 'fallback' ? 'bg-orange-100 text-orange-700' : 'bg-red-100 text-red-700'
+                    }`}>
+                      {l.status}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Pagination */}
+        <div className="mt-6 flex justify-between items-center bg-gray-50 p-4 rounded-xl">
+          <p className="text-xs font-black text-gray-400 uppercase tracking-widest">Trang {page + 1} / {Math.ceil(total / PAGE_SIZE)}</p>
+          <div className="flex gap-2">
+            <button 
+              onClick={() => setPage(p => Math.max(0, p - 1))}
+              disabled={page === 0}
+              className="px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-bold hover:bg-gray-100 disabled:opacity-50"
+            >
+              Trước
+            </button>
+            <button 
+              onClick={() => setPage(p => p + 1)}
+              disabled={(page + 1) * PAGE_SIZE >= total}
+              className="px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-bold hover:bg-gray-100 disabled:opacity-50"
+            >
+              Sau
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

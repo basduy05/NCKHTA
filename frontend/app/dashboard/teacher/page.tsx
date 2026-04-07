@@ -139,7 +139,7 @@ function TeacherDashboardContent() {
       </div>
 
       {showCreditModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+        <div className="fixed inset-0 !mt-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-300 border border-gray-100">
             <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
               <AlertCircle size={40} className="text-red-500" />
@@ -160,7 +160,7 @@ function TeacherDashboardContent() {
 
       {/* Word Lookup Modal */}
       {selectedWordInfo && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+        <div className="fixed inset-0 !mt-0 z-[110] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden border border-indigo-50 transform animate-in zoom-in-95 duration-200">
             <div className="bg-gradient-to-r from-indigo-600 to-purple-600 p-6 text-white relative">
               <button 

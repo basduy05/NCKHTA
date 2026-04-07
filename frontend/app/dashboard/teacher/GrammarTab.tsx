@@ -274,7 +274,7 @@ export function GrammarTab({ authFetch, API_URL }: GrammarTabProps) {
 
       {/* Compose Editor Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm transition-all duration-500">
+        <div className="fixed inset-0 !mt-0 z-[100] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm transition-all duration-500">
           <div className="bg-white w-full max-w-4xl max-h-[90vh] rounded-2xl shadow-xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-300">
             {/* Modal Header */}
             <div className="p-8 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
@@ -439,4 +439,3 @@ function EditorToolbarButton({ onClick, icon, tooltip, label }: { onClick: () =>
         </button>
     );
 }
-

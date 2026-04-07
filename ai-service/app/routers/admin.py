@@ -1,7 +1,7 @@
 
 from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form, Query, BackgroundTasks
 from fastapi.responses import Response
-from ..database import get_db, UserCreate, ClassCreate, LessonCreate, get_all_settings, set_setting
+from ..database import get_db, UserCreate, ClassCreate, LessonCreate, get_all_settings, set_setting, get_setting
 from ..services import graph_service, llm_service, auth_service
 import sqlite3
 import csv
@@ -9,6 +9,8 @@ import io
 import base64
 import asyncio
 import time
+import cohere
+import google.generativeai as genai
 from pydantic import BaseModel
 from typing import Dict, Optional, List
 
@@ -849,6 +851,85 @@ def test_neo4j():
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/settings/gemini-models")
+def list_gemini_models():
+    """List Gemini models that support generateContent using the configured API key."""
+    api_key = get_setting("GOOGLE_API_KEY") or auth_service._get_setting("GOOGLE_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=400, detail="GOOGLE_API_KEY is not configured")
+
+    try:
+        genai.configure(api_key=api_key)
+        models = []
+        lines = ["Cac model kha dung:"]
+
+        for model in genai.list_models():
+            methods = getattr(model, "supported_generation_methods", []) or []
+            if "generateContent" not in methods:
+                continue
+
+            item = {
+                "name": getattr(model, "name", ""),
+                "description": getattr(model, "description", "") or "",
+            }
+            models.append(item)
+            lines.append(f"- Ten: {item['name']}")
+            lines.append(f"  Mo ta: {item['description']}")
+            lines.append("")
+
+        if not models:
+            lines.append("Khong tim thay model nao ho tro generateContent.")
+
+        return {
+            "count": len(models),
+            "models": models,
+            "formatted_output": "\n".join(lines).strip(),
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to list Gemini models: {e}")
+
+@router.post("/settings/cohere-models")
+def list_cohere_models():
+    """List Cohere models using the configured API key."""
+    api_key = get_setting("COHERE_API_KEY") or auth_service._get_setting("COHERE_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=400, detail="COHERE_API_KEY is not configured")
+
+    try:
+        client = cohere.Client(api_key)
+        response = client.models.list(page_size=100)
+        models = []
+        lines = ["Cac model Cohere kha dung:"]
+
+        for model in getattr(response, "models", []) or []:
+            item = {
+                "name": getattr(model, "name", "") or "",
+                "endpoints": list(getattr(model, "endpoints", []) or []),
+                "default_endpoints": list(getattr(model, "default_endpoints", []) or []),
+                "features": list(getattr(model, "features", []) or []),
+                "context_length": getattr(model, "context_length", None),
+                "is_deprecated": bool(getattr(model, "is_deprecated", False)),
+            }
+            models.append(item)
+            lines.append(f"- Ten: {item['name']}")
+            lines.append(f"  Endpoints: {', '.join(item['endpoints']) if item['endpoints'] else 'N/A'}")
+            lines.append(f"  Default endpoints: {', '.join(item['default_endpoints']) if item['default_endpoints'] else 'N/A'}")
+            lines.append(f"  Features: {', '.join(item['features']) if item['features'] else 'N/A'}")
+            lines.append(f"  Context length: {item['context_length'] if item['context_length'] is not None else 'N/A'}")
+            lines.append(f"  Deprecated: {'yes' if item['is_deprecated'] else 'no'}")
+            lines.append("")
+
+        if not models:
+            lines.append("Khong tim thay model Cohere nao.")
+
+        return {
+            "count": len(models),
+            "models": models,
+            "formatted_output": "\n".join(lines).strip(),
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to list Cohere models: {e}")
 
 # --- ASSIGNMENTS (TESTS & EXERCISES) CRUD ---
 

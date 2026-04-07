@@ -359,7 +359,7 @@ export default function VocabularyTab({ API_URL }: VocabularyTabProps) {
         )}
 
       {practiceExercises.length > 0 && !generatingPractice && currentEx && (
-        <div className="fixed inset-0 z-50 flex flex-col bg-white overflow-y-auto animate-in slide-in-from-bottom-5 duration-300">
+        <div className="fixed inset-0 !mt-0 z-50 flex flex-col bg-white overflow-y-auto animate-in slide-in-from-bottom-5 duration-300">
           {/* Top Progress Header */}
           <div className="sticky top-0 bg-white/80 backdrop-blur-md z-10 px-6 py-4 flex items-center gap-6 border-b border-gray-100">
             <button onClick={() => setPracticeExercises([])} className="text-gray-400 hover:text-gray-600 transition"><X size={28} /></button>
@@ -601,7 +601,7 @@ export default function VocabularyTab({ API_URL }: VocabularyTabProps) {
       )}
 
       {editingWord && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+        <div className="fixed inset-0 !mt-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
           <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden border border-blue-100 transform animate-in zoom-in-95 duration-200">
             <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-6 text-white relative">
               <button onClick={() => setEditingWord(null)} className="absolute top-4 right-4 bg-white/20 hover:bg-white/30 p-1.5 rounded-full transition"><X size={18} /></button>

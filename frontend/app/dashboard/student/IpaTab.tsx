@@ -98,6 +98,7 @@ const SentenceWithBlank = ({
 export default function IpaTab({ API_URL }: IpaTabProps) {
   const { authFetch, refreshUser } = useAuth();
   const [focus, setFocus] = useState("vowels");
+  const [customWords, setCustomWords] = useState("");
   const [loading, setLoading] = useState(false);
   const [lesson, setLesson] = useState<any>(null);
   const [quizAnswers, setQuizAnswers] = useState<Record<number, number>>({});
@@ -113,9 +114,15 @@ export default function IpaTab({ API_URL }: IpaTabProps) {
     setQuizScore(0);
     setPracticeResults({});
     try {
+      const bodyPayload: any = { focus };
+      const wordsList = customWords.split(',').map(w => w.trim()).filter(Boolean);
+      if (wordsList.length > 0) {
+         bodyPayload.words = wordsList;
+      }
+      
       const res = await authFetch(`${API_URL}/student/ipa/generate`, {
         method: "POST",
-        body: JSON.stringify({ focus })
+        body: JSON.stringify(bodyPayload)
       });
       if (res.ok) {
         setLesson(await res.json());
@@ -172,44 +179,59 @@ export default function IpaTab({ API_URL }: IpaTabProps) {
       <section className="bg-white p-8 rounded-3xl border border-gray-100 shadow-xl relative overflow-hidden">
         <div className="absolute top-0 right-0 w-32 h-32 bg-blue-50 rounded-full -mr-16 -mt-16 opacity-50" />
         <div className="relative z-10">
-          <h3 className="text-3xl font-black bg-clip-text text-transparent bg-gradient-to-r from-blue-700 to-indigo-700 mb-6 flex items-center gap-3">
-              <Sparkles className="text-blue-600" /> IPA Master Dashboard
-          </h3>
-          <p className="text-gray-500 font-medium mb-8">Select a phoneme group to generate a personalized AI pronunciation lesson.</p>
-          
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="flex flex-col md:flex-row gap-6 mb-8 justify-between items-start md:items-end border-b border-gray-100 pb-8">
+            <div className="flex flex-wrap lg:inline-flex bg-gray-100/80 p-2 rounded-[1.5rem] gap-2 items-center">
               {["vowels", "diphthongs", "consonants"].map(type => (
                   <button 
                     key={type}
                     onClick={() => setFocus(type)}
-                    className={`py-6 rounded-2xl font-black uppercase tracking-widest transition-all border-2 
+                    className={`px-8 py-3 rounded-xl font-bold uppercase tracking-widest transition-all text-sm
                       ${focus === type 
-                        ? "bg-blue-600 border-blue-600 text-white shadow-2xl shadow-blue-200 scale-[1.02]" 
-                        : "bg-gray-50 border-gray-100 text-gray-400 hover:border-blue-400 hover:text-blue-600 hover:bg-white"}`}
+                        ? "bg-white text-blue-600 shadow-md scale-[1.02]" 
+                        : "text-gray-500 hover:text-blue-500 hover:bg-white/50"}`}
                   >
                       {type === "vowels" ? "Vowels" : type === "diphthongs" ? "Diphthongs" : "Consonants"}
                   </button>
               ))}
+            </div>
+            
+            <div className="w-full md:w-1/3">
+              <label className="block text-sm font-bold text-gray-700 mb-2 flex items-center gap-2">
+                 <Sparkles size={16} className="text-blue-500" />
+                 Luyện theo từ vựng (tuỳ chọn)
+              </label>
+              <input 
+                type="text" 
+                value={customWords} 
+                onChange={e => setCustomWords(e.target.value)} 
+                placeholder="Ví dụ: apple, banana, car..."
+                className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all font-medium text-gray-700"
+              />
+            </div>
           </div>
           
-          <div className="mt-12 flex flex-wrap gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-4 mt-6">
               {(IPA_DATA as any)[focus].map((item: any, i: number) => (
                   <button 
                     key={i} 
                     onClick={() => speak(item.example)}
-                    className="bg-white border border-gray-100 px-4 py-3 rounded-2xl hover:border-blue-500 hover:shadow-xl hover:scale-105 transition-all text-center group"
+                    className="bg-white border border-gray-100 p-4 rounded-2xl hover:border-blue-500 hover:shadow-lg transition-all group relative flex flex-col items-center justify-center min-h-[100px] overflow-hidden"
                   >
-                      <p className="text-xl font-black text-blue-800 group-hover:text-blue-600">/{item.ipa}/</p>
-                      <p className="text-[12px] text-gray-400 font-bold uppercase">{item.example}</p>
+                      <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                         <div className="p-1.5 bg-blue-50 text-blue-600 rounded-lg"><Volume2 size={14} /></div>
+                      </div>
+                      <span className="text-3xl font-black text-blue-800 mb-1 group-hover:scale-110 transition-transform">/{item.ipa}/</span>
+                      <span className="text-xs text-gray-400 font-bold uppercase group-hover:text-blue-600 transition-colors">{item.example}</span>
+                      <span className="text-[10px] text-gray-300 font-medium mt-0.5 tracking-widest hidden group-hover:block transition-all">/{item.transcription}/</span>
                   </button>
               ))}
           </div>
 
-          <div className="mt-12 flex justify-center">
+          <div className="mt-10 flex justify-center">
               <button 
                 onClick={generateLesson}
                 disabled={loading}
-                className="bg-gradient-to-r from-blue-600 to-indigo-600 px-16 py-6 rounded-[2.5rem] font-black text-2xl text-white flex items-center gap-4 shadow-3xl shadow-blue-200 hover:shadow-blue-300 hover:scale-105 active:scale-95 transition-all disabled:opacity-50"
+                className="bg-indigo-600 hover:bg-indigo-700 px-10 py-3 rounded-xl font-semibold text-white flex items-center gap-2 shadow-sm active:scale-95 transition-all disabled:opacity-50"
               >
                 {loading ? <div className="animate-spin rounded-full h-8 w-8 border-4 border-white/30 border-t-white" /> : <Brain size={32} />}
                 GENERATE WITH AI
@@ -223,7 +245,7 @@ export default function IpaTab({ API_URL }: IpaTabProps) {
               <header className="bg-gradient-to-br from-indigo-950 to-blue-900 rounded-[3rem] p-12 text-white shadow-3xl relative overflow-hidden">
                   <div className="relative z-10 flex flex-col md:flex-row items-center gap-10">
                       <button 
-                        onClick={() => speak(lesson.target_ipa)} 
+                        onClick={() => speak(lesson.lesson_title || lesson.target_ipa || "Pronunciation")} 
                         className="bg-white/10 backdrop-blur-md border border-white/20 w-32 h-32 rounded-[2.5rem] flex items-center justify-center hover:bg-white/20 hover:scale-110 transition-all shrink-0 shadow-2xl"
                       >
                         <Volume2 size={48} className="text-blue-200" />
@@ -232,8 +254,10 @@ export default function IpaTab({ API_URL }: IpaTabProps) {
                           <div className="inline-flex items-center gap-2 px-6 py-2 bg-blue-500/20 border border-blue-400/30 rounded-full text-sm font-black uppercase tracking-tighter text-blue-300 mb-6 italic">
                              <Sparkles size={16} /> Personalized content for your level
                           </div>
-                          <h2 className="text-6xl font-black mb-4">Target: <span className="text-blue-400 italic">/{lesson.target_ipa}/</span></h2>
-                          <p className="text-2xl text-blue-100/80 font-medium leading-relaxed max-w-2xl">{renderValue(lesson.description_vn)}</p>
+                          <h2 className="text-4xl md:text-5xl font-black mb-4 tracking-tight">
+                            {lesson.lesson_title ? lesson.lesson_title : <span>Target: <span className="text-blue-400 italic">/{lesson.target_ipa}/</span></span>}
+                          </h2>
+                          <p className="text-2xl text-blue-100/80 font-medium leading-relaxed max-w-2xl">{lesson.introduction || renderValue(lesson.description_vn)}</p>
                       </div>
                   </div>
                   <div className="absolute -bottom-10 -right-10 w-64 h-64 bg-blue-500/20 rounded-full blur-[80px]" />
@@ -246,19 +270,65 @@ export default function IpaTab({ API_URL }: IpaTabProps) {
                         Core Vocabulary
                       </h4>
                       <div className="space-y-4">
-                          {lesson.examples?.map((ex: any, i: number) => (
-                              <div key={i} className="flex items-center justify-between p-6 bg-gray-50/50 rounded-3xl hover:bg-blue-50/50 transition-all border-2 border-transparent hover:border-blue-100 group/item">
-                                  <div className="flex items-center gap-6">
-                                      <button onClick={() => speak(ex.word)} className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-blue-600 shadow-sm border border-gray-100 group-hover/item:scale-110 transition-all"><Volume2 size={24} /></button>
-                                      <div>
-                                          <p className="text-2xl font-black text-gray-900 uppercase tracking-tight">{ex.word}</p>
-                                          <p className="text-md text-blue-500 font-black font-mono">/{ex.ipa}/</p>
+                          {(lesson.sounds || lesson.examples || []).map((ex: any, i: number) => {
+                              if (ex.example_words && Array.isArray(ex.example_words)) {
+                                  return (
+                                     <div key={i} className="p-5 bg-gray-50/50 rounded-2xl border border-gray-100 gap-4 hover:border-blue-100 transition-all">
+                                         <div className="flex items-center justify-between mb-3 border-b border-gray-200/60 pb-3">
+                                            <div className="flex items-center gap-3">
+                                                <button onClick={() => speak(ex.name)} className="w-8 h-8 bg-white rounded-lg flex items-center justify-center text-blue-600 shadow-sm border border-gray-100"><Volume2 size={16} /></button>
+                                                <span className="text-2xl font-black text-blue-800">{ex.symbol}</span>
+                                            </div>
+                                            <span className="text-sm font-bold text-gray-500 uppercase">{ex.name}</span>
+                                         </div>
+                                         <p className="text-sm text-gray-600 italic mb-4 leading-relaxed">{ex.description}</p>
+                                         <div className="flex flex-wrap gap-2">
+                                            {ex.example_words.map((w: string, wi: number) => (
+                                                <button key={wi} onClick={() => speak(w)} className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-sm font-bold text-gray-800 shadow-sm hover:border-blue-400 hover:text-blue-600 flex items-center gap-2">
+                                                   {w} <span className="font-mono text-xs text-blue-500 opacity-70">{ex.example_ipa && ex.example_ipa[wi] ? ex.example_ipa[wi] : ''}</span>
+                                                </button>
+                                            ))}
+                                         </div>
+                                     </div>
+                                  );
+                              }
+                              return (
+                                  <div key={i} className="flex items-center justify-between p-6 bg-gray-50/50 rounded-3xl hover:bg-blue-50/50 transition-all border-2 border-transparent hover:border-blue-100 group/item">
+                                      <div className="flex items-center gap-6">
+                                          <button onClick={() => speak(ex.word)} className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-blue-600 shadow-sm border border-gray-100 group-hover/item:scale-110 transition-all"><Volume2 size={24} /></button>
+                                          <div>
+                                              <p className="text-2xl font-black text-gray-900 uppercase tracking-tight">{ex.word}</p>
+                                              <p className="text-md text-blue-500 font-black font-mono">/{ex.ipa}/</p>
+                                          </div>
                                       </div>
+                                      <p className="text-lg font-black text-gray-400 uppercase">{renderValue(ex.meaning_vn)}</p>
                                   </div>
-                                  <p className="text-lg font-black text-gray-400 uppercase">{renderValue(ex.meaning_vn)}</p>
-                              </div>
-                          ))}
+                              );
+                          })}
                       </div>
+                      
+                      {lesson.minimal_pairs && lesson.minimal_pairs.length > 0 && (
+                          <div className="mt-8 pt-8 border-t border-gray-100">
+                             <h5 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2"><Sparkles size={20} className="text-blue-500"/> Minimal Pairs</h5>
+                             <div className="space-y-4">
+                                {lesson.minimal_pairs.map((mp: any, i: number) => (
+                                    <div key={i} className="flex items-center justify-between p-4 bg-indigo-50/40 rounded-2xl border border-indigo-100/50">
+                                        <div className="flex-1 flex justify-center gap-4 items-center">
+                                           <div className="text-center group cursor-pointer" onClick={() => speak(mp.word1)}>
+                                              <p className="text-xl font-black text-gray-900 group-hover:text-blue-600">{mp.word1}</p>
+                                              <p className="text-sm font-mono text-blue-500">{mp.ipa1}</p>
+                                           </div>
+                                           <div className="px-6 text-gray-400 font-extrabold italic">VS</div>
+                                           <div className="text-center group cursor-pointer" onClick={() => speak(mp.word2)}>
+                                              <p className="text-xl font-black text-gray-900 group-hover:text-blue-600">{mp.word2}</p>
+                                              <p className="text-sm font-mono text-blue-500">{mp.ipa2}</p>
+                                           </div>
+                                        </div>
+                                    </div>
+                                ))}
+                             </div>
+                          </div>
+                      )}
                   </div>
 
                   <div className="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-xl group hover:shadow-2xl transition-all h-full">

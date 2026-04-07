@@ -750,7 +750,7 @@ export default function AIToolsTab({ setShowCreditModal, API_URL }: AIToolsTabPr
       )}
 
       {selectedWordInfo && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+        <div className="fixed inset-0 !mt-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden border border-blue-100 transform animate-in zoom-in-95 duration-200">
             <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-6 text-white relative">
               <button 

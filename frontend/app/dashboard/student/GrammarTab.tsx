@@ -141,7 +141,7 @@ export default function GrammarTab({ API_URL }: GrammarTabProps) {
             <p className="text-gray-500 font-bold text-lg leading-relaxed">AI đang tổng hợp dữ liệu và thiết kế bài tập cá nhân hóa cho bạn. Đợi chút nhé!</p>
           </div>
         ) : (
-            <div className="fixed inset-0 z-[150] flex flex-col bg-white overflow-y-auto animate-in fade-in duration-500">
+            <div className="fixed inset-0 !mt-0 z-[150] flex flex-col bg-white overflow-y-auto animate-in fade-in duration-500">
                 <div className="sticky top-0 bg-white/90 backdrop-blur-xl z-10 px-8 py-6 flex items-center gap-8 border-b border-gray-100">
                     <button onClick={() => setPracticing(false)} className="bg-gray-50 p-3 rounded-2xl text-gray-400 hover:text-gray-900 transition-all hover:bg-white hover:shadow-md"><X size={24} /></button>
                     <div className="flex-1 h-4 bg-gray-100 rounded-full overflow-hidden shadow-inner">
@@ -491,4 +491,3 @@ export default function GrammarTab({ API_URL }: GrammarTabProps) {
     </div>
   );
 }
-

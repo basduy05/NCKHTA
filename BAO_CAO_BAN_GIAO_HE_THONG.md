@@ -1,33 +1,33 @@
-# BAO CAO BAN GIAO HE THONG NCKHTA
+# BÁO CÁO BÀN GIAO HỆ THỐNG NCKHTA
 
-## 1. Muc dich tai lieu
+## 1. Mục đích tài liệu
 
-Tai lieu nay mo ta he thong NCKHTA theo goc nhin van hanh thuc te:
+Tài liệu này mô tả hệ thống NCKHTA theo góc nhìn vận hành thực tế:
 
-- He thong dung de hoc tieng Anh ca nhan hoa, ket hop quan ly lop hoc va cac tinh nang AI.
-- Muc tieu cua tai lieu la giup nguoi tiep quan co the hieu nhanh y tuong san pham, kien truc, luong du lieu, cac module chinh, cach chay he thong, va nhung diem can luu y khi bao tri.
-- Trong repo hien tai co mot so tai lieu va module cu. Tai lieu nay uu tien mo ta theo phan dang chay thuc te, khong chi theo thiet ke ban dau.
+- Hệ thống dùng để học tiếng Anh cá nhân hóa, kết hợp quản lý lớp học và các tính năng AI.
+- Mục tiêu của tài liệu là giúp người tiếp quản có thể hiểu nhanh ý tưởng sản phẩm, kiến trúc, luồng dữ liệu, các module chính, cách chạy hệ thống, và những điểm cần lưu ý khi bảo trì.
+- Trong repo hiện tại có một số tài liệu và module cũ. Tài liệu này ưu tiên mô tả theo phần đang chạy thực tế, không chỉ theo thiết kế ban đầu.
 
-## 2. Tong quan san pham
+## 2. Tổng quan sản phẩm
 
-NCKHTA la mot nen tang hoc tieng Anh gom 3 vai tro chinh:
+NCKHTA là một nền tảng học tiếng Anh gồm 3 vai trò chính:
 
-- Hoc sinh: hoc tu vung, luyen tap, lam bai tap, xem lo trinh hoc tap, tra cuu tu dien, su dung cong cu AI.
-- Giao vien: quan ly lop, them hoc sinh vao lop, tao bai hoc, tao bai tap, sinh noi dung bang AI, lay ngu lieu tu tin tuc.
-- Quan tri vien: quan ly nguoi dung, lop, bai hoc, bai tap, cau hinh he thong, theo doi AI logs va thong ke toan he thong.
+- Học sinh: học từ vựng, luyện tập, làm bài tập, xem lộ trình học tập, tra cứu từ điển, sử dụng công cụ AI.
+- Giáo viên: quản lý lớp, thêm học sinh vào lớp, tạo bài học, tạo bài tập, sinh nội dung bằng AI, lấy ngữ liệu từ tin tức.
+- Quản trị viên: quản lý người dùng, lớp, bài học, bài tập, cấu hình hệ thống, theo dõi AI logs và thống kê toàn hệ thống.
 
-Gia tri cot loi cua he thong:
+Giá trị cốt lõi của hệ thống:
 
-- Ca nhan hoa hoc tap bang AI.
-- Tra cuu tu vung nang cao, ket hop dictionary + AI + knowledge graph.
-- On tap tu vung theo co che spaced repetition FSRS.
-- Ho tro giao vien tao hoc lieu nhanh tu van ban, tep tin, va tin tuc.
+- Cá nhân hóa học tập bằng AI.
+- Tra cứu từ vựng nâng cao, kết hợp dictionary + AI + knowledge graph.
+- Ôn tập từ vựng theo cơ chế spaced repetition FSRS.
+- Hỗ trợ giáo viên tạo học liệu nhanh từ văn bản, tệp tin, và tin tức.
 
-## 3. Kien truc tong the
+## 3. Kiến trúc tổng thể
 
-### 3.1 Kien truc thuc te dang van hanh
+### 3.1 Kiến trúc thực tế đang vận hành
 
-He thong hien tai van hanh chu yeu theo mo hinh sau:
+Hệ thống hiện tại vận hành chủ yếu theo mô hình sau:
 
 ```mermaid
 flowchart LR
@@ -39,130 +39,130 @@ flowchart LR
     B --> G[Guardian API / NewsAPI]
 ```
 
-Thanh phan va vai tro:
+Thành phần và vai trò:
 
-- `frontend/`: giao dien nguoi dung, viet bang Next.js 14.
-- `ai-service/`: backend chinh, viet bang FastAPI, chua phan lon business logic, auth, AI, data access va graph integration.
-- `Turso / SQLite`: co so du lieu quan he chinh dang duoc `ai-service` su dung.
-- `Neo4j`: phuc vu knowledge graph, mot phan cache/quan he tu vung va grammar.
-- `Gemini / OpenAI / Cohere`: cac nha cung cap AI de sinh noi dung, bo sung dictionary, rerank ket qua va du phong khi mot provider loi.
-- `backend-core/`: Spring Boot service ton tai trong repo, nhung chi phu trach phan score API muc nho, khong phai trung tam van hanh cua he thong hien tai.
+- `frontend/`: giao diện người dùng, viết bằng Next.js 14.
+- `ai-service/`: backend chính, viết bằng FastAPI, chứa phần lớn business logic, auth, AI, data access và graph integration.
+- `Turso / SQLite`: cơ sở dữ liệu quan hệ chính đang được `ai-service` sử dụng.
+- `Neo4j`: phục vụ knowledge graph, một phần cache/quan hệ từ vựng và grammar.
+- `Gemini / OpenAI / Cohere`: các nhà cung cấp AI để sinh nội dung, bổ sung dictionary, rerank kết quả và dự phòng khi một provider lỗi.
+- `backend-core/`: Spring Boot service tồn tại trong repo, nhưng chỉ phụ trách phần score API mức nhỏ, không phải trung tâm vận hành của hệ thống hiện tại.
 
-### 3.2 Nhung dieu can hieu dung ngay tu dau
+### 3.2 Những điều cần hiểu đúng ngay từ đầu
 
-1. He thong-of-record hien tai la `ai-service`, khong phai `backend-core`.
-2. Schema du lieu thuc te dang chay nam trong `ai-service/app/database.py`, khong phai trong `database/schema.sql`.
-3. Mot phan tai lieu goc trong repo con phan anh kien truc cu, trong do co nhac toi Postgres hoac GraphRAG, nhung van hanh thuc te hien tai tap trung vao FastAPI + Turso/SQLite + Neo4j + cac AI provider.
+1. Hệ thống-of-record hiện tại là `ai-service`, không phải `backend-core`.
+2. Schema dữ liệu thực tế đang chạy nằm trong `ai-service/app/database.py`, không phải trong `database/schema.sql`.
+3. Một phần tài liệu gốc trong repo còn phản ánh kiến trúc cũ, trong đó có nhắc tới Postgres hoặc GraphRAG, nhưng vận hành thực tế hiện tại tập trung vào FastAPI + Turso/SQLite + Neo4j + các AI provider.
 
-## 4. Cau truc thu muc va trach nhiem tung phan
+## 4. Cấu trúc thư mục và trách nhiệm từng phần
 
 ### 4.1 `frontend/`
 
-Frontend la giao dien chinh cho ca 3 vai tro:
+Frontend là giao diện chính cho cả 3 vai trò:
 
-- Quan ly dang nhap, token va thong tin nguoi dung trong `app/context/AuthContext.tsx`.
-- Dieu huong dashboard theo role trong `app/dashboard/layout.tsx`.
-- Student dashboard gom cac tab cho thong ke, tu dien, tu vung, bai tap, AI tools, grammar, roadmap, ranking.
-- Teacher dashboard gom cac man quan ly lop, bai hoc, bai tap va AI tools.
-- Admin dashboard gom quan ly nguoi dung, lop, bai hoc, tu vung, grammar, settings, assignments, AI monitoring.
+- Quản lý đăng nhập, token và thông tin người dùng trong `app/context/AuthContext.tsx`.
+- Điều hướng dashboard theo role trong `app/dashboard/layout.tsx`.
+- Student dashboard gồm các tab cho thống kê, từ điển, từ vựng, bài tập, AI tools, grammar, roadmap, ranking.
+- Teacher dashboard gồm các màn quản lý lớp, bài học, bài tập và AI tools.
+- Admin dashboard gồm quản lý người dùng, lớp, bài học, từ vựng, grammar, settings, assignments, AI monitoring.
 
-Frontend khong xu ly business logic phuc tap. Vai tro cua no la:
+Frontend không xử lý business logic phức tạp. Vai trò của nó là:
 
-- Goi API den `ai-service`.
-- Parse ket qua streaming o mot so tinh nang AI.
-- Hien thi du lieu, thong ke, danh sach va form thao tac.
+- Gọi API đến `ai-service`.
+- Parse kết quả streaming ở một số tính năng AI.
+- Hiển thị dữ liệu, thống kê, danh sách và form thao tác.
 
 ### 4.2 `ai-service/`
 
-Day la thanh phan quan trong nhat cua he thong.
+Đây là thành phần quan trọng nhất của hệ thống.
 
-Chuc nang chinh:
+Chức năng chính:
 
-- Khoi tao app, middleware, CORS, health checks.
-- Xac thuc JWT, OTP, forgot/reset password.
-- Quan ly user, lop, bai hoc, bai tap, diem so, tu vung, lo trinh hoc tap.
-- Dieu phoi AI cho dictionary, quiz, practice, writing feedback, speaking topic, roadmap.
-- Tich hop Neo4j cho graph relations.
-- Ghi log va theo doi tinh trang AI providers.
+- Khởi tạo app, middleware, CORS, health checks.
+- Xác thực JWT, OTP, forgot/reset password.
+- Quản lý user, lớp, bài học, bài tập, điểm số, từ vựng, lộ trình học tập.
+- Điều phối AI cho dictionary, quiz, practice, writing feedback, speaking topic, roadmap.
+- Tích hợp Neo4j cho graph relations.
+- Ghi log và theo dõi tình trạng AI providers.
 
-Cac nhom file quan trong:
+Các nhóm file quan trọng:
 
-- `app/main.py`: diem vao FastAPI, middleware, include routers, health checks.
-- `app/database.py`: ket noi DB, migration, schema runtime, seed data, settings va cache DB.
-- `app/dependencies.py`: lay current user theo JWT, phan quyen theo role.
-- `app/routers/auth.py`: dang ky, OTP, login, profile, logout, reset password.
-- `app/routers/student.py`: luong nghiep vu hoc sinh.
-- `app/routers/teacher.py`: luong nghiep vu giao vien.
-- `app/routers/admin.py`: luong nghiep vu quan tri.
-- `app/services/llm_service.py`: xu ly AI, fallback providers, caching, rerank, dictionary enrichment.
-- `app/services/graph_service.py`: ket noi va truy van Neo4j.
-- `app/services/file_service.py`: trich xuat text tu txt, md, csv, pdf, docx.
+- `app/main.py`: điểm vào FastAPI, middleware, include routers, health checks.
+- `app/database.py`: kết nối DB, migration, schema runtime, seed data, settings và cache DB.
+- `app/dependencies.py`: lấy current user theo JWT, phân quyền theo role.
+- `app/routers/auth.py`: đăng ký, OTP, login, profile, logout, reset password.
+- `app/routers/student.py`: luồng nghiệp vụ học sinh.
+- `app/routers/teacher.py`: luồng nghiệp vụ giáo viên.
+- `app/routers/admin.py`: luồng nghiệp vụ quản trị.
+- `app/services/llm_service.py`: xử lý AI, fallback providers, caching, rerank, dictionary enrichment.
+- `app/services/graph_service.py`: kết nối và truy vấn Neo4j.
+- `app/services/file_service.py`: trích xuất text từ txt, md, csv, pdf, docx.
 - `app/services/auth_service.py`: hash password, JWT, email OTP, reset token.
-- `app/services/news_service.py`: lay ngu lieu tu Guardian va NewsAPI.
+- `app/services/news_service.py`: lấy ngữ liệu từ Guardian và NewsAPI.
 
 ### 4.3 `backend-core/`
 
-Module nay la Spring Boot service nho:
+Module này là Spring Boot service nhỏ:
 
-- Hien tai tap trung quanh `ScoreController`, `Score`, `ScoreRepository`.
-- Co cau hinh Spring Security nhung thuc te van `permitAll()` cho moi endpoint.
-- Chua thay su tich hop ro rang vao luong van hanh chinh cua frontend hien tai.
+- Hiện tại tập trung quanh `ScoreController`, `Score`, `ScoreRepository`.
+- Có cấu hình Spring Security nhưng thực tế vẫn `permitAll()` cho mọi endpoint.
+- Chưa thấy sự tích hợp rõ ràng vào luồng vận hành chính của frontend hiện tại.
 
-Ket luan ban giao:
+Kết luận bàn giao:
 
-- Khong nen xem `backend-core` la backend chinh cua san pham.
-- Neu tiep tuc phat trien, can quyet dinh ro se bo module nay, giu lai cho 1 nghiep vu rieng, hay hop nhat vao `ai-service`.
+- Không nên xem `backend-core` là backend chính của sản phẩm.
+- Nếu tiếp tục phát triển, cần quyết định rõ sẽ bỏ module này, giữ lại cho 1 nghiệp vụ riêng, hay hợp nhất vào `ai-service`.
 
 ### 4.4 `database/`
 
-Thu muc nay chua SQL va Cypher scripts goc. Gia tri chinh cua no la tai lieu lich su va khoi tao ban dau.
+Thư mục này chứa SQL và Cypher scripts gốc. Giá trị chính của nó là tài liệu lịch sử và khởi tạo ban đầu.
 
-Can luu y:
+Cần lưu ý:
 
-- `database/schema.sql` khong con day du so voi schema runtime thuc te.
-- `database/graph_schema.cypher` cung nghieng ve khoi tao ban dau, khong phan anh toan bo cach `graph_service.py` dang hoat dong.
+- `database/schema.sql` không còn đầy đủ so với schema runtime thực tế.
+- `database/graph_schema.cypher` cũng nghiêng về khởi tạo ban đầu, không phản ánh toàn bộ cách `graph_service.py` đang hoạt động.
 
-## 5. Luong khoi dong he thong
+## 5. Luồng khởi động hệ thống
 
-### 5.1 Luong startup cua `ai-service`
+### 5.1 Luồng startup của `ai-service`
 
-Khi `ai-service` chay:
+Khi `ai-service` chạy:
 
-1. Nap `.env` truoc khi import services.
-2. Import `graph_service`, `llm_service`, sau do import cac router.
+1. Nạp `.env` trước khi import services.
+2. Import `graph_service`, `llm_service`, sau đó import các router.
 3. Trong lifespan startup:
-   - Goi `init_db()` de tao/migrate schema.
-   - Kiem tra `SECRET_KEY`.
-   - Thu warm-up ket noi Neo4j.
-4. Cau hinh middleware:
+   - Gọi `init_db()` để tạo/migrate schema.
+   - Kiểm tra `SECRET_KEY`.
+   - Thử warm-up kết nối Neo4j.
+4. Cấu hình middleware:
    - Security headers.
    - Global exception handler.
    - Request timeout.
-   - Rate limit cho cac route nang ve AI/dictionary.
+   - Rate limit cho các route nặng về AI/dictionary.
 5. Include routers theo role:
    - `/auth`
    - `/admin`
    - `/teacher`
    - `/student`
-6. Bat CORS cho cac origin duoc khai bao va localhost.
+6. Bật CORS cho các origin được khai báo và localhost.
 
-### 5.2 Health va kha nang tu phuc hoi
+### 5.2 Health và khả năng tự phục hồi
 
-He thong co cac co che giam loi co ban:
+Hệ thống có các cơ chế giảm lỗi cơ bản:
 
-- `GET /health` kiem tra SQL DB va Neo4j.
-- Global exception handler tra loi 500 va log ra console.
-- Timeout middleware tranh request treo qua lau.
-- Rate limiter giam nguy co spam cac route AI nang.
-- Database connection co retry va fallback local khi khong bat `ONLINE_DB_ONLY`.
+- `GET /health` kiểm tra SQL DB và Neo4j.
+- Global exception handler trả lời 500 và log ra console.
+- Timeout middleware tránh request treo quá lâu.
+- Rate limiter giảm nguy cơ spam các route AI nặng.
+- Database connection có retry và fallback local khi không bật `ONLINE_DB_ONLY`.
 
-## 6. Co so du lieu thuc te dang chay
+## 6. Cơ sở dữ liệu thực tế đang chạy
 
-## 6.1 Nguon su that ve schema
+## 6.1 Nguồn sự thật về schema
 
-Schema runtime thuc te duoc tao va migrate trong `ai-service/app/database.py`.
+Schema runtime thực tế được tạo và migrate trong `ai-service/app/database.py`.
 
-Bang chinh dang duoc su dung:
+Bảng chính đang được sử dụng:
 
 - `users`
 - `revoked_tokens`
@@ -180,108 +180,108 @@ Bang chinh dang duoc su dung:
 - `student_roadmaps`
 - `ai_logs`
 - `provider_status`
-- `user_usage` (duoc tao khi can trong router student)
+- `user_usage` (được tạo khi cần trong router student)
 
-### 6.2 Y nghia nghiep vu cua cac bang
+### 6.2 Ý nghĩa nghiệp vụ của các bảng
 
 `users`
 
-- Chua tai khoan, role, password hash, trang thai xac minh, AI credits, points, muc tieu hoc tap.
+- Chứa tài khoản, role, password hash, trạng thái xác minh, AI credits, points, mục tiêu học tập.
 
 `revoked_tokens`
 
-- Danh sach JWT da logout hoac bi vo hieu hoa.
+- Danh sách JWT đã logout hoặc bị vô hiệu hóa.
 
 `classes`
 
-- Thong tin lop hoc do giao vien hoac admin tao.
+- Thông tin lớp học do giáo viên hoặc admin tạo.
 
 `lessons`
 
-- Noi dung bai hoc gan voi lop.
+- Nội dung bài học gắn với lớp.
 
 `settings`
 
-- Luu cau hinh he thong trong DB, bao gom key cho AI, email, Neo4j va cac tham so runtime.
+- Lưu cấu hình hệ thống trong DB, bao gồm key cho AI, email, Neo4j và các tham số runtime.
 
 `dictionary_cache`
 
-- Cache ket qua tra cuu tu dien de giam goi AI lap lai.
+- Cache kết quả tra cứu từ điển để giảm gọi AI lặp lại.
 
 `generated_exams`
 
-- Luu lich su de thi/luyen tap da sinh ra cho hoc sinh.
+- Lưu lịch sử đề thi/luyện tập đã sinh ra cho học sinh.
 
 `grammar_rules`
 
-- Danh sach chu de ngu phap va tep dinh kem.
+- Danh sách chủ đề ngữ pháp và tệp đính kèm.
 
 `enrollments`
 
-- Quan he hoc sinh - lop.
+- Quan hệ học sinh - lớp.
 
 `assignments`
 
-- Bai tap giao vien/admin tao cho lop hoc.
+- Bài tập giáo viên/admin tạo cho lớp học.
 
 `student_scores`
 
-- Diem so bai tap cua hoc sinh.
+- Điểm số bài tập của học sinh.
 
 `saved_vocabulary`
 
-- Tu vung da luu cua hoc sinh, dong thoi chua cac truong phuc vu FSRS nhu `stability`, `difficulty`, `retrievability`, `scheduled_at`, `reps`, `lapses`.
+- Từ vựng đã lưu của học sinh, đồng thời chứa các trường phục vụ FSRS như `stability`, `difficulty`, `retrievability`, `scheduled_at`, `reps`, `lapses`.
 
 `study_logs`
 
-- Nhat ky moi lan hoc sinh on tap tu vung.
+- Nhật ký mỗi lần học sinh ôn tập từ vựng.
 
 `student_roadmaps`
 
-- Cache lo trinh hoc tap ca nhan hoa.
+- Cache lộ trình học tập cá nhân hóa.
 
 `ai_logs`
 
-- Log request AI de admin theo doi.
+- Log request AI để admin theo dõi.
 
 `provider_status`
 
-- Ghi nhan nha cung cap AI dang loi tam thoi, phuc vu fallback.
+- Ghi nhận nhà cung cấp AI đang lỗi tạm thời, phục vụ fallback.
 
 `user_usage`
 
-- Gioi han so lan dung mot so tinh nang theo ngay.
+- Giới hạn số lần dùng một số tính năng theo ngày.
 
-### 6.3 Seed data mac dinh
+### 6.3 Seed data mặc định
 
-Neu bang `classes` rong khi khoi tao DB, he thong seed du lieu mau:
+Nếu bảng `classes` rỗng khi khởi tạo DB, hệ thống seed dữ liệu mẫu:
 
 - `admin@eam.edu.vn`
 - `lan.nguyen@eam.edu.vn`
 - `huytran123@gmail.com`
 
-Mat khau mac dinh duoc seed la `123456`.
+Mật khẩu mặc định được seed là `123456`.
 
-Canh bao ban giao:
+Cảnh báo bàn giao:
 
-- Day la thong tin phuc vu phat trien/demo.
-- Neu dua he thong vao moi truong that, can thay doi ngay mat khau seed hoac tat seed demo.
+- Đây là thông tin phục vụ phát triển/demo.
+- Nếu đưa hệ thống vào môi trường thật, cần thay đổi ngay mật khẩu seed hoặc tắt seed demo.
 
-## 7. Co che xac thuc va phan quyen
+## 7. Cơ chế xác thực và phân quyền
 
-### 7.1 Mo hinh auth
+### 7.1 Mô hình auth
 
-He thong dung JWT qua `auth_service.py`.
+Hệ thống dùng JWT qua `auth_service.py`.
 
-- Token chua `sub`, `email`, `exp`, `iat`, `jti`.
-- Han token mac dinh la 30 ngay.
-- Logout khong chi xoa token o frontend ma con ghi `jti` vao `revoked_tokens`.
-- Router duoc bao ve bang dependencies:
+- Token chứa `sub`, `email`, `exp`, `iat`, `jti`.
+- Hạn token mặc định là 30 ngày.
+- Logout không chỉ xóa token ở frontend mà còn ghi `jti` vào `revoked_tokens`.
+- Router được bảo vệ bằng dependencies:
   - admin: `get_admin_user`
   - teacher: `get_teacher_user`
   - student: `get_current_user`
 
-### 7.2 Luong dang ky va kich hoat
+### 7.2 Luồng đăng ký và kích hoạt
 
 ```mermaid
 sequenceDiagram
@@ -291,87 +291,87 @@ sequenceDiagram
     participant Mail as Email Provider
     participant DB as SQL DB
 
-    U->>FE: Dang ky tai khoan
+    U->>FE: Đăng ký tài khoản
     FE->>API: POST /auth/register
-    API->>DB: Tao user chua verify + OTP
-    API->>Mail: Gui OTP
-    U->>FE: Nhap OTP
+    API->>DB: Tạo user chưa verify + OTP
+    API->>Mail: Gửi OTP
+    U->>FE: Nhập OTP
     FE->>API: POST /auth/verify-otp
-    API->>DB: Xac minh tai khoan
-    API-->>FE: Tra access token + user info
+    API->>DB: Xác minh tài khoản
+    API-->>FE: Trả access token + user info
 ```
 
-### 7.3 Email va OTP
+### 7.3 Email và OTP
 
-He thong gui mail qua nhieu kenh du phong:
+Hệ thống gửi mail qua nhiều kênh dự phòng:
 
 - Brevo
 - Resend
 - SMTP
 
-Provider duoc lay tu `settings` va env. Dieu nay giup van hanh linh hoat tren cloud, dac biet khi SMTP bi chan.
+Provider được lấy từ `settings` và env. Điều này giúp vận hành linh hoạt trên cloud, đặc biệt khi SMTP bị chặn.
 
-### 7.4 Diem can luu y
+### 7.4 Điểm cần lưu ý
 
-- Neu `SECRET_KEY` khong duoc cau hinh, he thong tu tao key tam thoi. Khi restart service, cac session cu se khong con hop le.
-- Frontend luu token trong `localStorage` qua `AuthContext.tsx`.
-- `AuthContext` tu them Bearer token cho request va logout khi gap `401`.
+- Nếu `SECRET_KEY` không được cấu hình, hệ thống tự tạo key tạm thời. Khi restart service, các session cũ sẽ không còn hợp lệ.
+- Frontend lưu token trong `localStorage` qua `AuthContext.tsx`.
+- `AuthContext` tự thêm Bearer token cho request và logout khi gặp `401`.
 
-## 8. Luong nghiep vu theo vai tro
+## 8. Luồng nghiệp vụ theo vai trò
 
-## 8.1 Hoc sinh
+## 8.1 Học sinh
 
-Day la luong phong phu nhat cua he thong.
+Đây là luồng phong phú nhất của hệ thống.
 
-Chuc nang chinh:
+Chức năng chính:
 
-- Xem thong ke hoc tap.
-- Xem xep hang theo diem.
-- Tra cuu tu dien AI.
-- Luu tu vung ca nhan.
-- On tap tu vung theo FSRS.
-- Lam practice test.
-- Lam assignment dang quiz va writing.
-- Xem diem.
-- Xem lo trinh hoc tap ca nhan hoa.
-- Dung cac cong cu AI: IPA, reading, writing, speaking, file analysis.
+- Xem thống kê học tập.
+- Xem xếp hạng theo điểm.
+- Tra cứu từ điển AI.
+- Lưu từ vựng cá nhân.
+- Ôn tập từ vựng theo FSRS.
+- Làm practice test.
+- Làm assignment dạng quiz và writing.
+- Xem điểm.
+- Xem lộ trình học tập cá nhân hóa.
+- Dùng các công cụ AI: IPA, reading, writing, speaking, file analysis.
 
-Luong tong quat:
+Luồng tổng quát:
 
 ```mermaid
 flowchart TD
-    A[Hoc sinh dang nhap] --> B[Dashboard Student]
-    B --> C[Tra cuu tu dien]
-    B --> D[Luu tu vung]
-    D --> E[On tap FSRS]
-    B --> F[Lam bai tap]
-    B --> G[Lam practice test]
+    A[Học sinh đăng nhập] --> B[Dashboard Student]
+    B --> C[Tra cứu từ điển]
+    B --> D[Lưu từ vựng]
+    D --> E[Ôn tập FSRS]
+    B --> F[Làm bài tập]
+    B --> G[Làm practice test]
     B --> H[Xem roadmap]
     C --> D
-    E --> I[Cong diem va cap nhat lich hoc]
+    E --> I[Cộng điểm và cập nhật lịch học]
     G --> I
 ```
 
-#### 8.1.1 Tra cuu tu dien
+#### 8.1.1 Tra cứu từ điển
 
-Frontend student goi `/student/dictionary/lookup`.
+Frontend student gọi `/student/dictionary/lookup`.
 
-Luoc do xu ly:
+Lược đồ xử lý:
 
-1. Frontend gui tu can tra.
-2. Backend kiem tra cache memory.
-3. Neu khong co, kiem tra `dictionary_cache` trong DB.
-4. Neu du lieu thieu hoac khong co:
-   - Lay nghia co ban tu free dictionary source.
-   - Goi AI de bo sung nghia Anh, nghia Viet, vi du, collocations, idioms, muc CEFR, phonetics.
-   - Co the bo sung thong tin tu Wikipedia.
-   - Lay quan he tu trong Neo4j.
-   - Rerank ket qua bang Cohere khi phu hop.
-5. Chi cache khi du lieu du "complete enough".
-6. Stream ket qua ve frontend de hien thi tung phan.
-7. Hoc sinh co the luu tu vao `saved_vocabulary`.
+1. Frontend gửi từ cần tra.
+2. Backend kiểm tra cache memory.
+3. Nếu không có, kiểm tra `dictionary_cache` trong DB.
+4. Nếu dữ liệu thiếu hoặc không có:
+   - Lấy nghĩa cơ bản từ free dictionary source.
+   - Gọi AI để bổ sung nghĩa Anh, nghĩa Việt, ví dụ, collocations, idioms, mức CEFR, phonetics.
+   - Có thể bổ sung thông tin từ Wikipedia.
+   - Lấy quan hệ từ trong Neo4j.
+   - Rerank kết quả bằng Cohere khi phù hợp.
+5. Chỉ cache khi dữ liệu đủ "complete enough".
+6. Stream kết quả về frontend để hiển thị từng phần.
+7. Học sinh có thể lưu từ vào `saved_vocabulary`.
 
-Ket qua dictionary la mot trong nhung gia tri lon nhat cua he thong vi no khong chi la tu dien, ma la mot pipeline tong hop:
+Kết quả dictionary là một trong những giá trị lớn nhất của hệ thống vì nó không chỉ là từ điển, mà là một pipeline tổng hợp:
 
 - Dictionary raw data
 - AI enrichment
@@ -379,19 +379,19 @@ Ket qua dictionary la mot trong nhung gia tri lon nhat cua he thong vi no khong 
 - Cache
 - Streaming UX
 
-#### 8.1.2 On tap tu vung theo FSRS
+#### 8.1.2 Ôn tập từ vựng theo FSRS
 
-Router student co mot implementation FSRS don gian hoa.
+Router student có một implementation FSRS đơn giản hóa.
 
-Luong:
+Luồng:
 
-1. Hoc sinh luu tu vao `saved_vocabulary`.
-2. Khi bat dau practice, he thong chon:
-   - Tu chua hoc bao gio.
-   - Hoac tu da den lich `scheduled_at`.
-3. AI sinh cau hoi on tap.
-4. Hoc sinh nop ket qua.
-5. Backend cap nhat:
+1. Học sinh lưu từ vào `saved_vocabulary`.
+2. Khi bắt đầu practice, hệ thống chọn:
+   - Từ chưa học bao giờ.
+   - Hoặc từ đã đến lịch `scheduled_at`.
+3. AI sinh câu hỏi ôn tập.
+4. Học sinh nộp kết quả.
+5. Backend cập nhật:
    - `stability`
    - `difficulty`
    - `retrievability`
@@ -399,57 +399,57 @@ Luong:
    - `reps`
    - `lapses`
 6. Ghi `study_logs`.
-7. Cong diem cho hoc sinh.
+7. Cộng điểm cho học sinh.
 
-Tac dung:
+Tác dụng:
 
-- Day la co che lap lich on tap trung tam cho trai nghiem hoc tu vung ca nhan hoa.
-- Neu can chuyen giao cho nguoi moi, day la phan nen doc ky trong `student.py`.
+- Đây là cơ chế lập lịch ôn tập trung tâm cho trải nghiệm học từ vựng cá nhân hóa.
+- Nếu cần chuyển giao cho người mới, đây là phần nên đọc kỹ trong `student.py`.
 
-#### 8.1.3 Practice test va exam history
+#### 8.1.3 Practice test và exam history
 
-Hoc sinh co the sinh de luyen tap AI va luu lich su.
+Học sinh có thể sinh đề luyện tập AI và lưu lịch sử.
 
-Luong:
+Luồng:
 
-1. Frontend goi route sinh practice.
-2. AI tao de.
-3. Hoc sinh nop diem.
-4. Backend luu vao `generated_exams`.
-5. Cong points theo ty le diem dat duoc.
+1. Frontend gọi route sinh practice.
+2. AI tạo đề.
+3. Học sinh nộp điểm.
+4. Backend lưu vào `generated_exams`.
+5. Cộng points theo tỷ lệ điểm đạt được.
 
 #### 8.1.4 Assignment
 
-Hoc sinh xem assignment cua lop va nop bai.
+Học sinh xem assignment của lớp và nộp bài.
 
-He thong ho tro it nhat 2 kieu:
+Hệ thống hỗ trợ ít nhất 2 kiểu:
 
 - Quiz
 - Writing
 
-Sau khi nop:
+Sau khi nộp:
 
-- Ket qua duoc luu vao `student_scores`.
-- Hoc sinh co the xem lai diem.
+- Kết quả được lưu vào `student_scores`.
+- Học sinh có thể xem lại điểm.
 
-#### 8.1.5 Roadmap ca nhan hoa
+#### 8.1.5 Roadmap cá nhân hóa
 
-Route `/student/roadmap` tao lo trinh hoc tap bang AI.
+Route `/student/roadmap` tạo lộ trình học tập bằng AI.
 
-He thong khong sinh lai moi lan, ma dung cache trong `student_roadmaps`.
+Hệ thống không sinh lại mỗi lần, mà dùng cache trong `student_roadmaps`.
 
-Co che invalidation:
+Cơ chế invalidation:
 
-- Tao `stats_hash` dua tren tong so tu vung va diem.
-- Roadmap duoc sinh lai khi:
-  - Tang them moi 20 tu.
-  - Hoac tang them moi 500 diem.
+- Tạo `stats_hash` dựa trên tổng số từ vựng và điểm.
+- Roadmap được sinh lại khi:
+   - Tăng thêm mỗi 20 từ.
+   - Hoặc tăng thêm mỗi 500 điểm.
 
-Day la cach can bang giua chi phi AI va tinh ca nhan hoa.
+Đây là cách cân bằng giữa chi phí AI và tính cá nhân hóa.
 
-#### 8.1.6 AI tools cho hoc sinh
+#### 8.1.6 AI tools cho học sinh
 
-Mot so route AI tinh phi 5 credits moi lan thanh cong:
+Một số route AI tính phí 5 credits mỗi lần thành công:
 
 - `/student/analyze-text`
 - `/student/ipa/generate`
@@ -458,54 +458,54 @@ Mot so route AI tinh phi 5 credits moi lan thanh cong:
 - `/student/writing/evaluate`
 - `/student/speaking/topic`
 - `/student/file/upload-analyze`
-- mot so route practice/grammar khac
+- một số route practice/grammar khác
 
-Nguyen tac chung:
+Nguyên tắc chung:
 
-- Kiem tra `credits_ai` truoc.
-- Thu hien sinh noi dung.
-- Tru credits khi request thanh cong.
+- Kiểm tra `credits_ai` trước.
+- Thực hiện sinh nội dung.
+- Trừ credits khi request thành công.
 
-## 8.2 Giao vien
+## 8.2 Giáo viên
 
-Vai tro cua giao vien la quan ly hoc lieu va hoc sinh trong lop.
+Vai trò của giáo viên là quản lý học liệu và học sinh trong lớp.
 
-Chuc nang chinh:
+Chức năng chính:
 
-- Quan ly lop cua minh.
-- Them hoc sinh vao lop.
-- Quan ly bai hoc.
-- Tao assignment.
-- Dung AI de sinh quiz, sinh tu vung, sinh assignment tu file, sinh assignment tu tin tuc.
-- Tra cuu dictionary va xem knowledge graph.
-- Quan ly grammar rules.
+- Quản lý lớp của mình.
+- Thêm học sinh vào lớp.
+- Quản lý bài học.
+- Tạo assignment.
+- Dùng AI để sinh quiz, sinh từ vựng, sinh assignment từ file, sinh assignment từ tin tức.
+- Tra cứu dictionary và xem knowledge graph.
+- Quản lý grammar rules.
 
-Luong tong quat:
+Luồng tổng quát:
 
 ```mermaid
 flowchart TD
-    A[Giao vien dang nhap] --> B[Dashboard Teacher]
-    B --> C[Quan ly lop]
-    C --> D[Them hoc sinh]
-    C --> E[Them bai hoc]
-    B --> F[Tao assignment]
+    A[Giáo viên đăng nhập] --> B[Dashboard Teacher]
+    B --> C[Quản lý lớp]
+    C --> D[Thêm học sinh]
+    C --> E[Thêm bài học]
+    B --> F[Tạo assignment]
     F --> G[Sinh quiz / vocab / file / news]
-    B --> H[Tra cuu dictionary]
-    B --> I[Quan ly grammar]
+    B --> H[Tra cứu dictionary]
+    B --> I[Quản lý grammar]
 ```
 
-#### 8.2.1 Quan ly lop
+#### 8.2.1 Quản lý lớp
 
-Teacher co the:
+Teacher có thể:
 
-- Tao, sua, xoa lop cua minh.
-- Xem danh sach hoc sinh trong lop.
-- Lay danh sach hoc sinh co san de enroll vao lop.
-- Xem bai hoc va bai tap cua lop.
+- Tạo, sửa, xóa lớp của mình.
+- Xem danh sách học sinh trong lớp.
+- Lấy danh sách học sinh có sẵn để enroll vào lớp.
+- Xem bài học và bài tập của lớp.
 
-#### 8.2.2 Tao hoc lieu bang AI
+#### 8.2.2 Tạo học liệu bằng AI
 
-Teacher co cac route chinh:
+Teacher có các route chính:
 
 - `/teacher/generate-quiz`
 - `/teacher/generate-vocab`
@@ -515,188 +515,188 @@ Teacher co cac route chinh:
 - `/teacher/dictionary/lookup`
 - `/teacher/knowledge-graph`
 
-Co che tinh credits tuong tu student:
+Cơ chế tính credits tương tự student:
 
-- Nhieu route teacher tru 5 AI credits cho moi lan tao noi dung.
+- Nhiều route teacher trừ 5 AI credits cho mỗi lần tạo nội dung.
 
 #### 8.2.3 News-based assignment
 
-Teacher co the lay topic tin tuc tu `news_service.py`.
+Teacher có thể lấy topic tin tức từ `news_service.py`.
 
-Luong:
+Luồng:
 
-1. Goi Guardian API truoc.
-2. Neu can thi fallback sang NewsAPI.
-3. Chon bai co noi dung du dai.
-4. Dua ngu lieu do vao pipeline AI de sinh reading assignment.
+1. Gọi Guardian API trước.
+2. Nếu cần thì fallback sang NewsAPI.
+3. Chọn bài có nội dung đủ dài.
+4. Đưa ngữ liệu đó vào pipeline AI để sinh reading assignment.
 
-Day la tinh nang hay de trinh bay y tuong "hoc tren ngu lieu thoi su".
+Đây là tính năng hay để trình bày ý tưởng "học trên ngữ liệu thời sự".
 
-## 8.3 Quan tri vien
+## 8.3 Quản trị viên
 
-Admin co vai tro quan ly he thong va van hanh.
+Admin có vai trò quản lý hệ thống và vận hành.
 
-Chuc nang chinh:
+Chức năng chính:
 
-- Xem thong ke tong quan.
-- Quan ly nguoi dung.
-- Cap nhat credits hang loat.
-- Quan ly lop va bai hoc.
-- Quan ly tu vung.
-- Quan ly grammar.
-- Quan ly settings.
-- Test email va test Neo4j.
-- Quan ly assignments.
-- Theo doi AI logs va AI stats.
+- Xem thống kê tổng quan.
+- Quản lý người dùng.
+- Cập nhật credits hàng loạt.
+- Quản lý lớp và bài học.
+- Quản lý từ vựng.
+- Quản lý grammar.
+- Quản lý settings.
+- Test email và test Neo4j.
+- Quản lý assignments.
+- Theo dõi AI logs và AI stats.
 
-Admin la nguoi co kha nang chan doan he thong tot nhat tu giao dien.
+Admin là người có khả năng chẩn đoán hệ thống tốt nhất từ giao diện.
 
-Luot danh muc can biet:
+Lướt danh mục cần biết:
 
-- `AI Logs`: xem request nao dang loi, provider nao dang dung, do tre ra sao.
-- `Settings`: noi tap trung cho API keys, SMTP, Neo4j, v.v.
-- `Test Email`, `Test Neo4j`: dung de kiem tra cau hinh sau khi deploy.
+- `AI Logs`: xem request nào đang lỗi, provider nào đang dùng, độ trễ ra sao.
+- `Settings`: nơi tập trung cho API keys, SMTP, Neo4j, v.v.
+- `Test Email`, `Test Neo4j`: dùng để kiểm tra cấu hình sau khi deploy.
 
-## 9. Pipeline AI va cach xu ly thong minh
+## 9. Pipeline AI và cách xử lý thông minh
 
-## 9.1 `llm_service.py` la trung tam AI
+## 9.1 `llm_service.py` là trung tâm AI
 
-Day la file quan trong nhat neu muon hieu "tri tue" cua he thong.
+Đây là file quan trọng nhất nếu muốn hiểu "trí tuệ" của hệ thống.
 
-No phu trach:
+Nó phụ trách:
 
-- Chon provider AI.
-- Fallback khi provider loi.
-- Kiem soat so request dong thoi bang semaphore.
-- Sua JSON loi va lam sach response.
+- Chọn provider AI.
+- Fallback khi provider lỗi.
+- Kiểm soát số request đồng thời bằng semaphore.
+- Sửa JSON lỗi và làm sạch response.
 - Ghi log request AI.
-- Rerank ket qua dictionary.
-- Sinh cac dang noi dung hoc tap.
+- Rerank kết quả dictionary.
+- Sinh các dạng nội dung học tập.
 
-### 9.2 Chien luoc fallback provider
+### 9.2 Chiến lược fallback provider
 
-He thong ho tro it nhat:
+Hệ thống hỗ trợ ít nhất:
 
 - Gemini
 - OpenAI
 - Cohere
 
-Co che tong quat:
+Cơ chế tổng quát:
 
-1. Thu provider uu tien.
-2. Neu loi, danh dau provider fail vao `provider_status`.
-3. Chuyen sang provider tiep theo.
-4. Log lai qua trinh de admin co the kiem tra.
+1. Thử provider ưu tiên.
+2. Nếu lỗi, đánh dấu provider fail vào `provider_status`.
+3. Chuyển sang provider tiếp theo.
+4. Log lại quá trình để admin có thể kiểm tra.
 
-Muc tieu:
+Mục tiêu:
 
-- Giam xac suat he thong "chet AI" khi 1 nha cung cap gap van de.
+- Giảm xác suất hệ thống "chết AI" khi 1 nhà cung cấp gặp vấn đề.
 
 ### 9.3 Caching
 
-Caching duoc dung o nhieu tang:
+Caching được dùng ở nhiều tầng:
 
 - Memory cache trong process.
 - DB cache `dictionary_cache`.
 - Roadmap cache trong `student_roadmaps`.
-- Neo4j co the luu mot so du lieu graph/dictionary phuc vu truy van nhanh hon.
+- Neo4j có thể lưu một số dữ liệu graph/dictionary phục vụ truy vấn nhanh hơn.
 
-### 9.4 Gioi han tai
+### 9.4 Giới hạn tải
 
-`llm_service.py` dung `asyncio.Semaphore(15)` de gioi han so request AI dong thoi.
+`llm_service.py` dùng `asyncio.Semaphore(15)` để giới hạn số request AI đồng thời.
 
-Y nghia:
+Ý nghĩa:
 
-- Bao ve he thong khoi bi qua tai.
-- Giu on dinh cho local va production.
+- Bảo vệ hệ thống khỏi bị quá tải.
+- Giữ ổn định cho local và production.
 
-### 9.5 Logging va quan sat
+### 9.5 Logging và quan sát
 
-Moi request AI quan trong nen duoc ghi vao `ai_logs`.
+Mỗi request AI quan trọng nên được ghi vào `ai_logs`.
 
-Admin co the xem:
+Admin có thể xem:
 
-- route nao duoc dung nhieu
-- request nao loi
-- provider nao khong on dinh
-- xu huong su dung AI
+- route nào được dùng nhiều
+- request nào lỗi
+- provider nào không ổn định
+- xu hướng sử dụng AI
 
-## 10. Knowledge Graph va vai tro cua Neo4j
+## 10. Knowledge Graph và vai trò của Neo4j
 
-Neo4j khong phai he thong record chinh, nhung la thanh phan tao ra khac biet cho san pham.
+Neo4j không phải hệ thống record chính, nhưng là thành phần tạo ra khác biệt cho sản phẩm.
 
-Vai tro thuc te:
+Vai trò thực tế:
 
-- Luu node/quan he tu vung.
-- Luu va khai thac ket noi giua cac tu.
-- Phuc vu visualize knowledge graph.
-- Luu mot phan grammar theo dang graph.
-- Ho tro cache/bo sung dictionary trong mot so truong hop.
+- Lưu node/quan hệ từ vựng.
+- Lưu và khai thác kết nối giữa các từ.
+- Phục vụ visualize knowledge graph.
+- Lưu một phần grammar theo dạng graph.
+- Hỗ trợ cache/bổ sung dictionary trong một số trường hợp.
 
-Neu Neo4j mat ket noi:
+Nếu Neo4j mất kết nối:
 
-- He thong van co the chay o muc "degraded" cho nhieu chuc nang.
-- Nhung phan graph visualization va mot so enrichment se giam chat luong hoac khong co.
+- Hệ thống vẫn có thể chạy ở mức "degraded" cho nhiều chức năng.
+- Nhưng phần graph visualization và một số enrichment sẽ giảm chất lượng hoặc không có.
 
-## 11. Frontend va cach van hanh giao dien
+## 11. Frontend và cách vận hành giao diện
 
 ### 11.1 AuthContext
 
-`frontend/app/context/AuthContext.tsx` la diem trung tam phia client:
+`frontend/app/context/AuthContext.tsx` là điểm trung tâm phía client:
 
-- Luu `eam_token` va `eam_user` trong `localStorage`.
-- Cung cap `authFetch` de tu dong them Authorization header.
-- Tu dong logout khi token het han hoac backend tra `401`.
-- Dong bo logout giua cac tab bang `eam_logout_trigger`.
+- Lưu `eam_token` và `eam_user` trong `localStorage`.
+- Cung cấp `authFetch` để tự động thêm Authorization header.
+- Tự động logout khi token hết hạn hoặc backend trả `401`.
+- Đồng bộ logout giữa các tab bằng `eam_logout_trigger`.
 
 ### 11.2 Dashboard role-based
 
-Sau dang nhap:
+Sau đăng nhập:
 
-- Student thay dashboard hoc tap.
-- Teacher thay dashboard quan ly lop va AI tools.
-- Admin thay dashboard van hanh he thong.
+- Student thấy dashboard học tập.
+- Teacher thấy dashboard quản lý lớp và AI tools.
+- Admin thấy dashboard vận hành hệ thống.
 
 ### 11.3 Streaming UX
 
-Mot so tinh nang nhu dictionary su dung kieu response streaming.
+Một số tính năng như dictionary sử dụng kiểu response streaming.
 
-Frontend co nhiem vu:
+Frontend có nhiệm vụ:
 
-- Nhan chunk.
-- Parse tung phan.
-- Cap nhat UI theo tien trinh.
+- Nhận chunk.
+- Parse từng phần.
+- Cập nhật UI theo tiến trình.
 
-Day la diem giup trai nghiem AI tu nhien hon so voi cho response mot lan.
+Đây là điểm giúp trải nghiệm AI tự nhiên hơn so với chờ response một lần.
 
-## 12. Cach chay he thong
+## 12. Cách chạy hệ thống
 
-## 12.1 Chay local theo thuc te hien tai
+## 12.1 Chạy local theo thực tế hiện tại
 
-Huong dan local trong repo hien tai uu tien:
+Hướng dẫn local trong repo hiện tại ưu tiên:
 
-1. Chay `ai-service`.
-2. Bat `ONLINE_DB_ONLY=1` neu muon ep dung Turso.
-3. Chay frontend Next.js.
-4. Dat `NEXT_PUBLIC_API_URL` tro vao `http://localhost:8000` hoac `http://127.0.0.1:8000`.
+1. Chạy `ai-service`.
+2. Bật `ONLINE_DB_ONLY=1` nếu muốn ép dùng Turso.
+3. Chạy frontend Next.js.
+4. Đặt `NEXT_PUBLIC_API_URL` trỏ vào `http://localhost:8000` hoặc `http://127.0.0.1:8000`.
 
-Co the hieu ngan gon:
+Có thể hiểu ngắn gọn:
 
-- Backend chinh: `ai-service`
+- Backend chính: `ai-service`
 - Frontend: `frontend`
-- `backend-core` khong phai bat buoc cho luong chinh dang duoc su dung
+- `backend-core` không phải bắt buộc cho luồng chính đang được sử dụng
 
 ### 12.2 Deploy
 
-Theo cau truc hien tai:
+Theo cấu trúc hiện tại:
 
-- `ai-service` co the deploy len Render.
-- `frontend` co the deploy len Vercel.
-- `backend-core` cung co trong `render.yaml`, nhung can xem lai co con can dung khong.
+- `ai-service` có thể deploy lên Render.
+- `frontend` có thể deploy lên Vercel.
+- `backend-core` cũng có trong `render.yaml`, nhưng cần xem lại có còn cần dùng không.
 
-### 12.3 Bien moi truong quan trong
+### 12.3 Biến môi trường quan trọng
 
-Nhom can co:
+Nhóm cần có:
 
 - DB:
   - `TURSO_URL`
@@ -706,62 +706,62 @@ Nhom can co:
 - Auth:
   - `SECRET_KEY`
 - Neo4j:
-  - URI, username, password thong qua env hoac `settings`
+  - URI, username, password thông qua env hoặc `settings`
 - AI:
   - Gemini key
   - OpenAI key
   - Cohere key
 - Email:
-  - Brevo, Resend, hoac SMTP settings
+  - Brevo, Resend, hoặc SMTP settings
 - Frontend:
   - `NEXT_PUBLIC_API_URL`
 
-Neu ban giao cho nguoi moi, phan environment la phan can checklist ro rang nhat vi he thong phu thuoc vao nhieu dich vu ngoai.
+Nếu bàn giao cho người mới, phần environment là phần cần checklist rõ ràng nhất vì hệ thống phụ thuộc vào nhiều dịch vụ ngoài.
 
-## 13. Thuc trang he thong va nhung diem lech can luu y
+## 13. Thực trạng hệ thống và những điểm lệch cần lưu ý
 
-Day la phan rat quan trong khi ban giao.
+Đây là phần rất quan trọng khi bàn giao.
 
-### 13.1 `ai-service` moi la backend trung tam
+### 13.1 `ai-service` mới là backend trung tâm
 
-Tai lieu goc cua repo co nhac den `backend-core` nhu backend quan ly user/progress, nhung thuc te hien tai:
+Tài liệu gốc của repo có nhắc đến `backend-core` như backend quản lý user/progress, nhưng thực tế hiện tại:
 
 - Auth
 - Role-based API
-- Lop hoc
-- Bai hoc
-- Bai tap
-- Tu vung
+- Lớp học
+- Bài học
+- Bài tập
+- Từ vựng
 - Roadmap
 - AI
 - Settings
 
-deu nam trong `ai-service`.
+đều nằm trong `ai-service`.
 
-### 13.2 `backend-core` dang o trang thai phu tro, chua hoan tat security
+### 13.2 `backend-core` đang ở trạng thái phụ trợ, chưa hoàn tất security
 
-`backend-core/src/main/java/com/example/eam/config/SecurityConfig.java` hien tai:
+`backend-core/src/main/java/com/example/eam/config/SecurityConfig.java` hiện tại:
 
 - Permit public cho `/api/scores/**`
-- Va `anyRequest().permitAll()`
-- Comment trong code thua nhan JWT filter chua duoc lam xong
+- Và `anyRequest().permitAll()`
+- Comment trong code thừa nhận JWT filter chưa được làm xong
 
-Ket luan:
+Kết luận:
 
-- Khong nen dua module nay vao production voi ky vong no dang duoc bao ve day du.
-- Neu tiep quan he thong, can quyet dinh co tiep tuc duy tri module nay hay khong.
+- Không nên đưa module này vào production với kỳ vọng nó đang được bảo vệ đầy đủ.
+- Nếu tiếp quản hệ thống, cần quyết định có tiếp tục duy trì module này hay không.
 
-### 13.3 Tai lieu schema cu da lech so voi runtime
+### 13.3 Tài liệu schema cũ đã lệch so với runtime
 
-`database/schema.sql` va `database/graph_schema.cypher` khong con la nguon dung nhat de hieu du lieu hien tai.
+`database/schema.sql` và `database/graph_schema.cypher` không còn là nguồn đúng nhất để hiểu dữ liệu hiện tại.
 
-Nguon dung can doc la:
+Nguồn đúng cần đọc là:
 
 - `ai-service/app/database.py`
 
-### 13.4 Frontend teacher con goi mot so endpoint cu
+### 13.4 Frontend teacher còn gọi một số endpoint cũ
 
-Trong `frontend/app/dashboard/teacher/AIToolsTab.tsx`, frontend van goi mot so route cu nhu:
+Trong `frontend/app/dashboard/teacher/AIToolsTab.tsx`, frontend vẫn gọi một số route cũ như:
 
 - `/teacher/ai/extract-vocab`
 - `/teacher/ai/extract-vocab-file`
@@ -769,7 +769,7 @@ Trong `frontend/app/dashboard/teacher/AIToolsTab.tsx`, frontend van goi mot so r
 - `/teacher/dictionary/search`
 - `/teacher/ai/knowledge-graph`
 
-Trong khi backend hien tai dang expose:
+Trong khi backend hiện tại đang expose:
 
 - `/teacher/generate-vocab`
 - `/teacher/file/generate-assignment`
@@ -777,26 +777,26 @@ Trong khi backend hien tai dang expose:
 - `/teacher/dictionary/lookup`
 - `/teacher/knowledge-graph`
 
-Y nghia ban giao:
+Ý nghĩa bàn giao:
 
-- Teacher AI Tools co nguy co loi giao tiep frontend-backend neu chua duoc dong bo.
-- Nguoi tiep quan nen uu tien ra soat endpoint mapping o khu vuc nay.
+- Teacher AI Tools có nguy cơ lỗi giao tiếp frontend-backend nếu chưa được đồng bộ.
+- Người tiếp quản nên ưu tiên rà soát endpoint mapping ở khu vực này.
 
-### 13.5 Mot so chi tiet ky thuat trong AI service can xem lai
+### 13.5 Một số chi tiết kỹ thuật trong AI service cần xem lại
 
-Qua ra soat ma nguon, co it nhat cac diem sau can duoc danh dau:
+Qua rà soát mã nguồn, có ít nhất các điểm sau cần được đánh dấu:
 
-- `llm_service.py` dung semaphore 15 slots, nhung `get_queue_status()` lai tinh tren moc 7, khien thong tin queue tren UI co the sai.
-- File `llm_service.py` co dau hieu chua het code cu/thu nghiem, can test ky cac luong sinh reading/practice truoc khi mo rong.
-- Repo con nhieu file phu tro, script chan doan va artifact local, nen can tach ro "core" va "non-core" khi tiep quan.
+- `llm_service.py` dùng semaphore 15 slots, nhưng `get_queue_status()` lại tính trên mốc 7, khiến thông tin queue trên UI có thể sai.
+- File `llm_service.py` có dấu hiệu chưa hết code cũ/thử nghiệm, cần test kỹ các luồng sinh reading/practice trước khi mở rộng.
+- Repo còn nhiều file phụ trợ, script chẩn đoán và artifact local, nên cần tách rõ "core" và "non-core" khi tiếp quản.
 
-### 13.6 Seed account va du lieu demo
+### 13.6 Seed account và dữ liệu demo
 
-Co tai khoan demo seed san. Dieu nay huu ich cho demo, nhung la rui ro neu deploy that ma khong doi password.
+Có tài khoản demo seed sẵn. Điều này hữu ích cho demo, nhưng là rủi ro nếu deploy thật mà không đổi password.
 
-## 14. Thu tu khuyen nghi de doc khi tiep quan
+## 14. Thứ tự khuyến nghị để đọc khi tiếp quản
 
-Neu mot ky su moi vao du an, nen doc theo thu tu nay:
+Nếu một kỹ sư mới vào dự án, nên đọc theo thứ tự này:
 
 1. `README.md`
 2. `HUONG_DAN_LOCALHOST.md`
@@ -813,56 +813,55 @@ Neu mot ky su moi vao du an, nen doc theo thu tu nay:
 13. `frontend/app/dashboard/teacher/*`
 14. `frontend/app/dashboard/admin/page.tsx`
 
-Neu chi can hieu he thong nhanh de van hanh:
+Nếu chỉ cần hiểu hệ thống nhanh để vận hành:
 
-- Doc `database.py`, `main.py`, `auth.py`, `student.py`, `teacher.py`, `admin.py`, `AuthContext.tsx`.
+- Đọc `database.py`, `main.py`, `auth.py`, `student.py`, `teacher.py`, `admin.py`, `AuthContext.tsx`.
 
-Neu can debug AI:
+Nếu cần debug AI:
 
-- Tap trung vao `llm_service.py`, `graph_service.py`, `admin AI logs`, `settings`.
+- Tập trung vào `llm_service.py`, `graph_service.py`, `admin AI logs`, `settings`.
 
-## 15. Checklist ban giao van hanh
+## 15. Checklist bàn giao vận hành
 
-Nguoi nhan ban giao can duoc xac nhan cac muc sau:
+Người nhận bàn giao cần được xác nhận các mục sau:
 
-- Biet backend chinh la `ai-service`.
-- Biet frontend dang tro vao API nao.
-- Co day du `.env` hoac DB `settings`.
-- Co Turso credentials hop le.
-- Co Neo4j credentials hop le.
-- Co it nhat 1 AI provider key hoat dong.
-- Co email provider hoat dong neu can dang ky/OTP.
-- Hieu seed accounts va da doi mat khau neu can.
-- Biet cach kiem tra `/health`.
-- Biet vao trang admin de xem `AI Logs`, `Settings`, `Test Email`, `Test Neo4j`.
-- Biet teacher AI tools hien co endpoint mismatch can ra soat.
+- Biết backend chính là `ai-service`.
+- Biết frontend đang trỏ vào API nào.
+- Có đầy đủ `.env` hoặc DB `settings`.
+- Có Turso credentials hợp lệ.
+- Có Neo4j credentials hợp lệ.
+- Có ít nhất 1 AI provider key hoạt động.
+- Có email provider hoạt động nếu cần đăng ký/OTP.
+- Hiểu seed accounts và đã đổi mật khẩu nếu cần.
+- Biết cách kiểm tra `/health`.
+- Biết vào trang admin để xem `AI Logs`, `Settings`, `Test Email`, `Test Neo4j`.
+- Biết teacher AI tools hiện có endpoint mismatch cần rà soát.
 
-## 16. Danh gia tong ket
+## 16. Đánh giá tổng kết
 
-Ve mat y tuong, he thong co 3 lop gia tri ro rang:
+Về mặt ý tưởng, hệ thống có 3 lớp giá trị rõ ràng:
 
-- Nen tang hoc tieng Anh co role-based management.
-- Lop AI tao noi dung va phan tich hoc tap.
-- Lop knowledge graph va FSRS tao tinh ca nhan hoa va khac biet.
+- Nền tảng học tiếng Anh có role-based management.
+- Lớp AI tạo nội dung và phân tích học tập.
+- Lớp knowledge graph và FSRS tạo tính cá nhân hóa và khác biệt.
 
-Ve mat ky thuat, he thong da co mot "xuong song" van hanh kha day du:
+Về mặt kỹ thuật, hệ thống đã có một "xương sống" vận hành khá đầy đủ:
 
-- Frontend da co dashboard theo vai tro.
-- FastAPI da gom phan lon nghiep vu.
-- SQL DB va Neo4j da duoc tich hop.
-- AI pipeline da co fallback, cache va logging.
+- Frontend đã có dashboard theo vai trò.
+- FastAPI đã gom phần lớn nghiệp vụ.
+- SQL DB và Neo4j đã được tích hợp.
+- AI pipeline đã có fallback, cache và logging.
 
-Tuy nhien, de ban giao an toan cho nguoi moi, can noi ro:
+Tuy nhiên, để bàn giao an toàn cho người mới, cần nói rõ:
 
-- Repo con dau vet cua kien truc cu.
-- Tai lieu schema cu khong con day du.
-- Teacher frontend chua dong bo het voi backend.
-- `backend-core` chua nen xem la san sang production.
+- Repo còn dấu vết của kiến trúc cũ.
+- Tài liệu schema cũ không còn đầy đủ.
+- Teacher frontend chưa đồng bộ hết với backend.
+- `backend-core` chưa nên xem là sẵn sàng production.
 
-Neu nguoi nhan ban giao nam duoc 4 tru cot sau thi co the tiep quan he thong hieu qua:
+Nếu người nhận bàn giao nắm được 4 trụ cột sau thì có thể tiếp quản hệ thống hiệu quả:
 
-1. `ai-service` la trung tam.
-2. `database.py` la schema runtime that.
-3. `llm_service.py` la trung tam AI.
-4. Frontend role-based chi la lop giao tiep, business logic nam o backend.
-
+1. `ai-service` là trung tâm.
+2. `database.py` là schema runtime thật.
+3. `llm_service.py` là trung tâm AI.
+4. Frontend role-based chỉ là lớp giao tiếp, business logic nằm ở backend.

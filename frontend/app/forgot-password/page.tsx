@@ -41,7 +41,7 @@ export default function ForgotPasswordPage() {
       <div className="max-w-md w-full bg-white rounded-3xl shadow-xl overflow-hidden">
         <div className="bg-gradient-to-r from-blue-600 to-cyan-500 p-8 text-center">
           <div className="inline-flex items-center justify-center bg-white rounded-2xl p-2 mb-4">
-            <Image src="/logo.png" alt="iEdu" width={120} height={48} />
+            <Image src="/logo.png" alt="iEdu" width={120} height={48} style={{ height: "auto" }} />
           </div>
           <h1 className="text-2xl font-bold text-white mb-2">Quên Mật Khẩu</h1>
           <p className="text-blue-100">Nhập email để nhận mã khôi phục</p>

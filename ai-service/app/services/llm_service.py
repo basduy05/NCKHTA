@@ -333,11 +333,11 @@ def get_llm(difficulty: str = "medium", provider: Optional[str] = None):
             if gemini_key and gemini_key.strip():
                 # Use ONLY verified model names from Google AI Studio (User's Quota List)
                 if difficulty == "hard":
-                    model_names = ["gemini-3.1-pro", "gemini-3-flash", "gemini-2.5-pro", "gemini-1.5-pro"]
+                    model_names = ["gemini-2.5-pro", "gemini-pro-latest", "gemini-2.5-flash"]
                 elif difficulty == "easy":
-                    model_names = ["gemini-3.1-flash-lite", "gemini-2.5-flash-lite", "gemma-3-12b", "gemma-3-27b"]
+                    model_names = ["gemini-2.5-flash-lite", "gemini-flash-lite-latest", "gemini-2.5-flash"]
                 else: # medium
-                    model_names = ["gemini-3.1-flash-lite", "gemini-3-flash", "gemini-2.5-flash", "gemini-1.5-flash"]
+                    model_names = ["gemini-2.5-flash-lite", "gemini-2.5-flash", "gemini-flash-latest"]
                 
                 print(f"[LLM DEBUG] Trying Gemini/Gemma models: {model_names}", flush=True)
                 for m in model_names:
@@ -349,7 +349,7 @@ def get_llm(difficulty: str = "medium", provider: Optional[str] = None):
                         continue
                 
                 # Ultimate fallback for Google
-                return ChatGoogleGenerativeAI(model="gemini-3.1-flash-lite", google_api_key=gemini_key, timeout=20)
+                return ChatGoogleGenerativeAI(model="gemini-2.5-flash", google_api_key=gemini_key, timeout=20)
         
         # Priority 2: OpenAI
         if not is_provider_failed("OpenAI"):
@@ -382,7 +382,7 @@ def get_llm(difficulty: str = "medium", provider: Optional[str] = None):
     # Specific provider requested
     if provider == "gemini":
         key = get_setting("GOOGLE_API_KEY")
-        return ChatGoogleGenerativeAI(model="gemini-3.1-flash-lite", google_api_key=key, timeout=20) if key else None
+        return ChatGoogleGenerativeAI(model="gemini-2.5-flash", google_api_key=key, timeout=20) if key else None
     if provider == "openai":
         key = get_setting("OPENAI_API_KEY")
         return ChatOpenAI(model="gpt-4o-mini", openai_api_key=key, request_timeout=20) if key else None
@@ -476,9 +476,24 @@ async def _safe_invoke_async(chain, params: dict, difficulty: str = "medium", re
     
     # Attempt to extract model name from chain for logging
     try:
-        if hasattr(chain, 'last'): model_name = str(getattr(chain.last, 'model_name', 'unknown'))
-        elif hasattr(chain, 'model_name'): model_name = chain.model_name
-    except: pass
+        if hasattr(chain, 'last') and hasattr(chain.last, 'model_name'): 
+            model_name = str(getattr(chain.last, 'model_name', 'unknown'))
+        elif hasattr(chain, 'last') and hasattr(chain.last, 'model'): 
+            model_name = str(getattr(chain.last, 'model', 'unknown'))
+        elif hasattr(chain, 'model_name'): 
+            model_name = chain.model_name
+        elif hasattr(chain, 'bound') and hasattr(chain.bound, 'model_name'):
+            model_name = chain.bound.model_name
+        
+        # If it's a RunnableSequence, the last step is usually the LLM
+        if hasattr(chain, 'steps') and len(chain.steps) > 0:
+            last_step = chain.steps[-1]
+            if hasattr(last_step, 'model_name'):
+                 model_name = str(last_step.model_name)
+            elif hasattr(last_step, 'model'):
+                 model_name = str(last_step.model)
+    except Exception as e: 
+        print(f"Error getting model_name: {e}")
 
     for attempt in range(retries + 1):
         try:
@@ -763,7 +778,7 @@ def generate_fsrs_review_quiz(words: list):
     Generates a contextual review quiz for a list of words due for SRS review.
     Ensures strict format consistency with Pydantic schemas.
     """
-    llm = get_llm(difficulty="medium")
+    llm = get_llm(difficulty="easy")
     if not llm or not words:
         return []
 
@@ -1612,7 +1627,7 @@ async def generate_ipa_lesson(words: list = None, focus: str = "vowels"):
 
 async def generate_ipa_lesson_stream(text: str):
     """Streaming version of generate_ipa_lesson."""
-    llm = get_llm(difficulty="medium")
+    llm = get_llm(difficulty="easy")
     if not llm:
         yield json.dumps({"error": "LLM not configured"})
         return
@@ -1792,7 +1807,7 @@ async def generate_exercises_from_text_stream(text: str, exercise_type: str = "m
 
 async def generate_practice_test(test_type: str = "TOEIC", skill: str = "reading", part: str = ""):
     """Generate TOEIC/IELTS practice test questions with realistic structure."""
-    llm = get_llm(difficulty="medium")
+    llm = get_llm(difficulty="easy")
     if not llm:
         return {"error": "LLM not configured"}
 
@@ -1863,7 +1878,7 @@ async def generate_practice_test(test_type: str = "TOEIC", skill: str = "reading
                 "skill": skill,
                 "part": part or "general",
                 "format_context": format_context
-            }, difficulty="medium", feature="Practice Test")
+            }, difficulty="easy", feature="Practice Test")
             result = parse_json_response(response.content)
             if isinstance(result, dict):
                 return result
@@ -1875,7 +1890,7 @@ async def generate_practice_test(test_type: str = "TOEIC", skill: str = "reading
 
 async def generate_practice_test_stream(test_type: str = "TOEIC", skill: str = "reading", part: str = ""):
     """Streaming version of generate_practice_test."""
-    llm = get_llm(difficulty="medium")
+    llm = get_llm(difficulty="easy")
     if not llm:
         yield json.dumps({"error": "LLM not configured"})
         return
