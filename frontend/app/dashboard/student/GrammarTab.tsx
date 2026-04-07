@@ -117,15 +117,38 @@ export default function GrammarTab({ API_URL }: GrammarTabProps) {
     }
   };
 
-  const submitPractice = () => {
-    let s = 0;
+  const submitPractice = async () => {
+    let correctCount = 0;
     questions.forEach((q, i) => {
         const uAns = String(answers[i] || "").toLowerCase().trim();
         const cAns = String(q.answer || "").toLowerCase().trim();
-        if (uAns === cAns) s++;
+        if (uAns === cAns) correctCount++;
     });
-    setScore(s);
+    
+    const totalQuestions = questions.length;
+    const newScore = totalQuestions > 0 ? (correctCount / totalQuestions) * 100 : 0;
+    
+    setScore(newScore);
     setSubmitted(true);
+
+    try {
+      await authFetch(`${API_URL}/student/scores/save-practice`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          test_type: "Grammar",
+          skill: "Grammar",
+          part: selectedRules.map(id => rules.find(r => r.id === id)?.name).join(', ') || "General",
+          score: newScore,
+          title: `Luyện tập ngữ pháp: ${difficulty}`,
+        }),
+      });
+      showAlert("Đã lưu kết quả luyện tập.", "success");
+      refreshUser();
+    } catch (error) {
+      console.error("Failed to save grammar practice score:", error);
+      showAlert("Không thể lưu kết quả. Vui lòng thử lại.", "error");
+    }
   };
 
   if (practicing) {

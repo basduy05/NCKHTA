@@ -448,50 +448,47 @@ def get_assignment_scores(assignment_id: int, authorization: str = Header(...)):
 
 # ===================== AI TOOLS =====================
 
-@router.post("/generate-quiz")
-async def generate_quiz_for_class(authorization: str = Header(...), text: str = Form(...), num_questions: int = Form(5)):
-    """Use AI to generate quiz from text for teacher to assign (Streaming)."""
-    user = _get_current_teacher(authorization)
-    if user.get("credits_ai", 0) < 5:
-        raise HTTPException(status_code=402, detail="Insufficient AI credits (5 required)")
-    
-    # Deduct credit
-    conn = get_db()
-    conn.execute("UPDATE users SET credits_ai = MAX(0, credits_ai - 5) WHERE id = ?", (user["id"],))
-    conn.commit()
-    conn.close()
-
-    async def gen():
-        async for chunk in llm_service.generate_exercises_from_text_stream(text, "quiz", num_questions):
-            yield f"data: {chunk}\n\n"
-        yield "data: [DONE]\n\n"
-
-    return StreamingResponse(gen(), media_type="text/event-stream")
-
-@router.post("/generate-vocab")
-async def generate_vocab_for_class(authorization: str = Header(...), text: str = Form(...)):
-    """Use AI to extract vocabulary from text (Streaming)."""
-    user = _get_current_teacher(authorization)
-    if user.get("credits_ai", 0) < 5:
-        raise HTTPException(status_code=402, detail="Insufficient AI credits (5 required)")
-    
-    # Deduct credit
-    conn = get_db()
-    conn.execute("UPDATE users SET credits_ai = MAX(0, credits_ai - 5) WHERE id = ?", (user["id"],))
-    conn.commit()
-    conn.close()
-
-    async def gen():
-        async for chunk in llm_service.extract_vocabulary_from_text_stream(text):
-            yield f"data: {chunk}\n\n"
-        yield "data: [DONE]\n\n"
-
-    return StreamingResponse(gen(), media_type="text/event-stream")
-
+class ExtractVocabReq(BaseModel):
+    text: str
 
 class TeacherDictRequest(BaseModel):
     word: str
 
+@router.post("/ai/extract-vocab")
+async def ai_extract_vocab(req: ExtractVocabReq, authorization: str = Header(...)):
+    user = _get_current_teacher(authorization)
+    result = await llm_service.extract_vocabulary_from_text(req.text)
+    if isinstance(result, list):
+         return {"vocabulary": result}
+    return {"vocabulary": getattr(result, "words", [])}
+
+@router.post("/ai/extract-vocab-file")
+async def ai_extract_vocab_file(file: UploadFile = File(...), authorization: str = Header(...)):
+    user = _get_current_teacher(authorization)
+    # Simple extraction (usually would parse PDF/DOCX)
+    text = (await file.read()).decode('utf-8', errors='ignore')
+    result = await llm_service.extract_vocabulary_from_text(text[:5000])
+    if isinstance(result, list):
+         return {"vocabulary": result}
+    return {"vocabulary": getattr(result, "words", [])}
+
+@router.post("/ai/generate-quiz")
+async def ai_generate_quiz_from_text(req: ExtractVocabReq, authorization: str = Header(...)):
+    user = _get_current_teacher(authorization)
+    result = await llm_service.generate_exercises_from_text(req.text, "quiz", 5)
+    return {"quiz": result}
+
+@router.post("/dictionary/search")
+async def teacher_dictionary_search(req: TeacherDictRequest, authorization: str = Header(...)):
+    user = _get_current_teacher(authorization)
+    # Just forward to regular lookup
+    return await teacher_dictionary_lookup(req, authorization)
+
+@router.get("/ai/knowledge-graph")
+async def ai_knowledge_graph(topic: str = Query("all"), authorization: str = Header(...)):
+    user = _get_current_teacher(authorization)
+    from ..services.graph_service import lookup_word_graph
+    return await lookup_word_graph(topic, "en", 1)
 
 @router.post("/dictionary/lookup")
 async def teacher_dictionary_lookup(req: TeacherDictRequest, authorization: str = Header(...), background_tasks: BackgroundTasks = None):

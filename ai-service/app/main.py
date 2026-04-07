@@ -165,10 +165,7 @@ async def rate_limit_middleware(request: Request, call_next):
     return await call_next(request)
 
 if admin:
-    print("[STARTUP] Including admin router...", flush=True)
     app.include_router(admin.router, dependencies=[Depends(get_admin_user)])
-else:
-    print("[STARTUP WARNING] Admin router NOT included", flush=True)
 
 if auth:
     app.include_router(auth.router)

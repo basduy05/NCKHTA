@@ -473,6 +473,20 @@ def init_db():
         )
     """)
 
+    # --- AI PRACTICE HISTORY TABLE (For self-study tracking) ---
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS ai_practice_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            student_id INTEGER NOT NULL,
+            feature_name TEXT NOT NULL,
+            topic TEXT,
+            score INTEGER DEFAULT 0,
+            max_score INTEGER DEFAULT 0,
+            submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (student_id) REFERENCES users(id)
+        )
+    """)
+
     # --- SAVED VOCABULARY TABLE ---
     # NOTE: UNIQUE(user_id, word, pos) allows saving multiple meanings per word
     # e.g., "run" as verb and "run" as noun are separate entries

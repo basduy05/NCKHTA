@@ -135,7 +135,7 @@ export default function IpaTab({ API_URL }: IpaTabProps) {
     }
   };
 
-  const handleQuizSubmit = () => {
+  const handleQuizSubmit = async () => {
     if (!lesson?.quiz) return;
     let s = 0;
     lesson.quiz.forEach((q: any, i: number) => {
@@ -151,6 +151,18 @@ export default function IpaTab({ API_URL }: IpaTabProps) {
     });
     setQuizScore(s);
     setQuizSubmitted(true);
+
+    try {
+      await authFetch(`${API_URL}/student/scores/save-practice`, {
+        method: "POST",
+        body: JSON.stringify({
+          feature_name: "Pronunciation Practice",
+          topic: lesson.lesson_title || lesson.target_ipa || focus,
+          score: s,
+          max_score: lesson.quiz.length
+        })
+      });
+    } catch(err) { console.error("Could not save score", err); }
   };
 
   const speak = (text: string) => {

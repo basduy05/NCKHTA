@@ -78,6 +78,7 @@ export function AIToolsTab({ authFetch, user, API_URL, setShowCreditModal, handl
     try {
       const res = await authFetch(`${API_URL}/teacher/ai/extract-vocab`, {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text })
       });
       if (!res.ok) throw new Error("API error");

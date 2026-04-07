@@ -824,18 +824,56 @@ async def submit_assignment(assignment_id: int, submission: Union[QuizSubmission
 def my_scores(authorization: str = Header(...)):
     student = _get_current_student(authorization)
     conn = get_db()
-    rows = conn.execute(
+    # 1. Assignment Scores
+    rows_assignments = conn.execute(
         """SELECT ss.id, ss.score, ss.max_score, ss.submitted_at,
-                  a.title as assignment_title, c.name as class_name
+                  a.title as assignment_title, c.name as class_name, 'assignment' as source_type
            FROM student_scores ss
            JOIN assignments a ON ss.assignment_id = a.id
            JOIN classes c ON a.class_id = c.id
-           WHERE ss.student_id = ?
-           ORDER BY ss.submitted_at DESC""",
+           WHERE ss.student_id = ?""",
         (student["id"],)
     ).fetchall()
+    
+    # 2. Free AI Practice Scores
+    rows_practice = conn.execute(
+        """SELECT id, score, max_score, submitted_at,
+                  (feature_name || ' - ' || topic) as assignment_title, 'Luyện tập tự do' as class_name, 'practice' as source_type
+           FROM ai_practice_history
+           WHERE student_id = ?""",
+        (student["id"],)
+    ).fetchall()
+    
     conn.close()
-    return [dict(r) for r in rows]
+    
+    # Combine and sort by submitted_at DESC
+    all_scores = [dict(r) for r in rows_assignments] + [dict(r) for r in rows_practice]
+    all_scores.sort(key=lambda x: x['submitted_at'], reverse=True)
+    return all_scores
+
+class PracticeScoreRequest(BaseModel):
+    feature_name: str
+    topic: str
+    score: int
+    max_score: int
+
+@router.post("/scores/save-practice")
+def save_practice_score(req: PracticeScoreRequest, authorization: str = Header(...)):
+    """Save an AI practice test result to student's scores"""
+    student = _get_current_student(authorization)
+    conn = get_db()
+    try:
+        conn.execute(
+            """INSERT INTO ai_practice_history (student_id, feature_name, topic, score, max_score) 
+               VALUES (?, ?, ?, ?, ?)""",
+            (student["id"], req.feature_name, req.topic, req.score, req.max_score)
+        )
+        conn.commit()
+    except Exception as e:
+        conn.close()
+        raise HTTPException(status_code=500, detail=str(e))
+    conn.close()
+    return {"message": "Practice score saved successfully"}
 
 
 # ─── AI TEXT ANALYSIS ─────────────────────────────────────────────────────────
