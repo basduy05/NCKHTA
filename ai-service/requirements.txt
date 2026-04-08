@@ -23,6 +23,6 @@ PyPDF2
 json-repair
 bleach
 # libsql-experimental (Requires Rust toolchain to compile, fallback to sqlite3 is implemented)
-# libsql-experimental
+libsql>=0.1.11
 cohere
 typing-extensions
