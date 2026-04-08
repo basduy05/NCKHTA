@@ -196,7 +196,7 @@ app.add_middleware(
 )
 
 
-@app.get("/")
+@app.api_route("/", methods=["GET", "HEAD"])
 def read_root():
     return {
         "status": "AI Service Running", 
@@ -221,7 +221,7 @@ def debug_startup_error():
         return {"error": router_load_error}
     return {"message": "Small success: Routers loaded but something else might be wrong."}
 
-@app.get("/health")
+@app.api_route("/health", methods=["GET", "HEAD"])
 def health_check():
     """Detailed health check for all service dependencies."""
     health_status = {"status": "ok", "timestamp": time.time(), "dependencies": {}}
