@@ -99,6 +99,16 @@ class ConnectionWrapper:
         # We are using thread-local pooling, so do not actually close the connection.
         # This allows routers to safely call conn.close() without killing the shared connection.
         pass
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if exc_type is None:
+            try: self.commit()
+            except: pass
+        self.close()
+        return False
     def really_close(self):
         self._conn.close()
     def __enter__(self): return self
@@ -148,7 +158,7 @@ def get_db(retries=3):
     if not TURSO_URL:
         TURSO_URL = (os.getenv("TURSO_URL") or "").strip()
     if not TURSO_AUTH_TOKEN:
-        TURSO_AUTH_TOKEN = (os.getenv("TURSO_AUTH_TOKEN") or "").strip()
+        TURSO_AUTH_TOKEN = (os.getenv("TURSO_AUTH_TOKEN") or "").strip().strip('"').strip("'")
 
     is_render = bool(os.getenv("RENDER"))
     force_local_db = os.getenv("FORCE_LOCAL_DB", "0") == "1"
