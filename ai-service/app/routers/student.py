@@ -952,23 +952,24 @@ def clear_dictionary_cache(word: str, authorization: str = Header(...)):
     """Clear cached dictionary data for a word to force AI re-lookup."""
     _get_current_student(authorization)  # Auth check
     
-    word_lower = word.lower().strip()
+    word_exact = word.strip()
+    word_lower = word_exact.lower()
     conn = get_db()
     try:
         # 1. Clear from SQLite cache
-        cursor = conn.execute("DELETE FROM dictionary_cache WHERE word = ?", (word_lower,))
+        cursor = conn.execute("DELETE FROM dictionary_cache WHERE word = ? OR word = ?", (word_lower, word_exact))
         deleted_rows = cursor.rowcount
         conn.commit()
         conn.close()
         
         # 2. Clear from Neo4j graph cache (best effort)
         try:
-            g = graph_service.get_graph()
-            if g:
-                g.query(
-                    "MATCH (d:DictionaryCache {word: $word}) DETACH DELETE d",
-                    params={"word": word_lower}
-                )
+            from ..services.graph_service import _safe_query
+            _safe_query(
+                "MATCH (w:Word {text: $word}) SET w.data_json = null",
+                {"word": word_lower},
+                endpoint="clear_dict_cache"
+            )
         except Exception as neo4j_err:
             print(f"[DICT CACHE] Neo4j clear failed for '{word}': {neo4j_err}")
         
@@ -986,6 +987,7 @@ def clear_dictionary_cache(word: str, authorization: str = Header(...)):
 
 class DictionaryRequest(BaseModel):
     word: str
+    force_ai: Optional[bool] = False
 
 
 @router.post("/dictionary/lookup")
@@ -1030,6 +1032,7 @@ async def dictionary_lookup(req: DictionaryRequest, authorization: str = Header(
         return await loop.run_in_executor(None, _get)
 
     async def check_neo4j():
+        if req.force_ai: return None
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, graph_service.get_dictionary_cache, lookup_key)
 
@@ -1041,8 +1044,8 @@ async def dictionary_lookup(req: DictionaryRequest, authorization: str = Header(
     cache_task = asyncio.create_task(check_local_cache())
     local_row = await cache_task
 
-    # 1.1) Fast Exit on local cache hit
-    if local_row:
+    # 1.1) Fast Exit on local cache hit (only if NOT forcing AI)
+    if not req.force_ai and local_row:
         cached = json.loads(local_row["data_json"])
         if is_data_complete(cached):
             cached["_source"] = "database"
@@ -1120,13 +1123,8 @@ async def dictionary_lookup(req: DictionaryRequest, authorization: str = Header(
             c = get_db()
             try:
                 c.execute(
-                    """INSERT INTO dictionary_cache (word, word_original, data_json, meanings_count)
-                       VALUES (?, ?, ?, ?)
-                       ON CONFLICT(word) DO UPDATE SET
-                       data_json=excluded.data_json,
-                       word_original=excluded.word_original,
-                       meanings_count=excluded.meanings_count,
-                       updated_at=CURRENT_TIMESTAMP""",
+                    """INSERT OR REPLACE INTO dictionary_cache (word, word_original, data_json, meanings_count, updated_at)
+                       VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)""",
                     (key, original, json.dumps(data, ensure_ascii=False), mc)
                 )
                 c.commit()

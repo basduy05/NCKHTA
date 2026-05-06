@@ -88,7 +88,7 @@ export default function DictionaryTab({ API_URL }: DictionaryTabProps) {
     try {
       const res = await authFetch(`${API_URL}/student/dictionary/lookup`, {
         method: "POST",
-        body: JSON.stringify({ word: trimmedWord }),
+        body: JSON.stringify({ word: trimmedWord, force_ai: forceAI }),
         signal: controller.signal
       });
 
