@@ -42,7 +42,7 @@ export default function DictionaryTab({ API_URL }: DictionaryTabProps) {
     } catch (e) { }
   }, []);
 
-  const lookup = async () => {
+  const lookup = async (forceAI: boolean = false) => {
     const trimmedWord = word.trim();
     if (!trimmedWord) return;
 
@@ -51,7 +51,7 @@ export default function DictionaryTab({ API_URL }: DictionaryTabProps) {
                       ALL_WORDS_DATABASE[localWord.replace(/s$/, '')] || 
                       ALL_WORDS_DATABASE[localWord.replace(/es$/, '')];
 
-    if (localData) {
+    if (!forceAI && localData) {
       setResult({
         ...localData,
         status: "result",
@@ -199,7 +199,7 @@ export default function DictionaryTab({ API_URL }: DictionaryTabProps) {
     // 3. Re-trigger lookup
     setWord(currentWord);
     setTimeout(() => {
-      lookup();
+      lookup(true);
     }, 100);
   };
 
