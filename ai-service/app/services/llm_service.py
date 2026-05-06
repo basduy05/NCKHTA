@@ -1232,6 +1232,28 @@ async def translate_meanings_with_ai_stream(word: str, meanings: list, free_data
                                 last_yielded_json = current_json
                     except Exception:
                         pass
+        
+        # Final absolute repair yield to ensure the client receives the complete results
+        try:
+            repaired = json_repair.repair_json(accumulated_text, return_objects=True)
+            if isinstance(repaired, dict) and isinstance(repaired.get("meanings"), list):
+                repaired["status"] = "result"
+                repaired["_source"] = "ai"
+                repaired["elapsed"] = round(time.time() - start_time, 1)
+                if free_data:
+                    if not repaired.get("phonetic_uk") and phonetic_uk:
+                        repaired["phonetic_uk"] = phonetic_uk
+                    if not repaired.get("phonetic_us") and phonetic_us:
+                        repaired["phonetic_us"] = phonetic_us
+                    if not repaired.get("audio_url_uk") and audio_url:
+                        repaired["audio_url_uk"] = audio_url
+                    if not repaired.get("audio_url_us") and audio_url:
+                        repaired["audio_url_us"] = audio_url
+                current_json = json.dumps(repaired, ensure_ascii=False)
+                if current_json != last_yielded_json:
+                    yield current_json + "\n"
+        except Exception:
+            pass
     except Exception as e:
         print(f"[AI Stream Translation] Error: {e}")
         yield json.dumps({"error": str(e)}) + "\n"
@@ -1419,6 +1441,19 @@ async def lookup_dictionary_full_ai_stream(word: str):
                                 last_yielded_json = current_json
                     except Exception:
                         pass
+        
+        # Final absolute repair yield to ensure the client receives the complete results
+        try:
+            repaired = json_repair.repair_json(accumulated_text, return_objects=True)
+            if isinstance(repaired, dict) and "word" in repaired and isinstance(repaired.get("meanings"), list):
+                repaired["status"] = "result"
+                repaired["_source"] = "ai"
+                repaired["elapsed"] = round(time.time() - start_time, 1)
+                current_json = json.dumps(repaired, ensure_ascii=False)
+                if current_json != last_yielded_json:
+                    yield current_json + "\n"
+        except Exception:
+            pass
     except Exception as e:
         print(f"lookup_dictionary_full_ai_stream error: {e}")
         yield json.dumps({"word": word, "error": str(e)}) + "\n"
@@ -1486,7 +1521,7 @@ def lookup_dictionary(word: str):
     return result
 
 
-async def lookup_dictionary_stream(word: str, free_data: dict = None, wikipedia_data: dict = None):
+async def lookup_dictionary_stream(word: str, free_data: dict = None, wikipedia_data: dict = None, force_ai: bool = False):
     """
     Streaming version of hybrid dictionary lookup.
     Yields JSON chunks.
@@ -1502,18 +1537,25 @@ async def lookup_dictionary_stream(word: str, free_data: dict = None, wikipedia_
     connections = graph_service.get_word_connections(word.lower())
     graph_connections = connections.get("connections", [])
     
-    # Check cache first
-    cached = _cache_get(word)
-    if cached and is_data_complete(cached):
-        cached["_from_cache"] = True
-        cached["status"] = "result"
-        # Also try to get Wikipedia data if not cached
-        if not cached.get("wikipedia"):
-            wikipedia_data = lookup_wikipedia(word)
-            if wikipedia_data:
-                cached["wikipedia"] = wikipedia_data
-        yield json.dumps(cached, ensure_ascii=False)
-        return
+    # Check cache first (only if NOT forcing AI)
+    if not force_ai:
+        cached = _cache_get(word)
+        if cached and is_data_complete(cached):
+            cached["_from_cache"] = True
+            cached["status"] = "result"
+            # Also try to get Wikipedia data if not cached
+            if not cached.get("wikipedia"):
+                wikipedia_data = lookup_wikipedia(word)
+                if wikipedia_data:
+                    cached["wikipedia"] = wikipedia_data
+            yield json.dumps(cached, ensure_ascii=False)
+            return
+    else:
+        # Clear in-memory cache for this word to ensure it does not get served again
+        key = word.lower().strip()
+        with _cache_lock:
+            if key in _dict_cache:
+                del _dict_cache[key]
 
     # Step 1: Resolve Dependencies (Use provided or fetch)
     if not free_data:
