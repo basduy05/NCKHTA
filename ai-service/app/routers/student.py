@@ -1196,18 +1196,7 @@ async def dictionary_lookup(req: DictionaryRequest, authorization: str = Header(
                   except Exception as e:
                       print(f"[MEMORY CACHE] Update failed: {e}")
 
-              # 4) Send notification email to user (fire-and-forget)
-              try:
-                  user_email = user.get("email")
-                  user_name = user.get("name", "bạn")
-                  if user_email:
-                      auth_service.send_notification_email(
-                          user_email,
-                          f"Từ '{original}' đã được cập nhật",
-                          f"Chào {user_name},\n\nTừ '{original}' đã được tra cứu lại và dữ liệu mới đã được cập nhật vào hệ thống.\n\nTrân trọng,\nHệ thống iEdu"
-                      )
-              except Exception as e:
-                  print(f"[NOTIFY] Email send failed: {e}")
+
 
               # 5) Log to AI monitoring system
               try:
@@ -1246,6 +1235,9 @@ async def dictionary_lookup(req: DictionaryRequest, authorization: str = Header(
                         if isinstance(data, dict):
                             data["is_saved"] = is_saved
                             final_result_data = data # Capture the latest complete result
+                            # Debug: log captured data quality
+                            meanings = data.get("meanings", [])
+                            print(f"[STREAM DEBUG] Captured result: meanings_count={len(meanings)}, has_def_en={any(m.get('definition_en') for m in meanings)}")
                             chunk = json.dumps(data, ensure_ascii=False)
                     except Exception as e:
                         print(f"[STREAM PARSE ERROR] {e}")
