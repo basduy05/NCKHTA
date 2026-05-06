@@ -1040,9 +1040,11 @@ async def dictionary_lookup(req: DictionaryRequest, authorization: str = Header(
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, lookup_free_dictionary, lookup_key)
 
-    # 1) Parallel Lookup
-    cache_task = asyncio.create_task(check_local_cache())
-    local_row = await cache_task
+    # 1) Parallel Lookup (Only check local cache if NOT forcing AI)
+    local_row = None
+    if not req.force_ai:
+        cache_task = asyncio.create_task(check_local_cache())
+        local_row = await cache_task
 
     # 1.1) Fast Exit on local cache hit (only if NOT forcing AI)
     if not req.force_ai and local_row:
@@ -1195,10 +1197,8 @@ async def dictionary_lookup(req: DictionaryRequest, authorization: str = Header(
             
             # Save final parsed result if valid and complete
             if final_result_data and is_data_complete(final_result_data):
-                if background_tasks:
-                    background_tasks.add_task(_save_to_db_and_neo4j, lookup_key, word_original, final_result_data)
-                else:
-                    _save_to_db_and_neo4j(lookup_key, word_original, final_result_data)
+                print(f"[STREAM] Saving complete final_result_data for '{lookup_key}' to DB asynchronously...")
+                asyncio.create_task(asyncio.to_thread(_save_to_db_and_neo4j, lookup_key, word_original, final_result_data))
             else:
                 print(f"[STREAM] No complete final_result_data to save for '{lookup_key}'")
 
