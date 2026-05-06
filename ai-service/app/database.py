@@ -180,14 +180,19 @@ def get_db(retries=3):
                     else:
                         url_to_use = url_to_use.replace("libsql://", "https://")
                     
-                    try:
-                        conn = libsql.connect(url_to_use, auth_token=TURSO_AUTH_TOKEN)
-                    except (TypeError, Exception):
+                    if not HAS_LIBSQL_EXPERIMENTAL and os.name == 'nt':
+                        # Development fallback on Windows if libsql is not fully available
+                        print("[DB ERROR] Turso requested but libsql is missing on Windows, falling back to local SQLite.")
+                        conn = libsql.connect(DB_PATH)
+                    else:
                         try:
-                            conn = libsql.connect(url_to_use, authToken=TURSO_AUTH_TOKEN)
+                            conn = libsql.connect(url_to_use, auth_token=TURSO_AUTH_TOKEN)
                         except (TypeError, Exception):
-                            token_url = f"{url_to_use}?authToken={TURSO_AUTH_TOKEN}"
-                            conn = libsql.connect(token_url)
+                            try:
+                                conn = libsql.connect(url_to_use, authToken=TURSO_AUTH_TOKEN)
+                            except (TypeError, Exception):
+                                token_url = f"{url_to_use}?authToken={TURSO_AUTH_TOKEN}"
+                                conn = libsql.connect(token_url)
                 except Exception as e:
                     if online_db_only:
                         raise e
@@ -717,6 +722,29 @@ def init_db():
         )
     """)
     
+    # --- USER FEEDBACK TABLE ---
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS user_feedback (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            user_name TEXT,
+            feedback_type TEXT NOT NULL,
+            feature TEXT NOT NULL,
+            content TEXT NOT NULL,
+            status TEXT DEFAULT 'pending',
+            admin_note TEXT,
+            created_at TIMESTAMP DEFAULT (DATETIME('now', '+7 hours')),
+            FOREIGN KEY (user_id) REFERENCES users(id)
+        )
+    """)
+
+    # --- PERFORMANCE INDEXES FOR USER FEEDBACK ---
+    try:
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_user_feedback_user_id ON user_feedback(user_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_user_feedback_status ON user_feedback(status)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_user_feedback_created_at ON user_feedback(created_at DESC)")
+    except Exception: pass
+
     # --- MIGRATIONS FOR DICTIONARY CACHE ---
     try:
         cursor.execute("ALTER TABLE dictionary_cache ADD COLUMN word_original TEXT")

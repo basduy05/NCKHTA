@@ -4,6 +4,7 @@ import {
   Volume2, Sparkles, Brain, CheckCircle2, X, Info
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
+import FeedbackButton from "../../components/FeedbackButton";
 
 const IPA_DATA = {
   vowels: [
@@ -452,6 +453,8 @@ export default function IpaTab({ API_URL }: IpaTabProps) {
               )}
           </div>
       )}
+
+      <FeedbackButton feature="ipa" />
     </div>
   );
 }

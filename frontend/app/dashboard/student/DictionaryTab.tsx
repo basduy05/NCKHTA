@@ -2,12 +2,13 @@
 import React, { useState, useEffect, useRef } from "react";
 import { 
   Search, X, AlertCircle, Volume2, Bookmark, CheckCircle2, 
-  Star, Network, ArrowRight 
+  Star, Network, ArrowRight, RefreshCw 
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { 
   ALL_WORDS_DATABASE, getPosColor, POS_MAP 
 } from "../../components/DictionaryData";
+import FeedbackButton from "../../components/FeedbackButton";
 
 interface DictionaryTabProps {
   API_URL: string;
@@ -175,6 +176,31 @@ export default function DictionaryTab({ API_URL }: DictionaryTabProps) {
       setLoading(false);
       setResult(null);
     }
+  };
+
+  const reLookup = async () => {
+    if (!result?.word) return;
+    const currentWord = result.word;
+
+    // 1. Clear current result immediately
+    setResult(null);
+    setError(null);
+    setSaved(false);
+
+    // 2. Clear backend cache (best effort, don't block)
+    try {
+      await authFetch(`${API_URL}/student/dictionary/cache/${encodeURIComponent(currentWord)}`, {
+        method: "DELETE",
+      });
+    } catch (e) {
+      console.warn("Cache clear failed:", e);
+    }
+
+    // 3. Re-trigger lookup
+    setWord(currentWord);
+    setTimeout(() => {
+      lookup();
+    }, 100);
   };
 
   const saveWord = async () => {
@@ -348,6 +374,15 @@ export default function DictionaryTab({ API_URL }: DictionaryTabProps) {
                       result._source === "graph" ? "⚡ Từ Knowledge Graph" : "AI tra cứu"}
                   </span>
                 )}
+                {!loading && result.status !== "thinking" && (
+                  <button
+                    onClick={reLookup}
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-lg transition font-medium bg-white/20 hover:bg-white/30 text-white border border-white/20"
+                    title="Xoá cache và tra cứu lại bằng AI"
+                  >
+                    <RefreshCw size={15} /> Tra lại
+                  </button>
+                )}
                 <button
                   onClick={saveWord}
                   disabled={saving || saved}
@@ -513,6 +548,8 @@ export default function DictionaryTab({ API_URL }: DictionaryTabProps) {
           </div>
         </div>
       )}
+
+      <FeedbackButton feature="dictionary" />
     </div>
   );
 }

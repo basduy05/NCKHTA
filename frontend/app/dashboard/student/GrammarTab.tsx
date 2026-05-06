@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { useNotification } from "../../context/NotificationContext";
+import FeedbackButton from "../../components/FeedbackButton";
 
 interface GrammarTabProps {
   API_URL: string;
@@ -511,6 +512,8 @@ export default function GrammarTab({ API_URL }: GrammarTabProps) {
           </ul>
         )}
       </div>
+
+      <FeedbackButton feature="grammar" />
     </div>
   );
 }

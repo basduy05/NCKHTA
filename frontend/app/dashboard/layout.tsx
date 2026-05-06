@@ -3,7 +3,7 @@ import React, { Suspense } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams, useRouter } from "next/navigation";
 import Image from "next/image";
-import { BookOpen, Users, LayoutDashboard, Component, Database, GraduationCap, BookText, FileSearch, LogOut, Settings, ClipboardList, Sparkles, Search, BookMarked, Mic, Award, Trophy, TrendingUp } from "lucide-react";
+import { BookOpen, Users, LayoutDashboard, Component, Database, GraduationCap, BookText, FileSearch, LogOut, Settings, ClipboardList, Sparkles, Search, BookMarked, Mic, Award, Trophy, TrendingUp, MessageCircleWarning } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 
 function DashboardSidebar({ user, logout }: { user: any, logout: any }) {
@@ -27,6 +27,7 @@ function DashboardSidebar({ user, logout }: { user: any, logout: any }) {
       { name: "Sổ tay Từ Vựng (Graph)", href: "/dashboard/admin?tab=vocab", icon: Database, id: "vocab" },
       { name: "Kho Ngữ Pháp (AI)", href: "/dashboard/admin?tab=grammar", icon: BookText, id: "grammar" },
       { name: "Giám sát hiệu năng AI", href: "/dashboard/admin?tab=ai_monitoring", icon: TrendingUp, id: "ai_monitoring" },
+      { name: "Quản lý Góp ý & Lỗi", href: "/dashboard/admin?tab=feedback", icon: MessageCircleWarning, id: "feedback" },
       { name: "Cài đặt hệ thống", href: "/dashboard/admin?tab=settings", icon: Settings, id: "settings" },
     ];
   } else if (isTeacher) {

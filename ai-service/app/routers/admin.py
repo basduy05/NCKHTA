@@ -852,6 +852,118 @@ def test_neo4j():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
+# ─── USER FEEDBACK MANAGEMENT ────────────────────────────────────────────────
+
+@router.get("/feedback")
+def list_feedback(
+    status: str = "",
+    feature: str = "",
+    feedback_type: str = "",
+    limit: int = 50,
+    offset: int = 0
+):
+    """List all user feedback with optional filters."""
+    limit = max(1, min(limit, 200))
+    offset = max(0, offset)
+    
+    conn = get_db()
+    try:
+        conditions = []
+        params = []
+        
+        if status:
+            conditions.append("f.status = ?")
+            params.append(status)
+        if feature:
+            conditions.append("f.feature = ?")
+            params.append(feature)
+        if feedback_type:
+            conditions.append("f.feedback_type = ?")
+            params.append(feedback_type)
+        
+        where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+        
+        cursor = conn.execute(f"""
+            SELECT f.id, f.user_id, f.user_name, f.feedback_type, f.feature, 
+                   f.content, f.status, f.admin_note, f.created_at
+            FROM user_feedback f
+            {where_clause}
+            ORDER BY f.created_at DESC
+            LIMIT ? OFFSET ?
+        """, (*params, limit, offset))
+        items = [dict(row) for row in cursor.fetchall()]
+        
+        cursor = conn.execute(f"SELECT COUNT(*) FROM user_feedback f {where_clause}", params)
+        total = cursor.fetchone()[0]
+        
+        cursor = conn.execute("""
+            SELECT 
+                COUNT(*) as total,
+                SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending,
+                SUM(CASE WHEN status = 'reviewed' THEN 1 ELSE 0 END) as reviewed,
+                SUM(CASE WHEN status = 'resolved' THEN 1 ELSE 0 END) as resolved,
+                SUM(CASE WHEN feedback_type = 'bug_report' THEN 1 ELSE 0 END) as bugs,
+                SUM(CASE WHEN feedback_type = 'suggestion' THEN 1 ELSE 0 END) as suggestions
+            FROM user_feedback
+        """)
+        stats = dict(cursor.fetchone())
+        
+        conn.close()
+        return {"items": items, "total": total, "stats": stats}
+    except Exception as e:
+        if conn: conn.close()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class FeedbackUpdateRequest(BaseModel):
+    status: Optional[str] = None
+    admin_note: Optional[str] = None
+
+@router.put("/feedback/{feedback_id}")
+def update_feedback(feedback_id: int, data: FeedbackUpdateRequest):
+    """Update feedback status or add admin note."""
+    conn = get_db()
+    try:
+        fields = []
+        values = []
+        
+        if data.status:
+            if data.status not in ('pending', 'reviewed', 'resolved', 'rejected'):
+                raise HTTPException(status_code=400, detail="Invalid status")
+            fields.append("status = ?")
+            values.append(data.status)
+        if data.admin_note is not None:
+            fields.append("admin_note = ?")
+            values.append(data.admin_note)
+        
+        if not fields:
+            conn.close()
+            return {"message": "No fields to update"}
+        
+        values.append(feedback_id)
+        conn.execute(f"UPDATE user_feedback SET {', '.join(fields)} WHERE id = ?", tuple(values))
+        conn.commit()
+        conn.close()
+        return {"message": "Feedback updated"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        if conn: conn.close()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.delete("/feedback/{feedback_id}")
+def delete_feedback(feedback_id: int):
+    """Delete a feedback item."""
+    conn = get_db()
+    try:
+        conn.execute("DELETE FROM user_feedback WHERE id = ?", (feedback_id,))
+        conn.commit()
+        conn.close()
+        return {"message": "Feedback deleted"}
+    except Exception as e:
+        if conn: conn.close()
+        raise HTTPException(status_code=500, detail=str(e))
 @router.post("/settings/gemini-models")
 def list_gemini_models():
     """List Gemini models that support generateContent using the configured API key."""

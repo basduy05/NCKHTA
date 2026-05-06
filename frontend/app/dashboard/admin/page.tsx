@@ -1,7 +1,7 @@
 "use client";
 import { useState, Suspense, useEffect, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { Users, Database, Plus, UploadCloud, FileSpreadsheet, Save, Edit, Trash2, GraduationCap, X, Check, Copy, BookOpen, BookText, Settings, RefreshCw, Mail, Eye, EyeOff, Sparkles, ClipboardList, Bold, Italic, Underline, Heading1, Heading2, List, ListOrdered, TrendingUp, Network, Activity } from "lucide-react";
+import { Users, Database, Plus, UploadCloud, FileSpreadsheet, Save, Edit, Trash2, GraduationCap, X, Check, Copy, BookOpen, BookText, Settings, RefreshCw, Mail, Eye, EyeOff, Sparkles, ClipboardList, Bold, Italic, Underline, Heading1, Heading2, List, ListOrdered, TrendingUp, Network, Activity, MessageCircleWarning, Bug, Lightbulb, CheckCircle, Clock } from "lucide-react";
 import { useAuth } from "@/app/context/AuthContext";
 import { useNotification } from "@/app/context/NotificationContext";
 
@@ -47,6 +47,7 @@ function AdminDashboardContent() {
           {activeTab === 'assignments' && 'Quản lý Bài tập & Đề thi'}
           {activeTab === 'grammar' && 'Kho Ngữ Pháp (AI)'}
           {activeTab === 'ai_monitoring' && 'Giám sát hiệu năng AI'}
+          {activeTab === 'feedback' && 'Quản lý Góp ý & Lỗi'}
           {activeTab === 'settings' && 'Cài đặt hệ thống'}
         </h1>
       </div>
@@ -59,6 +60,7 @@ function AdminDashboardContent() {
       {activeTab === 'assignments' && <AssignmentsTab />}
       {activeTab === 'grammar' && <GrammarTab />}
       {activeTab === 'ai_monitoring' && <AILogsTab />}
+      {activeTab === 'feedback' && <FeedbackTab />}
       {activeTab === 'settings' && <SettingsTab />}
     </div>
   );
@@ -1443,6 +1445,313 @@ function SettingsTab() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ==========================================
+// FEEDBACK MANAGEMENT TAB
+// ==========================================
+function FeedbackTab() {
+  const { token, isInitialized, authFetch } = useAuth();
+  const { showAlert, showConfirm } = useNotification();
+  const [items, setItems] = useState<any[]>([]);
+  const [stats, setStats] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  
+  // Filters
+  const [filterStatus, setFilterStatus] = useState("");
+  const [filterType, setFilterType] = useState("");
+  
+  // Detail modal
+  const [selectedItem, setSelectedItem] = useState<any>(null);
+  const [adminNote, setAdminNote] = useState("");
+  const [savingNote, setSavingNote] = useState(false);
+
+  const fetchFeedback = async () => {
+    if (!token) return;
+    setLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (filterStatus) params.append("status", filterStatus);
+      if (filterType) params.append("feedback_type", filterType);
+      
+      const res = await authFetch(`${API_URL}/admin/feedback?${params.toString()}`);
+      if (!res.ok) throw new Error("Failed to fetch");
+      const data = await res.json();
+      setItems(data.items || []);
+      setStats(data.stats || null);
+    } catch (e) {
+      console.error(e);
+      showAlert("Lỗi khi tải danh sách góp ý", "error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isInitialized && token) {
+      fetchFeedback();
+    }
+  }, [isInitialized, token, filterStatus, filterType]);
+
+  const updateStatus = async (id: number, newStatus: string) => {
+    if (!token) return;
+    try {
+      const res = await authFetch(`${API_URL}/admin/feedback/${id}`, {
+        method: "PUT",
+        body: JSON.stringify({ status: newStatus })
+      });
+      if (res.ok) {
+        showAlert("Đã cập nhật trạng thái", "success");
+        fetchFeedback();
+        if (selectedItem?.id === id) {
+          setSelectedItem({ ...selectedItem, status: newStatus });
+        }
+      }
+    } catch (e) {
+      showAlert("Lỗi khi cập nhật trạng thái", "error");
+    }
+  };
+
+  const saveAdminNote = async () => {
+    if (!selectedItem || !token) return;
+    setSavingNote(true);
+    try {
+      const res = await authFetch(`${API_URL}/admin/feedback/${selectedItem.id}`, {
+        method: "PUT",
+        body: JSON.stringify({ admin_note: adminNote })
+      });
+      if (res.ok) {
+        showAlert("Đã lưu ghi chú", "success");
+        setSelectedItem({ ...selectedItem, admin_note: adminNote });
+        fetchFeedback();
+      }
+    } catch (e) {
+      showAlert("Lỗi khi lưu ghi chú", "error");
+    } finally {
+      setSavingNote(false);
+    }
+  };
+
+  const handleDelete = async (id: number) => {
+    if (!token) return;
+    if (!(await showConfirm("Bạn có chắc muốn xoá phản hồi này không?"))) return;
+    try {
+      const res = await authFetch(`${API_URL}/admin/feedback/${id}`, { method: "DELETE" });
+      if (res.ok) {
+        showAlert("Đã xoá phản hồi", "success");
+        if (selectedItem?.id === id) setSelectedItem(null);
+        fetchFeedback();
+      }
+    } catch (e) {
+      showAlert("Lỗi khi xoá", "error");
+    }
+  };
+
+  const featureLabels: Record<string, string> = {
+    dictionary: "Tra từ điển",
+    grammar: "Ngữ pháp",
+    ipa: "Phát âm IPA",
+    practice: "Luyện thi",
+    "ai-tools": "Công cụ AI",
+    vocabulary: "Từ vựng"
+  };
+
+  const statusColors: Record<string, string> = {
+    pending: "bg-amber-100 text-amber-700 border-amber-200",
+    reviewed: "bg-blue-100 text-blue-700 border-blue-200",
+    resolved: "bg-green-100 text-green-700 border-green-200",
+    rejected: "bg-gray-100 text-gray-700 border-gray-200"
+  };
+
+  const statusLabels: Record<string, string> = {
+    pending: "Chờ xử lý",
+    reviewed: "Đang xem xét",
+    resolved: "Đã xử lý xong",
+    rejected: "Từ chối"
+  };
+
+  return (
+    <div className="space-y-6 animate-in fade-in duration-300">
+      {/* Stats Cards */}
+      {stats && (
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center">
+            <div className="p-3 bg-amber-50 rounded-xl mr-4"><MessageCircleWarning className="text-amber-500" size={24} /></div>
+            <div><p className="text-sm font-medium text-gray-500">Tổng phản hồi</p><h3 className="text-2xl font-bold">{stats.total}</h3></div>
+          </div>
+          <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center">
+            <div className="p-3 bg-red-50 rounded-xl mr-4"><Bug className="text-red-500" size={24} /></div>
+            <div><p className="text-sm font-medium text-gray-500">Báo lỗi</p><h3 className="text-2xl font-bold">{stats.bugs}</h3></div>
+          </div>
+          <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center">
+            <div className="p-3 bg-green-50 rounded-xl mr-4"><CheckCircle className="text-green-500" size={24} /></div>
+            <div><p className="text-sm font-medium text-gray-500">Đã xử lý</p><h3 className="text-2xl font-bold">{stats.resolved}</h3></div>
+          </div>
+          <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center">
+            <div className="p-3 bg-orange-50 rounded-xl mr-4"><Lightbulb className="text-orange-500" size={24} /></div>
+            <div><p className="text-sm font-medium text-gray-500">Góp ý</p><h3 className="text-2xl font-bold">{stats.suggestions}</h3></div>
+          </div>
+        </div>
+      )}
+
+      {/* Main Content */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col md:flex-row min-h-[600px]">
+        {/* List Section */}
+        <div className="w-full md:w-1/2 lg:w-2/3 border-r border-gray-100 flex flex-col">
+          <div className="p-4 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between">
+            <h2 className="font-bold text-gray-900 flex items-center gap-2">
+              <MessageCircleWarning size={18} className="text-amber-500" /> Danh sách phản hồi
+            </h2>
+            <div className="flex gap-2">
+              <select 
+                className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 outline-none focus:border-amber-400"
+                value={filterType} onChange={e => setFilterType(e.target.value)}
+              >
+                <option value="">Tất cả loại</option>
+                <option value="bug_report">Báo lỗi</option>
+                <option value="suggestion">Góp ý</option>
+              </select>
+              <select 
+                className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 outline-none focus:border-amber-400"
+                value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
+              >
+                <option value="">Tất cả TT</option>
+                <option value="pending">Chờ xử lý</option>
+                <option value="reviewed">Đang xem xét</option>
+                <option value="resolved">Đã giải quyết</option>
+              </select>
+              <button onClick={fetchFeedback} className="p-1.5 text-gray-500 hover:bg-gray-200 rounded-lg transition"><RefreshCw size={16} /></button>
+            </div>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50/30">
+            {loading ? (
+              <div className="text-center p-10 text-gray-400">Đang tải dữ liệu...</div>
+            ) : items.length === 0 ? (
+              <div className="text-center p-10 text-gray-400">Không có phản hồi nào phù hợp.</div>
+            ) : (
+              items.map(item => (
+                <div 
+                  key={item.id} 
+                  onClick={() => { setSelectedItem(item); setAdminNote(item.admin_note || ""); }}
+                  className={`bg-white p-4 rounded-xl border cursor-pointer transition shadow-sm ${selectedItem?.id === item.id ? 'border-amber-400 ring-1 ring-amber-400/50' : 'border-gray-200 hover:border-amber-300'}`}
+                >
+                  <div className="flex justify-between items-start mb-2">
+                    <div className="flex items-center gap-2">
+                      {item.feedback_type === 'bug_report' ? (
+                        <span className="bg-red-100 text-red-700 px-2 py-0.5 rounded text-[10px] font-bold uppercase flex items-center gap-1 border border-red-200"><Bug size={10} /> Lỗi</span>
+                      ) : (
+                        <span className="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded text-[10px] font-bold uppercase flex items-center gap-1 border border-emerald-200"><Lightbulb size={10} /> Góp ý</span>
+                      )}
+                      <span className="text-xs font-semibold text-gray-500 bg-gray-100 px-2 py-0.5 rounded">{featureLabels[item.feature] || item.feature}</span>
+                    </div>
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold border uppercase tracking-wider ${statusColors[item.status]}`}>
+                      {statusLabels[item.status]}
+                    </span>
+                  </div>
+                  <p className="text-gray-900 text-sm font-medium line-clamp-2 mb-2 leading-relaxed">{item.content}</p>
+                  <div className="flex justify-between items-center text-xs text-gray-400 mt-3 pt-3 border-t border-gray-50">
+                    <span className="flex items-center gap-1.5"><Users size={12} /> {item.user_name || `User #${item.user_id}`}</span>
+                    <span className="flex items-center gap-1.5"><Clock size={12} /> {new Date(item.created_at).toLocaleString('vi-VN')}</span>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* Detail Section */}
+        <div className="w-full md:w-1/2 lg:w-1/3 bg-white flex flex-col h-full">
+          {selectedItem ? (
+            <>
+              <div className="p-5 border-b border-gray-100 bg-gradient-to-br from-amber-50 to-orange-50">
+                <div className="flex justify-between items-start mb-3">
+                  <h3 className="font-bold text-gray-900 text-lg flex items-center gap-2">
+                    {selectedItem.feedback_type === 'bug_report' ? <Bug className="text-red-500" size={20} /> : <Lightbulb className="text-amber-500" size={20} />}
+                    Chi tiết phản hồi #{selectedItem.id}
+                  </h3>
+                  <button onClick={() => setSelectedItem(null)} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
+                </div>
+                
+                <div className="flex flex-col gap-2 text-sm mt-4">
+                  <div className="flex justify-between items-center bg-white/60 p-2 rounded-lg border border-white">
+                    <span className="text-gray-500 font-medium">Trạng thái:</span>
+                    <select 
+                      value={selectedItem.status}
+                      onChange={(e) => updateStatus(selectedItem.id, e.target.value)}
+                      className={`text-xs font-bold rounded-md px-2 py-1 outline-none border ${statusColors[selectedItem.status]}`}
+                    >
+                      <option value="pending">Chờ xử lý</option>
+                      <option value="reviewed">Đang xem xét</option>
+                      <option value="resolved">Đã giải quyết</option>
+                      <option value="rejected">Từ chối</option>
+                    </select>
+                  </div>
+                  <div className="flex justify-between items-center bg-white/60 p-2 rounded-lg border border-white">
+                    <span className="text-gray-500 font-medium">Người gửi:</span>
+                    <span className="font-semibold text-gray-900">{selectedItem.user_name} (ID: {selectedItem.user_id})</span>
+                  </div>
+                  <div className="flex justify-between items-center bg-white/60 p-2 rounded-lg border border-white">
+                    <span className="text-gray-500 font-medium">Chức năng:</span>
+                    <span className="font-semibold text-gray-900">{featureLabels[selectedItem.feature] || selectedItem.feature}</span>
+                  </div>
+                  <div className="flex justify-between items-center bg-white/60 p-2 rounded-lg border border-white">
+                    <span className="text-gray-500 font-medium">Thời gian:</span>
+                    <span className="font-semibold text-gray-900">{new Date(selectedItem.created_at).toLocaleString('vi-VN')}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-5 space-y-6 bg-white">
+                <div>
+                  <h4 className="text-sm font-bold text-gray-700 mb-2 uppercase tracking-wide">Nội dung người dùng gửi</h4>
+                  <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 text-gray-800 text-sm whitespace-pre-wrap leading-relaxed shadow-inner">
+                    {selectedItem.content}
+                  </div>
+                </div>
+
+                <div>
+                  <h4 className="text-sm font-bold text-gray-700 mb-2 uppercase tracking-wide flex items-center justify-between">
+                    <span>Ghi chú nội bộ (Admin)</span>
+                    <button 
+                      onClick={saveAdminNote}
+                      disabled={savingNote || adminNote === (selectedItem.admin_note || "")}
+                      className="text-xs bg-indigo-50 text-indigo-600 px-3 py-1 rounded-md font-semibold hover:bg-indigo-100 transition disabled:opacity-50"
+                    >
+                      {savingNote ? "Đang lưu..." : "Lưu ghi chú"}
+                    </button>
+                  </h4>
+                  <textarea
+                    value={adminNote}
+                    onChange={(e) => setAdminNote(e.target.value)}
+                    placeholder="Ghi chú quá trình xử lý, nguyên nhân lỗi... (Chỉ admin xem được)"
+                    className="w-full h-32 border border-gray-200 rounded-xl p-3 text-sm text-gray-700 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition resize-none bg-indigo-50/20"
+                  />
+                </div>
+                
+                <div className="pt-4 border-t border-gray-100 flex justify-end">
+                  <button 
+                    onClick={() => handleDelete(selectedItem.id)}
+                    className="flex items-center gap-1.5 text-sm text-red-500 hover:text-red-700 font-medium px-4 py-2 hover:bg-red-50 rounded-lg transition"
+                  >
+                    <Trash2 size={16} /> Xoá phản hồi này
+                  </button>
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="flex-1 flex flex-col items-center justify-center p-10 text-center text-gray-400 bg-gray-50/50">
+              <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mb-4 border-4 border-white shadow-sm">
+                <MessageCircleWarning size={32} className="text-gray-300" />
+              </div>
+              <h3 className="font-bold text-gray-600 mb-1 text-lg">Chưa chọn phản hồi</h3>
+              <p className="text-sm text-gray-400 max-w-[200px]">Chọn một phản hồi từ danh sách bên trái để xem chi tiết và xử lý.</p>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

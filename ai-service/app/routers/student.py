@@ -913,6 +913,75 @@ async def analyze_text(req: TextAnalysisRequest, authorization: str = Header(...
     return {"error": "Failed to analyze text", "detail": result.get("error") if isinstance(result, dict) else "Unknown error"}
 
 
+# ─── USER FEEDBACK / BUG REPORT ───────────────────────────────────────────────
+
+class FeedbackRequest(BaseModel):
+    feedback_type: str  # 'suggestion' or 'bug_report'
+    feature: str        # 'dictionary', 'grammar', 'ipa', 'practice', 'ai-tools', 'vocabulary'
+    content: str
+
+@router.post("/feedback")
+def submit_feedback(req: FeedbackRequest, authorization: str = Header(...)):
+    """Submit user feedback or bug report."""
+    student = _get_current_student(authorization)
+    
+    if not req.content.strip():
+        raise HTTPException(status_code=400, detail="Nội dung không được để trống")
+    if len(req.content) > 2000:
+        raise HTTPException(status_code=400, detail="Nội dung quá dài (tối đa 2000 ký tự)")
+    
+    conn = get_db()
+    try:
+        conn.execute(
+            """INSERT INTO user_feedback (user_id, user_name, feedback_type, feature, content)
+               VALUES (?, ?, ?, ?, ?)""",
+            (student["id"], student["name"], req.feedback_type, req.feature, req.content.strip())
+        )
+        conn.commit()
+        conn.close()
+        return {"status": "success", "message": "Cảm ơn bạn đã gửi góp ý!"}
+    except Exception as e:
+        if conn: conn.close()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ─── DICTIONARY CACHE CLEAR (for re-lookup) ──────────────────────────────────
+
+@router.delete("/dictionary/cache/{word}")
+def clear_dictionary_cache(word: str, authorization: str = Header(...)):
+    """Clear cached dictionary data for a word to force AI re-lookup."""
+    _get_current_student(authorization)  # Auth check
+    
+    word_lower = word.lower().strip()
+    conn = get_db()
+    try:
+        # 1. Clear from SQLite cache
+        cursor = conn.execute("DELETE FROM dictionary_cache WHERE word = ?", (word_lower,))
+        deleted_rows = cursor.rowcount
+        conn.commit()
+        conn.close()
+        
+        # 2. Clear from Neo4j graph cache (best effort)
+        try:
+            g = graph_service.get_graph()
+            if g:
+                g.query(
+                    "MATCH (d:DictionaryCache {word: $word}) DETACH DELETE d",
+                    params={"word": word_lower}
+                )
+        except Exception as neo4j_err:
+            print(f"[DICT CACHE] Neo4j clear failed for '{word}': {neo4j_err}")
+        
+        return {
+            "status": "success", 
+            "message": f"Đã xoá cache cho '{word}'",
+            "deleted": deleted_rows > 0
+        }
+    except Exception as e:
+        if conn: conn.close()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ─── DICTIONARY LOOKUP ────────────────────────────────────────────────────────
 
 class DictionaryRequest(BaseModel):
