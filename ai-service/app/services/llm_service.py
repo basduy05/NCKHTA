@@ -121,32 +121,21 @@ def is_data_complete(data: dict) -> bool:
     Returns False if data is missing critical information and should be re-looked up.
     
     NOTE: This function decides whether cached data is "complete enough" to use.
-    We should be lenient - core data (meanings with translations) is essential,
-    but additional fields (idioms, collocations, register) can be enriched later."""
+    We should be lenient - as long as we have meanings with translations and phonetics,
+    the data is complete enough to cache and use. This prevents infinite re-lookups."""
     if not data or not isinstance(data, dict):
         return False
     meanings = data.get("meanings", [])
     if not meanings or len(meanings) == 0:
         return False
         
-    # Check that ALL meanings have VN translation, EN definition, and examples (CRITICAL)
-    missing_vn = any(not m.get("definition_vn") for m in meanings)
-    missing_en = any(not m.get("definition_en") for m in meanings)
-    missing_examples = any(not m.get("examples") or len(m.get("examples", [])) == 0 for m in meanings)
+    # Check that at least one meaning has VN translation and EN definition
+    has_valid_meaning = any(m.get("definition_vn") and m.get("definition_en") for m in meanings)
     
     # Check phonetics (important)
     has_phonetic = bool(data.get("phonetic_uk") or data.get("phonetic_us"))
     
-    # Level is helpful but not required for basic functionality
-    has_level = bool(data.get("level") and data.get("level") in ("A1", "A2", "B1", "B2", "C1", "C2"))
-    
-    # Additional fields (idioms, collocations, register) - these are ENRICHMENT, not required
-    # Don't block caching just because these are missing - they can be added later
-    # Old cached data without these fields should still be usable
-    
-    # CORE REQUIREMENTS: meanings with translations + examples + phonetic
-    # These are the minimum for a usable dictionary entry
-    return (not missing_vn) and (not missing_en) and (not missing_examples) and has_phonetic
+    return has_valid_meaning and has_phonetic
 
 # ─── REQUEST QUEUING (SEMAPHORE) ───────────────────────────────────────────
 

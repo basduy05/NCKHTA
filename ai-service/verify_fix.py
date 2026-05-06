@@ -29,8 +29,7 @@ async def test_fallback():
         return False
 
 if __name__ == "__main__":
-    loop = asyncio.get_event_loop()
-    success = loop.run_until_complete(test_fallback())
+    success = asyncio.run(test_fallback())
     if success:
         print("\nVerification PASSED: Fallback mechanism is working correctly.")
         sys.exit(0)

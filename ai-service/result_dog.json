@@ -1,0 +1,175 @@
+{
+  "word": "dog",
+  "phonetic_uk": "/dɒɡ/",
+  "phonetic_us": "/dɔːɡ/",
+  "audio_url_uk": "https://dictionaryapi.dev/media/pronunciations/uk/dog-uk.mp3",
+  "audio_url_us": "https://dictionaryapi.dev/media/pronunciations/us/dog-us.mp3",
+  "meanings": [
+    {
+      "pos": "noun",
+      "definition_en": "A domesticated mammal (Canis familiaris) kept as a pet or for work, known for its loyalty and varied breeds.",
+      "definition_vn": "Một loài động vật có vú được thuần hóa (Canis familiaris), được nuôi làm thú cưng hoặc để làm việc, nổi tiếng với sự trung thành và nhiều giống khác nhau.",
+      "examples": [
+        "The dog barked at the mailman. | Con chó sủa người đưa thư.",
+        "She adopted a rescue dog from the shelter. | Cô ấy nhận nuôi một con chó từ trại cứu hộ."
+      ],
+      "synonyms": [
+        "canine",
+        "pooch",
+        "mutt",
+        "pup",
+        "hound"
+      ],
+      "antonyms": [
+        "cat",
+        "bird"
+      ],
+      "register": "neutral",
+      "usage_notes": "Common in everyday language, referring to domestic dogs."
+    },
+    {
+      "pos": "noun",
+      "definition_en": "A member of the family Canidae, including wolves, foxes, and other wild canids.",
+      "definition_vn": "Một thành viên của họ Canidae, bao gồm sói, cáo và các loài họ chó hoang dã khác.",
+      "examples": [
+        "Wolves are wild dogs. | Sói là loài chó hoang dã.",
+        "The fox is a small dog-like animal. | Cáo là một loài động vật giống chó nhỏ."
+      ],
+      "synonyms": [
+        "canid",
+        "wild dog",
+        "jackal",
+        "coyote"
+      ],
+      "antonyms": [],
+      "register": "technical",
+      "usage_notes": "Used in biological or zoological contexts."
+    },
+    {
+      "pos": "noun",
+      "definition_en": "A derogatory term for a woman considered unattractive or unpleasant.",
+      "definition_vn": "Một từ miệt thị để chỉ một người phụ nữ được coi là không hấp dẫn hoặc khó chịu.",
+      "examples": [
+        "She called her rival a dog. | Cô ấy gọi đối thủ của mình là con chó.",
+        "Don’t be such a dog to your friends. | Đừng đối xử tệ với bạn bè như vậy."
+      ],
+      "synonyms": [
+        "bitch",
+        "hag",
+        "harpy"
+      ],
+      "antonyms": [
+        "beauty",
+        "angel"
+      ],
+      "register": "slang",
+      "usage_notes": "Highly offensive and inappropriate in most contexts."
+    },
+    {
+      "pos": "noun",
+      "definition_en": "A mechanical device with a tooth-like projection used for holding or fastening.",
+      "definition_vn": "Một thiết bị cơ khí có phần nhô ra giống răng được sử dụng để giữ hoặc cố định.",
+      "examples": [
+        "The dog on the winch prevented the cable from slipping. | Con chó trên cần trục ngăn không cho cáp trượt.",
+        "He tightened the dog to secure the clamp. | Anh ấy siết chặt con chó để cố định kẹp."
+      ],
+      "synonyms": [
+        "clamp",
+        "pawl",
+        "fastener",
+        "grip"
+      ],
+      "antonyms": [],
+      "register": "technical",
+      "usage_notes": "Used in engineering or mechanical contexts."
+    },
+    {
+      "pos": "noun",
+      "definition_en": "A slang term for a man, often implying foolishness or dishonesty.",
+      "definition_vn": "Một từ lóng để chỉ đàn ông, thường ngụ ý sự ngu ngốc hoặc không trung thực.",
+      "examples": [
+        "He’s a sly dog. | Anh ta là một kẻ gian xảo.",
+        "Stop acting like a foolish dog. | Đừng hành động như một kẻ ngu ngốc."
+      ],
+      "synonyms": [
+        "dude",
+        "guy",
+        "fellow",
+        "bloke"
+      ],
+      "antonyms": [
+        "gentleman",
+        "saint"
+      ],
+      "register": "slang",
+      "usage_notes": "Informal and often used humorously or derogatorily."
+    },
+    {
+      "pos": "verb",
+      "definition_en": "To pursue or follow persistently, often in an annoying or harassing manner.",
+      "definition_vn": "Đuổi theo hoặc theo dõi một cách dai dẳng, thường theo cách phiền nhiễu hoặc quấy rối.",
+      "examples": [
+        "The detective dogged the suspect’s trail. | Thám tử theo dõi dấu vết của nghi phạm.",
+        "Misfortune seemed to dog him throughout his life. | Xui xẻo dường như theo đuổi anh ta suốt cuộc đời."
+      ],
+      "synonyms": [
+        "pursue",
+        "follow",
+        "harass",
+        "hound"
+      ],
+      "antonyms": [
+        "ignore",
+        "abandon"
+      ],
+      "register": "neutral",
+      "usage_notes": "Common in both literal and figurative contexts."
+    }
+  ],
+  "level": "B1",
+  "frequency": "very common",
+  "word_family": [
+    "doggy",
+    "dogged",
+    "doghouse",
+    "dogmatic",
+    "dogcatcher",
+    "dogfight",
+    "doggedly"
+  ],
+  "collocations": [
+    "dog food | thức ăn cho chó",
+    "dog park | công viên dành cho chó",
+    "dog trainer | huấn luyện viên chó",
+    "dog license | giấy phép nuôi chó",
+    "dog breed | giống chó"
+  ],
+  "idioms": [
+    {
+      "idiom": "every dog has its day",
+      "meaning_vn": "Mỗi người sẽ có lúc thành công.",
+      "example": "Don’t worry, every dog has its day. | Đừng lo, mỗi người sẽ có lúc thành công."
+    },
+    {
+      "idiom": "let sleeping dogs lie",
+      "meaning_vn": "Đừng động đến vấn đề nhạy cảm.",
+      "example": "I decided to let sleeping dogs lie and not bring up the argument. | Tôi quyết định không động đến vấn đề nhạy cảm và không nhắc lại cuộc tranh cãi."
+    },
+    {
+      "idiom": "dog-eat-dog",
+      "meaning_vn": "Cạnh tranh khốc liệt, không khoan nhượng.",
+      "example": "The business world is a dog-eat-dog environment. | Thế giới kinh doanh là môi trường cạnh tranh khốc liệt."
+    }
+  ],
+  "notes": "The word 'dog' has a wide range of meanings, from literal references to domesticated animals to figurative and slang uses. Care should be taken when using derogatory or offensive meanings.",
+  "sources": [
+    "Cambridge Dictionary",
+    "Oxford Advanced Learner's Dictionary",
+    "Merriam-Webster",
+    "Longman",
+    "Urban Dictionary"
+  ],
+  "status": "result",
+  "_source": "ai",
+  "elapsed": 29.7
+}

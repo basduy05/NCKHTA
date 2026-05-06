@@ -169,7 +169,7 @@ function UsersTab() {
 
     const interval = setInterval(() => {
       fetchUsers();
-    }, 15000);
+    }, 5000);
 
     const handleVisibility = () => {
       if (document.visibilityState === "visible") {
@@ -380,7 +380,7 @@ function ClassesTab() {
 
     const interval = setInterval(() => {
       fetchClasses();
-    }, 15000);
+    }, 5000);
 
     const handleVisibility = () => {
       if (document.visibilityState === "visible") {
@@ -545,7 +545,7 @@ function LessonsTab() {
     const interval = setInterval(() => {
       fetchLessons();
       fetchClasses();
-    }, 15000);
+    }, 5000);
 
     const handleVisibility = () => {
       if (document.visibilityState === "visible") {
@@ -1564,7 +1564,7 @@ function FeedbackTab() {
 
       const interval = setInterval(() => {
         fetchFeedback(true);
-      }, 15000);
+      }, 5000);
 
       const handleVisibility = () => {
         if (document.visibilityState === "visible") {
@@ -1866,7 +1866,7 @@ function AssignmentsTab() {
 
     const interval = setInterval(() => {
       fetchData();
-    }, 15000);
+    }, 5000);
 
     const handleVisibility = () => {
       if (document.visibilityState === "visible") {
