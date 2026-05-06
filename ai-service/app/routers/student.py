@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Header, Query, UploadFile, File, Form, BackgroundTasks, Response
-from ..database import get_db
+from ..database import get_db, log_ai_request
 from ..services import auth_service, llm_service, graph_service, file_service
 from pydantic import BaseModel
 from typing import Optional, List
@@ -961,8 +961,14 @@ def clear_dictionary_cache(word: str, authorization: str = Header(...)):
         deleted_rows = cursor.rowcount
         conn.commit()
         conn.close()
-        
-        # 2. Clear from Neo4j graph cache (best effort)
+
+        # 2. Clear from memory cache (in-memory LRU cache)
+        with llm_service._cache_lock:
+            if word_lower in llm_service._dict_cache:
+                del llm_service._dict_cache[word_lower]
+                print(f"[CACHE CLEAR] Memory cache cleared for '{word_lower}'")
+
+        # 3. Clear from Neo4j graph cache (best effort)
         try:
             from ..services.graph_service import _safe_query
             _safe_query(
@@ -1118,60 +1124,107 @@ async def dictionary_lookup(req: DictionaryRequest, authorization: str = Header(
     
     # We will use StreamingResponse to stream the AI output to the client.
     # 3) Save to SQLite + Neo4j asynchronously AFTER the stream finishes successfully
-    def _save_to_db_and_neo4j(key, original, data):
-        # Save to SQLite dictionary_cache
-        try:
-            mc = len(data.get("meanings", []))
-            c = get_db()
-            try:
-                c.execute(
-                    """INSERT OR REPLACE INTO dictionary_cache (word, word_original, data_json, meanings_count, updated_at)
-                       VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)""",
-                    (key, original, json.dumps(data, ensure_ascii=False), mc)
-                )
-                c.commit()
-            finally:
-                c.close()
-            print(f"[DB SAVE] dictionary_cache success for: {key}")
-        except Exception as e:
-            print(f"[DB SAVE] dictionary_cache error: {e}")
+    def _save_to_db_and_neo4j(key, original, data, latency_ms=0):
+         saved_success = False
+         # Save to SQLite dictionary_cache
+         try:
+             mc = len(data.get("meanings", []))
+             c = get_db()
+             try:
+                 c.execute(
+                     """INSERT OR REPLACE INTO dictionary_cache (word, word_original, data_json, meanings_count, updated_at)
+                        VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)""",
+                     (key, original, json.dumps(data, ensure_ascii=False), mc)
+                 )
+                 c.commit()
+                 saved_success = True
+             finally:
+                 c.close()
+             print(f"[DB SAVE] dictionary_cache success for: {key}")
+         except Exception as e:
+             print(f"[DB SAVE] dictionary_cache error: {e}")
 
-        # Save meanings to Neo4j
-        try:
-            all_synonyms = []
-            all_antonyms = []
-            primary_meaning_en = ""
-            primary_meaning_vn = ""
-            primary_pos = data.get("pos", "")
-            
-            for i, meaning in enumerate(data.get("meanings", [])):
-                if i == 0:
-                    primary_meaning_en = meaning.get("definition_en", "")
-                    primary_meaning_vn = meaning.get("definition_vn", "")
-                    primary_pos = meaning.get("pos", primary_pos)
-                all_synonyms.extend(meaning.get("synonyms", []))
-                all_antonyms.extend(meaning.get("antonyms", []))
-            
-            graph_service.save_word_to_graph({
-                "word": key.lower(),
-                "phonetic": data.get("phonetic_uk", ""),
-                "audio_url": data.get("audio_url", ""),
-                "pos": primary_pos,
-                "meaning_en": primary_meaning_en,
-                "meaning_vn": primary_meaning_vn,
-                "example": (data.get("meanings", [{}])[0].get("examples") or [""])[0].split("|")[0] if data.get("meanings") else "",
-                "level": data.get("level", "B1"),
-                "word_family": data.get("word_family", []),
-                "collocations": data.get("collocations", []),
-                "idioms": data.get("idioms", []),
-                "synonyms": list(set(all_synonyms))[:5],
-                "antonyms": list(set(all_antonyms))[:3],
-            })
-            
-            # Save full raw JSON to Neo4j for persistent caching
-            graph_service.set_dictionary_cache(key.lower(), data)
-        except Exception as e:
-            print(f"[Neo4j SAVE] error: {e}")
+         # Save meanings to Neo4j
+         try:
+             all_synonyms = []
+             all_antonyms = []
+             primary_meaning_en = ""
+             primary_meaning_vn = ""
+             primary_pos = data.get("pos", "")
+             
+             for i, meaning in enumerate(data.get("meanings", [])):
+                 if i == 0:
+                     primary_meaning_en = meaning.get("definition_en", "")
+                     primary_meaning_vn = meaning.get("definition_vn", "")
+                     primary_pos = meaning.get("pos", primary_pos)
+                 all_synonyms.extend(meaning.get("synonyms", []))
+                 all_antonyms.extend(meaning.get("antonyms", []))
+             
+             graph_service.save_word_to_graph({
+                 "word": key.lower(),
+                 "phonetic": data.get("phonetic_uk", ""),
+                 "audio_url": data.get("audio_url", ""),
+                 "pos": primary_pos,
+                 "meaning_en": primary_meaning_en,
+                 "meaning_vn": primary_meaning_vn,
+                 "example": (data.get("meanings", [{}])[0].get("examples") or [""])[0].split("|")[0] if data.get("meanings") else "",
+                 "level": data.get("level", "B1"),
+                 "word_family": data.get("word_family", []),
+                 "collocations": data.get("collocations", []),
+                 "idioms": data.get("idioms", []),
+                 "synonyms": list(set(all_synonyms))[:5],
+                 "antonyms": list(set(all_antonyms))[:3],
+             })
+             
+             # Save full raw JSON to Neo4j for persistent caching
+             graph_service.set_dictionary_cache(key.lower(), data)
+         except Exception as e:
+             print(f"[Neo4j SAVE] error: {e}")
+
+          # Post-save actions only if DB save succeeded
+         if saved_success:
+              # Determine completeness once
+              is_complete = llm_service.is_data_complete(data)
+
+              # 3) Update in-memory cache ONLY if data is complete (to avoid polluting cache with partial data)
+              if is_complete:
+                  try:
+                      norm_key = key.lower().strip()
+                      with llm_service._cache_lock:
+                          llm_service._dict_cache[norm_key] = {"data": data, "ts": time.time()}
+                      print(f"[MEMORY CACHE] Updated for '{norm_key}'")
+                  except Exception as e:
+                      print(f"[MEMORY CACHE] Update failed: {e}")
+
+              # 4) Send notification email to user (fire-and-forget)
+              try:
+                  user_email = user.get("email")
+                  user_name = user.get("name", "bạn")
+                  if user_email:
+                      auth_service.send_notification_email(
+                          user_email,
+                          f"Từ '{original}' đã được cập nhật",
+                          f"Chào {user_name},\n\nTừ '{original}' đã được tra cứu lại và dữ liệu mới đã được cập nhật vào hệ thống.\n\nTrân trọng,\nHệ thống iEdu"
+                      )
+              except Exception as e:
+                  print(f"[NOTIFY] Email send failed: {e}")
+
+              # 5) Log to AI monitoring system
+              try:
+                  log_ai_request(
+                      user_id=user["id"],
+                      endpoint="dictionary/lookup",
+                      model="AI Stream",
+                      difficulty="easy",
+                      latency_ms=latency_ms,
+                      status="success" if is_complete else "partial",
+                      feature="Dictionary Re-Lookup",
+                      response_content=json.dumps(data, ensure_ascii=False)[:500]
+                  )
+              except Exception as e:
+                  print(f"[MONITOR] Log failed: {e}")
+
+
 
     # We will use StreamingResponse to stream the AI output to the client.
     async def stream_generator():
@@ -1181,7 +1234,8 @@ async def dictionary_lookup(req: DictionaryRequest, authorization: str = Header(
             is_saved = cursor.fetchone() is not None
             
             final_result_data = None
-            
+            stream_start = time.time()
+
             async for chunk in llm_service.lookup_dictionary_stream(lookup_key, free_data=free_data, wikipedia_data=wikipedia_data, force_ai=req.force_ai):
                 if not chunk: continue
                 # We can inject is_saved into result chunks
@@ -1198,12 +1252,12 @@ async def dictionary_lookup(req: DictionaryRequest, authorization: str = Header(
                 
                 yield f"data: {chunk}\n\n"
             
-            # Save final parsed result if valid and complete
-            if final_result_data and is_data_complete(final_result_data):
-                print(f"[STREAM] Saving complete final_result_data for '{lookup_key}' to DB asynchronously...")
-                asyncio.create_task(asyncio.to_thread(_save_to_db_and_neo4j, lookup_key, word_original, final_result_data))
+            # Save final parsed result if available (always attempt to save on re-lookup)
+            if final_result_data:
+                print(f"[STREAM] Saving final_result_data for '{lookup_key}' to DB asynchronously...")
+                asyncio.create_task(asyncio.to_thread(_save_to_db_and_neo4j, lookup_key, word_original, final_result_data, int((time.time() - stream_start) * 1000)))
             else:
-                print(f"[STREAM] No complete final_result_data to save for '{lookup_key}'")
+                print(f"[STREAM] No final_result_data to save for '{lookup_key}'")
 
         except Exception as e:
             print(f"Dictionary STREAM error: {e}")
