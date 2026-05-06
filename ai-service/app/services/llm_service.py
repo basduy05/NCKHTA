@@ -423,33 +423,23 @@ def _safe_invoke(chain, params: dict, difficulty: str = "medium", retries: int =
         except Exception as e:
             last_error = e
             error_str = str(e).lower()
+            provider_name = "Gemini" if "google" in error_str or "gemini" in error_str else ("OpenAI" if "openai" in error_str else "Unknown")
+            print(f"[LLM ERROR] {provider_name} Failed. Error: {e}. Falling back to Cohere...")
+            mark_provider_failed(provider_name)
             
-            # 429 = Quota, 401/403 = Auth, INVALID_ARGUMENT = expired key
-            is_quota_error = any(k in error_str for k in ["quota", "rate_limit", "429", "too many requests", "resource_exhausted"])
-            is_auth_error = any(k in error_str for k in ["api_key", "unauthorized", "expired", "401", "403", "forbidden", "invalid_argument", "api key expired"])
-            
-            if is_auth_error or is_quota_error:
-                provider_name = "Gemini" if "google" in error_str or "gemini" in error_str else ("OpenAI" if "openai" in error_str else "Unknown")
-                reason = "Quota" if is_quota_error else "Auth"
-                print(f"[LLM ERROR] {provider_name} {reason} Failed. Error: {e}. Marking provider as temporarily failed.")
-                mark_provider_failed(provider_name)
+            fallback_llm = get_llm(provider="cohere")
+            if fallback_llm:
+                # Reconstruct chain if it's a pipe-style sequence
+                fallback_chain = (chain.first | fallback_llm) if hasattr(chain, 'first') else fallback_llm
+                res = fallback_chain.invoke(params)
+                fallback_latency = int((time.time() - start_time) * 1000)
                 
-                # Fallback to Cohere immediately
-                fallback_llm = get_llm(provider="cohere")
-                if fallback_llm:
-                    print(f"[LLM] Falling back to Cohere due to {reason} error...")
-                    # Reconstruct chain if it's a pipe-style sequence
-                    fallback_chain = (chain.first | fallback_llm) if hasattr(chain, 'first') else fallback_llm
-                    res = fallback_chain.invoke(params)
-                    fallback_latency = int((time.time() - start_time) * 1000)
-                    
-                    log_ai_request(None, "invoke_fallback", "command-r-08-2024", difficulty, fallback_latency, "fallback", error_str, feature=feature, response_content=res.content)
-                    # TRIGGER REFEREE EVALUATION (Background)
-                    trigger_evaluation(None, "invoke_fallback", params, res.content, "command-r-08-2024", feature)
-                    return res
-            else:
-                print(f"[LLM ERROR] Unexpected error on attempt {attempt+1}: {e}")
+                log_ai_request(None, "invoke_fallback", "command-r-08-2024", difficulty, fallback_latency, "fallback", error_str, feature=feature, response_content=res.content)
+                # TRIGGER REFEREE EVALUATION (Background)
+                trigger_evaluation(None, "invoke_fallback", params, res.content, "command-r-08-2024", feature)
+                return res
             
+            print(f"[LLM ERROR] Unexpected error on attempt {attempt+1}: {e}")
             if attempt < retries:
                 time.sleep(RETRY_DELAY)
     latency = int((time.time() - start_time) * 1000)
@@ -513,38 +503,32 @@ async def _safe_invoke_async(chain, params: dict, difficulty: str = "medium", re
         except Exception as e:
             last_error = e
             error_str = str(e).lower()
-            is_auth_error = any(k in error_str for k in ["api_key", "unauthorized", "expired", "401", "403", "forbidden", "404", "not_found", "not found"])
-            is_quota_error = any(k in error_str for k in ["quota", "rate_limit", "429", "too many requests", "resource_exhausted", "limit exceeded"])
+            provider_name = "Gemini" if "google" in error_str or "gemini" in error_str else ("OpenAI" if "openai" in error_str else "Unknown")
+            print(f"[LLM ERROR] {provider_name} Failed (Async). Error: {e}. Falling back to Cohere...")
+            mark_provider_failed(provider_name)
             
-            if is_auth_error or is_quota_error:
-                provider_name = "Gemini" if "google" in error_str or "gemini" in error_str else ("OpenAI" if "openai" in error_str else "Unknown")
-                reason = "Quota" if is_quota_error else "Auth"
-                print(f"[LLM ERROR] {provider_name} {reason} Failed (Async). Error: {e}. Marking as failed.")
-                mark_provider_failed(provider_name)
+            fallback_llm = get_llm(provider="cohere")
+            if fallback_llm:
+                fallback_chain = (chain.first | fallback_llm) if hasattr(chain, 'first') else fallback_llm
+                res = None
+                if hasattr(fallback_chain, 'ainvoke'):
+                    res = await fallback_chain.ainvoke(params)
+                else:
+                    res = await asyncio.to_thread(fallback_chain.invoke, params)
+                fallback_latency = int((time.time() - start_time) * 1000)
                 
-                fallback_llm = get_llm(provider="cohere")
-                if fallback_llm:
-                    print(f"[LLM] Falling back to Cohere (Async) due to {reason} error...")
-                    fallback_chain = (chain.first | fallback_llm) if hasattr(chain, 'first') else fallback_llm
-                    res = None
-                    if hasattr(fallback_chain, 'ainvoke'):
-                        res = await fallback_chain.ainvoke(params)
-                    else:
-                        res = await asyncio.to_thread(fallback_chain.invoke, params)
-                    fallback_latency = int((time.time() - start_time) * 1000)
-                    
-                    log_ai_request(None, "ainvoke_fallback", "command-r-08-2024", difficulty, fallback_latency, "fallback", error_str, feature=feature, response_content=res.content)
-                    
-                    # TRIGGER REFEREE EVALUATION (Background)
-                    trigger_evaluation(None, "ainvoke_fallback", params, res.content, "command-r-08-2024", feature)
-                    
-                    # Store warning
-                    warning = "> [!CAUTION]\n> **Cảnh báo:** API Key Gemini của bạn đã hết hạn hoặc hết hạn mức. Hệ thống sử dụng AI dự phòng với chất lượng thấp hơn. Vui lòng cập nhật API Key mới.\n\n"
-                    if res:
-                        setattr(res, '_warning', warning)
-                    return res
-            else:
-                print(f"[LLM ERROR] Unexpected async error on attempt {attempt+1}: {e}")
+                log_ai_request(None, "ainvoke_fallback", "command-r-08-2024", difficulty, fallback_latency, "fallback", error_str, feature=feature, response_content=res.content)
+                
+                # TRIGGER REFEREE EVALUATION (Background)
+                trigger_evaluation(None, "ainvoke_fallback", params, res.content, "command-r-08-2024", feature)
+                
+                # Store warning
+                warning = "> [!CAUTION]\n> **Cảnh báo:** API Key Gemini của bạn đã hết hạn hoặc hết hạn mức. Hệ thống sử dụng AI dự phòng với chất lượng thấp hơn. Vui lòng cập nhật API Key mới.\n\n"
+                if res:
+                    setattr(res, '_warning', warning)
+                return res
+            
+            print(f"[LLM ERROR] Unexpected async error on attempt {attempt+1}: {e}")
             
             if attempt < retries:
                 await asyncio.sleep(RETRY_DELAY)
@@ -577,26 +561,20 @@ async def _safe_astream(chain, params, difficulty: str = "medium", feature: str 
             
     except Exception as e:
         error_str = str(e).lower()
-        # 404 NOT_FOUND can happen if model name is wrong or unavailable
-        is_auth_error = any(k in error_str for k in ["api_key", "unauthorized", "expired", "401", "403", "forbidden", "404", "not_found", "not found", "invalid_argument", "api key expired"])
-        is_quota_error = any(k in error_str for k in ["quota", "429", "rate_limit", "resource_exhausted", "limit exceeded"])
+        provider_name = "Gemini" if "google" in error_str or "gemini" in error_str else "OpenAI"
+        print(f"[LLM ERROR] {provider_name} Failed (Stream). Error: {e}. Falling back to Cohere...")
+        mark_provider_failed(provider_name)
         
-        if is_auth_error or is_quota_error:
-            reason = "Auth/404" if is_auth_error else "Quota"
-            provider_name = "Gemini" if "google" in error_str or "gemini" in error_str else "OpenAI"
-            mark_provider_failed(provider_name)
+        fallback_llm = get_llm(provider="cohere")
+        if fallback_llm:
+            # Reconstruct chain
+            fallback_chain = (chain.first | fallback_llm) if hasattr(chain, 'first') else fallback_llm
+            async for chunk in fallback_chain.astream(params):
+                yield chunk
             
-            fallback_llm = get_llm(provider="cohere")
-            if fallback_llm:
-                print(f"[LLM] Falling back to Cohere (Stream) due to {reason} error: {e}")
-                # Reconstruct chain
-                fallback_chain = (chain.first | fallback_llm) if hasattr(chain, 'first') else fallback_llm
-                async for chunk in fallback_chain.astream(params):
-                    yield chunk
-                
-                latency = int((time.time() - start_time) * 1000)
-                log_ai_request(None, "astream_fallback", "command-r-08-2024", difficulty, latency, "fallback", error_str, feature=feature)
-                return
+            latency = int((time.time() - start_time) * 1000)
+            log_ai_request(None, "astream_fallback", "command-r-08-2024", difficulty, latency, "fallback", error_str, feature=feature)
+            return
         
         latency = int((time.time() - start_time) * 1000)
         log_ai_request(None, "astream_error", model_name, difficulty, latency, "error", str(e), feature=feature)
@@ -1148,20 +1126,14 @@ async def translate_meanings_with_ai_stream(word: str, meanings: list, free_data
                 for chunk in chain_to_use.stream(params):
                     yield chunk.content
         except Exception as e:
-            error_str = str(e).lower()
-            is_quota = any(k in error_str for k in ["quota", "rate_limit", "resource_exhausted", "429", "too many requests", "503", "403", "404", "forbidden", "not found"])
-            is_auth = any(k in error_str for k in ["api_key", "unauthorized", "invalid", "api key", "expired"])
-            
-            if is_quota or is_auth:
-                if llm_name == "Primary":
-                    reason = "quota exceeded" if is_quota else "API key invalid/expired"
-                    print(f"[LLM ERROR] Primary LLM {reason} in stream. Falling back to Cohere...")
-                    fallback_llm = get_llm(provider="cohere")
-                    if fallback_llm and hasattr(chain_to_use, 'first'):
-                        fallback_chain = chain_to_use.first | fallback_llm
-                        async for c in _safe_stream_invoke(fallback_chain, params, llm_name="Cohere"):
-                            yield c
-                        return
+            if llm_name == "Primary":
+                print(f"[LLM ERROR] Primary LLM failed in stream with error: {e}. Falling back to Cohere...")
+                fallback_llm = get_llm(provider="cohere")
+                if fallback_llm and hasattr(chain_to_use, 'first'):
+                    fallback_chain = chain_to_use.first | fallback_llm
+                    async for c in _safe_stream_invoke(fallback_chain, params, llm_name="Cohere"):
+                        yield c
+                    return
             raise e
 
     try:
@@ -1297,19 +1269,11 @@ def lookup_dictionary_full_ai(word: str):
         try:
             response = _safe_invoke(chain, {"word": word}, difficulty="easy", feature="Full Dictionary Lookup")
         except Exception as e:
-            error_str = str(e).lower()
-            is_quota = any(k in error_str for k in ["quota", "rate_limit", "resource_exhausted", "429", "too many requests", "403", "404", "forbidden", "not found"])
-            is_auth = any(k in error_str for k in ["api_key", "unauthorized", "invalid", "api key", "expired"])
-            
-            if is_quota or is_auth:
-                reason = "quota exceeded" if is_quota else "API key invalid/expired"
-                print(f"[LLM ERROR] Primary LLM {reason}: {e}. Retrying with Cohere in lookup_full...")
-                fallback_llm = get_llm(provider="cohere")
-                if fallback_llm:
-                    chain = prompt | fallback_llm
-                    response = _safe_invoke(chain, {"word": word}, feature="Full Dictionary Lookup")
-                else:
-                    raise e
+            print(f"[LLM ERROR] Primary LLM failed in lookup_full with error: {e}. Retrying with Cohere...")
+            fallback_llm = get_llm(provider="cohere")
+            if fallback_llm:
+                chain = prompt | fallback_llm
+                response = _safe_invoke(chain, {"word": word}, feature="Full Dictionary Lookup")
             else:
                 raise e
 
@@ -1376,20 +1340,14 @@ async def lookup_dictionary_full_ai_stream(word: str):
                 for chunk in chain_to_use.stream(params):
                     yield chunk.content
         except Exception as e:
-            error_str = str(e).lower()
-            is_quota = any(k in error_str for k in ["quota", "rate_limit", "resource_exhausted", "429", "too many requests", "503", "403", "404", "forbidden", "not found"])
-            is_auth = any(k in error_str for k in ["api_key", "unauthorized", "invalid", "api key", "expired"])
-            
-            if is_quota or is_auth:
-                if llm_name == "Primary":
-                    reason = "quota exceeded" if is_quota else "API key invalid/expired"
-                    print(f"[LLM ERROR] Primary LLM {reason} in stream. Falling back to Cohere...")
-                    fallback_llm = get_llm(provider="cohere")
-                    if fallback_llm and hasattr(chain_to_use, 'first'):
-                        fallback_chain = chain_to_use.first | fallback_llm
-                        async for c in _safe_stream_invoke(fallback_chain, params, llm_name="Cohere"):
-                            yield c
-                        return
+            if llm_name == "Primary":
+                print(f"[LLM ERROR] Primary LLM failed in stream with error: {e}. Falling back to Cohere...")
+                fallback_llm = get_llm(provider="cohere")
+                if fallback_llm and hasattr(chain_to_use, 'first'):
+                    fallback_chain = chain_to_use.first | fallback_llm
+                    async for c in _safe_stream_invoke(fallback_chain, params, llm_name="Cohere"):
+                        yield c
+                    return
             raise e
 
     try:
