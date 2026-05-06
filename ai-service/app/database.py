@@ -180,9 +180,9 @@ def get_db(retries=3):
                     else:
                         url_to_use = url_to_use.replace("libsql://", "https://")
                     
-                    if not HAS_LIBSQL_EXPERIMENTAL and os.name == 'nt':
-                        # Development fallback on Windows if libsql is not fully available
-                        print("[DB ERROR] Turso requested but libsql is missing on Windows, falling back to local SQLite.")
+                    if not HAS_LIBSQL_EXPERIMENTAL:
+                        # Development fallback if libsql is not fully available
+                        print("[DB ERROR] Turso requested but libsql is missing, falling back to local SQLite.")
                         conn = libsql.connect(DB_PATH)
                     else:
                         try:
