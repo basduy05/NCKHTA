@@ -1,6 +1,0 @@
-try:
-    from app import main
-    print("Main app imported OK!")
-except Exception as e:
-    import traceback
-    traceback.print_exc()
