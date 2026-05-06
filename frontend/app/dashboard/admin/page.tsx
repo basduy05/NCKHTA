@@ -166,6 +166,22 @@ function UsersTab() {
   useEffect(() => {
     if (!isInitialized || !token) return;
     fetchUsers();
+
+    const interval = setInterval(() => {
+      fetchUsers();
+    }, 15000);
+
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        fetchUsers();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
   }, [isInitialized, token]);
 
   const handleSaveUser = async () => {
@@ -173,17 +189,21 @@ function UsersTab() {
     if (!formUser.name || !formUser.email) return showAlert("Vui lòng điền đủ thông tin!", 'warning');
     try {
       if (isEditing !== null) {
-        await authFetch(
+        const res = await authFetch(
           `${API_URL}/admin/users/${isEditing}`,
           { method: "PUT", body: JSON.stringify(formUser) }
         );
+        const payload = await res.json().catch(() => ({}));
+        if (!res.ok) return showAlert(payload.detail || "Lỗi cập nhật người dùng", 'error');
+        showAlert("Cập nhật người dùng thành công!", 'success');
       } else {
         const res = await authFetch(
           `${API_URL}/admin/users`,
           { method: "POST", body: JSON.stringify(formUser) }
         );
-        const payload = await res.json();
+        const payload = await res.json().catch(() => ({}));
         if (!res.ok) return showAlert(payload.detail || "Lỗi tạo người dùng", 'error');
+        showAlert("Tạo người dùng mới thành công!", 'success');
       }
       resetForm();
       fetchUsers();
@@ -195,8 +215,18 @@ function UsersTab() {
   const handleDeleteUser = async (id: number) => {
     if (!token) return;
     if (await showConfirm("Bạn có chắc chắn xoá người dùng này?")) {
-      await authFetch(`${API_URL}/admin/users/${id}`, { method: "DELETE" });
-      fetchUsers();
+      try {
+        const res = await authFetch(`${API_URL}/admin/users/${id}`, { method: "DELETE" });
+        if (res.ok) {
+          showAlert("Xoá người dùng thành công!", "success");
+          fetchUsers();
+        } else {
+          const payload = await res.json().catch(() => ({}));
+          showAlert(payload.detail || "Lỗi khi xoá người dùng", "error");
+        }
+      } catch (err) {
+        showAlert("Lỗi kết nối", 'error');
+      }
     }
   };
 
@@ -345,7 +375,25 @@ function ClassesTab() {
     }
   };
 
-  useEffect(() => { fetchClasses(); }, [token]);
+  useEffect(() => {
+    fetchClasses();
+
+    const interval = setInterval(() => {
+      fetchClasses();
+    }, 15000);
+
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        fetchClasses();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, [token]);
 
   const handleSave = async () => {
     if (!formClass.name || !formClass.teacher_name) return showAlert("Điền đủ thông tin!", 'warning');
@@ -490,7 +538,28 @@ function LessonsTab() {
     try { const res = await authFetch(`${API_URL}/admin/classes`); if (!res.ok) throw new Error(`API error ${res.status}`); const data = await res.json(); setClasses(Array.isArray(data) ? data : []); } catch { }
   };
 
-  useEffect(() => { fetchLessons(); fetchClasses(); }, []);
+  useEffect(() => {
+    fetchLessons();
+    fetchClasses();
+
+    const interval = setInterval(() => {
+      fetchLessons();
+      fetchClasses();
+    }, 15000);
+
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        fetchLessons();
+        fetchClasses();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, []);
 
   const handleSave = async () => {
     if (!formLesson.class_id || !formLesson.title) return showAlert("Hãy chọn lớp và nhập tên bài học", 'warning');
@@ -1468,9 +1537,9 @@ function FeedbackTab() {
   const [adminNote, setAdminNote] = useState("");
   const [savingNote, setSavingNote] = useState(false);
 
-  const fetchFeedback = async () => {
+  const fetchFeedback = async (isSilent = false) => {
     if (!token) return;
-    setLoading(true);
+    if (!isSilent) setLoading(true);
     try {
       const params = new URLSearchParams();
       if (filterStatus) params.append("status", filterStatus);
@@ -1483,15 +1552,31 @@ function FeedbackTab() {
       setStats(data.stats || null);
     } catch (e) {
       console.error(e);
-      showAlert("Lỗi khi tải danh sách góp ý", "error");
+      if (!isSilent) showAlert("Lỗi khi tải danh sách góp ý", "error");
     } finally {
-      setLoading(false);
+      if (!isSilent) setLoading(false);
     }
   };
 
   useEffect(() => {
     if (isInitialized && token) {
       fetchFeedback();
+
+      const interval = setInterval(() => {
+        fetchFeedback(true);
+      }, 15000);
+
+      const handleVisibility = () => {
+        if (document.visibilityState === "visible") {
+          fetchFeedback(true);
+        }
+      };
+      document.addEventListener("visibilitychange", handleVisibility);
+
+      return () => {
+        clearInterval(interval);
+        document.removeEventListener("visibilitychange", handleVisibility);
+      };
     }
   }, [isInitialized, token, filterStatus, filterType]);
 
@@ -1622,7 +1707,7 @@ function FeedbackTab() {
                 <option value="reviewed">Đang xem xét</option>
                 <option value="resolved">Đã giải quyết</option>
               </select>
-              <button onClick={fetchFeedback} className="p-1.5 text-gray-500 hover:bg-gray-200 rounded-lg transition"><RefreshCw size={16} /></button>
+              <button onClick={() => fetchFeedback()} className="p-1.5 text-gray-500 hover:bg-gray-200 rounded-lg transition"><RefreshCw size={16} /></button>
             </div>
           </div>
 
@@ -1776,7 +1861,25 @@ function AssignmentsTab() {
     finally { setLoading(false); }
   };
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => {
+    fetchData();
+
+    const interval = setInterval(() => {
+      fetchData();
+    }, 15000);
+
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        fetchData();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, []);
 
   const handleSave = async () => {
     if (!form.class_id || !form.title) return showAlert("Vui lòng nhập tên bài tập và chọn lớp.", 'warning');

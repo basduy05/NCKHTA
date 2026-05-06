@@ -1060,7 +1060,11 @@ async def dictionary_lookup(req: DictionaryRequest, authorization: str = Header(
     neo4j_task = asyncio.create_task(check_neo4j())
     free_dict_task = asyncio.create_task(check_free_dict())
     
-    neo4j_data, free_data = await asyncio.gather(neo4j_task, free_dict_task)
+    try:
+        neo4j_data, free_data = await asyncio.gather(neo4j_task, free_dict_task)
+    except Exception as e:
+        print(f"[LOOKUP DEBUG] asyncio.gather cache error: {e}")
+        neo4j_data, free_data = None, None
     wikipedia_data = None  # Initialize to avoid NameError
 
     # 2.1) Process Results (Neo4j and other caches)

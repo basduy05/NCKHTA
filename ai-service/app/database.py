@@ -744,6 +744,19 @@ def init_db():
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_user_feedback_status ON user_feedback(status)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_user_feedback_created_at ON user_feedback(created_at DESC)")
     except Exception: pass
+    
+    # --- MIGRATION FOR USER FEEDBACK ---
+    try:
+        cursor.execute("ALTER TABLE user_feedback RENAME COLUMN type TO feedback_type")
+    except Exception: pass
+    
+    try:
+        cursor.execute("ALTER TABLE user_feedback RENAME COLUMN admin_notes TO admin_note")
+    except Exception: pass
+
+    try:
+        cursor.execute("ALTER TABLE user_feedback ADD COLUMN user_name TEXT")
+    except Exception: pass
 
     # --- MIGRATIONS FOR DICTIONARY CACHE ---
     try:
