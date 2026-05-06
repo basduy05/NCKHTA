@@ -118,24 +118,17 @@ def _cache_set(word: str, data: dict):
 
 def is_data_complete(data: dict) -> bool:
     """Check if dictionary data has all required fields filled.
-    Returns False if data is missing critical information and should be re-looked up.
-    
-    NOTE: This function decides whether cached data is "complete enough" to use.
-    We should be lenient - as long as we have meanings with translations and phonetics,
-    the data is complete enough to cache and use. This prevents infinite re-lookups."""
+    Lenient check: as long as we have meanings with definitions, it's valid to save.
+    This prevents strict phonetic or minor field missing issues from blocking DB saves."""
     if not data or not isinstance(data, dict):
         return False
     meanings = data.get("meanings", [])
     if not meanings or len(meanings) == 0:
         return False
         
-    # Check that at least one meaning has VN translation and EN definition
-    has_valid_meaning = any(m.get("definition_vn") and m.get("definition_en") for m in meanings)
-    
-    # Check phonetics (important)
-    has_phonetic = bool(data.get("phonetic_uk") or data.get("phonetic_us"))
-    
-    return has_valid_meaning and has_phonetic
+    # Check that at least one meaning has EN definition
+    has_valid_meaning = any(m.get("definition_en") for m in meanings)
+    return has_valid_meaning
 
 # ─── REQUEST QUEUING (SEMAPHORE) ───────────────────────────────────────────
 

@@ -1187,11 +1187,14 @@ async def dictionary_lookup(req: DictionaryRequest, authorization: str = Header(
                 # We can inject is_saved into result chunks
                 if '"status": "result"' in chunk:
                     try:
-                        data = json.loads(chunk)
-                        data["is_saved"] = is_saved
-                        final_result_data = data # Capture the latest complete result
-                        chunk = json.dumps(data, ensure_ascii=False)
-                    except: pass
+                        import json_repair
+                        data = json_repair.repair_json(chunk, return_objects=True)
+                        if isinstance(data, dict):
+                            data["is_saved"] = is_saved
+                            final_result_data = data # Capture the latest complete result
+                            chunk = json.dumps(data, ensure_ascii=False)
+                    except Exception as e:
+                        print(f"[STREAM PARSE ERROR] {e}")
                 
                 yield f"data: {chunk}\n\n"
             
