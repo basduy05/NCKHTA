@@ -267,7 +267,7 @@ export default function DictionaryTab({ API_URL }: DictionaryTabProps) {
             )}
           </div>
           <button
-            onClick={lookup}
+            onClick={() => lookup(false)}
             disabled={loading || !word.trim()}
             className="btn-primary py-3.5 px-8 rounded-xl flex items-center gap-2 shadow-md disabled:opacity-50 transition text-lg"
           >
