@@ -1649,8 +1649,8 @@ async def student_upload_analyze(
 def get_grammar_rules(authorization: str = Header(...)):
     _get_current_student(authorization)
     conn = get_db()
-    cursor = conn.execute("SELECT id, name, description, file_name, created_at FROM grammar_rules ORDER BY id DESC")
-    results = cursor.fetchall()
+    cursor = conn.execute("SELECT id, name, description, file_name, created_at, COALESCE(level, 'B1') as level FROM grammar_rules ORDER BY name ASC")
+    results = [dict(row) for row in cursor.fetchall()]
     conn.close()
     return results
 

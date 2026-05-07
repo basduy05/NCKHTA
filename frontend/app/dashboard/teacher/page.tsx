@@ -335,52 +335,96 @@ function ClassesTab() {
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex justify-between items-center">
-        <p className="text-gray-500">{classes.length} lớp học</p>
+    <div className="space-y-6 animate-in fade-in duration-300">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-2xl font-black text-gray-900">Lớp học của tôi</h2>
+          <p className="text-gray-400 font-medium mt-1">{classes.length} lớp đang quản lý</p>
+        </div>
         <button onClick={() => { setShowForm(true); setEditId(null); setFormName(""); }}
-          className="btn-primary flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700">
-          <Plus size={18} /> Tạo lớp mới
+          className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-indigo-600 text-white hover:bg-indigo-700 font-black shadow-lg shadow-indigo-200 transition-all active:scale-95">
+          <Plus size={20} /> Tạo lớp mới
         </button>
       </div>
 
       {showForm && (
-        <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
-          <h3 className="font-bold mb-4">{editId ? "Sửa lớp học" : "Tạo lớp mới"}</h3>
+        <div className="bg-white p-8 rounded-3xl border border-gray-100 shadow-xl animate-in slide-in-from-top-4 duration-300">
+          <h3 className="font-black text-xl text-gray-900 mb-6">{editId ? "Sửa lớp học" : "Tạo lớp học mới"}</h3>
           <div className="flex gap-3">
-            <input value={formName} onChange={e => setFormName(e.target.value)} placeholder="Tên lớp học"
-              className="flex-1 border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none" />
-            <button onClick={handleSave} className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 flex items-center gap-1">
-              <Check size={16} /> Lưu
+            <input value={formName} onChange={e => setFormName(e.target.value)} placeholder="Tên lớp học (ví dụ: Lớp Anh Văn A1 — 2024)"
+              className="flex-1 border-2 border-gray-100 focus:border-indigo-400 rounded-2xl p-4 outline-none font-bold text-gray-700 transition-all shadow-sm" />
+            <button onClick={handleSave} className="px-6 py-3 bg-indigo-600 text-white rounded-2xl hover:bg-indigo-700 font-black flex items-center gap-2 shadow-sm transition-all active:scale-95">
+              <Check size={18} /> Lưu
             </button>
-            <button onClick={() => setShowForm(false)} className="px-4 py-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200">
-              <X size={16} />
+            <button onClick={() => setShowForm(false)} className="px-4 py-3 bg-gray-100 text-gray-600 rounded-2xl hover:bg-gray-200 transition-all">
+              <X size={18} />
             </button>
           </div>
         </div>
       )}
 
-      {loading ? <p>Đang tải...</p> : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {classes.map((c: any) => (
-            <div key={c.id} className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition">
-              <div className="flex justify-between items-start mb-4">
-                <div>
-                  <h3 className="font-bold text-gray-900 text-lg">{c.name}</h3>
-                  <p className="text-sm text-gray-500 mt-1">GV: {c.teacher_name}</p>
+      {loading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {Array(3).fill(0).map((_, i) => <div key={i} className="h-48 bg-gray-100 rounded-3xl animate-pulse" />)}
+        </div>
+      ) : classes.length === 0 ? (
+        <div className="bg-white rounded-3xl border border-dashed border-gray-300 p-16 text-center">
+          <div className="bg-indigo-50 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <GraduationCap size={32} className="text-indigo-400" />
+          </div>
+          <h3 className="font-black text-gray-400 text-xl">Chưa có lớp học nào</h3>
+          <p className="text-gray-400 mt-2 font-medium">Nhấn "Tạo lớp mới" để bắt đầu.</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {classes.map((c: any, idx: number) => {
+            const colors = [
+              { bg: "from-indigo-500 to-purple-600", light: "bg-indigo-50", text: "text-indigo-600" },
+              { bg: "from-blue-500 to-cyan-600", light: "bg-blue-50", text: "text-blue-600" },
+              { bg: "from-emerald-500 to-teal-600", light: "bg-emerald-50", text: "text-emerald-600" },
+              { bg: "from-orange-500 to-amber-600", light: "bg-orange-50", text: "text-orange-600" },
+              { bg: "from-pink-500 to-rose-600", light: "bg-pink-50", text: "text-pink-600" },
+              { bg: "from-violet-500 to-indigo-600", light: "bg-violet-50", text: "text-violet-600" },
+            ];
+            const color = colors[idx % colors.length];
+            return (
+              <div key={c.id} className="group bg-white rounded-3xl border border-gray-100 shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden">
+                <div className={`bg-gradient-to-br ${color.bg} p-6 text-white relative overflow-hidden`}>
+                  <div className="absolute top-0 right-0 w-20 h-20 bg-white/10 rounded-full -mr-6 -mt-6"></div>
+                  <div className="flex justify-between items-start">
+                    <div className="bg-white/20 p-3 rounded-2xl w-fit">
+                      <GraduationCap size={24} />
+                    </div>
+                    <div className="flex gap-1.5">
+                      <button onClick={() => { setShowForm(true); setEditId(c.id); setFormName(c.name); }}
+                        className="p-2 bg-white/20 hover:bg-white/30 rounded-xl transition"><Edit size={15} /></button>
+                      <button onClick={() => handleDelete(c.id)}
+                        className="p-2 bg-white/20 hover:bg-red-400/50 rounded-xl transition"><Trash2 size={15} /></button>
+                    </div>
+                  </div>
+                  <h3 className="font-black text-xl mt-4 leading-tight">{c.name}</h3>
+                  <p className="text-white/70 text-sm font-medium mt-1">GV: {c.teacher_name || "Tôi"}</p>
                 </div>
-                <div className="flex gap-1">
-                  <button onClick={() => { setShowForm(true); setEditId(c.id); setFormName(c.name); }}
-                    className="p-1.5 text-blue-600 hover:bg-blue-50 rounded"><Edit size={16} /></button>
-                  <button onClick={() => handleDelete(c.id)}
-                    className="p-1.5 text-red-600 hover:bg-red-50 rounded"><Trash2 size={16} /></button>
+                <div className="p-5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className={`p-2 ${color.light} rounded-xl`}>
+                        <Users size={16} className={color.text} />
+                      </div>
+                      <div>
+                        <p className="font-black text-gray-900 text-lg">{c.enrolled_count || 0}</p>
+                        <p className="text-xs text-gray-400 font-bold -mt-0.5">Học sinh</p>
+                      </div>
+                    </div>
+                    <span className="text-xs font-black text-gray-300 uppercase tracking-widest">
+                      {c.created_at ? new Date(c.created_at).toLocaleDateString("vi-VN") : "—"}
+                    </span>
+                  </div>
                 </div>
               </div>
-              <div className="flex items-center gap-4 text-sm text-gray-500">
-                <span className="flex items-center gap-1"><Users size={14} /> {c.enrolled_count || 0} học sinh</span>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
@@ -905,177 +949,227 @@ function AssignmentsTab({ handleTextareaDoubleClick }: { handleTextareaDoubleCli
     setExpandedScores(assignmentId);
   };
 
+  const TYPE_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
+    quiz:     { label: "Quiz",     color: "text-purple-700", bg: "bg-purple-50 border-purple-100" },
+    reading:  { label: "Reading",  color: "text-blue-700",   bg: "bg-blue-50 border-blue-100" },
+    writing:  { label: "Writing",  color: "text-orange-700", bg: "bg-orange-50 border-orange-100" },
+    speaking: { label: "Speaking", color: "text-green-700",  bg: "bg-green-50 border-green-100" },
+  };
+
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap gap-3 items-center">
-        <label className="font-medium text-gray-700">Lớp:</label>
-        <select value={selectedClass || ""} onChange={e => setSelectedClass(Number(e.target.value))}
-          className="border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none min-w-[200px]">
-          {classes.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
+    <div className="space-y-6 animate-in fade-in duration-300">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+        <div className="flex items-center gap-4">
+          <label className="font-black text-gray-700">Lớp:</label>
+          <select value={selectedClass || ""} onChange={e => setSelectedClass(Number(e.target.value))}
+            className="border-2 border-gray-100 focus:border-indigo-400 rounded-2xl px-5 py-3 outline-none font-bold text-gray-700 min-w-[220px] transition-all">
+            {classes.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </div>
         <button onClick={() => { setShowForm(true); setFormTitle(""); setFormDesc(""); setFormDue(""); setFormType("quiz"); setFormQuizText(""); setGeneratedQuiz([]); }}
-          className="ml-auto flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700">
-          <Plus size={18} /> Tạo bài tập
+          className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-2xl hover:bg-indigo-700 font-black shadow-lg shadow-indigo-200 transition-all active:scale-95">
+          <Plus size={20} /> Tạo bài tập mới
         </button>
       </div>
 
       {showForm && (
-        <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm space-y-4">
+        <div className="bg-white p-8 rounded-3xl border border-gray-100 shadow-xl space-y-6 animate-in slide-in-from-top-4 duration-300">
           <div className="flex justify-between items-center">
-            <h3 className="font-bold text-gray-900">Tạo bài tập mới</h3>
-            <button onClick={() => setShowForm(false)} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
+            <h3 className="font-black text-xl text-gray-900">Tạo bài tập mới</h3>
+            <button onClick={() => setShowForm(false)} className="p-2 text-gray-400 hover:text-gray-900 hover:bg-gray-100 rounded-xl transition"><X size={20} /></button>
           </div>
-          <input value={formTitle} onChange={e => setFormTitle(e.target.value)} placeholder="Tiêu đề bài tập"
-            className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none" />
-          <textarea 
-            value={formDesc} 
-            onChange={e => setFormDesc(e.target.value)} 
-            onDoubleClick={handleTextareaDoubleClick}
-            placeholder="Mô tả (tuỳ chọn)" rows={2}
-            className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none resize-none" 
-          />
-          <input type="date" value={formDue} onChange={e => setFormDue(e.target.value)}
-            className="border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none" />
-          <select value={formType} onChange={e => setFormType(e.target.value)}
-            className="border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none">
-            <option value="quiz">Quiz (Trắc nghiệm)</option>
-            <option value="reading">Reading (Đọc hiểu - News API)</option>
-            <option value="writing">Writing (Viết bài)</option>
-            <option value="speaking">Speaking (Nói)</option>
-          </select>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <div className="md:col-span-2">
+              <label className="text-xs font-black text-gray-400 uppercase tracking-widest mb-2 block">Tiêu đề bài tập</label>
+              <input value={formTitle} onChange={e => setFormTitle(e.target.value)} placeholder="VD: Grammar Quiz - Unit 5: Present Perfect"
+                className="w-full border-2 border-gray-100 focus:border-indigo-400 rounded-2xl px-5 py-4 outline-none font-bold text-gray-700 transition-all" />
+            </div>
+            <div>
+              <label className="text-xs font-black text-gray-400 uppercase tracking-widest mb-2 block">Loại bài tập</label>
+              <select value={formType} onChange={e => setFormType(e.target.value)}
+                className="w-full border-2 border-gray-100 focus:border-indigo-400 rounded-2xl px-5 py-4 outline-none font-black text-gray-700 transition-all">
+                <option value="quiz">Quiz (Trắc nghiệm)</option>
+                <option value="reading">Reading (Đọc hiểu)</option>
+                <option value="writing">Writing (Viết bài)</option>
+                <option value="speaking">Speaking (Nói)</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-xs font-black text-gray-400 uppercase tracking-widest mb-2 block">Hạn nộp bài</label>
+              <input type="date" value={formDue} onChange={e => setFormDue(e.target.value)}
+                className="w-full border-2 border-gray-100 focus:border-indigo-400 rounded-2xl px-5 py-4 outline-none font-bold text-gray-700 transition-all" />
+            </div>
+            <div className="md:col-span-2">
+              <label className="text-xs font-black text-gray-400 uppercase tracking-widest mb-2 block">Mô tả (tuỳ chọn)</label>
+              <textarea value={formDesc} onChange={e => setFormDesc(e.target.value)} onDoubleClick={handleTextareaDoubleClick}
+                placeholder="Hướng dẫn làm bài..." rows={2}
+                className="w-full border-2 border-gray-100 focus:border-indigo-400 rounded-2xl px-5 py-4 outline-none font-medium text-gray-700 transition-all resize-none" />
+            </div>
+          </div>
 
           {formType === "quiz" && (
-          <div className="bg-gradient-to-r from-purple-50 to-indigo-50 p-4 rounded-xl border border-indigo-100">
-            <h4 className="font-bold text-indigo-700 mb-2 flex items-center gap-2"><Sparkles size={18} /> Tạo Quiz bằng AI</h4>
-            <textarea 
-              value={formQuizText} 
-              onChange={e => setFormQuizText(e.target.value)}
-              onDoubleClick={handleTextareaDoubleClick}
-              placeholder="Dán đoạn văn tiếng Anh vào đây, AI sẽ tự động tạo câu hỏi trắc nghiệm..." rows={4}
-              className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none resize-none bg-white" 
-            />
-            <button onClick={handleGenerateQuiz} disabled={generating}
-              className="mt-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 flex items-center gap-2 disabled:opacity-50">
-              <Brain size={16} /> {generating ? "Đang tạo..." : "Tạo Quiz"}
-            </button>
-          </div>
+            <div className="bg-gradient-to-r from-purple-50 to-indigo-50 p-6 rounded-2xl border border-indigo-100">
+              <h4 className="font-black text-indigo-700 mb-4 flex items-center gap-2 text-lg"><Sparkles size={20} /> Tạo Quiz bằng AI</h4>
+              <textarea value={formQuizText} onChange={e => setFormQuizText(e.target.value)} onDoubleClick={handleTextareaDoubleClick}
+                placeholder="Dán đoạn văn tiếng Anh vào đây, AI sẽ tự động tạo câu hỏi trắc nghiệm..." rows={4}
+                className="w-full border-2 border-indigo-100 focus:border-indigo-400 rounded-2xl px-5 py-4 outline-none font-medium text-gray-700 transition-all resize-none bg-white" />
+              <button onClick={handleGenerateQuiz} disabled={generating}
+                className="mt-4 px-6 py-3 bg-indigo-600 text-white rounded-2xl hover:bg-indigo-700 font-black flex items-center gap-2 disabled:opacity-50 shadow-sm transition-all active:scale-95">
+                <Brain size={18} /> {generating ? "Đang tạo..." : "Tạo Quiz với AI"}
+              </button>
+            </div>
           )}
 
-          {/* Render Reading options if formType is reading */}
           {formType === "reading" && (
-            <div className="bg-gradient-to-r from-indigo-50 to-blue-50 p-4 rounded-xl border border-blue-100 mt-4">
-              <h4 className="font-bold text-indigo-700 mb-2 flex items-center gap-2">Nguồn bài báo (Reading Comprehension)</h4>
-              <div className="flex gap-2 mb-2">
-                <button onClick={fetchNewsTopics} disabled={newsLoading} className="px-4 py-2 bg-white text-indigo-600 border border-indigo-200 rounded-lg text-sm hover:bg-indigo-50 disabled:opacity-50">
-                  {newsLoading ? "Đang tải..." : "Tải tin tức mới nhất (The Guardian)"}
-                </button>
-              </div>
+            <div className="bg-gradient-to-r from-blue-50 to-cyan-50 p-6 rounded-2xl border border-blue-100">
+              <h4 className="font-black text-blue-700 mb-4 flex items-center gap-2 text-lg"><BookOpen size={20} /> Reading từ News API</h4>
+              <button onClick={fetchNewsTopics} disabled={newsLoading}
+                className="px-5 py-3 bg-white text-blue-600 border-2 border-blue-200 rounded-2xl text-sm font-black hover:bg-blue-50 disabled:opacity-50 transition-all active:scale-95">
+                {newsLoading ? "Đang tải..." : "Lấy tin tức mới (The Guardian)"}
+              </button>
               {newsTopics.length > 0 && (
-                <div className="space-y-2 mb-4 max-h-40 overflow-y-auto">
+                <div className="space-y-2 mt-4 max-h-48 overflow-y-auto">
                   {newsTopics.map((news, idx) => (
-                    <div key={idx} onClick={() => setSelectedNews(news)} className={`p-2 border rounded cursor-pointer text-sm ${selectedNews?.title === news.title ? 'bg-indigo-100 border-indigo-500' : 'bg-white hover:bg-gray-50'}`}>
-                      <p className="font-bold">{news.title}</p>
-                      <p className="text-xs text-gray-500 line-clamp-1">{news.content}</p>
+                    <div key={idx} onClick={() => setSelectedNews(news)}
+                      className={`p-4 border-2 rounded-2xl cursor-pointer text-sm transition-all ${selectedNews?.title === news.title ? "bg-blue-100 border-blue-500" : "bg-white border-blue-100 hover:border-blue-300"}`}>
+                      <p className="font-black text-gray-900">{news.title}</p>
+                      <p className="text-xs text-gray-500 line-clamp-1 mt-1">{news.content}</p>
                     </div>
                   ))}
                 </div>
               )}
               {selectedNews && (
-                 <button onClick={handleGenerateReading} disabled={generating} className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 flex items-center gap-2 disabled:opacity-50 mt-2">
-                  <Brain size={16} /> {generating ? "Đang tạo IELTS Reading test..." : "Tạo bài Reading test"}
+                <button onClick={handleGenerateReading} disabled={generating}
+                  className="mt-4 px-6 py-3 bg-blue-600 text-white rounded-2xl hover:bg-blue-700 font-black flex items-center gap-2 disabled:opacity-50 shadow-sm transition-all active:scale-95">
+                  <Brain size={18} /> {generating ? "Đang tạo bài Reading..." : "Tạo bài Reading test"}
                 </button>
               )}
             </div>
           )}
 
           {generatedQuiz.length > 0 && (
-            <div className="mt-4 space-y-2 bg-green-50 p-4 border border-green-100 rounded-xl">
-              <p className="text-sm text-green-700 font-bold">Đã tạo {generatedQuiz.length} câu hỏi / bài tập</p>
-              {generatedQuiz.map((q: any, i: number) => (
-                <div key={i} className="bg-white p-3 rounded-lg text-sm shadow-sm border border-gray-100">
-                  {q.type && <span className="inline-block px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs mb-1 font-medium select-none">{q.type}</span>}
-                  <p className="font-medium text-gray-900">{i + 1}. {q.question || q.q}</p>
-                  <div className="ml-4 mt-1 space-y-1 text-gray-700">
-                    {(q.options || []).map((opt: string, j: number) => {
-                      const ans = q.correct_answer ?? q.ans;
-                      const isCorrect = (typeof ans === 'number' && j === ans) || (typeof ans === 'string' && opt.includes(ans) && !['True', 'False', 'Not Given'].includes(opt)) || (typeof ans === 'string' && opt === ans);
-                      return (
-                        <p key={j} className={isCorrect ? "text-green-700 font-bold flex items-center gap-1" : ""}>
-                          {isCorrect && <CheckCircle2 size={14}/>} {String.fromCharCode(65 + j)}. {opt}
-                        </p>
-                      );
-                    })}
+            <div className="bg-green-50 p-6 border border-green-100 rounded-2xl">
+              <p className="font-black text-green-800 mb-4 flex items-center gap-2">
+                <CheckCircle2 size={20} /> Đã tạo {generatedQuiz.length} câu hỏi
+              </p>
+              <div className="space-y-3 max-h-60 overflow-y-auto">
+                {generatedQuiz.map((q: any, i: number) => (
+                  <div key={i} className="bg-white p-4 rounded-2xl text-sm shadow-sm border border-gray-100">
+                    {q.type && <span className="inline-block px-2.5 py-1 bg-purple-50 text-purple-700 rounded-full text-[10px] mb-2 font-black uppercase">{q.type}</span>}
+                    <p className="font-bold text-gray-900">{i + 1}. {q.question || q.q}</p>
+                    <div className="ml-4 mt-2 space-y-1 text-gray-600">
+                      {(q.options || []).map((opt: string, j: number) => {
+                        const ans = q.correct_answer ?? q.ans;
+                        const isCorrect = (typeof ans === "number" && j === ans) || (typeof ans === "string" && opt === ans);
+                        return (
+                          <p key={j} className={isCorrect ? "text-green-700 font-black flex items-center gap-1.5" : ""}>
+                            {isCorrect && <CheckCircle2 size={13} />} {String.fromCharCode(65 + j)}. {opt}
+                          </p>
+                        );
+                      })}
+                    </div>
+                    {q.explanation && <p className="text-xs text-indigo-600 mt-2 italic bg-indigo-50 p-2 rounded-xl">Giải thích: {q.explanation}</p>}
                   </div>
-                  {q.explanation && <p className="text-xs text-indigo-600 mt-2 italic bg-indigo-50 p-2 rounded">Giải thích: {q.explanation}</p>}
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           )}
 
-          <button onClick={handleSaveAssignment}
-            className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2">
-            <Check size={16} /> Lưu bài tập
-          </button>
+          <div className="flex justify-end gap-3 pt-2">
+            <button onClick={() => setShowForm(false)} className="px-6 py-3 font-black text-gray-400 hover:text-gray-900 transition">Hủy</button>
+            <button onClick={handleSaveAssignment}
+              className="px-8 py-3 bg-green-600 text-white rounded-2xl hover:bg-green-700 font-black flex items-center gap-2 shadow-sm transition-all active:scale-95">
+              <Check size={18} /> Lưu bài tập
+            </button>
+          </div>
         </div>
       )}
 
       {/* Assignments list */}
-      <div className="space-y-3">
+      <div className="space-y-4">
         {assignments.length === 0 ? (
-          <div className="bg-white p-8 rounded-2xl border border-gray-100 text-center text-gray-500">
-            Chưa có bài tập nào. Nhấn "Tạo bài tập" để bắt đầu.
+          <div className="bg-white p-16 rounded-3xl border border-dashed border-gray-300 text-center">
+            <div className="bg-indigo-50 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <ClipboardList size={32} className="text-indigo-400" />
+            </div>
+            <h3 className="font-black text-gray-400 text-xl">Chưa có bài tập nào</h3>
+            <p className="text-gray-400 mt-2 font-medium">Nhấn "Tạo bài tập mới" để bắt đầu.</p>
           </div>
-        ) : assignments.map((a: any) => (
-          <div key={a.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-            <div className="p-5 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-green-100 rounded-lg"><ClipboardList size={18} className="text-green-600" /></div>
-                <div>
-                  <p className="font-bold text-gray-900">{a.title}</p>
-                  <div className="flex gap-4 text-sm text-gray-500 mt-1">
-                    {a.description && <span>{a.description}</span>}
-                    {a.due_date && <span>Hạn: {new Date(a.due_date).toLocaleDateString("vi-VN")}</span>}
-                    <span>{a.submissions || 0} bài nộp</span>
+        ) : assignments.map((a: any) => {
+          const typeConf = TYPE_CONFIG[a.type] || TYPE_CONFIG.quiz;
+          const isOverdue = a.due_date && new Date(a.due_date) < new Date();
+          return (
+            <div key={a.id} className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden hover:shadow-md transition-all duration-200">
+              <div className="p-6 flex items-start justify-between gap-4">
+                <div className="flex items-start gap-4 flex-1 min-w-0">
+                  <div className={`p-3 rounded-2xl border flex-shrink-0 ${typeConf.bg}`}>
+                    <ClipboardList size={20} className={typeConf.color} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-wrap items-center gap-2 mb-1">
+                      <span className={`text-[10px] font-black px-2.5 py-1 rounded-full border uppercase ${typeConf.bg} ${typeConf.color}`}>{typeConf.label}</span>
+                      {a.due_date && (
+                        <span className={`text-[10px] font-black px-2.5 py-1 rounded-full border ${isOverdue ? "bg-red-50 text-red-600 border-red-100" : "bg-gray-50 text-gray-500 border-gray-100"}`}>
+                          Hạn: {new Date(a.due_date).toLocaleDateString("vi-VN")}
+                        </span>
+                      )}
+                    </div>
+                    <h4 className="font-black text-gray-900 text-lg leading-tight">{a.title}</h4>
+                    {a.description && <p className="text-sm text-gray-500 mt-1 line-clamp-1">{a.description}</p>}
+                    <div className="flex items-center gap-4 mt-3">
+                      <span className="text-sm font-black text-indigo-600 flex items-center gap-1.5">
+                        <Users size={14} /> {a.submissions || 0} bài nộp
+                      </span>
+                    </div>
                   </div>
                 </div>
+                <div className="flex gap-2 flex-shrink-0">
+                  <button onClick={() => toggleScores(a.id)}
+                    className={`p-2.5 rounded-xl transition-all ${expandedScores === a.id ? "bg-indigo-100 text-indigo-700" : "text-indigo-400 hover:bg-indigo-50 hover:text-indigo-600"}`}
+                    title="Xem điểm số">
+                    <BarChart3 size={18} />
+                  </button>
+                  <button onClick={() => handleDelete(a.id)}
+                    className="p-2.5 text-red-400 hover:bg-red-50 hover:text-red-600 rounded-xl transition-all"><Trash2 size={18} /></button>
+                </div>
               </div>
-              <div className="flex gap-1">
-                <button onClick={() => toggleScores(a.id)}
-                  className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded" title="Xem điểm">
-                  <BarChart3 size={16} />
-                </button>
-                <button onClick={() => handleDelete(a.id)}
-                  className="p-1.5 text-red-600 hover:bg-red-50 rounded"><Trash2 size={16} /></button>
-              </div>
+
+              {expandedScores === a.id && (
+                <div className="border-t border-gray-100 p-6 bg-gray-50/70">
+                  <h5 className="font-black text-gray-700 mb-4 text-sm uppercase tracking-widest">Kết quả học sinh</h5>
+                  {scores.length === 0 ? (
+                    <p className="text-gray-400 font-medium text-sm">Chưa có học sinh nào nộp bài.</p>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm text-left">
+                        <thead>
+                          <tr className="text-gray-400 text-xs uppercase tracking-widest border-b border-gray-200">
+                            <th className="pb-3 font-black">Học sinh</th>
+                            <th className="pb-3 font-black">Điểm</th>
+                            <th className="pb-3 font-black">Nộp lúc</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {scores.map((s: any) => (
+                            <tr key={s.id} className="hover:bg-white transition-colors">
+                              <td className="py-3 font-bold text-gray-900">{s.student_name}</td>
+                              <td className="py-3">
+                                <span className="font-black text-indigo-600 bg-indigo-50 px-3 py-1 rounded-xl text-xs">{s.score}/{s.max_score}</span>
+                              </td>
+                              <td className="py-3 text-gray-400 text-xs">{new Date(s.submitted_at).toLocaleString("vi-VN")}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
-            {expandedScores === a.id && (
-              <div className="border-t border-gray-100 p-4 bg-gray-50">
-                {scores.length === 0 ? (
-                  <p className="text-sm text-gray-500">Chưa có học sinh nào nộp bài.</p>
-                ) : (
-                  <table className="w-full text-sm text-left">
-                    <thead>
-                      <tr className="text-gray-500">
-                        <th className="pb-2 font-medium">Học sinh</th>
-                        <th className="pb-2 font-medium">Điểm</th>
-                        <th className="pb-2 font-medium">Nộp lúc</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {scores.map((s: any) => (
-                        <tr key={s.id} className="border-t border-gray-100">
-                          <td className="py-2">{s.student_name}</td>
-                          <td className="py-2 font-bold text-indigo-600">{s.score}/{s.max_score}</td>
-                          <td className="py-2 text-gray-500">{new Date(s.submitted_at).toLocaleString("vi-VN")}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-              </div>
-            )}
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

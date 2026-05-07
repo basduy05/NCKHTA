@@ -22,6 +22,7 @@ export function GrammarTab({ authFetch, API_URL }: GrammarTabProps) {
   const [formName, setFormName] = useState("");
   const editorRef = useRef<HTMLDivElement>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedLevel, setSelectedLevel] = useState("B1");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isGeneratingAI, setIsGeneratingAI] = useState(false);
 
@@ -68,6 +69,7 @@ export function GrammarTab({ authFetch, API_URL }: GrammarTabProps) {
   const openAddModal = () => {
     setEditingRule(null);
     setFormName("");
+    setSelectedLevel("B1");
     setSelectedFile(null);
     if (editorRef.current) editorRef.current.innerHTML = "";
     setIsModalOpen(true);
@@ -76,13 +78,11 @@ export function GrammarTab({ authFetch, API_URL }: GrammarTabProps) {
   const openEditModal = (rule: any) => {
     setEditingRule(rule);
     setFormName(rule.name);
+    setSelectedLevel(rule.level || "B1");
     setSelectedFile(null);
     setIsModalOpen(true);
-    // Timeout to wait for Ref rendering
     setTimeout(() => {
-      if (editorRef.current) {
-        editorRef.current.innerHTML = rule.description || "";
-      }
+      if (editorRef.current) editorRef.current.innerHTML = rule.description || "";
     }, 50);
   };
 
@@ -90,6 +90,7 @@ export function GrammarTab({ authFetch, API_URL }: GrammarTabProps) {
     setIsModalOpen(false);
     setEditingRule(null);
     setFormName("");
+    setSelectedLevel("B1");
     setSelectedFile(null);
     if (editorRef.current) editorRef.current.innerHTML = "";
   };
@@ -146,6 +147,7 @@ export function GrammarTab({ authFetch, API_URL }: GrammarTabProps) {
     const formData = new FormData();
     formData.append("name", formName);
     formData.append("description", description);
+    formData.append("level", selectedLevel);
     if (selectedFile) {
         formData.append("file", selectedFile);
     }
@@ -232,7 +234,10 @@ export function GrammarTab({ authFetch, API_URL }: GrammarTabProps) {
           <div key={r.id} className="group bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden hover:shadow-md transition-all duration-300">
             <div className="p-6 md:p-8">
               <div className="flex justify-between items-start gap-4 mb-4">
-                <h4 className="font-black text-xl text-teal-800 leading-tight flex-1">{r.name}</h4>
+                <div className="flex-1">
+                  <span className="inline-block text-[10px] font-black px-2.5 py-1 rounded-full bg-teal-50 text-teal-700 border border-teal-100 mb-2">{r.level || "B1"}</span>
+                  <h4 className="font-black text-xl text-teal-800 leading-tight">{r.name}</h4>
+                </div>
                 <div className="flex items-center gap-2">
                   <button 
                     onClick={() => openEditModal(r)}
@@ -298,6 +303,22 @@ export function GrammarTab({ authFetch, API_URL }: GrammarTabProps) {
             <div className="flex-1 overflow-y-auto flex flex-col">
               <div className="p-8 space-y-8">
                  {/* Rule Name Field */}
+                <div className="space-y-3">
+                    <label className="text-sm font-black text-gray-400 uppercase tracking-widest px-1">Cấp độ CEFR</label>
+                    <select
+                      value={selectedLevel}
+                      onChange={e => setSelectedLevel(e.target.value)}
+                      className="w-full bg-gray-50 border-2 border-gray-200 focus:border-teal-500 rounded-xl p-4 outline-none transition-all font-black text-gray-700 shadow-sm"
+                    >
+                      <option value="Pre-A1">Pre-A1 — Beginner</option>
+                      <option value="A1">A1 — Elementary</option>
+                      <option value="A2">A2 — Pre-Intermediate</option>
+                      <option value="B1">B1 — Intermediate</option>
+                      <option value="B2">B2 — Upper-Intermediate</option>
+                      <option value="C1">C1 — Advanced</option>
+                    </select>
+                </div>
+
                 <div className="space-y-3">
                     <label className="text-sm font-black text-gray-400 uppercase tracking-widest px-1">Tên cấu trúc / Chủ đề</label>
                     <div className="flex gap-3">

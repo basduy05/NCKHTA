@@ -88,16 +88,29 @@ class CursorWrapper:
 class ConnectionWrapper:
     def __init__(self, conn):
         self._conn = conn
+        self.is_libsql_client = False
+        if getattr(conn, '__module__', '').startswith('libsql_client') or 'Client' in str(type(conn)):
+            self.is_libsql_client = True
+            
     def cursor(self):
+        if self.is_libsql_client:
+            return LibsqlClientCursorWrapper(self._conn)
         return CursorWrapper(self._conn.cursor())
+
     def execute(self, *args, **kwargs):
+        if self.is_libsql_client:
+            cur = LibsqlClientCursorWrapper(self._conn)
+            return cur.execute(*args, **kwargs)
         cursor = self._conn.cursor()
         cursor.execute(*args, **kwargs)
         return CursorWrapper(cursor)
-    def commit(self): self._conn.commit()
+
+    def commit(self):
+        if self.is_libsql_client:
+            return
+        self._conn.commit()
+
     def close(self):
-        # We are using thread-local pooling, so do not actually close the connection.
-        # This allows routers to safely call conn.close() without killing the shared connection.
         pass
 
     def __enter__(self):
@@ -109,12 +122,58 @@ class ConnectionWrapper:
             except: pass
         self.close()
         return False
+        
     def really_close(self):
-        self._conn.close()
-    def __enter__(self): return self
-    def __exit__(self, exc_type, exc_val, exc_tb): pass
+        if self.is_libsql_client:
+            try: self._conn.close()
+            except: pass
+        else:
+            self._conn.close()
+            
     def __getattr__(self, name):
+        if self.is_libsql_client:
+            raise AttributeError(name)
         return getattr(self._conn, name)
+
+class LibsqlClientCursorWrapper:
+    def __init__(self, client):
+        self.client = client
+        self.last_rs = None
+        self.row_idx = 0
+        self.description = None
+        self.lastrowid = None
+
+    def execute(self, query, params=None):
+        if params is None:
+            params = []
+        rs = self.client.execute(query, params)
+        self.last_rs = rs
+        self.row_idx = 0
+        self.description = [(col, None, None, None, None, None, None) for col in rs.columns] if rs.columns else []
+        self.lastrowid = rs.last_insert_rowid
+        return self
+
+    def fetchone(self):
+        if not self.last_rs or self.row_idx >= len(self.last_rs.rows):
+            return None
+        row = self.last_rs.rows[self.row_idx]
+        self.row_idx += 1
+        return DictRow(self, row)
+
+    def fetchall(self):
+        if not self.last_rs:
+            return []
+        res = []
+        while self.row_idx < len(self.last_rs.rows):
+            res.append(DictRow(self, self.last_rs.rows[self.row_idx]))
+            self.row_idx += 1
+        return res
+
+    def __iter__(self):
+        return iter(self.fetchall())
+    
+    def __getattr__(self, name):
+        raise AttributeError(name)
 
 def get_db(retries=3):
     """
@@ -175,15 +234,18 @@ def get_db(retries=3):
                 # Direct Connection Strategy
                 try:
                     url_to_use = TURSO_URL
-                    if not url_to_use.startswith(("https://", "libsql://")):
+                    if not url_to_use.startswith(("https://", "libsql://", "wss://", "ws://")):
                         url_to_use = f"https://{url_to_use}"
                     else:
                         url_to_use = url_to_use.replace("libsql://", "https://")
                     
                     if not HAS_LIBSQL_EXPERIMENTAL:
-                        # Development fallback if libsql is not fully available
-                        print("[DB ERROR] Turso requested but libsql is missing, falling back to local SQLite.")
-                        conn = libsql.connect(DB_PATH)
+                        try:
+                            import libsql_client
+                            conn = libsql_client.create_client_sync(url=url_to_use, auth_token=TURSO_AUTH_TOKEN)
+                        except ImportError:
+                            print("[DB ERROR] Turso requested but libsql and libsql-client are missing, falling back to local SQLite.")
+                            conn = sqlite3.connect(DB_PATH)
                     else:
                         try:
                             conn = libsql.connect(url_to_use, auth_token=TURSO_AUTH_TOKEN)
@@ -430,7 +492,15 @@ def init_db():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
-    
+
+    # --- GRAMMAR RULES MIGRATION: add level column if not present ---
+    try:
+        cursor.execute("ALTER TABLE grammar_rules ADD COLUMN level TEXT DEFAULT 'B1'")
+        conn.commit()
+        print("[DB MIGRATION] Added 'level' column to grammar_rules")
+    except Exception:
+        pass  # Column already exists
+
     # --- PERFORMANCE INDEXES ---
     try:
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_generated_exams_user_id ON generated_exams(user_id)")

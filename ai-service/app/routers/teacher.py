@@ -671,8 +671,8 @@ async def teacher_generate_assignment_from_file(
 def get_grammar_rules(authorization: str = Header(...)):
     _get_current_teacher(authorization)
     conn = get_db()
-    cursor = conn.execute("SELECT id, name, description, file_name, created_at FROM grammar_rules ORDER BY id DESC")
-    results = cursor.fetchall()
+    cursor = conn.execute("SELECT id, name, description, file_name, created_at, COALESCE(level, 'B1') as level FROM grammar_rules ORDER BY id DESC")
+    results = [dict(row) for row in cursor.fetchall()]
     conn.close()
     return results
 
@@ -702,20 +702,21 @@ async def create_grammar_rule(
     authorization: str = Header(...),
     name: str = Form(...),
     description: str = Form(""),
+    level: str = Form("B1"),
     file: Optional[UploadFile] = File(None)
 ):
-    teacher = _get_current_teacher(authorization)
+    _get_current_teacher(authorization)
     conn = get_db()
-    
+
     file_name = None
     file_data = None
     if file and file.filename:
         file_name = file.filename
         file_data = await file.read()
-        
+
     conn.execute(
-        "INSERT INTO grammar_rules (name, description, file_name, file_data) VALUES (?, ?, ?, ?)",
-        (name, description, file_name, file_data)
+        "INSERT INTO grammar_rules (name, description, level, file_name, file_data) VALUES (?, ?, ?, ?, ?)",
+        (name, description, level, file_name, file_data)
     )
     conn.commit()
     conn.close()
@@ -727,24 +728,25 @@ async def update_grammar_rule(
     authorization: str = Header(...),
     name: str = Form(...),
     description: str = Form(""),
+    level: str = Form("B1"),
     file: Optional[UploadFile] = File(None)
 ):
-    teacher = _get_current_teacher(authorization)
+    _get_current_teacher(authorization)
     conn = get_db()
-    
+
     if file and file.filename:
         file_name = file.filename
         file_data = await file.read()
         conn.execute(
-            "UPDATE grammar_rules SET name = ?, description = ?, file_name = ?, file_data = ? WHERE id = ?",
-            (name, description, file_name, file_data, rule_id)
+            "UPDATE grammar_rules SET name = ?, description = ?, level = ?, file_name = ?, file_data = ? WHERE id = ?",
+            (name, description, level, file_name, file_data, rule_id)
         )
     else:
         conn.execute(
-            "UPDATE grammar_rules SET name = ?, description = ? WHERE id = ?",
-            (name, description, rule_id)
+            "UPDATE grammar_rules SET name = ?, description = ?, level = ? WHERE id = ?",
+            (name, description, level, rule_id)
         )
-        
+
     conn.commit()
     conn.close()
     return {"message": "Cập nhật quy tắc ngữ pháp thành công"}
