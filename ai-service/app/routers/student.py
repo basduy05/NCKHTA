@@ -1227,21 +1227,19 @@ async def dictionary_lookup(req: DictionaryRequest, authorization: str = Header(
 
             async for chunk in llm_service.lookup_dictionary_stream(lookup_key, free_data=free_data, wikipedia_data=wikipedia_data, force_ai=req.force_ai):
                 if not chunk: continue
-                # We can inject is_saved into result chunks
-                if '"status": "result"' in chunk:
-                    try:
-                        import json_repair
-                        data = json_repair.repair_json(chunk, return_objects=True)
-                        if isinstance(data, dict):
-                            data["is_saved"] = is_saved
-                            final_result_data = data # Capture the latest complete result
-                            # Debug: log captured data quality
-                            meanings = data.get("meanings", [])
-                            print(f"[STREAM DEBUG] Captured result: meanings_count={len(meanings)}, has_def_en={any(m.get('definition_en') for m in meanings)}")
-                            chunk = json.dumps(data, ensure_ascii=False)
-                    except Exception as e:
-                        print(f"[STREAM PARSE ERROR] {e}")
-                
+                # Parse JSON properly instead of fragile string check
+                try:
+                    import json_repair
+                    parsed = json_repair.repair_json(chunk, return_objects=True)
+                    if isinstance(parsed, dict) and parsed.get("status") == "result":
+                        parsed["is_saved"] = is_saved
+                        final_result_data = parsed
+                        meanings = parsed.get("meanings", [])
+                        print(f"[STREAM DEBUG] Captured result: meanings={len(meanings)}, has_def_en={any(m.get('definition_en') for m in meanings)}")
+                        chunk = json.dumps(parsed, ensure_ascii=False)
+                except Exception as e:
+                    print(f"[STREAM PARSE ERROR] {e}")
+
                 yield f"data: {chunk}\n\n"
             
             # Save final parsed result if available (always attempt to save on re-lookup)

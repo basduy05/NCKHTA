@@ -5,8 +5,9 @@ import {
   Star, Network, ArrowRight, RefreshCw 
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
-import { 
-  ALL_WORDS_DATABASE, getPosColor, POS_MAP 
+import { useChatContext } from "../../context/ChatContext";
+import {
+  ALL_WORDS_DATABASE, getPosColor, POS_MAP
 } from "../../components/DictionaryData";
 import FeedbackButton from "../../components/FeedbackButton";
 
@@ -16,6 +17,7 @@ interface DictionaryTabProps {
 
 export default function DictionaryTab({ API_URL }: DictionaryTabProps) {
   const { authFetch } = useAuth();
+  const { updateChatContext } = useChatContext();
   const [word, setWord] = useState("");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
@@ -42,20 +44,20 @@ export default function DictionaryTab({ API_URL }: DictionaryTabProps) {
     } catch (e) { }
   }, []);
 
-  const lookup = async (forceAI: boolean = false) => {
-    const trimmedWord = word.trim();
+  const lookup = async (forceAI: boolean = false, wordOverride?: string) => {
+    const trimmedWord = (wordOverride ?? word).trim();
     if (!trimmedWord) return;
 
     const localWord = trimmedWord.toLowerCase();
-    const localData = ALL_WORDS_DATABASE[localWord] || 
-                      ALL_WORDS_DATABASE[localWord.replace(/s$/, '')] || 
+    const localData = ALL_WORDS_DATABASE[localWord] ||
+                      ALL_WORDS_DATABASE[localWord.replace(/s$/, '')] ||
                       ALL_WORDS_DATABASE[localWord.replace(/es$/, '')];
 
     if (!forceAI && localData) {
       setResult({
         ...localData,
         status: "result",
-        _source: "database", 
+        _source: "database",
         meanings: [{
           pos: localData.type,
           definition_en: localData.engMeaning,
@@ -65,6 +67,13 @@ export default function DictionaryTab({ API_URL }: DictionaryTabProps) {
         phonetic_uk: localData.phonetic,
       });
       setLoading(false);
+      updateChatContext("dictionary", {
+        word: localWord,
+        pos: localData.type || "",
+        meaning_vn: localData.translation || "",
+        meaning_en: localData.engMeaning || "",
+        level: localData.level || "",
+      });
       setHistory(prev => {
         const next = [localWord, ...prev.filter(w => w !== localWord)].slice(0, 10);
         if (typeof window !== "undefined") localStorage.setItem("dictionaryHistory", JSON.stringify(next));
@@ -136,6 +145,18 @@ export default function DictionaryTab({ API_URL }: DictionaryTabProps) {
       }
       setResult({ ...finalData });
 
+      // Update chatbot context with the looked-up word
+      if (finalData.word) {
+        const firstMeaning = finalData.meanings?.[0] ?? {};
+        updateChatContext("dictionary", {
+          word: finalData.word,
+          pos: finalData.pos || firstMeaning.pos || "",
+          meaning_vn: firstMeaning.definition_vn || "",
+          meaning_en: firstMeaning.definition_en || "",
+          level: finalData.level || "",
+        });
+      }
+
       if (buffer.trim()) {
         try {
           let rawJson = buffer.trim();
@@ -182,12 +203,12 @@ export default function DictionaryTab({ API_URL }: DictionaryTabProps) {
     if (!result?.word) return;
     const currentWord = result.word;
 
-    // 1. Clear current result immediately
     setResult(null);
     setError(null);
     setSaved(false);
+    setWord(currentWord);
 
-    // 2. Clear backend cache (best effort, don't block)
+    // Clear backend cache (best effort, don't block)
     try {
       await authFetch(`${API_URL}/student/dictionary/cache/${encodeURIComponent(currentWord)}`, {
         method: "DELETE",
@@ -196,11 +217,8 @@ export default function DictionaryTab({ API_URL }: DictionaryTabProps) {
       console.warn("Cache clear failed:", e);
     }
 
-    // 3. Re-trigger lookup
-    setWord(currentWord);
-    setTimeout(() => {
-      lookup(true);
-    }, 100);
+    // Pass word directly to avoid stale closure
+    await lookup(true, currentWord);
   };
 
   const saveWord = async () => {

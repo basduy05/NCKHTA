@@ -49,6 +49,7 @@ try:
     from .routers import auth  # Import Auth Router
     from .routers import teacher  # Import Teacher Router
     from .routers import student  # Import Student Router
+    from .routers import chat    # Import AI Chat Router
     print("[STARTUP] Routers loaded OK", flush=True)
 except Exception as e:
     import traceback
@@ -59,6 +60,7 @@ except Exception as e:
     auth = None
     teacher = None
     student = None
+    chat = None
     
 from .dependencies import get_admin_user, get_teacher_user, get_current_user
 
@@ -175,6 +177,9 @@ if teacher:
 
 if student:
     app.include_router(student.router, dependencies=[Depends(get_current_user)])
+
+if chat:
+    app.include_router(chat.router, dependencies=[Depends(get_current_user)])
 
 # CORS: Allow specific origins
 # MUST BE ADDED LAST TO BE OUTERMOST IN FASTAPI (wraps all other middlewares)

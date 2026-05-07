@@ -16,6 +16,7 @@ export default function FeedbackButton({ feature }: FeedbackButtonProps) {
   const [content, setContent] = useState("");
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
 
   const featureLabels: Record<string, string> = {
     dictionary: "Tra từ điển",
@@ -29,6 +30,7 @@ export default function FeedbackButton({ feature }: FeedbackButtonProps) {
   const handleSubmit = async () => {
     if (!content.trim()) return;
     setSending(true);
+    setSendError(null);
     try {
       const res = await authFetch(`${API_URL}/student/feedback`, {
         method: "POST",
@@ -45,10 +47,15 @@ export default function FeedbackButton({ feature }: FeedbackButtonProps) {
           setSent(false);
           setContent("");
           setFeedbackType("suggestion");
+          setSendError(null);
         }, 2000);
+      } else {
+        const err = await res.json().catch(() => ({}));
+        setSendError(err.detail || `Gửi thất bại (${res.status}). Vui lòng thử lại.`);
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error("Feedback error:", e);
+      setSendError("Lỗi kết nối. Vui lòng kiểm tra mạng và thử lại.");
     } finally {
       setSending(false);
     }
@@ -151,6 +158,14 @@ export default function FeedbackButton({ feature }: FeedbackButtonProps) {
                     </span>
                   </div>
                 </div>
+
+                {/* Error message */}
+                {sendError && (
+                  <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-red-700 text-sm font-medium flex items-center gap-2">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                    {sendError}
+                  </div>
+                )}
 
                 {/* Submit */}
                 <button

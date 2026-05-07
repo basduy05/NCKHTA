@@ -5,6 +5,8 @@ import { usePathname, useSearchParams, useRouter } from "next/navigation";
 import Image from "next/image";
 import { BookOpen, Users, LayoutDashboard, Component, Database, GraduationCap, BookText, FileSearch, LogOut, Settings, ClipboardList, Sparkles, Search, BookMarked, Mic, Award, Trophy, TrendingUp, MessageCircleWarning } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
+import { ChatProvider, useChatContext } from "../context/ChatContext";
+import AIChatbot from "../components/AIChatbot";
 
 function DashboardSidebar({ user, logout }: { user: any, logout: any }) {
   const pathname = usePathname();
@@ -99,6 +101,20 @@ function DashboardSidebar({ user, logout }: { user: any, logout: any }) {
   );
 }
 
+function ChatTriggerButton() {
+  const { openChat, isChatOpen } = useChatContext();
+  if (isChatOpen) return null;
+  return (
+    <button
+      onClick={() => openChat()}
+      className="fixed bottom-6 left-6 z-[100] w-14 h-14 rounded-2xl bg-gradient-to-br from-violet-600 to-indigo-600 text-white shadow-lg shadow-indigo-300/50 hover:shadow-xl hover:shadow-indigo-400/50 hover:scale-105 active:scale-95 transition-all duration-200 flex items-center justify-center group"
+      title="Mở AI Trợ lý"
+    >
+      <Sparkles size={24} className="group-hover:rotate-12 transition-transform" />
+    </button>
+  );
+}
+
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, logout, isInitialized } = useAuth();
   const router = useRouter();
@@ -125,13 +141,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }
 
   return (
-    <div className="flex h-screen bg-gray-50">
-      <Suspense fallback={<div className="w-64 bg-white border-r border-gray-200 p-6">Loading sidebar...</div>}>
-        <DashboardSidebar user={user} logout={logout} />
-      </Suspense>
-      <main className="flex-1 p-8 overflow-auto">
-        {children}
-      </main>
-    </div>
+    <ChatProvider>
+      <div className="flex h-screen bg-gray-50">
+        <Suspense fallback={<div className="w-64 bg-white border-r border-gray-200 p-6">Loading sidebar...</div>}>
+          <DashboardSidebar user={user} logout={logout} />
+        </Suspense>
+        <main className="flex-1 p-8 overflow-auto">
+          {children}
+        </main>
+      </div>
+      {/* AI Chatbot — available on all dashboard pages */}
+      <AIChatbot />
+      <ChatTriggerButton />
+    </ChatProvider>
   );
 }
