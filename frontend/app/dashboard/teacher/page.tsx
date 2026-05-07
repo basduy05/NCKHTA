@@ -116,7 +116,7 @@ function TeacherDashboardContent() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-start mb-6">
+      <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">
             {activeTab === "overview" && "Tổng quan"}
@@ -124,17 +124,17 @@ function TeacherDashboardContent() {
             {activeTab === "students" && "Quản lý Học sinh"}
             {activeTab === "lessons" && "Quản lý Bài học"}
             {activeTab === "assignments" && "Bài tập & Kiểm tra"}
-            {activeTab === "ai-tools" && "Công cụ AI Premium"}
+            {activeTab === "ai-tools" && "Công cụ AI"}
             {activeTab === "grammar" && "Kho Ngữ Pháp"}
             {activeTab === "practice" && "Luyện thi IELTS/TOEIC"}
             {activeTab === "ipa" && "Luyện phát âm IPA"}
           </h1>
-          <p className="text-gray-500 text-sm mt-1">Xin chào, <span className="font-semibold text-indigo-600">{user?.name}</span> (Giáo viên)</p>
+          <p className="text-gray-400 text-sm mt-0.5">
+            Giáo viên · <span className="text-gray-600 font-medium">{user?.name}</span>
+          </p>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1.5 bg-indigo-50 text-indigo-700 px-4 py-2 rounded-2xl border border-indigo-100 font-bold text-sm shadow-sm">
-             <Sparkles size={16} className="text-indigo-500" /> {user?.credits_ai || 0} AI Credits
-          </div>
+        <div className="flex items-center gap-2.5 bg-indigo-50 text-indigo-700 px-4 py-2 rounded-xl border border-indigo-100 font-semibold text-sm">
+          <Sparkles size={15} className="text-indigo-500" /> {user?.credits_ai || 0} AI Credits
         </div>
       </div>
 
@@ -244,26 +244,32 @@ function OverviewTab() {
   }, [token]);
 
   const cards = [
-    { label: "Lớp học", value: stats.classes, icon: GraduationCap, color: "text-purple-600", bg: "bg-purple-100" },
-    { label: "Học sinh", value: stats.students, icon: Users, color: "text-blue-600", bg: "bg-blue-100" },
-    { label: "Bài học", value: stats.lessons, icon: BookOpen, color: "text-orange-600", bg: "bg-orange-100" },
-    { label: "Bài tập", value: stats.assignments, icon: ClipboardList, color: "text-green-600", bg: "bg-green-100" },
+    { label: "Lớp học", value: stats.classes, icon: GraduationCap, color: "text-purple-600", bg: "bg-purple-50" },
+    { label: "Học sinh", value: stats.students, icon: Users, color: "text-blue-600", bg: "bg-blue-50" },
+    { label: "Bài học", value: stats.lessons, icon: BookOpen, color: "text-orange-500", bg: "bg-orange-50" },
+    { label: "Bài tập", value: stats.assignments, icon: ClipboardList, color: "text-green-600", bg: "bg-green-50" },
   ];
 
   return (
     <div className="space-y-6">
-      <div className="bg-gradient-to-r from-purple-600 to-indigo-600 rounded-2xl p-8 text-white shadow-xl">
-        <h2 className="text-2xl font-bold mb-1">Xin chào, {stats.teacher_name || "Giáo viên"}! 👋</h2>
-        <p className="text-purple-100">Chào mừng bạn quay trở lại hệ thống iEdu.</p>
+      <div className="bg-gradient-to-br from-indigo-600 to-purple-600 rounded-2xl p-8 text-white relative overflow-hidden">
+        <div className="absolute inset-0 opacity-10">
+          <div className="absolute top-0 right-0 w-56 h-56 bg-white rounded-full -mr-16 -mt-16" />
+        </div>
+        <div className="relative z-10">
+          <p className="text-indigo-200 text-sm font-medium mb-1">Xin chào trở lại</p>
+          <h2 className="text-2xl font-bold mb-1">{stats.teacher_name || "Giáo viên"} 👋</h2>
+          <p className="text-indigo-100">Chào mừng bạn quay trở lại hệ thống iEdu.</p>
+        </div>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {cards.map((c, i) => (
-          <div key={i} className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex items-center">
-            <div className={`p-4 rounded-2xl ${c.bg} mr-4`}><c.icon className={c.color} size={28} /></div>
-            <div>
-              <p className="text-sm font-medium text-gray-500">{c.label}</p>
-              <h3 className="text-2xl font-bold text-gray-900">{loading ? "..." : c.value}</h3>
+          <div key={i} className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-all">
+            <div className={`w-10 h-10 rounded-xl ${c.bg} flex items-center justify-center mb-4`}>
+              <c.icon className={c.color} size={19} />
             </div>
+            <p className="text-2xl font-bold text-gray-900">{loading ? "—" : c.value}</p>
+            <p className="text-sm text-gray-500 mt-0.5">{c.label}</p>
           </div>
         ))}
       </div>
@@ -529,39 +535,50 @@ function StudentsTab() {
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap gap-3 items-center">
-        <label className="font-medium text-gray-700">Lớp:</label>
-        <select value={selectedClass || ""} onChange={e => setSelectedClass(Number(e.target.value))}
-          className="border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none min-w-[200px]">
-          {classes.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
+    <div className="space-y-6">
+      {/* Controls */}
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 flex flex-wrap gap-3 items-center">
+        <div className="flex items-center gap-2 flex-1 min-w-[200px]">
+          <label className="text-sm font-semibold text-gray-500 shrink-0">Lớp:</label>
+          <select value={selectedClass || ""} onChange={e => setSelectedClass(Number(e.target.value))}
+            className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 outline-none bg-white">
+            {classes.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </div>
         <button onClick={openEnrollModal}
-          className="ml-auto flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-xl hover:bg-green-700">
-          <UserPlus size={18} /> Thêm học sinh
+          className="ml-auto flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 font-semibold text-sm transition">
+          <UserPlus size={16} /> Thêm học sinh
         </button>
       </div>
 
-      {/* Enroll modal */}
+      {/* Enroll panel */}
       {showEnroll && (
-        <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-lg">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="font-bold text-gray-900">Thêm học sinh vào lớp</h3>
-            <button onClick={() => setShowEnroll(false)} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden animate-in slide-in-from-top-2 duration-200">
+          <div className="flex justify-between items-center px-5 py-4 border-b border-gray-100">
+            <h3 className="font-semibold text-gray-900">Thêm học sinh vào lớp</h3>
+            <button onClick={() => setShowEnroll(false)} className="p-1 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition"><X size={16} /></button>
           </div>
           {availableStudents.length === 0 ? (
-            <p className="text-gray-500 text-sm">Không có học sinh nào khả dụng (tất cả đã trong lớp hoặc chưa có tài khoản STUDENT).</p>
+            <div className="px-5 py-8 text-center">
+              <Users size={32} className="mx-auto text-gray-200 mb-2" />
+              <p className="text-gray-500 text-sm">Không có học sinh khả dụng (tất cả đã trong lớp).</p>
+            </div>
           ) : (
-            <div className="max-h-60 overflow-y-auto space-y-2">
+            <div className="max-h-64 overflow-y-auto divide-y divide-gray-50">
               {availableStudents.map((s: any) => (
-                <div key={s.id} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg hover:bg-gray-100">
-                  <div>
-                    <p className="font-medium text-gray-900">{s.name}</p>
-                    <p className="text-sm text-gray-500">{s.email}</p>
+                <div key={s.id} className="flex items-center justify-between px-5 py-3 hover:bg-gray-50 transition">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 font-bold text-sm flex items-center justify-center">
+                      {s.name.charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <p className="font-semibold text-gray-900 text-sm">{s.name}</p>
+                      <p className="text-xs text-gray-400">{s.email}</p>
+                    </div>
                   </div>
                   <button onClick={() => handleEnroll(s.id)}
-                    className="px-3 py-1.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 flex items-center gap-1">
-                    <UserPlus size={14} /> Thêm
+                    className="px-3 py-1.5 bg-indigo-600 text-white text-xs rounded-lg hover:bg-indigo-700 flex items-center gap-1 font-semibold transition">
+                    <UserPlus size={13} /> Thêm
                   </button>
                 </div>
               ))}
@@ -571,39 +588,39 @@ function StudentsTab() {
       )}
 
       {/* Student list */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-        <h3 className="font-bold text-gray-900 mb-4">Danh sách học sinh ({students.length})</h3>
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+          <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+            <Users size={16} className="text-indigo-600" /> Danh sách học sinh
+          </h3>
+          <span className="text-sm text-gray-400 font-medium">{students.length} học sinh</span>
+        </div>
         {students.length === 0 ? (
-          <p className="text-gray-500 text-sm">Chưa có học sinh nào trong lớp. Nhấn "Thêm học sinh" để bắt đầu.</p>
+          <div className="px-5 py-12 text-center">
+            <Users size={40} className="mx-auto text-gray-200 mb-3" />
+            <p className="text-gray-500 text-sm">Chưa có học sinh nào. Nhấn "Thêm học sinh" để bắt đầu.</p>
+          </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left">
-              <thead>
-                <tr className="border-b border-gray-200 text-gray-500 text-sm">
-                  <th className="pb-3 font-medium">#</th>
-                  <th className="pb-3 font-medium">Họ tên</th>
-                  <th className="pb-3 font-medium">Email</th>
-                  <th className="pb-3 font-medium">Ngày tham gia</th>
-                  <th className="pb-3 font-medium">Hành động</th>
-                </tr>
-              </thead>
-              <tbody className="text-sm">
-                {students.map((s: any, i: number) => (
-                  <tr key={s.id} className="border-b border-gray-50 hover:bg-gray-50">
-                    <td className="py-3 text-gray-400">{i + 1}</td>
-                    <td className="py-3 font-medium text-gray-900">{s.name}</td>
-                    <td className="py-3 text-gray-500">{s.email}</td>
-                    <td className="py-3 text-gray-500">{s.enrolled_at ? new Date(s.enrolled_at).toLocaleDateString("vi-VN") : "-"}</td>
-                    <td className="py-3">
-                      <button onClick={() => handleRemove(s.id)}
-                        className="p-1.5 text-red-600 hover:bg-red-50 rounded" title="Xoá khỏi lớp">
-                        <UserMinus size={16} />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="divide-y divide-gray-50">
+            {students.map((s: any, i: number) => (
+              <div key={s.id} className="flex items-center gap-4 px-5 py-3.5 hover:bg-gray-50 transition">
+                <span className="text-sm text-gray-400 w-6 text-center">{i + 1}</span>
+                <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 font-bold text-sm flex items-center justify-center flex-shrink-0">
+                  {s.name.charAt(0).toUpperCase()}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-gray-900 text-sm">{s.name}</p>
+                  <p className="text-xs text-gray-400">{s.email}</p>
+                </div>
+                <span className="text-xs text-gray-400 hidden md:block">
+                  {s.enrolled_at ? new Date(s.enrolled_at).toLocaleDateString("vi-VN") : "—"}
+                </span>
+                <button onClick={() => handleRemove(s.id)}
+                  className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition" title="Xoá khỏi lớp">
+                  <UserMinus size={15} />
+                </button>
+              </div>
+            ))}
           </div>
         )}
       </div>
@@ -704,77 +721,94 @@ function LessonsTab({ handleTextareaDoubleClick }: { handleTextareaDoubleClick: 
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap gap-3 items-center">
-        <label className="font-medium text-gray-700">Lớp:</label>
-        <select value={selectedClass || ""} onChange={e => setSelectedClass(Number(e.target.value))}
-          className="border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none min-w-[200px]">
-          {classes.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
+    <div className="space-y-6">
+      {/* Controls */}
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 flex flex-wrap gap-3 items-center">
+        <div className="flex items-center gap-2 flex-1 min-w-[200px]">
+          <label className="text-sm font-semibold text-gray-500 shrink-0">Lớp:</label>
+          <select value={selectedClass || ""} onChange={e => setSelectedClass(Number(e.target.value))}
+            className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 outline-none bg-white">
+            {classes.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </div>
         <button onClick={() => { setShowForm(true); setEditId(null); setFormTitle(""); setFormContent(""); setFormFile(null); }}
-          className="ml-auto flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700">
-          <Plus size={18} /> Thêm bài học
+          className="ml-auto flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 font-semibold text-sm transition">
+          <Plus size={16} /> Thêm bài học
         </button>
       </div>
 
       {showForm && (
-        <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="font-bold">{editId ? "Sửa bài học" : "Tạo bài học mới"}</h3>
-            <button onClick={resetForm} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden animate-in slide-in-from-top-2 duration-200">
+          <div className="flex justify-between items-center px-5 py-4 border-b border-gray-100">
+            <h3 className="font-semibold text-gray-900">{editId ? "Chỉnh sửa bài học" : "Tạo bài học mới"}</h3>
+            <button onClick={resetForm} className="p-1 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition"><X size={16} /></button>
           </div>
-          <div className="space-y-3">
-            <input value={formTitle} onChange={e => setFormTitle(e.target.value)} placeholder="Tiêu đề bài học"
-              className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none" />
-            <textarea 
-               value={formContent} 
-               onChange={e => setFormContent(e.target.value)} 
-               onDoubleClick={handleTextareaDoubleClick}
-               placeholder="Nội dung bài học (tuỳ chọn)" rows={4}
-              className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none resize-none" 
-            />
+          <div className="p-5 space-y-4">
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Tiêu đề</label>
+              <input value={formTitle} onChange={e => setFormTitle(e.target.value)} placeholder="Nhập tiêu đề bài học..."
+                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 outline-none" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Nội dung (tuỳ chọn)</label>
+              <textarea
+                value={formContent}
+                onChange={e => setFormContent(e.target.value)}
+                onDoubleClick={handleTextareaDoubleClick}
+                placeholder="Nhập nội dung bài học... (click đúp vào từ để tra từ điển)" rows={4}
+                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 outline-none resize-none"
+              />
+            </div>
             <div className="flex items-center gap-3">
-              <label className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg cursor-pointer hover:bg-gray-200">
-                <Upload size={16} /> {formFile ? formFile.name : "Đính kèm file"}
+              <label className="flex items-center gap-2 px-4 py-2 bg-gray-50 border border-gray-200 text-gray-600 rounded-xl cursor-pointer hover:bg-gray-100 text-sm font-medium transition">
+                <Upload size={15} /> {formFile ? formFile.name : "Đính kèm file"}
                 <input type="file" className="hidden" onChange={e => setFormFile(e.target.files?.[0] || null)} />
               </label>
-              <button onClick={handleSave} className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 flex items-center gap-1">
-                <Check size={16} /> Lưu
+              <button onClick={handleSave} className="ml-auto px-6 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 font-semibold text-sm flex items-center gap-1.5 transition">
+                <Check size={15} /> Lưu bài học
               </button>
             </div>
           </div>
         </div>
       )}
 
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-        <h3 className="font-bold text-gray-900 mb-4">Danh sách bài học ({lessons.length})</h3>
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+          <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+            <BookOpen size={16} className="text-indigo-600" /> Danh sách bài học
+          </h3>
+          <span className="text-sm text-gray-400 font-medium">{lessons.length} bài học</span>
+        </div>
         {lessons.length === 0 ? (
-          <p className="text-gray-500 text-sm">Chưa có bài học nào. Nhấn "Thêm bài học" để bắt đầu.</p>
+          <div className="px-5 py-12 text-center">
+            <BookOpen size={40} className="mx-auto text-gray-200 mb-3" />
+            <p className="text-gray-500 text-sm">Chưa có bài học nào. Nhấn "Thêm bài học" để bắt đầu.</p>
+          </div>
         ) : (
-          <div className="space-y-3">
+          <div className="divide-y divide-gray-50">
             {lessons.map((l: any) => (
-              <div key={l.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-indigo-100 rounded-lg"><BookOpen size={18} className="text-indigo-600" /></div>
-                  <div>
-                    <p className="font-medium text-gray-900">{l.title}</p>
-                    {l.content && <p className="text-sm text-gray-500 line-clamp-1">{l.content}</p>}
-                    {l.file_name && (
-                      <span className="text-xs text-blue-600 flex items-center gap-1 mt-1">
-                        <FileText size={12} /> {l.file_name}
-                      </span>
-                    )}
-                  </div>
+              <div key={l.id} className="flex items-center gap-4 px-5 py-4 hover:bg-gray-50 transition group">
+                <div className="p-2 bg-indigo-50 rounded-xl flex-shrink-0">
+                  <BookOpen size={16} className="text-indigo-600" />
                 </div>
-                <div className="flex gap-1">
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-gray-900 text-sm">{l.title}</p>
+                  {l.content && <p className="text-xs text-gray-400 line-clamp-1 mt-0.5">{l.content}</p>}
+                  {l.file_name && (
+                    <span className="text-xs text-indigo-600 flex items-center gap-1 mt-1">
+                      <FileText size={11} /> {l.file_name}
+                    </span>
+                  )}
+                </div>
+                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition">
                   {l.file_name && (
                     <a href={`${API_URL}/teacher/lessons/${l.id}/file`} target="_blank" rel="noopener noreferrer"
-                      className="p-1.5 text-green-600 hover:bg-green-50 rounded"><Download size={16} /></a>
+                      className="p-1.5 text-green-600 hover:bg-green-50 rounded-lg transition"><Download size={15} /></a>
                   )}
                   <button onClick={() => { setShowForm(true); setEditId(l.id); setFormTitle(l.title); setFormContent(l.content || ""); setFormFile(null); }}
-                    className="p-1.5 text-blue-600 hover:bg-blue-50 rounded"><Edit size={16} /></button>
+                    className="p-1.5 text-indigo-500 hover:bg-indigo-50 rounded-lg transition"><Edit size={15} /></button>
                   <button onClick={() => handleDelete(l.id)}
-                    className="p-1.5 text-red-600 hover:bg-red-50 rounded"><Trash2 size={16} /></button>
+                    className="p-1.5 text-red-400 hover:bg-red-50 rounded-lg transition"><Trash2 size={15} /></button>
                 </div>
               </div>
             ))}

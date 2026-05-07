@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useEffect } from "react";
-import { BarChart3 } from "lucide-react";
+import { BarChart3, Trophy, CheckCircle2, TrendingUp } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 
 interface ScoresTabProps {
@@ -22,7 +22,14 @@ export default function ScoresTab({ API_URL }: ScoresTabProps) {
     })();
   }, [token, authFetch, API_URL]);
 
-  if (loading) return <div className="flex justify-center py-20"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" /></div>;
+  if (loading) return (
+    <div className="space-y-6 animate-pulse">
+      <div className="grid grid-cols-3 gap-4">
+        {Array(3).fill(0).map((_, i) => <div key={i} className="h-24 bg-gray-100 rounded-xl" />)}
+      </div>
+      <div className="h-64 bg-gray-100 rounded-xl" />
+    </div>
+  );
 
   if (scores.length === 0) {
     return (
@@ -37,55 +44,68 @@ export default function ScoresTab({ API_URL }: ScoresTabProps) {
   const totalScore = scores.reduce((s, r) => s + r.score, 0);
   const totalMax = scores.reduce((s, r) => s + r.max_score, 0);
   const avgPercent = totalMax > 0 ? Math.round(totalScore / totalMax * 100) : 0;
+  const excellentCount = scores.filter(s => s.max_score > 0 && Math.round(s.score / s.max_score * 100) >= 80).length;
+
+  const getScoreColor = (pct: number) => {
+    if (pct >= 80) return { text: "text-green-600", bg: "bg-green-50", bar: "bg-green-500", border: "border-green-100" };
+    if (pct >= 50) return { text: "text-yellow-600", bg: "bg-yellow-50", bar: "bg-yellow-400", border: "border-yellow-100" };
+    return { text: "text-red-600", bg: "bg-red-50", bar: "bg-red-500", border: "border-red-100" };
+  };
+
+  const statCards = [
+    { label: "Bài đã làm", value: scores.length, icon: CheckCircle2, color: "indigo" },
+    { label: "Điểm trung bình", value: `${avgPercent}%`, icon: BarChart3, color: "green" },
+    { label: "Xuất sắc (≥80%)", value: excellentCount, icon: Trophy, color: "yellow" },
+  ];
+  const colorMap: Record<string, { icon: string; bg: string }> = {
+    indigo: { icon: "text-indigo-600", bg: "bg-indigo-50" },
+    green:  { icon: "text-green-600",  bg: "bg-green-50" },
+    yellow: { icon: "text-yellow-600", bg: "bg-yellow-50" },
+  };
 
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-white rounded-xl p-5 border border-gray-100 shadow-sm text-center">
-          <p className="text-3xl font-extrabold text-blue-600">{scores.length}</p>
-          <p className="text-sm text-gray-500">Bài đã làm</p>
-        </div>
-        <div className="bg-white rounded-xl p-5 border border-gray-100 shadow-sm text-center">
-          <p className="text-3xl font-extrabold text-green-600">{totalScore}/{totalMax}</p>
-          <p className="text-sm text-gray-500">Tổng điểm</p>
-        </div>
-        <div className="bg-white rounded-xl p-5 border border-gray-100 shadow-sm text-center">
-          <p className="text-3xl font-extrabold text-purple-600">{avgPercent}%</p>
-          <p className="text-sm text-gray-500">Trung bình</p>
-        </div>
+        {statCards.map((card, i) => {
+          const col = colorMap[card.color];
+          return (
+            <div key={i} className="bg-white rounded-xl p-5 border border-gray-100 shadow-sm">
+              <div className={`w-10 h-10 ${col.bg} rounded-xl flex items-center justify-center mb-3`}>
+                <card.icon size={19} className={col.icon} />
+              </div>
+              <p className="text-2xl font-bold text-gray-900">{card.value}</p>
+              <p className="text-sm text-gray-500 mt-0.5">{card.label}</p>
+            </div>
+          );
+        })}
       </div>
 
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50 border-b border-gray-100">
-              <tr>
-                <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase">Bài tập</th>
-                <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase">Lớp</th>
-                <th className="text-center px-5 py-3 text-xs font-semibold text-gray-500 uppercase">Điểm</th>
-                <th className="text-right px-5 py-3 text-xs font-semibold text-gray-500 uppercase">Ngày nộp</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {scores.map((s) => {
-                const pct = s.max_score > 0 ? Math.round(s.score / s.max_score * 100) : 0;
-                return (
-                  <tr key={s.id} className="hover:bg-gray-50 transition">
-                    <td className="px-5 py-4 font-medium text-gray-900">{s.assignment_title}</td>
-                    <td className="px-5 py-4 text-sm text-gray-500">{s.class_name}</td>
-                    <td className="px-5 py-4 text-center">
-                      <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-sm font-bold ${pct >= 80 ? "bg-green-100 text-green-700" : pct >= 50 ? "bg-yellow-100 text-yellow-700" : "bg-red-100 text-red-700"}`}>
-                        {s.score}/{s.max_score}
-                      </span>
-                    </td>
-                    <td className="px-5 py-4 text-right text-sm text-gray-500">
-                      {new Date(s.submitted_at).toLocaleDateString("vi-VN")}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+        <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-2">
+          <TrendingUp size={16} className="text-indigo-600" />
+          <h3 className="font-semibold text-gray-900">Chi tiết kết quả</h3>
+        </div>
+        <div className="divide-y divide-gray-50">
+          {scores.map((s) => {
+            const pct = s.max_score > 0 ? Math.round(s.score / s.max_score * 100) : 0;
+            const col = getScoreColor(pct);
+            return (
+              <div key={s.id} className="px-5 py-4 hover:bg-gray-50 transition">
+                <div className="flex items-center justify-between mb-2">
+                  <div>
+                    <p className="font-semibold text-gray-900">{s.assignment_title}</p>
+                    <p className="text-xs text-gray-400 mt-0.5">{s.class_name} · {new Date(s.submitted_at).toLocaleDateString("vi-VN")}</p>
+                  </div>
+                  <span className={`text-sm font-bold px-3 py-1 rounded-full ${col.bg} ${col.text} border ${col.border} flex-shrink-0 ml-4`}>
+                    {s.score}/{s.max_score} · {pct}%
+                  </span>
+                </div>
+                <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                  <div className={`h-full ${col.bar} rounded-full transition-all`} style={{ width: `${pct}%` }} />
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>

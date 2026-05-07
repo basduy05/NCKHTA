@@ -260,7 +260,14 @@ export default function VocabularyTab({ API_URL }: VocabularyTabProps) {
   const levels = ["A1", "A2", "B1", "B2", "C1", "C2"];
   const currentEx = practiceExercises[currentExerciseIdx];
 
-  if (loading) return <div className="flex justify-center py-20"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" /></div>;
+  if (loading) return (
+    <div className="space-y-6 animate-pulse">
+      <div className="h-16 bg-gray-100 rounded-2xl" />
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {Array(6).fill(0).map((_, i) => <div key={i} className="h-40 bg-gray-100 rounded-2xl" />)}
+      </div>
+    </div>
+  );
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
@@ -295,7 +302,7 @@ export default function VocabularyTab({ API_URL }: VocabularyTabProps) {
           <button
             onClick={startRichPractice}
             disabled={generatingPractice || words.length === 0}
-            className="btn-primary py-2 px-6 rounded-xl font-bold text-sm flex items-center gap-2 shadow-sm whitespace-nowrap disabled:opacity-50"
+            className="bg-indigo-600 hover:bg-indigo-700 text-white py-2 px-6 rounded-xl font-semibold text-sm flex items-center gap-2 shadow-sm whitespace-nowrap disabled:opacity-50 transition"
           >
             {generatingPractice ? <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" /> : <PlayCircle size={18} />}
             Luyện tập SR

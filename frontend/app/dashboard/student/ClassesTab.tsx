@@ -39,7 +39,14 @@ export default function ClassesTab({ API_URL }: ClassesTabProps) {
     finally { setLessonsLoading(false); }
   };
 
-  if (loading) return <div className="flex justify-center py-20"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" /></div>;
+  if (loading) return (
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-pulse">
+      <div className="space-y-3">
+        {Array(3).fill(0).map((_, i) => <div key={i} className="h-24 bg-gray-100 rounded-xl" />)}
+      </div>
+      <div className="lg:col-span-2 h-64 bg-gray-100 rounded-xl" />
+    </div>
+  );
 
   if (classes.length === 0) {
     return (
@@ -59,11 +66,11 @@ export default function ClassesTab({ API_URL }: ClassesTabProps) {
           <button
             key={c.id}
             onClick={() => loadLessons(c.id)}
-            className={`w-full text-left p-5 rounded-xl border transition-all ${selectedClass === c.id ? "bg-blue-600 border-blue-600 shadow-lg shadow-blue-200 text-white" : "bg-white border-gray-100 shadow-sm hover:border-blue-300 text-gray-700"}`}
+            className={`w-full text-left p-5 rounded-xl border transition-all ${selectedClass === c.id ? "bg-indigo-600 border-indigo-600 shadow-lg shadow-indigo-100 text-white" : "bg-white border-gray-100 shadow-sm hover:border-indigo-200 text-gray-700"}`}
           >
             <div className="flex justify-between items-start">
               <div>
-                <p className={`text-xs font-bold uppercase tracking-wider mb-1 ${selectedClass === c.id ? "text-blue-100" : "text-gray-400"}`}>Lớp của {c.teacher_name}</p>
+                <p className={`text-xs font-semibold uppercase tracking-wider mb-1 ${selectedClass === c.id ? "text-indigo-100" : "text-gray-400"}`}>Lớp của {c.teacher_name}</p>
                 <h4 className="font-extrabold text-lg leading-tight">{c.name}</h4>
               </div>
               <ChevronRight size={20} className={selectedClass === c.id ? "text-white" : "text-gray-300"} />
@@ -77,9 +84,9 @@ export default function ClassesTab({ API_URL }: ClassesTabProps) {
 
       <div className="lg:col-span-2">
         {!selectedClass ? (
-          <div className="bg-blue-50/50 rounded-2xl p-12 text-center border-2 border-dashed border-blue-100">
-            <BookOpen size={48} className="mx-auto text-blue-200 mb-4" />
-            <p className="text-blue-600 font-medium italic">Chọn một lớp học để xem bài học</p>
+          <div className="bg-indigo-50/50 rounded-2xl p-12 text-center border-2 border-dashed border-indigo-100">
+            <BookOpen size={48} className="mx-auto text-indigo-200 mb-4" />
+            <p className="text-indigo-600 font-medium">Chọn một lớp học để xem bài học</p>
           </div>
         ) : lessonsLoading ? (
           <div className="flex justify-center py-20"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" /></div>

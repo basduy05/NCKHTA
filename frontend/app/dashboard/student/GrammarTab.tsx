@@ -525,7 +525,7 @@ export default function GrammarTab({ API_URL }: GrammarTabProps) {
 
       {/* ── Sticky Practice Bar ── */}
       {selectedRules.length > 0 && (
-        <div className="fixed bottom-0 left-64 right-0 z-50 p-5">
+        <div className="fixed bottom-0 left-60 right-0 z-50 p-5">
           <div className="max-w-4xl mx-auto bg-white rounded-[28px] border border-gray-100 shadow-2xl p-5 flex flex-col sm:flex-row items-center gap-5">
             <div className="flex-1">
               <p className="font-black text-gray-900 text-lg">{selectedRules.length} chủ đề đã chọn</p>

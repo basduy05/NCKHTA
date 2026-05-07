@@ -1,7 +1,8 @@
 "use client";
 import React, { useState, useEffect } from "react";
-import { 
-  ClipboardList, Clock, CheckCircle2, Trophy, ChevronRight, Sparkles 
+import {
+  ClipboardList, Clock, CheckCircle2, Trophy, ChevronRight, Sparkles,
+  PenLine, BookOpen, Mic, Brain
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { useNotification } from "../../context/NotificationContext";
@@ -87,7 +88,23 @@ export default function AssignmentsTab({ API_URL }: AssignmentsTabProps) {
     finally { setSubmitting(false); }
   };
 
-  if (loading) return <div className="flex justify-center py-20"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" /></div>;
+  const TYPE_CONFIG: Record<string, { label: string; icon: any; color: string }> = {
+    quiz:     { label: "Trắc nghiệm", icon: Brain,    color: "bg-indigo-50 text-indigo-600 border-indigo-100" },
+    writing:  { label: "Bài viết",    icon: PenLine,  color: "bg-purple-50 text-purple-600 border-purple-100" },
+    reading:  { label: "Đọc hiểu",   icon: BookOpen, color: "bg-teal-50 text-teal-600 border-teal-100" },
+    speaking: { label: "Nói",         icon: Mic,      color: "bg-orange-50 text-orange-600 border-orange-100" },
+  };
+
+  const isOverdue = (dueDate: string) => {
+    if (!dueDate) return false;
+    return new Date(dueDate) < new Date();
+  };
+
+  if (loading) return (
+    <div className="space-y-4 animate-pulse">
+      {Array(3).fill(0).map((_, i) => <div key={i} className="h-20 bg-gray-100 rounded-xl" />)}
+    </div>
+  );
 
   if (takingQuiz) {
     const assignmentType = takingQuiz.type || "quiz";
@@ -179,7 +196,7 @@ export default function AssignmentsTab({ API_URL }: AssignmentsTabProps) {
                 <button
                   onClick={() => submitAssignment()}
                   disabled={!quizAnswers["text"]?.trim()}
-                  className="btn-primary px-10 py-3 rounded-xl text-lg shadow-md hover:shadow-lg disabled:opacity-50 transition"
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white px-10 py-3 rounded-xl text-base font-semibold shadow-sm hover:shadow-md disabled:opacity-50 transition"
                 >
                   Nộp bài viết
                 </button>
@@ -211,7 +228,7 @@ export default function AssignmentsTab({ API_URL }: AssignmentsTabProps) {
               </div>
             ))}
           </div>
-          <button onClick={() => { setTakingQuiz(null); setQuizResult(null); }} className="btn-primary px-6 py-2 rounded-xl">
+          <button onClick={() => { setTakingQuiz(null); setQuizResult(null); }} className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-xl font-semibold transition">
             Quay lại danh sách
           </button>
         </div>
@@ -273,7 +290,7 @@ export default function AssignmentsTab({ API_URL }: AssignmentsTabProps) {
               <button
                 onClick={submitAssignment}
                 disabled={submitting || Object.keys(quizAnswers).length === 0}
-                className="btn-primary px-10 py-3 rounded-xl text-lg shadow-md hover:shadow-lg disabled:opacity-50 transition"
+                className="bg-indigo-600 hover:bg-indigo-700 text-white px-10 py-3 rounded-xl text-base font-semibold shadow-sm hover:shadow-md disabled:opacity-50 transition"
               >
                 {submitting ? "Đang nộp bài..." : "Nộp bài & Xem kết quả"}
               </button>
@@ -301,18 +318,33 @@ export default function AssignmentsTab({ API_URL }: AssignmentsTabProps) {
             <div>
               <h3 className="font-bold text-gray-900 mb-3 flex items-center gap-2"><Clock size={18} className="text-orange-500" /> Chưa làm ({pending.length})</h3>
               <div className="space-y-3">
-                {pending.map((a) => (
-                  <div key={a.id} className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm flex items-center justify-between hover:shadow-md transition">
-                    <div>
+                {pending.map((a) => {
+                  const typeCfg = TYPE_CONFIG[a.type] || TYPE_CONFIG["quiz"];
+                  const TypeIcon = typeCfg.icon;
+                  const overdue = isOverdue(a.due_date);
+                  return (
+                    <div key={a.id} className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm flex items-center justify-between hover:shadow-md transition">
+                      <div className="flex-1 min-w-0 mr-4">
+                        <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                          <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full border ${typeCfg.color}`}>
+                            <TypeIcon size={11} /> {typeCfg.label}
+                          </span>
+                          {overdue && (
+                            <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-red-50 text-red-600 border border-red-100">
+                              <Clock size={11} /> Quá hạn
+                            </span>
+                          )}
+                        </div>
                         <h4 className="font-bold text-gray-900">{a.title}</h4>
-                        <p className="text-sm text-gray-500">{a.class_name}{a.due_date ? ` · Hạn: ${a.due_date}` : ""}</p>
-                        {a.description && <p className="text-sm text-gray-400 mt-1">{a.description}</p>}
+                        <p className="text-sm text-gray-500 mt-0.5">{a.class_name}{a.due_date ? ` · Hạn: ${a.due_date}` : ""}</p>
+                        {a.description && <p className="text-sm text-gray-400 mt-1 line-clamp-1">{a.description}</p>}
+                      </div>
+                      <button onClick={() => startQuiz(a.id)} className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-xl text-sm font-semibold flex items-center gap-1.5 shrink-0 transition">
+                        Làm bài <ChevronRight size={15} />
+                      </button>
                     </div>
-                    <button onClick={() => startQuiz(a.id)} className="btn-primary px-5 py-2 rounded-lg text-sm flex items-center gap-1 shrink-0">
-                      Làm bài <ChevronRight size={16} />
-                    </button>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}

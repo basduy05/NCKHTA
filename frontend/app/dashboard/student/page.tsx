@@ -97,35 +97,39 @@ function StudentDashboardContent() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center mb-2">
-        <h1 className="text-2xl font-bold text-gray-900">{getTitle(activeTab)}</h1>
-        <div className="flex items-center gap-4">
-          <button 
+      <div className="flex justify-between items-center mb-6">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">{getTitle(activeTab)}</h1>
+          <p className="text-gray-400 text-sm mt-0.5">
+            Học sinh · <span className="text-gray-600 font-medium">{user?.name}</span>
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
             onClick={() => refreshUser()}
-            className="hidden md:flex items-center gap-1.5 bg-yellow-50 text-yellow-700 px-3 py-1 rounded-full border border-yellow-100 font-bold text-sm hover:bg-yellow-100 transition"
+            className="flex items-center gap-1.5 bg-yellow-50 text-yellow-700 px-3.5 py-2 rounded-xl border border-yellow-100 font-semibold text-sm hover:bg-yellow-100 transition"
           >
-             <Trophy size={14} className="text-yellow-500" /> {user?.points || 0} pts
+            <Trophy size={14} className="text-yellow-500" /> {user?.points || 0} pts
           </button>
-          <div className="hidden md:flex items-center gap-1.5 bg-indigo-50 text-indigo-700 px-3 py-1 rounded-full border border-indigo-100 font-bold text-sm">
-             <Sparkles size={14} className="text-indigo-500" /> {user?.credits_ai || 0} credits
+          <div className="flex items-center gap-1.5 bg-indigo-50 text-indigo-700 px-3.5 py-2 rounded-xl border border-indigo-100 font-semibold text-sm">
+            <Sparkles size={14} className="text-indigo-500" /> {user?.credits_ai || 0} credits
           </div>
-          <p className="text-sm text-gray-500">Xin chào, <span className="font-semibold text-blue-600">{user?.name}</span></p>
         </div>
       </div>
 
       {showCreditModal && (
         <div className="fixed inset-0 !mt-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-300">
-            <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
-              <AlertCircle size={40} className="text-red-500" />
+          <div className="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-300 border border-gray-100">
+            <div className="w-16 h-16 bg-red-50 rounded-2xl flex items-center justify-center mx-auto mb-5">
+              <AlertCircle size={32} className="text-red-500" />
             </div>
-            <h3 className="text-2xl font-black text-gray-900 text-center mb-2">Hết lượt sử dụng AI!</h3>
-            <p className="text-gray-600 text-center mb-8">
-              Bạn đã sử dụng hết số credits AI trong ngày. Vui lòng quay lại vào ngày mai hoặc liên hệ quản trị viên để được cấp thêm.
+            <h3 className="text-xl font-bold text-gray-900 text-center mb-2">Hết lượt sử dụng AI!</h3>
+            <p className="text-gray-500 text-center mb-6 text-sm">
+              Bạn đã dùng hết credits AI hôm nay. Quay lại vào ngày mai hoặc liên hệ quản trị viên.
             </p>
-            <button 
+            <button
               onClick={() => setShowCreditModal(false)}
-              className="w-full bg-blue-600 text-white py-4 rounded-2xl font-bold text-lg shadow-xl shadow-blue-200 hover:bg-blue-700 transition"
+              className="w-full bg-indigo-600 text-white py-3 rounded-xl font-semibold hover:bg-indigo-700 transition"
             >
               Đã hiểu
             </button>

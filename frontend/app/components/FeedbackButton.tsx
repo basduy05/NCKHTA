@@ -66,7 +66,7 @@ export default function FeedbackButton({ feature }: FeedbackButtonProps) {
       {/* Floating Button */}
       <button
         onClick={() => setIsOpen(true)}
-        className="fixed bottom-6 right-6 z-50 bg-gradient-to-r from-amber-500 to-orange-500 text-white p-3.5 rounded-2xl shadow-lg shadow-orange-200 hover:shadow-xl hover:shadow-orange-300 hover:scale-105 active:scale-95 transition-all duration-200 group"
+        className="fixed bottom-[88px] right-6 z-50 bg-gradient-to-r from-amber-500 to-orange-500 text-white p-3.5 rounded-2xl shadow-lg shadow-orange-200 hover:shadow-xl hover:shadow-orange-300 hover:scale-105 active:scale-95 transition-all duration-200 group"
         title="Góp ý / Báo lỗi"
       >
         <MessageCircleWarning size={22} className="group-hover:rotate-12 transition-transform" />

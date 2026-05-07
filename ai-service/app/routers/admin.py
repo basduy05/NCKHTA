@@ -271,10 +271,30 @@ def bulk_update_credits(data: BulkCreditUpdate):
 @router.delete("/users/{user_id}")
 def delete_user(user_id: int):
     conn = get_db()
-    conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
-    conn.commit()
-    conn.close()
-    return {"message": "User deleted"}
+    try:
+        row = conn.execute("SELECT id FROM users WHERE id = ?", (user_id,)).fetchone()
+        if not row:
+            conn.close()
+            raise HTTPException(status_code=404, detail="Không tìm thấy người dùng")
+        # Xóa các bản ghi liên quan trước để tránh lỗi FK constraint
+        conn.execute("DELETE FROM enrollments WHERE student_id = ?", (user_id,))
+        conn.execute("DELETE FROM student_scores WHERE student_id = ?", (user_id,))
+        conn.execute("DELETE FROM ai_practice_history WHERE student_id = ?", (user_id,))
+        conn.execute("DELETE FROM saved_vocabulary WHERE user_id = ?", (user_id,))
+        conn.execute("DELETE FROM generated_exams WHERE user_id = ?", (user_id,))
+        conn.execute("DELETE FROM assignments WHERE teacher_id = ?", (user_id,))
+        conn.execute("DELETE FROM study_logs WHERE user_id = ?", (user_id,))
+        conn.execute("UPDATE classes SET teacher_id = NULL WHERE teacher_id = ?", (user_id,))
+        conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
+        conn.commit()
+        conn.close()
+        return {"message": "Đã xóa người dùng thành công"}
+    except HTTPException:
+        if conn: conn.close()
+        raise
+    except Exception as e:
+        if conn: conn.close()
+        raise HTTPException(status_code=500, detail=f"Lỗi xóa người dùng: {str(e)}")
 
 
 # --- CLASSES CRUD ---
