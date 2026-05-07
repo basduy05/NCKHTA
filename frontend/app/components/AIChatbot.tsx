@@ -124,11 +124,13 @@ export default function AIChatbot() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
       const reader = res.body?.getReader();
+      if (!reader) throw new Error("Stream không khả dụng");
+
       const decoder = new TextDecoder();
       let buffer = "";
       let accumulated = "";
 
-      while (reader) {
+      while (true) {
         const { value, done } = await reader.read();
         if (done) break;
         buffer += decoder.decode(value, { stream: true });

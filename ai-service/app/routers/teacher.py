@@ -4,7 +4,7 @@ from ..database import get_db, AssignmentCreate
 from ..services import auth_service, llm_service, graph_service, file_service
 
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 import json
 import traceback
 
@@ -36,7 +36,7 @@ def _get_current_teacher(authorization: str = Header(...)):
             conn.close()
             raise HTTPException(status_code=401, detail="Invalid or expired token")
 
-        cursor = conn.execute("SELECT id, name, email, role FROM users WHERE id = ?", (payload["user_id"],))
+        cursor = conn.execute("SELECT id, name, email, role, credits_ai FROM users WHERE id = ?", (payload["user_id"],))
         user = cursor.fetchone()
         conn.close()
         if not user:
@@ -803,5 +803,287 @@ async def generate_assignment_from_news(req: NewsGenerateRequest, authorization:
         return result
     except Exception as e:
         traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Grammar — Parse & Quiz endpoints (Teacher/Admin)
+# ─────────────────────────────────────────────────────────────────────────────
+
+class ParseTextRequest(BaseModel):
+    text: str
+
+class SaveQuizzesReq(BaseModel):
+    rule_id: int
+    questions: List[dict]
+
+
+def _parse_quiz_local_teacher(text: str) -> list:
+    """Parse quiz text using regex rules, no AI required."""
+    import re
+
+    lines = text.replace('\r\n', '\n').replace('\r', '\n').split('\n')
+    full_text = '\n'.join(lines)
+
+    answer_key: dict = {}
+    ak_match = re.search(
+        r'(?:answer\s*key|answers?|key|đáp\s*án)\s*:?\s*\n?(.+?)(?:\n\n|\Z)',
+        full_text, re.IGNORECASE | re.DOTALL
+    )
+    ak_source = ak_match.group(1) if ak_match else full_text
+    for m in re.finditer(r'(\d+)\s*[-.:]\s*([A-D])', ak_source, re.IGNORECASE):
+        answer_key[int(m.group(1))] = m.group(2).upper()
+
+    questions = []
+    current_q: dict | None = None
+    current_num = 0
+
+    q_start_re = re.compile(r'^(\d+)\s*[.)\-:]\s*(.+)', re.IGNORECASE)
+    opt_re = re.compile(r'^([A-Da-d])\s*[.)\-:]\s*(.+)', re.IGNORECASE)
+
+    for raw_line in lines:
+        line = raw_line.strip()
+        if not line:
+            continue
+
+        q_match = q_start_re.match(line)
+        opt_match = opt_re.match(line) if not q_match else None
+
+        if q_match:
+            if current_q:
+                questions.append(current_q)
+            current_num = int(q_match.group(1))
+            question_text = q_match.group(2).strip()
+
+            inline_split = re.split(r'\s+([A-D])\.\s+', question_text)
+            inline_opts = []
+            if len(inline_split) >= 3:
+                question_text = inline_split[0].strip()
+                for i in range(1, len(inline_split), 2):
+                    if i + 1 < len(inline_split):
+                        opt_letter = inline_split[i].upper()
+                        opt_text = inline_split[i + 1].strip()
+                        is_correct = opt_text.endswith('(*)') or opt_text.endswith('*')
+                        if is_correct:
+                            opt_text = re.sub(r'\s*\(\*\)\s*$|\s*\*\s*$', '', opt_text).strip()
+                        inline_opts.append(f"{opt_letter}. {opt_text}")
+
+            current_q = {
+                "question": question_text,
+                "type": "MCQ" if inline_opts else "FIB",
+                "options": inline_opts,
+                "answer": "",
+                "explanation_vn": ""
+            }
+        elif opt_match and current_q is not None:
+            opt_letter = opt_match.group(1).upper()
+            opt_text = opt_match.group(2).strip()
+            is_correct = opt_text.endswith('(*)') or opt_text.endswith('*')
+            if is_correct:
+                opt_text = re.sub(r'\s*\(\*\)\s*$|\s*\*\s*$', '', opt_text).strip()
+                current_q["answer"] = f"{opt_letter}. {opt_text}"
+            current_q["options"].append(f"{opt_letter}. {opt_text}")
+            current_q["type"] = "MCQ"
+        elif current_q is not None and not current_q["options"]:
+            current_q["question"] += " " + line
+
+    if current_q:
+        questions.append(current_q)
+
+    for i, q in enumerate(questions):
+        if not q["answer"]:
+            ak_letter = answer_key.get(i + 1, "")
+            if ak_letter:
+                for opt in q["options"]:
+                    if opt.startswith(ak_letter + '.'):
+                        q["answer"] = opt
+                        break
+                if not q["answer"]:
+                    q["answer"] = ak_letter
+
+    return [q for q in questions if len(q["question"].strip()) > 3]
+
+
+@router.post("/grammar/parse-text")
+async def parse_grammar_text_teacher(req: ParseTextRequest, authorization: str = Header(...)):
+    """Parse exam text with AI to extract questions (costs 3 AI credits)."""
+    teacher = _get_current_teacher(authorization)
+
+    text = req.text.strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="Text không được để trống")
+    if len(text) > 12000:
+        raise HTTPException(status_code=400, detail="Text quá dài (tối đa 12000 ký tự)")
+
+    if (teacher.get("credits_ai") or 0) < 3:
+        raise HTTPException(status_code=402, detail="Không đủ AI credits (cần 3)")
+
+    try:
+        llm = llm_service.get_llm()
+        if not llm:
+            raise HTTPException(status_code=503, detail="AI service không khả dụng, vui lòng thử lại sau")
+
+        from langchain_core.messages import SystemMessage, HumanMessage
+        import asyncio, re
+
+        system_prompt = """You are an expert at parsing English exam texts.
+Extract ALL questions and answers from the given text. The text may be copied from a PDF.
+
+Return ONLY a valid JSON array (no extra text, no markdown fences) where each element has:
+{
+  "question": "full question text (cleaned up)",
+  "options": ["A. text", "B. text", "C. text", "D. text"],
+  "answer": "A. text",
+  "type": "MCQ",
+  "explanation_vn": "short Vietnamese explanation of why this is correct"
+}
+
+For fill-in-blank (no options): use type "FIB" and set options to [].
+Rules:
+- Detect questions numbered 1., 2., Question 1:, I., etc.
+- Match options A. B. C. D. or (A) (B) (C) (D)
+- If answer key is provided (e.g. "1-A, 2-C"), use it to set the correct answer
+- Clean up PDF artifacts (extra spaces, line breaks within words)"""
+
+        lc_messages = [
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=text)
+        ]
+
+        loop = asyncio.get_event_loop()
+
+        def _call_llm():
+            resp = llm.invoke(lc_messages)
+            return resp.content if hasattr(resp, "content") else str(resp)
+
+        raw = await loop.run_in_executor(None, _call_llm)
+
+        try:
+            import json_repair
+            questions = json_repair.repair_json(raw, return_objects=True)
+        except Exception:
+            questions = None
+
+        if not isinstance(questions, list):
+            match = re.search(r'\[[\s\S]*\]', raw)
+            if match:
+                try:
+                    import json_repair
+                    questions = json_repair.repair_json(match.group(), return_objects=True)
+                except Exception:
+                    questions = None
+
+        if isinstance(questions, list) and len(questions) > 0:
+            valid = []
+            for q in questions:
+                if not isinstance(q, dict):
+                    continue
+                question_text = q.get("question") or q.get("q") or ""
+                if not question_text.strip():
+                    continue
+                q["question"] = question_text.strip()
+                q["type"] = q.get("type", "MCQ" if q.get("options") else "FIB")
+                if not isinstance(q.get("options"), list):
+                    q["options"] = []
+                valid.append(q)
+
+            if valid:
+                conn = get_db()
+                conn.execute("UPDATE users SET credits_ai = MAX(0, credits_ai - 3) WHERE id = ?", (teacher["id"],))
+                conn.commit()
+                conn.close()
+                return valid
+
+        raise HTTPException(
+            status_code=422,
+            detail="Không tìm thấy câu hỏi nào. Hãy kiểm tra định dạng văn bản."
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/grammar/parse-text-local")
+def parse_grammar_text_local_teacher(req: ParseTextRequest, authorization: str = Header(...)):
+    """Parse quiz text locally using regex — no AI, no credits deducted."""
+    _get_current_teacher(authorization)
+    text = req.text.strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="Text không được để trống")
+    if len(text) > 20000:
+        raise HTTPException(status_code=400, detail="Text quá dài (tối đa 20000 ký tự)")
+    try:
+        questions = _parse_quiz_local_teacher(text)
+        if not questions:
+            raise HTTPException(
+                status_code=422,
+                detail="Không tìm thấy câu hỏi nào. Đảm bảo câu hỏi được đánh số (1. 2. ...) và đáp án gán A/B/C/D."
+            )
+        return {"questions": questions, "count": len(questions)}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/grammar/quizzes/save")
+def save_grammar_quizzes_teacher(req: SaveQuizzesReq, authorization: str = Header(...)):
+    """Save parsed quiz questions to a grammar rule (teacher or admin)."""
+    _get_current_teacher(authorization)
+    conn = get_db()
+    try:
+        rule = conn.execute("SELECT id FROM grammar_rules WHERE id = ?", (req.rule_id,)).fetchone()
+        if not rule:
+            raise HTTPException(status_code=404, detail="Chủ đề ngữ pháp không tồn tại")
+        saved = 0
+        for q in req.questions:
+            question = (q.get("question") or "").strip()
+            if not question:
+                continue
+            options_json = json.dumps(q.get("options") or [], ensure_ascii=False)
+            conn.execute(
+                "INSERT INTO grammar_quizzes (rule_id, question, type, options, answer, explanation_vn) VALUES (?, ?, ?, ?, ?, ?)",
+                (req.rule_id, question, q.get("type", "MCQ"), options_json, q.get("answer", ""), q.get("explanation_vn", ""))
+            )
+            saved += 1
+        conn.commit()
+        conn.close()
+        return {"message": f"Đã lưu {saved} câu hỏi vào chủ đề", "saved": saved}
+    except HTTPException:
+        raise
+    except Exception as e:
+        if conn:
+            try: conn.close()
+            except: pass
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/grammar/{rule_id}/quizzes")
+def get_grammar_quizzes_teacher(rule_id: int, authorization: str = Header(...)):
+    """Get stored quiz questions for a grammar rule."""
+    _get_current_teacher(authorization)
+    conn = get_db()
+    try:
+        cursor = conn.execute(
+            "SELECT id, question, type, options, answer, explanation_vn FROM grammar_quizzes WHERE rule_id = ? ORDER BY id ASC",
+            (rule_id,)
+        )
+        quizzes = []
+        for row in cursor.fetchall():
+            d = dict(row)
+            try:
+                d["options"] = json.loads(d["options"]) if d["options"] else []
+            except Exception:
+                d["options"] = []
+            quizzes.append(d)
+        conn.close()
+        return quizzes
+    except Exception as e:
+        if conn:
+            try: conn.close()
+            except: pass
         raise HTTPException(status_code=500, detail=str(e))
 

@@ -1,7 +1,7 @@
 "use client";
 import { useState, Suspense, useEffect, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { Users, Database, Plus, UploadCloud, FileSpreadsheet, Save, Edit, Trash2, GraduationCap, X, Check, Copy, BookOpen, BookText, Settings, RefreshCw, Mail, Eye, EyeOff, Sparkles, ClipboardList, Bold, Italic, Underline, Heading1, Heading2, List, ListOrdered, TrendingUp, Network, Activity, MessageCircleWarning, Bug, Lightbulb, CheckCircle, Clock } from "lucide-react";
+import { Users, Database, Plus, UploadCloud, FileSpreadsheet, Save, Edit, Trash2, GraduationCap, X, Check, Copy, BookOpen, BookText, Settings, RefreshCw, Mail, Eye, EyeOff, Sparkles, ClipboardList, Bold, Italic, Underline, Heading1, Heading2, List, ListOrdered, TrendingUp, Network, Activity, MessageCircleWarning, Bug, Lightbulb, CheckCircle, Clock, ClipboardPaste, ListChecks, Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
 import { useAuth } from "@/app/context/AuthContext";
 import { useNotification } from "@/app/context/NotificationContext";
 
@@ -924,6 +924,19 @@ function GrammarTab() {
   const [isEditing, setIsEditing] = useState<number | null>(null);
   const [generatingAI, setGeneratingAI] = useState(false);
 
+  // Parse modal state
+  const [showParseModal, setShowParseModal] = useState(false);
+  const [parseTab, setParseTab] = useState<"ai" | "local">("local");
+  const [parseText, setParseText] = useState("");
+  const [parsing, setParsing] = useState(false);
+  const [parseError, setParseError] = useState<string | null>(null);
+  const [localParsedQuestions, setLocalParsedQuestions] = useState<any[]>([]);
+  const [localParseError, setLocalParseError] = useState<string | null>(null);
+  const [localParsing, setLocalParsing] = useState(false);
+  const [selectedSaveRuleId, setSelectedSaveRuleId] = useState<string>("");
+  const [savingQuizzes, setSavingQuizzes] = useState(false);
+  const [savedSuccess, setSavedSuccess] = useState(false);
+
   // Formatting Helper
   const handleEditorCommand = (command: string, value: string = "") => {
     document.execCommand(command, false, value);
@@ -1040,17 +1053,113 @@ function GrammarTab() {
     setFile(null);
   };
 
+  const closeParseModal = () => {
+    if (parsing || localParsing) return;
+    setShowParseModal(false);
+    setParseError(null);
+    setLocalParseError(null);
+    setLocalParsedQuestions([]);
+    setSavedSuccess(false);
+    setParseText("");
+  };
+
+  const handleAIParse = async () => {
+    if (!parseText.trim()) return;
+    setParsing(true);
+    setParseError(null);
+    try {
+      const res = await authFetch(`${API_URL}/student/grammar/parse-text`, {
+        method: "POST",
+        body: JSON.stringify({ text: parseText }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || `Lỗi ${res.status}`);
+      }
+      const data = await res.json();
+      const rawQ = Array.isArray(data) ? data : (data.questions || []);
+      const validQ = (Array.isArray(rawQ) ? rawQ : []).filter((q: any) => q && (q.question || q.q));
+      if (validQ.length === 0) throw new Error("Không tìm thấy câu hỏi nào trong văn bản.");
+      setLocalParsedQuestions(validQ);
+      setParseTab("local");
+      setParseText("");
+    } catch (e: any) {
+      setParseError(e.message || "Lỗi khi phân tích văn bản");
+    } finally {
+      setParsing(false);
+    }
+  };
+
+  const handleLocalParse = async () => {
+    if (!parseText.trim()) return;
+    setLocalParsing(true);
+    setLocalParseError(null);
+    setLocalParsedQuestions([]);
+    setSavedSuccess(false);
+    try {
+      const res = await authFetch(`${API_URL}/student/grammar/parse-text-local`, {
+        method: "POST",
+        body: JSON.stringify({ text: parseText }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || `Lỗi ${res.status}`);
+      }
+      const data = await res.json();
+      if (!data.questions || data.questions.length === 0) {
+        throw new Error("Không tìm thấy câu hỏi nào. Kiểm tra định dạng văn bản.");
+      }
+      setLocalParsedQuestions(data.questions);
+    } catch (e: any) {
+      setLocalParseError(e.message || "Lỗi phân tích");
+    } finally {
+      setLocalParsing(false);
+    }
+  };
+
+  const saveLocalQuizzes = async () => {
+    if (!selectedSaveRuleId || localParsedQuestions.length === 0) return;
+    setSavingQuizzes(true);
+    try {
+      const res = await authFetch(`${API_URL}/student/grammar/quizzes/save`, {
+        method: "POST",
+        body: JSON.stringify({ rule_id: parseInt(selectedSaveRuleId), questions: localParsedQuestions }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || "Lỗi lưu bài tập");
+      }
+      const data = await res.json();
+      setSavedSuccess(true);
+      showAlert(`Đã lưu ${data.saved} câu hỏi vào chủ đề!`, "success");
+      fetchRules();
+    } catch (e: any) {
+      showAlert(e.message || "Lỗi khi lưu bài tập", "error");
+    } finally {
+      setSavingQuizzes(false);
+    }
+  };
+
   return (
     <div className="animate-in fade-in duration-300">
       <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-8 mb-8">
-        <div className="flex items-center gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
             <div className="bg-teal-50 p-3 rounded-2xl">
-                <BookText className="text-teal-600" size={32} />
+              <BookText className="text-teal-600" size={32} />
             </div>
             <div>
-                <h2 className="text-2xl font-black text-gray-900 leading-none">Kho Ngữ Pháp (AI)</h2>
-                <p className="text-gray-500 text-sm mt-1 font-medium italic italic">Quản lý cấu trúc ngữ pháp hệ thống.</p>
+              <h2 className="text-2xl font-black text-gray-900 leading-none">Kho Ngữ Pháp (AI)</h2>
+              <p className="text-gray-500 text-sm mt-1 font-medium italic">Quản lý cấu trúc ngữ pháp hệ thống.</p>
             </div>
+          </div>
+          <button
+            onClick={() => { setShowParseModal(true); setParseTab("local"); setLocalParsedQuestions([]); setSavedSuccess(false); }}
+            className="flex items-center gap-2 px-6 py-3 bg-orange-500 hover:bg-orange-600 text-white font-black rounded-xl shadow-sm transition-all active:scale-95 self-start sm:self-auto whitespace-nowrap"
+          >
+            <ClipboardPaste size={18} />
+            Nhập bài tập từ đề thi
+          </button>
         </div>
       </div>
 
@@ -1173,6 +1282,200 @@ function GrammarTab() {
           )}
         </div>
       </div>
+
+      {/* ── Parse Modal ── */}
+      {showParseModal && (
+        <div className="fixed inset-0 !mt-0 z-[200] flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={closeParseModal} />
+          <div className="relative z-10 bg-white w-full sm:max-w-2xl rounded-t-[32px] sm:rounded-[32px] shadow-2xl flex flex-col max-h-[90vh]">
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-gray-100 flex-shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="bg-orange-100 p-2.5 rounded-2xl"><ClipboardPaste size={22} className="text-orange-600" /></div>
+                <div>
+                  <h3 className="text-lg font-black text-gray-900">Nhập bài tập từ đề thi</h3>
+                  <p className="text-xs text-gray-400 font-bold">Trích xuất câu hỏi & đáp án từ văn bản, lưu vào kho ngữ pháp</p>
+                </div>
+              </div>
+              <button onClick={closeParseModal} disabled={parsing || localParsing}
+                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-xl transition disabled:opacity-40">
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Tabs */}
+            <div className="flex border-b border-gray-100 px-6 flex-shrink-0">
+              <button onClick={() => { setParseTab("ai"); setLocalParsedQuestions([]); }}
+                className={`pb-3 pt-4 px-4 font-black text-sm flex items-center gap-2 border-b-2 transition-all ${parseTab === "ai" ? "border-teal-500 text-teal-700" : "border-transparent text-gray-400 hover:text-gray-700"}`}>
+                <Sparkles size={15} /> AI Phân tích <span className="text-xs bg-teal-100 text-teal-700 px-2 py-0.5 rounded-full">3 credits</span>
+              </button>
+              <button onClick={() => { setParseTab("local"); setLocalParsedQuestions([]); setSavedSuccess(false); }}
+                className={`pb-3 pt-4 px-4 font-black text-sm flex items-center gap-2 border-b-2 transition-all ${parseTab === "local" ? "border-orange-500 text-orange-700" : "border-transparent text-gray-400 hover:text-gray-700"}`}>
+                <ListChecks size={15} /> Phân tích thông minh <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Miễn phí</span>
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-6 flex-1 overflow-y-auto space-y-4">
+              {parseTab === "ai" ? (
+                <>
+                  <div className="bg-teal-50 border border-teal-100 rounded-2xl p-4 text-sm text-teal-700 font-medium">
+                    <p className="font-black mb-1">Cách sử dụng:</p>
+                    <ul className="space-y-1 text-xs opacity-80">
+                      <li>• Copy đoạn văn bản từ file PDF/Word chứa câu hỏi trắc nghiệm</li>
+                      <li>• Dán vào ô bên dưới và nhấn <strong>Phân tích</strong></li>
+                      <li>• AI sẽ tự động nhận biết câu hỏi, đáp án A/B/C/D và đáp án đúng</li>
+                      <li>• Tốn <strong>3 AI credits</strong> mỗi lần phân tích · Admin có thể lưu kết quả vào kho ngữ pháp</li>
+                    </ul>
+                  </div>
+                  <textarea
+                    value={parseText}
+                    onChange={e => setParseText(e.target.value)}
+                    placeholder={"Dán văn bản đề thi vào đây...\n\nVí dụ:\n1. She _____ (go) to school every day.\nA. goes   B. go   C. went   D. going\n\nAnswer key: 1-A"}
+                    disabled={parsing}
+                    rows={10}
+                    className="w-full bg-gray-50 border-2 border-gray-200 focus:border-teal-400 rounded-2xl p-4 outline-none text-sm font-mono text-gray-700 resize-y transition-all disabled:opacity-60"
+                  />
+                  {parseError && (
+                    <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-2xl p-3 text-sm text-red-700">
+                      <AlertCircle size={16} className="flex-shrink-0 mt-0.5" />
+                      <p className="font-medium">{parseError}</p>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between text-xs text-gray-400">
+                    <span>{parseText.length} / 12,000 ký tự</span>
+                    <span className="font-bold text-teal-600">3 credits</span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="bg-orange-50 border border-orange-100 rounded-2xl p-4 text-sm text-orange-700 font-medium">
+                    <p className="font-black mb-1">Phân tích thông minh — không cần AI:</p>
+                    <ul className="space-y-1 text-xs opacity-80">
+                      <li>• Hệ thống tự nhận diện câu hỏi theo số thứ tự (1. 2. 3. ...)</li>
+                      <li>• Tự phát hiện đáp án A. B. C. D. và đáp án đúng</li>
+                      <li>• Hỗ trợ bảng đáp án ở cuối (ví dụ: 1-A, 2-C, 3-B)</li>
+                      <li>• <strong>Miễn phí</strong> · Admin có thể <strong>lưu bài tập vào chủ đề</strong> để học sinh luyện tập</li>
+                    </ul>
+                  </div>
+
+                  {localParsedQuestions.length === 0 ? (
+                    <>
+                      <textarea
+                        value={parseText}
+                        onChange={e => setParseText(e.target.value)}
+                        placeholder={"Dán văn bản đề thi vào đây...\n\nVí dụ:\n1. She _____ to school every day.\nA. goes\nB. go\nC. went\nD. going\n\n2. Which is correct?\nA. He don't like coffee.\nB. He doesn't likes coffee.\nC. He doesn't like coffee.\nD. He not like coffee.\n\nAnswer key: 1-A, 2-C"}
+                        disabled={localParsing}
+                        rows={10}
+                        className="w-full bg-gray-50 border-2 border-gray-200 focus:border-orange-400 rounded-2xl p-4 outline-none text-sm font-mono text-gray-700 resize-y transition-all disabled:opacity-60"
+                      />
+                      {localParseError && (
+                        <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-2xl p-3 text-sm text-red-700">
+                          <AlertCircle size={16} className="flex-shrink-0 mt-0.5" />
+                          <p className="font-medium">{localParseError}</p>
+                        </div>
+                      )}
+                      <div className="flex items-center justify-between text-xs text-gray-400">
+                        <span>{parseText.length} / 20,000 ký tự</span>
+                        <span className="font-bold text-green-600">Miễn phí</span>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="font-black text-gray-900 flex items-center gap-2">
+                          <Eye size={16} className="text-teal-600" /> Kết quả: {localParsedQuestions.length} câu hỏi
+                        </p>
+                        <button onClick={() => { setLocalParsedQuestions([]); setSavedSuccess(false); }}
+                          className="text-xs font-black text-gray-400 hover:text-gray-600 flex items-center gap-1">
+                          <X size={12} /> Nhập lại
+                        </button>
+                      </div>
+                      <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
+                        {localParsedQuestions.map((q: any, i: number) => (
+                          <div key={i} className="bg-gray-50 rounded-2xl p-4 border border-gray-100">
+                            <p className="font-black text-gray-900 text-sm mb-2">{i + 1}. {q.question}</p>
+                            {q.options && q.options.length > 0 && (
+                              <div className="grid grid-cols-2 gap-1 mb-2">
+                                {q.options.map((opt: string, j: number) => (
+                                  <span key={j} className={`text-xs px-2 py-1 rounded-lg font-bold ${opt === q.answer ? "bg-green-100 text-green-700 border border-green-200" : "bg-white text-gray-500 border border-gray-100"}`}>
+                                    {opt === q.answer && "✓ "}{opt}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                            {q.answer && <p className="text-xs font-black text-teal-600">Đáp án: {q.answer}</p>}
+                          </div>
+                        ))}
+                      </div>
+
+                      {!savedSuccess ? (
+                        <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4">
+                          <p className="font-black text-blue-900 text-sm mb-3 flex items-center gap-2">
+                            <Save size={15} /> Lưu vào chủ đề ngữ pháp
+                          </p>
+                          <div className="flex gap-3">
+                            <select
+                              value={selectedSaveRuleId}
+                              onChange={e => setSelectedSaveRuleId(e.target.value)}
+                              className="flex-1 bg-white border-2 border-blue-200 rounded-xl px-3 py-2 outline-none font-bold text-gray-700 text-sm focus:border-blue-400">
+                              <option value="">-- Chọn chủ đề --</option>
+                              {rules.map((r: any) => (
+                                <option key={r.id} value={r.id}>{r.name}</option>
+                              ))}
+                            </select>
+                            <button onClick={saveLocalQuizzes} disabled={!selectedSaveRuleId || savingQuizzes}
+                              className="px-4 py-2 bg-blue-600 text-white rounded-xl font-black text-sm hover:bg-blue-700 transition disabled:opacity-40 flex items-center gap-2 flex-shrink-0">
+                              {savingQuizzes ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                              Lưu
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="bg-green-50 border border-green-200 rounded-2xl p-4 flex items-center gap-2 text-green-700 font-black text-sm">
+                          <CheckCircle2 size={18} /> Đã lưu thành công vào chủ đề!
+                        </div>
+                      )}
+                    </>
+                  )}
+                </>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 pb-6 pt-3 border-t border-gray-100 flex-shrink-0 flex gap-3">
+              {parseTab === "ai" && localParsedQuestions.length === 0 ? (
+                <>
+                  <button onClick={closeParseModal} disabled={parsing}
+                    className="flex-1 py-3 rounded-2xl font-black text-gray-500 bg-gray-100 hover:bg-gray-200 transition disabled:opacity-40">
+                    Hủy
+                  </button>
+                  <button onClick={handleAIParse} disabled={parsing || !parseText.trim()}
+                    className="flex-1 sm:flex-none sm:px-10 py-3 rounded-2xl font-black text-white bg-teal-600 hover:bg-teal-700 transition flex items-center justify-center gap-2 shadow-lg shadow-teal-200 disabled:opacity-40 disabled:shadow-none">
+                    {parsing ? <><Loader2 size={18} className="animate-spin" /> Đang phân tích...</> : <><Sparkles size={18} /> Phân tích ngay</>}
+                  </button>
+                </>
+              ) : parseTab === "local" && localParsedQuestions.length === 0 ? (
+                <>
+                  <button onClick={closeParseModal} disabled={localParsing}
+                    className="flex-1 py-3 rounded-2xl font-black text-gray-500 bg-gray-100 hover:bg-gray-200 transition disabled:opacity-40">
+                    Hủy
+                  </button>
+                  <button onClick={handleLocalParse} disabled={localParsing || !parseText.trim()}
+                    className="flex-1 sm:flex-none sm:px-10 py-3 rounded-2xl font-black text-white bg-orange-500 hover:bg-orange-600 transition flex items-center justify-center gap-2 shadow-lg shadow-orange-200 disabled:opacity-40 disabled:shadow-none">
+                    {localParsing ? <><Loader2 size={18} className="animate-spin" /> Đang phân tích...</> : <><ListChecks size={18} /> Phân tích ngay</>}
+                  </button>
+                </>
+              ) : (
+                <button onClick={closeParseModal}
+                  className="flex-1 py-3 rounded-2xl font-black text-gray-500 bg-gray-100 hover:bg-gray-200 transition">
+                  Đóng
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
