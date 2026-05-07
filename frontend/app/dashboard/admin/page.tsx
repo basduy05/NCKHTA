@@ -1,7 +1,7 @@
 "use client";
 import { useState, Suspense, useEffect, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { Users, Database, Plus, UploadCloud, FileSpreadsheet, Save, Edit, Trash2, GraduationCap, X, Check, Copy, BookOpen, BookText, Settings, RefreshCw, Mail, Eye, EyeOff, Sparkles, ClipboardList, Bold, Italic, Underline, Heading1, Heading2, List, ListOrdered, TrendingUp, Network, Activity, MessageCircleWarning, Bug, Lightbulb, CheckCircle, Clock, ClipboardPaste, ListChecks, Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Users, Database, Plus, UploadCloud, FileSpreadsheet, Save, Edit, Trash2, GraduationCap, X, Check, Copy, BookOpen, BookText, Settings, RefreshCw, Mail, Eye, EyeOff, Sparkles, ClipboardList, Bold, Italic, Underline, Heading1, Heading2, List, ListOrdered, TrendingUp, Network, Activity, MessageCircleWarning, Bug, Lightbulb, CheckCircle, Clock, ClipboardPaste, ListChecks, Loader2, AlertCircle, CheckCircle2, ChevronUp, ChevronDown } from "lucide-react";
 import { useAuth } from "@/app/context/AuthContext";
 import { useNotification } from "@/app/context/NotificationContext";
 
@@ -918,11 +918,14 @@ function GrammarTab() {
   const [rules, setRules] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [name, setName] = useState('');
+  const [level, setLevel] = useState('B1');
+  const [parentId, setParentId] = useState<string>('');
   const editorRef = useRef<HTMLDivElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
   const [isEditing, setIsEditing] = useState<number | null>(null);
   const [generatingAI, setGeneratingAI] = useState(false);
+  const [expandedAdminNodes, setExpandedAdminNodes] = useState<Set<number>>(new Set());
 
   // Parse modal state
   const [showParseModal, setShowParseModal] = useState(false);
@@ -1017,6 +1020,8 @@ function GrammarTab() {
       const fd = new FormData();
       fd.append("name", name);
       fd.append("description", editorRef.current?.innerHTML || "");
+      fd.append("level", level);
+      fd.append("parent_id", parentId || "null");
       if (file) fd.append("file", file);
       const url = isEditing ? `${API_URL}/admin/grammar/${isEditing}` : `${API_URL}/admin/grammar`;
       const method = isEditing ? 'PUT' : 'POST';
@@ -1032,6 +1037,8 @@ function GrammarTab() {
   const handleEdit = (r: any) => {
     setIsEditing(r.id);
     setName(r.name);
+    setLevel(r.level || 'B1');
+    setParentId(r.parent_id ? String(r.parent_id) : '');
     setFile(null);
     setTimeout(() => {
         if (editorRef.current) {
@@ -1049,6 +1056,8 @@ function GrammarTab() {
   const resetForm = () => {
     setIsEditing(null);
     setName('');
+    setLevel('B1');
+    setParentId('');
     if (editorRef.current) editorRef.current.innerHTML = '';
     setFile(null);
   };
@@ -1174,15 +1183,36 @@ function GrammarTab() {
               {isEditing && <button onClick={resetForm} className="p-2 hover:bg-gray-100 rounded-xl transition"><X size={20} /></button>}
             </div>
             
-            <div className="space-y-6">
+            <div className="space-y-4">
                <div className="space-y-2">
-                <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-1">Tên cấu trúc (VD: Hiện tại tiếp diễn)</label>
-                <div className="flex gap-3">
-                  <input type="text" value={name} onChange={e => setName(e.target.value)} className="flex-1 bg-gray-50 border-2 border-gray-200 focus:border-teal-500 rounded-xl p-4 outline-none transition-all font-bold text-lg" placeholder="Tên cấu trúc..." />
-                  <button onClick={handleAIGenerate} disabled={generatingAI} className="px-6 py-4 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition-all font-black flex items-center gap-2 shadow-sm">
-                     {generatingAI ? <RefreshCw className="animate-spin" size={20} /> : <Sparkles size={20} />} 
-                     AI Tạo Mô tả
+                <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-1">Tên cấu trúc ngữ pháp</label>
+                <div className="flex gap-2">
+                  <input type="text" value={name} onChange={e => setName(e.target.value)} className="flex-1 bg-gray-50 border-2 border-gray-200 focus:border-teal-500 rounded-xl p-3 outline-none transition-all font-bold text-base" placeholder="VD: Hiện tại tiếp diễn..." />
+                  <button onClick={handleAIGenerate} disabled={generatingAI} className="px-4 py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition-all font-black flex items-center gap-1.5 shadow-sm text-sm whitespace-nowrap">
+                     {generatingAI ? <RefreshCw className="animate-spin" size={16} /> : <Sparkles size={16} />}
+                     AI Mô tả
                   </button>
+                </div>
+              </div>
+
+              {/* Level + Parent topic */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-black text-gray-400 uppercase tracking-widest">Cấp độ CEFR</label>
+                  <select value={level} onChange={e => setLevel(e.target.value)}
+                    className="w-full bg-gray-50 border-2 border-gray-200 focus:border-teal-500 rounded-xl p-2.5 outline-none font-bold text-sm text-gray-700">
+                    {['Pre-A1','A1','A2','B1','B2','C1'].map(l => <option key={l} value={l}>{l}</option>)}
+                  </select>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-black text-gray-400 uppercase tracking-widest">Chủ đề cha (tuỳ chọn)</label>
+                  <select value={parentId} onChange={e => setParentId(e.target.value)}
+                    className="w-full bg-gray-50 border-2 border-gray-200 focus:border-teal-500 rounded-xl p-2.5 outline-none font-bold text-sm text-gray-700">
+                    <option value="">— Chủ đề gốc —</option>
+                    {rules.filter(r => r.id !== isEditing && !r.parent_id).map((r: any) => (
+                      <option key={r.id} value={String(r.id)}>{r.name}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
@@ -1220,66 +1250,92 @@ function GrammarTab() {
                 </div>
               </div>
 
-              <div className="border-2 border-dashed border-gray-200 rounded-2xl p-6 text-center hover:border-teal-400 hover:bg-teal-50/30 transition-all group">
+              <div className="border-2 border-dashed border-gray-200 rounded-xl p-4 text-center hover:border-teal-400 hover:bg-teal-50/30 transition-all group">
                 <input type="file" className="hidden" id="admin-grammar-file" onChange={e => { if (e.target.files) setFile(e.target.files[0]); }} />
-                <label htmlFor="admin-grammar-file" className="cursor-pointer text-gray-500 flex flex-col items-center gap-3">
-                  <UploadCloud size={40} className={`transition ${file ? "text-teal-600 scale-110" : "group-hover:-translate-y-2"}`} />
-                  <span className="font-black text-lg">{file ? file.name : "Đính kèm tài liệu học tập (.pdf, .docx, .png)"}</span>
-                  <span className="text-xs font-bold uppercase tracking-widest text-gray-400 italic">Dung lượng tối đa 10MB</span>
+                <label htmlFor="admin-grammar-file" className="cursor-pointer text-gray-500 flex items-center justify-center gap-3">
+                  <UploadCloud size={24} className={`transition flex-shrink-0 ${file ? "text-teal-600" : "group-hover:-translate-y-0.5"}`} />
+                  <span className="font-bold text-sm">{file ? file.name : "Đính kèm tài liệu (.pdf, .docx, .png) — tối đa 10MB"}</span>
                 </label>
               </div>
 
-              <button onClick={handleSave} disabled={saving} className="w-full bg-teal-600 text-white py-5 rounded-xl font-black text-xl hover:bg-teal-700 disabled:opacity-50 transition-all shadow-sm active:scale-[0.98] flex items-center justify-center gap-3">
-                {saving ? <RefreshCw className="animate-spin" size={24} /> : isEditing ? <><Save size={24} /> Lưu thay đổi</> : <Plus size={24} />} 
-                {saving ? "Đang xử lý..." : isEditing ? "Cập nhật Kho Ngữ Pháp" : "Tạo mới bài Ngữ Pháp"}
+              <button onClick={handleSave} disabled={saving} className="w-full bg-teal-600 text-white py-3.5 rounded-xl font-black text-base hover:bg-teal-700 disabled:opacity-50 transition-all shadow-sm active:scale-[0.98] flex items-center justify-center gap-2">
+                {saving ? <RefreshCw className="animate-spin" size={18} /> : isEditing ? <><Save size={18} /> Lưu thay đổi</> : <Plus size={18} />}
+                {saving ? "Đang xử lý..." : isEditing ? "Cập nhật" : "Tạo mới"}
               </button>
             </div>
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm flex flex-col h-fit">
-          <h3 className="text-2xl font-black mb-6 flex justify-between items-center">
-            Danh sách
-            <span className="text-xs bg-gray-100 text-gray-400 px-3 py-1 rounded-full">{rules.length} tài liệu</span>
+        <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm flex flex-col h-fit">
+          <h3 className="text-lg font-black mb-4 flex justify-between items-center">
+            Danh sách chủ đề
+            <span className="text-xs bg-gray-100 text-gray-400 px-2.5 py-1 rounded-full">{rules.length}</span>
           </h3>
           {loading ? (
-             <div className="space-y-4">
-                {Array(3).fill(0).map((_, i) => <div key={i} className="h-24 bg-gray-50 rounded-xl animate-pulse"></div>)}
-             </div>
+            <div className="space-y-2">{Array(4).fill(0).map((_, i) => <div key={i} className="h-14 bg-gray-50 rounded-xl animate-pulse" />)}</div>
           ) : rules.length === 0 ? (
-            <div className="py-20 text-center">
-                <BookText size={64} className="mx-auto text-gray-100 mb-4" />
-                <p className="text-gray-400 font-bold uppercase tracking-widest">Trống</p>
+            <div className="py-12 text-center">
+              <BookText size={48} className="mx-auto text-gray-100 mb-3" />
+              <p className="text-gray-400 font-bold text-sm uppercase tracking-widest">Trống</p>
             </div>
-          ) : (
-            <ul className="space-y-4 max-h-[800px] overflow-y-auto pr-2 custom-scrollbar">
-              {rules.map((r: any) => (
-                <li key={r.id} className="p-5 bg-gray-50/30 rounded-xl border border-gray-100 hover:border-teal-200 transition-all group">
-                  <div className="flex justify-between items-start gap-4">
-                    <div className="flex-1">
-                      <p className="font-black text-teal-900 text-lg group-hover:text-teal-600 transition-colors leading-tight mb-2">{r.name}</p>
-                      {r.description && (
-                        <div 
-                          className="text-xs text-gray-500 font-bold line-clamp-2 leading-relaxed rich-text"
-                          dangerouslySetInnerHTML={{ __html: parseMarkdown(r.description) }}
-                        />
-                      )}
-                      {r.file_name && (
-                        <a href={`${API_URL}/admin/grammar/${r.id}/file`} target="_blank" rel="noopener noreferrer"
-                          className="inline-flex items-center mt-3 text-xs text-indigo-600 font-black hover:underline gap-1">
-                          <FileSpreadsheet size={14} /> {r.file_name}
-                        </a>
-                      )}
+          ) : (() => {
+            // Build tree for admin list
+            const adminMap: Record<number, any> = {};
+            rules.forEach((r: any) => { adminMap[r.id] = { ...r, children: [] }; });
+            const adminRoots: any[] = [];
+            rules.forEach((r: any) => {
+              if (r.parent_id && adminMap[r.parent_id]) adminMap[r.parent_id].children.push(adminMap[r.id]);
+              else adminRoots.push(adminMap[r.id]);
+            });
+
+            const AdminRuleRow = ({ rule, depth }: { rule: any; depth: number }) => {
+              const hasKids = rule.children && rule.children.length > 0;
+              const isExp = expandedAdminNodes.has(rule.id);
+              const CEFR_CHIP: Record<string, string> = {
+                'Pre-A1': 'bg-purple-100 text-purple-700', A1: 'bg-blue-100 text-blue-700',
+                A2: 'bg-cyan-100 text-cyan-700', B1: 'bg-green-100 text-green-700',
+                B2: 'bg-yellow-100 text-yellow-700', C1: 'bg-orange-100 text-orange-700',
+              };
+              return (
+                <div className={depth > 0 ? "ml-4 border-l-2 border-gray-100 pl-2 mt-1" : ""}>
+                  <li className="p-3 bg-gray-50/50 rounded-xl border border-gray-100 hover:border-teal-200 transition-all group list-none">
+                    <div className="flex items-start gap-2">
+                      {hasKids ? (
+                        <button onClick={() => setExpandedAdminNodes(prev => { const s = new Set(prev); s.has(rule.id) ? s.delete(rule.id) : s.add(rule.id); return s; })}
+                          className="mt-0.5 text-gray-400 hover:text-teal-600 flex-shrink-0 transition">
+                          {isExp ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                        </button>
+                      ) : <div className="w-3.5 flex-shrink-0" />}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
+                          <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full ${CEFR_CHIP[rule.level] || 'bg-gray-100 text-gray-500'}`}>{rule.level || 'B1'}</span>
+                          {hasKids && <span className="text-[9px] text-gray-400 font-bold">{rule.children.length} con</span>}
+                        </div>
+                        <p className="font-black text-gray-900 text-sm leading-tight group-hover:text-teal-600 transition-colors">{rule.name}</p>
+                        {rule.file_name && (
+                          <a href={`${API_URL}/admin/grammar/${rule.id}/file`} target="_blank" rel="noopener noreferrer"
+                            className="inline-flex items-center mt-0.5 text-[10px] text-indigo-500 font-black hover:underline gap-0.5">
+                            <FileSpreadsheet size={10} /> {rule.file_name}
+                          </a>
+                        )}
+                      </div>
+                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                        <button onClick={() => handleEdit(rule)} className="text-blue-500 bg-white p-1.5 rounded-lg shadow-sm hover:shadow-md transition"><Edit size={13} /></button>
+                        <button onClick={() => handleDelete(rule.id)} className="text-red-500 bg-white p-1.5 rounded-lg shadow-sm hover:shadow-md transition"><Trash2 size={13} /></button>
+                      </div>
                     </div>
-                    <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button onClick={() => handleEdit(r)} className="text-blue-500 bg-white p-3 rounded-2xl shadow-sm hover:shadow-md transition"><Edit size={18} /></button>
-                      <button onClick={() => handleDelete(r.id)} className="text-red-500 bg-white p-3 rounded-2xl shadow-sm hover:shadow-md transition"><Trash2 size={18} /></button>
-                    </div>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
+                  </li>
+                  {hasKids && isExp && rule.children.map((ch: any) => <AdminRuleRow key={ch.id} rule={ch} depth={depth + 1} />)}
+                </div>
+              );
+            };
+
+            return (
+              <ul className="space-y-1.5 max-h-[720px] overflow-y-auto pr-1 custom-scrollbar">
+                {adminRoots.map((r: any) => <AdminRuleRow key={r.id} rule={r} depth={0} />)}
+              </ul>
+            );
+          })()}
         </div>
       </div>
 
@@ -1383,57 +1439,46 @@ function GrammarTab() {
                   ) : (
                     <>
                       <div className="flex items-center justify-between mb-2">
-                        <p className="font-black text-gray-900 flex items-center gap-2">
-                          <Eye size={16} className="text-teal-600" /> Kết quả: {localParsedQuestions.length} câu hỏi
-                        </p>
+                        <p className="font-black text-gray-900 text-sm flex items-center gap-1.5"><Eye size={14} className="text-teal-600" /> {localParsedQuestions.length} câu hỏi</p>
                         <button onClick={() => { setLocalParsedQuestions([]); setSavedSuccess(false); }}
-                          className="text-xs font-black text-gray-400 hover:text-gray-600 flex items-center gap-1">
-                          <X size={12} /> Nhập lại
-                        </button>
+                          className="text-xs font-black text-gray-400 hover:text-gray-600 flex items-center gap-1"><X size={11} /> Nhập lại</button>
                       </div>
-                      <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
+                      <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
                         {localParsedQuestions.map((q: any, i: number) => (
-                          <div key={i} className="bg-gray-50 rounded-2xl p-4 border border-gray-100">
-                            <p className="font-black text-gray-900 text-sm mb-2">{i + 1}. {q.question}</p>
+                          <div key={i} className="bg-gray-50 rounded-xl p-3 border border-gray-100">
+                            <p className="font-black text-gray-900 text-xs mb-1.5">{i + 1}. {q.question}</p>
                             {q.options && q.options.length > 0 && (
-                              <div className="grid grid-cols-2 gap-1 mb-2">
+                              <div className="grid grid-cols-2 gap-1 mb-1">
                                 {q.options.map((opt: string, j: number) => (
-                                  <span key={j} className={`text-xs px-2 py-1 rounded-lg font-bold ${opt === q.answer ? "bg-green-100 text-green-700 border border-green-200" : "bg-white text-gray-500 border border-gray-100"}`}>
+                                  <span key={j} className={`text-[10px] px-1.5 py-0.5 rounded-lg font-bold ${opt === q.answer ? "bg-green-100 text-green-700 border border-green-200" : "bg-white text-gray-500 border border-gray-100"}`}>
                                     {opt === q.answer && "✓ "}{opt}
                                   </span>
                                 ))}
                               </div>
                             )}
-                            {q.answer && <p className="text-xs font-black text-teal-600">Đáp án: {q.answer}</p>}
+                            {q.answer && <p className="text-[10px] font-black text-teal-600">Đáp án: {q.answer}</p>}
                           </div>
                         ))}
                       </div>
 
                       {!savedSuccess ? (
-                        <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4">
-                          <p className="font-black text-blue-900 text-sm mb-3 flex items-center gap-2">
-                            <Save size={15} /> Lưu vào chủ đề ngữ pháp
-                          </p>
-                          <div className="flex gap-3">
-                            <select
-                              value={selectedSaveRuleId}
-                              onChange={e => setSelectedSaveRuleId(e.target.value)}
-                              className="flex-1 bg-white border-2 border-blue-200 rounded-xl px-3 py-2 outline-none font-bold text-gray-700 text-sm focus:border-blue-400">
+                        <div className="bg-blue-50 border border-blue-100 rounded-xl p-3">
+                          <p className="font-black text-blue-900 text-xs mb-2 flex items-center gap-1.5"><Save size={13} /> Lưu vào chủ đề ngữ pháp</p>
+                          <div className="flex gap-2">
+                            <select value={selectedSaveRuleId} onChange={e => setSelectedSaveRuleId(e.target.value)}
+                              className="flex-1 bg-white border-2 border-blue-200 rounded-lg px-2 py-1.5 outline-none font-bold text-gray-700 text-xs focus:border-blue-400">
                               <option value="">-- Chọn chủ đề --</option>
-                              {rules.map((r: any) => (
-                                <option key={r.id} value={r.id}>{r.name}</option>
-                              ))}
+                              {rules.map((r: any) => <option key={r.id} value={r.id}>{r.name} ({r.level || 'B1'})</option>)}
                             </select>
                             <button onClick={saveLocalQuizzes} disabled={!selectedSaveRuleId || savingQuizzes}
-                              className="px-4 py-2 bg-blue-600 text-white rounded-xl font-black text-sm hover:bg-blue-700 transition disabled:opacity-40 flex items-center gap-2 flex-shrink-0">
-                              {savingQuizzes ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-                              Lưu
+                              className="px-3 py-1.5 bg-blue-600 text-white rounded-lg font-black text-xs hover:bg-blue-700 transition disabled:opacity-40 flex items-center gap-1 flex-shrink-0">
+                              {savingQuizzes ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />} Lưu
                             </button>
                           </div>
                         </div>
                       ) : (
-                        <div className="bg-green-50 border border-green-200 rounded-2xl p-4 flex items-center gap-2 text-green-700 font-black text-sm">
-                          <CheckCircle2 size={18} /> Đã lưu thành công vào chủ đề!
+                        <div className="bg-green-50 border border-green-200 rounded-xl p-3 flex items-center gap-2 text-green-700 font-black text-xs">
+                          <CheckCircle2 size={14} /> Đã lưu thành công!
                         </div>
                       )}
                     </>
@@ -1443,34 +1488,28 @@ function GrammarTab() {
             </div>
 
             {/* Footer */}
-            <div className="px-6 pb-6 pt-3 border-t border-gray-100 flex-shrink-0 flex gap-3">
+            <div className="px-5 pb-5 pt-3 border-t border-gray-100 flex-shrink-0 flex gap-2">
               {parseTab === "ai" && localParsedQuestions.length === 0 ? (
                 <>
                   <button onClick={closeParseModal} disabled={parsing}
-                    className="flex-1 py-3 rounded-2xl font-black text-gray-500 bg-gray-100 hover:bg-gray-200 transition disabled:opacity-40">
-                    Hủy
-                  </button>
+                    className="flex-1 py-2.5 rounded-xl font-black text-sm text-gray-500 bg-gray-100 hover:bg-gray-200 transition disabled:opacity-40">Hủy</button>
                   <button onClick={handleAIParse} disabled={parsing || !parseText.trim()}
-                    className="flex-1 sm:flex-none sm:px-10 py-3 rounded-2xl font-black text-white bg-teal-600 hover:bg-teal-700 transition flex items-center justify-center gap-2 shadow-lg shadow-teal-200 disabled:opacity-40 disabled:shadow-none">
-                    {parsing ? <><Loader2 size={18} className="animate-spin" /> Đang phân tích...</> : <><Sparkles size={18} /> Phân tích ngay</>}
+                    className="flex-1 sm:flex-none sm:px-8 py-2.5 rounded-xl font-black text-sm text-white bg-teal-600 hover:bg-teal-700 transition flex items-center justify-center gap-1.5 shadow-lg disabled:opacity-40">
+                    {parsing ? <><Loader2 size={15} className="animate-spin" /> Đang phân tích...</> : <><Sparkles size={15} /> Phân tích ngay</>}
                   </button>
                 </>
               ) : parseTab === "local" && localParsedQuestions.length === 0 ? (
                 <>
                   <button onClick={closeParseModal} disabled={localParsing}
-                    className="flex-1 py-3 rounded-2xl font-black text-gray-500 bg-gray-100 hover:bg-gray-200 transition disabled:opacity-40">
-                    Hủy
-                  </button>
+                    className="flex-1 py-2.5 rounded-xl font-black text-sm text-gray-500 bg-gray-100 hover:bg-gray-200 transition disabled:opacity-40">Hủy</button>
                   <button onClick={handleLocalParse} disabled={localParsing || !parseText.trim()}
-                    className="flex-1 sm:flex-none sm:px-10 py-3 rounded-2xl font-black text-white bg-orange-500 hover:bg-orange-600 transition flex items-center justify-center gap-2 shadow-lg shadow-orange-200 disabled:opacity-40 disabled:shadow-none">
-                    {localParsing ? <><Loader2 size={18} className="animate-spin" /> Đang phân tích...</> : <><ListChecks size={18} /> Phân tích ngay</>}
+                    className="flex-1 sm:flex-none sm:px-8 py-2.5 rounded-xl font-black text-sm text-white bg-orange-500 hover:bg-orange-600 transition flex items-center justify-center gap-1.5 shadow-lg disabled:opacity-40">
+                    {localParsing ? <><Loader2 size={15} className="animate-spin" /> Đang phân tích...</> : <><ListChecks size={15} /> Phân tích ngay</>}
                   </button>
                 </>
               ) : (
                 <button onClick={closeParseModal}
-                  className="flex-1 py-3 rounded-2xl font-black text-gray-500 bg-gray-100 hover:bg-gray-200 transition">
-                  Đóng
-                </button>
+                  className="flex-1 py-2.5 rounded-xl font-black text-sm text-gray-500 bg-gray-100 hover:bg-gray-200 transition">Đóng</button>
               )}
             </div>
           </div>

@@ -637,7 +637,9 @@ async def ai_generate_grammar_rule(data: GrammarAIGen):
 @router.get("/grammar")
 def get_grammar_rules():
     conn = get_db()
-    cursor = conn.execute("SELECT id, name, description, file_name, created_at FROM grammar_rules ORDER BY id DESC")
+    cursor = conn.execute(
+        "SELECT id, name, description, file_name, level, parent_id, created_at FROM grammar_rules ORDER BY COALESCE(parent_id, id), id ASC"
+    )
     rules = [dict(row) for row in cursor.fetchall()]
     conn.close()
     return rules
@@ -646,19 +648,24 @@ def get_grammar_rules():
 async def create_grammar_rule(
     name: str = Form(...),
     description: str = Form(""),
+    level: str = Form("B1"),
+    parent_id: Optional[str] = Form(None),
     file: Optional[UploadFile] = File(None)
 ):
     conn = get_db()
     cursor = conn.cursor()
     file_name = None
     file_data = None
+    pid = int(parent_id) if parent_id and parent_id.strip() and parent_id != "null" else None
     if file and file.filename:
         if hasattr(file, 'size') and file.size > 10 * 1024 * 1024:
             raise HTTPException(status_code=413, detail="File too large. Maximum size is 10MB.")
         file_name = file.filename
         file_data = await file.read()
-    cursor.execute("INSERT INTO grammar_rules (name, description, file_name, file_data) VALUES (?, ?, ?, ?)",
-                   (name, description, file_name, file_data))
+    cursor.execute(
+        "INSERT INTO grammar_rules (name, description, level, parent_id, file_name, file_data) VALUES (?, ?, ?, ?, ?, ?)",
+        (name, description, level, pid, file_name, file_data)
+    )
     conn.commit()
     conn.close()
     
@@ -708,20 +715,27 @@ async def update_grammar_rule(
     rule_id: int,
     name: str = Form(...),
     description: str = Form(""),
+    level: str = Form("B1"),
+    parent_id: Optional[str] = Form(None),
     file: Optional[UploadFile] = File(None)
 ):
     conn = get_db()
     cursor = conn.cursor()
+    pid = int(parent_id) if parent_id and parent_id.strip() and parent_id != "null" else None
     if file and file.filename:
         if hasattr(file, 'size') and file.size > 10 * 1024 * 1024:
             raise HTTPException(status_code=413, detail="File too large. Maximum size is 10MB.")
         file_name = file.filename
         file_data = await file.read()
-        cursor.execute("UPDATE grammar_rules SET name=?, description=?, file_name=?, file_data=? WHERE id=?",
-                       (name, description, file_name, file_data, rule_id))
+        cursor.execute(
+            "UPDATE grammar_rules SET name=?, description=?, level=?, parent_id=?, file_name=?, file_data=? WHERE id=?",
+            (name, description, level, pid, file_name, file_data, rule_id)
+        )
     else:
-        cursor.execute("UPDATE grammar_rules SET name=?, description=? WHERE id=?",
-                       (name, description, rule_id))
+        cursor.execute(
+            "UPDATE grammar_rules SET name=?, description=?, level=?, parent_id=? WHERE id=?",
+            (name, description, level, pid, rule_id)
+        )
     conn.commit()
     conn.close()
     

@@ -511,6 +511,14 @@ def init_db():
     except Exception:
         pass  # Column already exists
 
+    # --- GRAMMAR RULES MIGRATION: add parent_id for hierarchy ---
+    try:
+        cursor.execute("ALTER TABLE grammar_rules ADD COLUMN parent_id INTEGER DEFAULT NULL")
+        conn.commit()
+        print("[DB MIGRATION] Added 'parent_id' column to grammar_rules")
+    except Exception:
+        pass  # Column already exists
+
     # --- GRAMMAR QUIZZES TABLE ---
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS grammar_quizzes (

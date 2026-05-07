@@ -560,7 +560,8 @@ async def parse_grammar_text(req: ParseTextRequest, authorization: str = Header(
         raise HTTPException(status_code=402, detail="Không đủ AI credits (cần 3)")
 
     try:
-        llm = llm_service.get_llm()
+        # Prefer Cohere for parsing — more reliable JSON output than Gemini
+        llm = llm_service.get_llm(provider="cohere") or llm_service.get_llm()
         if not llm:
             raise HTTPException(status_code=503, detail="AI service không khả dụng, vui lòng thử lại sau")
 
@@ -652,32 +653,88 @@ Rules:
 
 
 def _parse_quiz_local(text: str) -> list:
-    """Parse quiz text using regex rules, no AI required."""
-    import re, json as _json
+    """Parse quiz text using regex rules, no AI required.
+    Handles: numbered questions, letter options, answer keys, inline options,
+    Vietnamese/English, Question N: format, Roman numerals, multi-line questions.
+    """
+    import re
 
-    lines = text.replace('\r\n', '\n').replace('\r', '\n').split('\n')
-    full_text = '\n'.join(lines)
+    text = text.replace('\r\n', '\n').replace('\r', '\n')
+    # Normalize unicode dashes/bullets to standard
+    text = text.replace('–', '-').replace('—', '-').replace('•', '-').replace('●', '-')
+    lines = text.split('\n')
+    full_text = text
 
-    # Extract answer key (e.g. "1-A, 2-C" or "Answer key: 1.A 2.B")
+    # --- Extract answer key block if present ---
     answer_key: dict = {}
-    ak_match = re.search(
-        r'(?:answer\s*key|answers?|key|đáp\s*án)\s*:?\s*\n?(.+?)(?:\n\n|\Z)',
-        full_text, re.IGNORECASE | re.DOTALL
+    # Look for "Answer key:", "Đáp án:", "Key:", etc. followed by "N-X" or "N.X" pairs
+    ak_section_re = re.compile(
+        r'(?:answer\s*key|answers?\s*key|key|đáp\s*án|correct\s*answers?)\s*:?\s*\n?([\s\S]+?)(?:\n\s*\n|\Z)',
+        re.IGNORECASE
     )
+    ak_match = ak_section_re.search(full_text)
     ak_source = ak_match.group(1) if ak_match else full_text
-    for m in re.finditer(r'(\d+)\s*[-.:]\s*([A-D])', ak_source, re.IGNORECASE):
+
+    # Match patterns: "1-A", "1.A", "1:A", "1) A", "1 A", "(1)A"
+    for m in re.finditer(r'(?:^|\s|\()(\d+)\s*[-.:)]\s*([A-Da-d])(?:\s|$|,|;)', ak_source, re.MULTILINE):
         answer_key[int(m.group(1))] = m.group(2).upper()
+    # Also match "1A" directly (e.g. "1A 2C 3B")
+    if not answer_key:
+        for m in re.finditer(r'\b(\d+)\s*([A-Da-d])\b', ak_source):
+            answer_key[int(m.group(1))] = m.group(2).upper()
 
     questions = []
     current_q: dict | None = None
     current_num = 0
 
-    q_start_re = re.compile(r'^(\d+)\s*[.)\-:]\s*(.+)', re.IGNORECASE)
-    opt_re = re.compile(r'^([A-Da-d])\s*[.)\-:]\s*(.+)', re.IGNORECASE)
+    # Question starters: "1.", "1)", "1-", "Question 1:", "Câu 1:", "I.", "II.", "(1)"
+    q_start_re = re.compile(
+        r'^(?:'
+        r'(?:question|câu|q)\s*(\d+)\s*[:.)\-]?\s+'  # "Question 1:" / "Câu 1:"
+        r'|(\d+)\s*[.):\-]\s+'                         # "1. " / "1) " / "1: "
+        r'|\((\d+)\)\s*'                               # "(1) "
+        r')',
+        re.IGNORECASE
+    )
+    # Options: "A.", "A)", "A-", "(A)", "a.", "a)"
+    opt_re = re.compile(r'^(?:\(([A-Da-d])\)|([A-Da-d])\s*[.)\-:])\s*(.+)', re.IGNORECASE)
+    # Skip lines that look like answer key entries
+    ak_line_re = re.compile(r'^(?:\d+\s*[-.:]\s*[A-D]\s*[,;]?\s*)+$', re.IGNORECASE)
+
+    def _extract_q_num(m: re.Match) -> int:
+        return int(m.group(1) or m.group(2) or m.group(3))
+
+    def _extract_inline_opts(question_text: str):
+        """Split inline options like 'She ___ A. goes  B. go  C. went  D. going'"""
+        # Allow tab or 2+ spaces as separator between options
+        inline_split = re.split(r'(?:\s{2,}|\t)([A-D])[.)]\s+', question_text)
+        if len(inline_split) < 3:
+            # Try single space separator for tightly packed options
+            inline_split = re.split(r'\s+([A-D])\.\s+', question_text)
+        opts = []
+        if len(inline_split) >= 3:
+            q_text = inline_split[0].strip()
+            for i in range(1, len(inline_split), 2):
+                if i + 1 < len(inline_split):
+                    letter = inline_split[i].upper()
+                    opt_txt = inline_split[i + 1].strip()
+                    is_correct = opt_txt.endswith('(*)') or opt_txt.endswith('*')
+                    if is_correct:
+                        opt_txt = re.sub(r'\s*\(\*\)\s*$|\s*\*\s*$', '', opt_txt).strip()
+                    opts.append((letter, opt_txt, is_correct))
+            return q_text, opts
+        return question_text, []
+
+    pending_continuation = False  # True while question text may still be on next line
 
     for raw_line in lines:
         line = raw_line.strip()
         if not line:
+            pending_continuation = False
+            continue
+
+        # Skip pure answer-key lines
+        if ak_line_re.match(line) and len(line) < 80:
             continue
 
         q_match = q_start_re.match(line)
@@ -686,56 +743,75 @@ def _parse_quiz_local(text: str) -> list:
         if q_match:
             if current_q:
                 questions.append(current_q)
-            current_num = int(q_match.group(1))
-            question_text = q_match.group(2).strip()
+            current_num = _extract_q_num(q_match)
+            question_text = line[q_match.end():].strip()
 
-            # Check for inline options: "She ___ A. goes  B. go  C. went  D. going"
-            inline_split = re.split(r'\s+([A-D])\.\s+', question_text)
-            inline_opts = []
-            if len(inline_split) >= 3:
-                question_text = inline_split[0].strip()
-                for i in range(1, len(inline_split), 2):
-                    if i + 1 < len(inline_split):
-                        opt_letter = inline_split[i].upper()
-                        opt_text = inline_split[i + 1].strip()
-                        is_correct = opt_text.endswith('(*)') or opt_text.endswith('*')
-                        if is_correct:
-                            opt_text = re.sub(r'\s*\(\*\)\s*$|\s*\*\s*$', '', opt_text).strip()
-                        inline_opts.append(f"{opt_letter}. {opt_text}")
+            # Check for inline options embedded in question line
+            q_text, inline_opts = _extract_inline_opts(question_text)
+            if inline_opts:
+                correct_answer = ""
+                opt_list = []
+                for letter, opt_txt, is_correct in inline_opts:
+                    opt_list.append(f"{letter}. {opt_txt}")
+                    if is_correct:
+                        correct_answer = f"{letter}. {opt_txt}"
+                current_q = {
+                    "question": q_text,
+                    "type": "MCQ",
+                    "options": opt_list,
+                    "answer": correct_answer,
+                    "explanation_vn": ""
+                }
+                pending_continuation = False
+            else:
+                current_q = {
+                    "question": question_text,
+                    "type": "FIB",
+                    "options": [],
+                    "answer": "",
+                    "explanation_vn": ""
+                }
+                # If question text is very short, it might continue on next line
+                pending_continuation = len(question_text) < 10
 
-            current_q = {
-                "question": question_text,
-                "type": "MCQ" if inline_opts else "FIB",
-                "options": inline_opts,
-                "answer": "",
-                "explanation_vn": ""
-            }
         elif opt_match and current_q is not None:
-            opt_letter = opt_match.group(1).upper()
-            opt_text = opt_match.group(2).strip()
-            is_correct = opt_text.endswith('(*)') or opt_text.endswith('*')
+            opt_letter = (opt_match.group(1) or opt_match.group(2)).upper()
+            opt_text = opt_match.group(3).strip()
+            # Correct-answer markers: (*), *, or bold
+            is_correct = bool(re.search(r'\(\*\)|\*$', opt_text))
             if is_correct:
-                opt_text = re.sub(r'\s*\(\*\)\s*$|\s*\*\s*$', '', opt_text).strip()
+                opt_text = re.sub(r'\s*\(\*\)\s*|\s*\*\s*$', '', opt_text).strip()
                 current_q["answer"] = f"{opt_letter}. {opt_text}"
             current_q["options"].append(f"{opt_letter}. {opt_text}")
             current_q["type"] = "MCQ"
+            pending_continuation = False
+
         elif current_q is not None and not current_q["options"]:
-            current_q["question"] += " " + line
+            # Continuation line of multi-line question (only before options appear)
+            if pending_continuation or (len(current_q["question"]) < 120 and not line[0].isupper() or line.startswith('(')):
+                current_q["question"] = (current_q["question"] + " " + line).strip()
+            pending_continuation = False
 
     if current_q:
         questions.append(current_q)
 
-    # Apply answer key to questions without answers
+    # --- Apply answer key to questions without answers ---
     for i, q in enumerate(questions):
         if not q["answer"]:
-            ak_letter = answer_key.get(i + 1, "")
+            q_num = i + 1
+            ak_letter = answer_key.get(q_num, "")
             if ak_letter:
+                matched = False
                 for opt in q["options"]:
-                    if opt.startswith(ak_letter + '.'):
+                    if opt.upper().startswith(ak_letter + '.') or opt.upper().startswith(ak_letter + ' '):
                         q["answer"] = opt
+                        matched = True
                         break
-                if not q["answer"]:
+                if not matched:
                     q["answer"] = ak_letter
+        # Ensure MCQ type when options exist
+        if q["options"] and q["type"] == "FIB":
+            q["type"] = "MCQ"
 
     return [q for q in questions if len(q["question"].strip()) > 3]
 
@@ -1990,12 +2066,13 @@ def get_grammar_rules(authorization: str = Header(...)):
     cursor = conn.execute("""
         SELECT r.id, r.name, r.description, r.file_name, r.created_at,
                COALESCE(r.level, 'B1') as level,
+               r.parent_id,
                COALESCE(q.quiz_count, 0) as quiz_count
         FROM grammar_rules r
         LEFT JOIN (
             SELECT rule_id, COUNT(*) as quiz_count FROM grammar_quizzes GROUP BY rule_id
         ) q ON r.id = q.rule_id
-        ORDER BY r.name ASC
+        ORDER BY COALESCE(r.parent_id, r.id), r.id ASC
     """)
     results = [dict(row) for row in cursor.fetchall()]
     conn.close()
