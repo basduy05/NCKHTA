@@ -511,6 +511,21 @@ def init_db():
     except Exception:
         pass  # Column already exists
 
+    # --- GRAMMAR QUIZZES TABLE ---
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS grammar_quizzes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            rule_id INTEGER NOT NULL,
+            question TEXT NOT NULL,
+            type TEXT DEFAULT 'MCQ',
+            options TEXT DEFAULT '[]',
+            answer TEXT NOT NULL DEFAULT '',
+            explanation_vn TEXT DEFAULT '',
+            created_at TIMESTAMP DEFAULT (DATETIME('now', '+7 hours')),
+            FOREIGN KEY (rule_id) REFERENCES grammar_rules(id) ON DELETE CASCADE
+        )
+    """)
+
     # --- PERFORMANCE INDEXES ---
     try:
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_generated_exams_user_id ON generated_exams(user_id)")

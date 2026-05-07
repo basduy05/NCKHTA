@@ -185,35 +185,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const confirmed = await showConfirm("Bạn có chắc chắn muốn đăng xuất?");
       if (!confirmed) return false;
     }
-    
-    setIsLoading(true);
-    try {
-      // 1. Notify backend if we have a token
-      if (token) {
-        await fetch(`${API_URL}/auth/logout`, {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${token}` }
-        }).catch(err => console.warn("[AUTH] Backend logout failed:", err));
-      }
-    } finally {
-      // 2. Clear local state
-      setUser(null);
-      setToken(null);
-      
-      // 3. Clear all storage
-      localStorage.removeItem('eam_token');
-      localStorage.removeItem('eam_user');
-      localStorage.removeItem('dictionaryHistory'); // Clear app-specific data
-      sessionStorage.clear(); // Clear all session data (like tips dismissed state)
-      
-      // 4. Trigger logout in other tabs
-      localStorage.setItem('eam_logout_trigger', Date.now().toString());
-      
-      setIsLoading(false);
-      
-      // 5. Force full reload for clean state
-      window.location.href = '/login';
+
+    // 1. Capture token before clearing state
+    const currentToken = token;
+
+    // 2. Clear all storage immediately
+    localStorage.removeItem('eam_token');
+    localStorage.removeItem('eam_user');
+    localStorage.removeItem('dictionaryHistory');
+    sessionStorage.clear();
+
+    // 3. Trigger logout in other tabs
+    localStorage.setItem('eam_logout_trigger', Date.now().toString());
+
+    // 4. Clear React state
+    setUser(null);
+    setToken(null);
+
+    // 5. Navigate immediately — do not wait for backend call
+    window.location.href = '/login';
+
+    // 6. Notify backend in the background (fire and forget)
+    if (currentToken) {
+      fetch(`${API_URL}/auth/logout`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${currentToken}` }
+      }).catch(() => {});
     }
+
     return true;
   };
 

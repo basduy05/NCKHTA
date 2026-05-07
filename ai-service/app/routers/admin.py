@@ -886,93 +886,80 @@ def list_feedback(
     """List all user feedback with optional filters."""
     limit = max(1, min(limit, 200))
     offset = max(0, offset)
-    
+
     conn = get_db()
     try:
-        # Get actual columns of user_feedback table to prevent any "no such column" 500 crashes
-        cursor = conn.execute("PRAGMA table_info(user_feedback)")
-        existing_cols = {row["name"] for row in cursor.fetchall()}
-        
+        # Ensure table exists with all required columns
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS user_feedback (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                user_name TEXT,
+                feedback_type TEXT NOT NULL DEFAULT '',
+                feature TEXT NOT NULL DEFAULT '',
+                content TEXT NOT NULL DEFAULT '',
+                status TEXT DEFAULT 'pending',
+                admin_note TEXT,
+                created_at TIMESTAMP DEFAULT (DATETIME('now', '+7 hours'))
+            )
+        """)
+
         conditions = []
-        params = []
-        
-        if status and "status" in existing_cols:
-            conditions.append("f.status = ?")
+        params: list = []
+
+        if status:
+            conditions.append("status = ?")
             params.append(status)
-        if feature and "feature" in existing_cols:
-            conditions.append("f.feature = ?")
+        if feature:
+            conditions.append("feature = ?")
             params.append(feature)
         if feedback_type:
-            col_name = "feedback_type" if "feedback_type" in existing_cols else ("type" if "type" in existing_cols else None)
-            if col_name:
-                conditions.append(f"f.{col_name} = ?")
-                params.append(feedback_type)
-        
-        where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
-        
-        # Build select list dynamically based on what actually exists
-        select_fields = []
-        for field in ["id", "user_id", "user_name", "feedback_type", "type", "feature", "content", "status", "admin_note", "admin_notes", "created_at"]:
-            if field in existing_cols:
-                if field == "feedback_type":
-                    select_fields.append("f.feedback_type")
-                elif field == "type" and "feedback_type" not in existing_cols:
-                    select_fields.append("f.type AS feedback_type")
-                elif field == "admin_note":
-                    select_fields.append("f.admin_note")
-                elif field == "admin_notes" and "admin_note" not in existing_cols:
-                    select_fields.append("f.admin_notes AS admin_note")
-                elif field == "user_name":
-                    select_fields.append("f.user_name")
-                elif field in ["id", "user_id", "feature", "content", "status", "created_at"]:
-                    select_fields.append(f"f.{field}")
-        
-        if "feedback_type" not in existing_cols and "type" not in existing_cols:
-            select_fields.append("'' AS feedback_type")
-        if "admin_note" not in existing_cols and "admin_notes" not in existing_cols:
-            select_fields.append("'' AS admin_note")
-        if "user_name" not in existing_cols:
-            select_fields.append("'' AS user_name")
-            
+            conditions.append("feedback_type = ?")
+            params.append(feedback_type)
+
+        where_clause = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+
         cursor = conn.execute(f"""
-            SELECT {', '.join(select_fields)}
-            FROM user_feedback f
+            SELECT
+                id,
+                user_id,
+                COALESCE(user_name, '') AS user_name,
+                COALESCE(feedback_type, '') AS feedback_type,
+                COALESCE(feature, '') AS feature,
+                COALESCE(content, '') AS content,
+                COALESCE(status, 'pending') AS status,
+                COALESCE(admin_note, '') AS admin_note,
+                created_at
+            FROM user_feedback
             {where_clause}
-            ORDER BY f.created_at DESC
+            ORDER BY created_at DESC
             LIMIT ? OFFSET ?
         """, (*params, limit, offset))
         items = [dict(row) for row in cursor.fetchall()]
-        
-        cursor = conn.execute(f"SELECT COUNT(*) FROM user_feedback f {where_clause}", params)
+
+        cursor = conn.execute(f"SELECT COUNT(*) FROM user_feedback {where_clause}", params)
         total = cursor.fetchone()[0]
-        
-        stats = {"total": 0, "pending": 0, "reviewed": 0, "resolved": 0, "bugs": 0, "suggestions": 0}
-        type_col = "feedback_type" if "feedback_type" in existing_cols else ("type" if "type" in existing_cols else None)
-        status_col = "status" if "status" in existing_cols else None
-        
-        stats_fields = ["COUNT(*) as total"]
-        if status_col:
-            stats_fields.extend([
-                "SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending",
-                "SUM(CASE WHEN status = 'reviewed' THEN 1 ELSE 0 END) as reviewed",
-                "SUM(CASE WHEN status = 'resolved' THEN 1 ELSE 0 END) as resolved"
-            ])
-        if type_col:
-            stats_fields.extend([
-                f"SUM(CASE WHEN {type_col} = 'bug_report' THEN 1 ELSE 0 END) as bugs",
-                f"SUM(CASE WHEN {type_col} = 'suggestion' THEN 1 ELSE 0 END) as suggestions"
-            ])
-            
-        cursor = conn.execute(f"SELECT {', '.join(stats_fields)} FROM user_feedback")
+
+        cursor = conn.execute("""
+            SELECT
+                COUNT(*) as total,
+                SUM(CASE WHEN COALESCE(status,'pending') = 'pending'  THEN 1 ELSE 0 END) as pending,
+                SUM(CASE WHEN status = 'reviewed' THEN 1 ELSE 0 END) as reviewed,
+                SUM(CASE WHEN status = 'resolved' THEN 1 ELSE 0 END) as resolved,
+                SUM(CASE WHEN COALESCE(feedback_type,'') = 'bug_report'  THEN 1 ELSE 0 END) as bugs,
+                SUM(CASE WHEN COALESCE(feedback_type,'') = 'suggestion'  THEN 1 ELSE 0 END) as suggestions
+            FROM user_feedback
+        """)
         row = cursor.fetchone()
-        if row:
-            stats.update(dict(row))
-        
+        stats = dict(row) if row else {"total": 0, "pending": 0, "reviewed": 0, "resolved": 0, "bugs": 0, "suggestions": 0}
+
         conn.close()
         return {"items": items, "total": total, "stats": stats}
     except Exception as e:
-        if conn: conn.close()
-        raise HTTPException(status_code=500, detail=str(e))
+        if conn:
+            try: conn.close()
+            except: pass
+        raise HTTPException(status_code=500, detail=f"Feedback list error: {str(e)}")
 
 
 class FeedbackUpdateRequest(BaseModel):

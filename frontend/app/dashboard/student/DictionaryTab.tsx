@@ -263,14 +263,14 @@ export default function DictionaryTab({ API_URL }: DictionaryTabProps) {
 
   return (
     <div className="space-y-6">
-      <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
-        <div className="flex items-center gap-3">
+      <div className="bg-white p-4 sm:p-6 rounded-xl border border-gray-100 shadow-sm">
+        <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
           <div className="relative flex-1">
-            <Search size={20} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+            <Search size={18} className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
               type="text"
-              className="w-full pl-12 pr-10 py-3.5 bg-gray-50 border border-gray-200 rounded-xl text-gray-700 focus:bg-white focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 outline-none transition text-lg"
-              placeholder="Nhập từ tiếng Anh cần tra (vd: accomplish, serendipity, ...)"
+              className="w-full pl-10 sm:pl-12 pr-10 py-3 sm:py-3.5 bg-gray-50 border border-gray-200 rounded-xl text-gray-700 focus:bg-white focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 outline-none transition text-base sm:text-lg"
+              placeholder="Nhập từ tiếng Anh cần tra..."
               value={word}
               onChange={(e) => setWord(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && lookup()}
@@ -284,33 +284,33 @@ export default function DictionaryTab({ API_URL }: DictionaryTabProps) {
               </button>
             )}
           </div>
-          <button
-            onClick={() => lookup(false)}
-            disabled={loading || !word.trim()}
-            className="btn-primary py-3.5 px-8 rounded-xl flex items-center gap-2 shadow-md disabled:opacity-50 transition text-lg"
-          >
-            {loading ? (
-              <div className="flex items-center gap-2">
+          <div className="flex gap-2 flex-shrink-0">
+            <button
+              onClick={() => lookup(false)}
+              disabled={loading || !word.trim()}
+              className="btn-primary flex-1 sm:flex-none py-3 sm:py-3.5 px-5 sm:px-8 rounded-xl flex items-center justify-center gap-2 shadow-md disabled:opacity-50 transition text-base sm:text-lg"
+            >
+              {loading ? (
                 <div className="flex gap-1 justify-center items-center h-5">
                   <div className="w-1 h-3 bg-yellow-300 animate-bounce [animation-delay:-0.3s]"></div>
                   <div className="w-1 h-4 bg-yellow-300 animate-bounce [animation-delay:-0.15s]"></div>
                   <div className="w-1 h-3 bg-yellow-300 animate-bounce"></div>
                 </div>
-              </div>
-            ) : (
-              <Search size={20} />
-            )}
-            <span>{loading ? "Đang xử lý..." : "Tra từ"}</span>
-          </button>
-
-          {loading && (
-            <button
-              onClick={cancelLookup}
-              className="px-6 py-3.5 border border-red-200 text-red-500 rounded-xl hover:bg-red-50 transition font-medium"
-            >
-              Hủy
+              ) : (
+                <Search size={18} />
+              )}
+              <span className="hidden sm:inline">{loading ? "Đang xử lý..." : "Tra từ"}</span>
+              <span className="sm:hidden">{loading ? "..." : "Tra"}</span>
             </button>
-          )}
+            {loading && (
+              <button
+                onClick={cancelLookup}
+                className="px-4 sm:px-6 py-3 sm:py-3.5 border border-red-200 text-red-500 rounded-xl hover:bg-red-50 transition font-medium text-sm sm:text-base"
+              >
+                Hủy
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -363,50 +363,50 @@ export default function DictionaryTab({ API_URL }: DictionaryTabProps) {
               <p className="text-sm text-gray-600">Vui lòng liên hệ admin để cập nhật API key mới.</p>
             </div>
           )}
-          <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-6 text-white">
-            <div className="flex items-start justify-between">
-              <div>
-                <h2 className="text-3xl font-extrabold mb-1">{result.word}</h2>
-                <div className="flex items-center gap-4 mt-2">
+          <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-4 sm:p-6 text-white">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0">
+                <h2 className="text-2xl sm:text-3xl font-extrabold mb-1 break-words">{result.word}</h2>
+                <div className="flex items-center gap-2 sm:gap-4 mt-2 flex-wrap">
                   {result.phonetic_uk && (
-                    <button onClick={() => speak(result.word, "en-GB")} className="flex items-center gap-1.5 bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-lg transition">
-                      <Volume2 size={16} /> <span className="text-sm">UK</span> <span className="font-mono text-sm">{result.phonetic_uk}</span>
+                    <button onClick={() => speak(result.word, "en-GB")} className="flex items-center gap-1 sm:gap-1.5 bg-white/20 hover:bg-white/30 px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg transition text-sm">
+                      <Volume2 size={14} /> <span>UK</span> <span className="font-mono">{result.phonetic_uk}</span>
                     </button>
                   )}
                   {result.phonetic_us && (
-                    <button onClick={() => speak(result.word, "en-US")} className="flex items-center gap-1.5 bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-lg transition">
-                      <Volume2 size={16} /> <span className="text-sm">US</span> <span className="font-mono text-sm">{result.phonetic_us}</span>
+                    <button onClick={() => speak(result.word, "en-US")} className="flex items-center gap-1 sm:gap-1.5 bg-white/20 hover:bg-white/30 px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg transition text-sm">
+                      <Volume2 size={14} /> <span>US</span> <span className="font-mono">{result.phonetic_us}</span>
                     </button>
                   )}
                 </div>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap sm:flex-nowrap flex-shrink-0">
                 {result.level && (
-                  <span className="bg-white/20 px-3 py-1 rounded-lg text-sm font-bold">{result.level}</span>
+                  <span className="bg-white/20 px-2 sm:px-3 py-1 rounded-lg text-xs sm:text-sm font-bold">{result.level}</span>
                 )}
                 {result._source && (
-                  <span className={`px-3 py-1 rounded-lg text-xs font-bold ${result._source === "database" ? "bg-green-400/30 text-green-100" :
+                  <span className={`px-2 sm:px-3 py-1 rounded-lg text-xs font-bold hidden sm:inline ${result._source === "database" ? "bg-green-400/30 text-green-100" :
                     result._source === "graph" ? "bg-cyan-400/30 text-cyan-100" : "bg-amber-400/30 text-amber-100"
                     }`}>
-                    {result._source === "database" ? "Từ Database (không tốn AI)" :
-                      result._source === "graph" ? "⚡ Từ Knowledge Graph" : "AI tra cứu"}
+                    {result._source === "database" ? "Database" :
+                      result._source === "graph" ? "⚡ Graph" : "AI"}
                   </span>
                 )}
                 {!loading && result.status !== "thinking" && (
                   <button
                     onClick={reLookup}
-                    className="flex items-center gap-1.5 px-4 py-2 rounded-lg transition font-medium bg-white/20 hover:bg-white/30 text-white border border-white/20"
+                    className="flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg transition font-medium bg-white/20 hover:bg-white/30 text-white border border-white/20 text-sm"
                     title="Xoá cache và tra cứu lại bằng AI"
                   >
-                    <RefreshCw size={15} /> Tra lại
+                    <RefreshCw size={14} /> <span className="hidden sm:inline">Tra lại</span>
                   </button>
                 )}
                 <button
                   onClick={saveWord}
                   disabled={saving || saved}
-                  className={`flex items-center gap-1.5 px-4 py-2 rounded-lg transition font-medium ${saved ? "bg-green-500 text-white" : "bg-white text-blue-600 hover:bg-blue-50"}`}
+                  className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg transition font-medium text-sm ${saved ? "bg-green-500 text-white" : "bg-white text-blue-600 hover:bg-blue-50"}`}
                 >
-                  {saved ? <><CheckCircle2 size={16} /> Đã lưu</> : saving ? "Đang lưu..." : <><Bookmark size={16} /> Lưu từ</>}
+                  {saved ? <><CheckCircle2 size={15} /> <span className="hidden sm:inline">Đã lưu</span></> : saving ? "..." : <><Bookmark size={15} /> <span className="hidden sm:inline">Lưu từ</span></>}
                 </button>
               </div>
             </div>
