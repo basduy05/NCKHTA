@@ -23,6 +23,16 @@ except ImportError:
         import sqlite3 as libsql
         SQLITE_OP_ERROR = libsql.OperationalError
 
+# libsql_client raises KeyError (not OperationalError) on SQL errors (e.g. duplicate column).
+# Override SQLITE_OP_ERROR so migration try/except blocks catch these correctly.
+try:
+    import libsql_client as _lc_check
+    del _lc_check
+    if not HAS_LIBSQL_EXPERIMENTAL:
+        SQLITE_OP_ERROR = Exception
+except ImportError:
+    pass
+
 from pydantic import BaseModel
 from typing import List, Optional
 

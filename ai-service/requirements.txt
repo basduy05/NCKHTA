@@ -22,7 +22,9 @@ python-docx
 PyPDF2
 json-repair
 bleach
-# libsql-experimental (Requires Rust toolchain to compile on Windows, fallback to sqlite3 is implemented)
+# libsql-experimental (Requires Rust toolchain to compile on Windows, not available on win32)
 libsql-experimental; sys_platform != "win32"
+# libsql-client: pure Python HTTP client for Turso, works on all platforms including Windows
+libsql-client
 cohere
 typing-extensions

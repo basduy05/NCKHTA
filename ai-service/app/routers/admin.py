@@ -10,7 +10,7 @@ import base64
 import asyncio
 import time
 import cohere
-import google.generativeai as genai
+from google import genai as genai
 from pydantic import BaseModel
 from typing import Dict, Optional, List
 
@@ -1036,18 +1036,19 @@ def list_gemini_models():
         raise HTTPException(status_code=400, detail="GOOGLE_API_KEY is not configured")
 
     try:
-        genai.configure(api_key=api_key)
+        client = genai.Client(api_key=api_key)
         models = []
         lines = ["Cac model kha dung:"]
 
-        for model in genai.list_models():
-            methods = getattr(model, "supported_generation_methods", []) or []
-            if "generateContent" not in methods:
+        for model in client.models.list():
+            # new google.genai: filter to generative models only
+            name = getattr(model, "name", "") or ""
+            if not name or "gemini" not in name.lower():
                 continue
 
             item = {
-                "name": getattr(model, "name", ""),
-                "description": getattr(model, "description", "") or "",
+                "name": name,
+                "description": getattr(model, "display_name", "") or getattr(model, "description", "") or "",
             }
             models.append(item)
             lines.append(f"- Ten: {item['name']}")
