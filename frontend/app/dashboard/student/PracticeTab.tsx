@@ -5,6 +5,7 @@ import { useAuth } from "../../context/AuthContext";
 import { useNotification } from "../../context/NotificationContext";
 import { MOCK_PRACTICE_TESTS } from "../../components/MockPracticeData";
 import FeedbackButton from "../../components/FeedbackButton";
+import { Button, Confetti, useSound } from "../../components/ui";
 
 interface PracticeTabProps {
   API_URL: string;
@@ -25,6 +26,8 @@ const TOEIC_PARTS = [
 export default function PracticeTab({ API_URL, setShowCreditModal }: PracticeTabProps) {
   const { user, authFetch, refreshUser } = useAuth();
   const { showAlert } = useNotification();
+  const sfx = useSound();
+  const [confettiTick, setConfettiTick] = useState(0);
   const [testType, setTestType] = useState("TOEIC");
   const [skill, setSkill] = useState("reading");
   const [loading, setLoading] = useState(false);
@@ -694,6 +697,8 @@ export default function PracticeTab({ API_URL, setShowCreditModal }: PracticeTab
       const numericBand = Number.parseFloat(String(evalData.overall_band || 0)) || 0;
       const pts = Math.round((numericBand / 9) * 100);
       setPointsEarned(pts);
+      if (pts >= 80) { sfx.levelUp(); setConfettiTick(t => t + 1); }
+      else sfx.finish();
 
       const savedWritingTexts = writingTasks.length
         ? { ...writingTexts, [activeWritingTask]: textToEvaluate }
@@ -780,6 +785,8 @@ export default function PracticeTab({ API_URL, setShowCreditModal }: PracticeTab
     setSubmitted(true);
     const pts = Math.round((correct / totalQ) * 100);
     setPointsEarned(pts);
+    if (pts >= 80) { sfx.levelUp(); setConfettiTick(t => t + 1); }
+    else sfx.finish();
     await saveExam(practice, answers, correct, totalQ);
   };
 

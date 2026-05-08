@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import FeedbackButton from "../../components/FeedbackButton";
+import { Button, Card, Confetti, useSound } from "../../components/ui";
 
 const IPA_DATA = {
   vowels: [
@@ -41,27 +42,30 @@ interface IpaTabProps {
   API_URL: string;
 }
 
-const SentenceWithBlank = ({ 
-  sentence, 
-  correctAnswer, 
-  onCorrect 
-}: { 
-  sentence: string, 
-  correctAnswer: string, 
-  onCorrect: () => void 
+const SentenceWithBlank = ({
+  sentence,
+  correctAnswer,
+  onCorrect
+}: {
+  sentence: string,
+  correctAnswer: string,
+  onCorrect: () => void
 }) => {
   const [userInput, setUserInput] = useState("");
   const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
+  const sfx = useSound();
 
   const checkAnswer = (val: string) => {
     setUserInput(val);
     const cleanUser = val.toLowerCase().trim();
     const cleanAnswer = correctAnswer.toLowerCase().trim();
-    
+
     if (cleanUser === cleanAnswer) {
+      if (isCorrect !== true) sfx.correct();
       setIsCorrect(true);
       onCorrect();
     } else if (cleanUser.length >= cleanAnswer.length) {
+      if (isCorrect !== false) sfx.wrong();
       setIsCorrect(false);
     } else {
       setIsCorrect(null);
@@ -98,6 +102,8 @@ const SentenceWithBlank = ({
 
 export default function IpaTab({ API_URL }: IpaTabProps) {
   const { authFetch, refreshUser } = useAuth();
+  const sfx = useSound();
+  const [confettiTick, setConfettiTick] = useState(0);
   const [focus, setFocus] = useState("vowels");
   const [customWords, setCustomWords] = useState("");
   const [loading, setLoading] = useState(false);
@@ -152,6 +158,13 @@ export default function IpaTab({ API_URL }: IpaTabProps) {
     });
     setQuizScore(s);
     setQuizSubmitted(true);
+    const total = lesson.quiz.length;
+    if (total > 0 && s / total >= 0.8) {
+      sfx.levelUp();
+      setConfettiTick(t => t + 1);
+    } else {
+      sfx.finish();
+    }
 
     try {
       await authFetch(`${API_URL}/student/scores/save-practice`, {
@@ -189,7 +202,8 @@ export default function IpaTab({ API_URL }: IpaTabProps) {
 
   return (
     <div className="space-y-8 pb-12 w-full">
-      <section className="bg-white p-8 rounded-3xl border border-gray-100 shadow-xl relative overflow-hidden">
+      <Confetti trigger={confettiTick} />
+      <section className="bg-white p-8 rounded-3xl border-2 border-gray-100 shadow-xl relative overflow-hidden">
         <div className="absolute top-0 right-0 w-32 h-32 bg-blue-50 rounded-full -mr-16 -mt-16 opacity-50" />
         <div className="relative z-10">
           <div className="flex flex-col md:flex-row gap-6 mb-8 justify-between items-start md:items-end border-b border-gray-100 pb-8">
@@ -225,10 +239,10 @@ export default function IpaTab({ API_URL }: IpaTabProps) {
           
           <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-4 mt-6">
               {(IPA_DATA as any)[focus].map((item: any, i: number) => (
-                  <button 
-                    key={i} 
-                    onClick={() => speak(item.example)}
-                    className="bg-white border border-gray-100 p-4 rounded-2xl hover:border-blue-500 hover:shadow-lg transition-all group relative flex flex-col items-center justify-center min-h-[100px] overflow-hidden"
+                  <button
+                    key={i}
+                    onClick={() => { sfx.click(); speak(item.example); }}
+                    className="bg-white border-2 border-gray-100 p-4 rounded-2xl hover:border-blue-500 hover:shadow-lg active:scale-95 transition-all group relative flex flex-col items-center justify-center min-h-[100px] overflow-hidden"
                   >
                       <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
                          <div className="p-1.5 bg-blue-50 text-blue-600 rounded-lg"><Volume2 size={14} /></div>
@@ -241,14 +255,15 @@ export default function IpaTab({ API_URL }: IpaTabProps) {
           </div>
 
           <div className="mt-10 flex justify-center">
-              <button 
+              <Button
                 onClick={generateLesson}
                 disabled={loading}
-                className="bg-indigo-600 hover:bg-indigo-700 px-10 py-3 rounded-xl font-semibold text-white flex items-center gap-2 shadow-sm active:scale-95 transition-all disabled:opacity-50"
+                loading={loading}
+                size="lg"
+                iconLeft={!loading ? <Brain size={24} /> : null}
               >
-                {loading ? <div className="animate-spin rounded-full h-8 w-8 border-4 border-white/30 border-t-white" /> : <Brain size={32} />}
                 GENERATE WITH AI
-              </button>
+              </Button>
           </div>
         </div>
       </section>
@@ -406,11 +421,11 @@ export default function IpaTab({ API_URL }: IpaTabProps) {
                                           } else if (isSelected) btnCls = "border-blue-600 bg-blue-50 text-blue-700 shadow-blue-100 scale-[1.02]";
                                           
                                           return (
-                                              <button 
+                                              <button
                                                 key={oi}
                                                 disabled={quizSubmitted}
-                                                onClick={() => setQuizAnswers(p => ({...p, [i]: oi}))}
-                                                className={`p-6 rounded-3xl border-3 text-left text-xl font-black transition-all duration-300 ${btnCls}`}
+                                                onClick={() => { sfx.click(); setQuizAnswers(p => ({...p, [i]: oi})); }}
+                                                className={`p-6 rounded-3xl border-2 text-left text-xl font-black transition-all duration-300 active:scale-[0.98] ${btnCls}`}
                                               >
                                                 {opt}
                                               </button>
@@ -423,13 +438,14 @@ export default function IpaTab({ API_URL }: IpaTabProps) {
 
                       {!quizSubmitted ? (
                           <div className="mt-20 text-center">
-                              <button 
+                              <Button
                                 onClick={handleQuizSubmit}
                                 disabled={Object.keys(quizAnswers).length < lesson.quiz.length}
-                                className="bg-gradient-to-r from-blue-600 via-indigo-600 to-indigo-700 px-24 py-8 rounded-[3rem] font-black text-3xl text-white shadow-3xl shadow-blue-200 active:scale-95 transition-all disabled:opacity-50"
+                                size="lg"
+                                intent="primary"
                               >
-                                  FINISH & SEE RESULTS
-                              </button>
+                                FINISH & SEE RESULTS
+                              </Button>
                           </div>
                       ) : (
                           <div className="mt-20 bg-gradient-to-br from-blue-100/50 to-indigo-100/50 rounded-[4rem] p-16 border-4 border-white flex flex-col md:flex-row items-center justify-between gap-12 relative overflow-hidden backdrop-blur-xl">
@@ -441,12 +457,14 @@ export default function IpaTab({ API_URL }: IpaTabProps) {
                                     <span className="font-black text-3xl text-blue-700">+{quizScore * 10} XP</span>
                                   </div>
                               </div>
-                              <button 
-                                onClick={() => setLesson(null)} 
-                                className="relative z-10 px-12 py-6 bg-white text-gray-900 font-black text-2xl rounded-3xl border-4 border-indigo-50 hover:bg-indigo-50 transition-all shadow-2xl active:scale-95"
+                              <Button
+                                onClick={() => setLesson(null)}
+                                intent="ghost"
+                                size="lg"
+                                className="relative z-10"
                               >
                                 NEW LESSON
-                              </button>
+                              </Button>
                           </div>
                       )}
                   </div>

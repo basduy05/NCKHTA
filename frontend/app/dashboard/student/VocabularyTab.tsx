@@ -632,6 +632,16 @@ export default function VocabularyTab({ API_URL }: VocabularyTabProps) {
         onClose={() => setEditingWord(null)}
         title={editingWord ? `Chỉnh sửa "${editingWord.word}"` : "Chỉnh sửa từ vựng"}
         size="md"
+        footer={editingWord ? (
+          <>
+            <Button type="button" intent="ghost" onClick={() => setEditingWord(null)}>
+              Hủy
+            </Button>
+            <Button type="button" intent="primary" loading={isUpdating} onClick={(e) => updateWord(e as any)}>
+              {isUpdating ? "Đang lưu..." : "Cập nhật"}
+            </Button>
+          </>
+        ) : null}
       >
         {editingWord && (
           <form onSubmit={updateWord} className="space-y-4">
@@ -665,14 +675,7 @@ export default function VocabularyTab({ API_URL }: VocabularyTabProps) {
               <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Ví dụ</label>
               <textarea rows={2} className="w-full px-4 py-2 bg-gray-50 border-2 border-gray-200 rounded-xl outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100 italic" value={editingWord.example || ""} onChange={e => setEditingWord({...editingWord, example: e.target.value})} />
             </div>
-            <div className="pt-2 flex gap-3">
-              <Button type="submit" intent="primary" loading={isUpdating} block>
-                {isUpdating ? "Đang lưu..." : "Cập nhật"}
-              </Button>
-              <Button type="button" intent="ghost" onClick={() => setEditingWord(null)} block>
-                Hủy
-              </Button>
-            </div>
+            <button type="submit" className="hidden" />
           </form>
         )}
       </Modal>

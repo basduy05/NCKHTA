@@ -11,6 +11,7 @@ import {
 import { useAuth } from "../../context/AuthContext";
 import { useNotification } from "../../context/NotificationContext";
 import FeedbackButton from "../../components/FeedbackButton";
+import { Confetti, useSound } from "../../components/ui";
 
 interface GrammarTabProps {
   API_URL: string;
@@ -72,6 +73,9 @@ export default function GrammarTab({ API_URL }: GrammarTabProps) {
   const [activeLevel, setActiveLevel] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedNodes, setExpandedNodes] = useState<Set<number>>(new Set());
+
+  const sfx = useSound();
+  const [confettiTick, setConfettiTick] = useState(0);
 
   // Practice state
   const [selectedRules, setSelectedRules] = useState<number[]>([]);
@@ -172,6 +176,8 @@ export default function GrammarTab({ API_URL }: GrammarTabProps) {
     const total = questions.length;
     const newScore = total > 0 ? Math.round((correct / total) * 100) : 0;
     setScore(newScore); setSubmitted(true);
+    if (newScore >= 80) { sfx.levelUp(); setConfettiTick(t => t + 1); }
+    else sfx.finish();
     try {
       const part = usingStoredQuizzes
         ? storedRuleName || "Bài tập có sẵn"
@@ -323,8 +329,8 @@ export default function GrammarTab({ API_URL }: GrammarTabProps) {
                           } else if (isSelected) cls = "bg-teal-100 border-teal-500 text-teal-800 shadow-md scale-[1.01] ring-2 ring-teal-400/20";
                           return (
                             <button key={idx} disabled={questionSubmitted}
-                              onClick={() => setAnswers({ ...answers, [currentIdx]: opt })}
-                              className={`p-4 rounded-2xl border-2 text-left transition-all duration-200 font-bold text-sm md:text-base flex items-center gap-3 ${cls}`}>
+                              onClick={() => { sfx.click(); setAnswers({ ...answers, [currentIdx]: opt }); }}
+                              className={`p-4 rounded-2xl border-2 text-left transition-all duration-200 font-bold text-sm md:text-base flex items-center gap-3 active:scale-[0.98] ${cls}`}>
                               <div className={`w-7 h-7 rounded-full border-2 flex items-center justify-center font-black flex-shrink-0 text-xs transition-all ${questionSubmitted && isCorrect ? "border-green-600 text-green-700 bg-white" : questionSubmitted && isSelected ? "border-red-500 text-red-600 bg-white" : isSelected ? "border-teal-600 text-teal-600 bg-white" : "border-gray-200 text-gray-400"}`}>
                                 {questionSubmitted && isCorrect ? <CheckCircle2 size={16} /> : questionSubmitted && isSelected ? <X size={14} /> : String.fromCharCode(65 + idx)}
                               </div>
@@ -341,7 +347,7 @@ export default function GrammarTab({ API_URL }: GrammarTabProps) {
                         <input autoFocus type="text"
                           value={answers[currentIdx] || ""}
                           onChange={e => setAnswers({ ...answers, [currentIdx]: e.target.value })}
-                          onKeyDown={e => { if (e.key === "Enter" && !questionSubmitted && answers[currentIdx]) setQuestionSubmitted(true); }}
+                          onKeyDown={e => { if (e.key === "Enter" && !questionSubmitted && answers[currentIdx]) { (isAnswerCorrect(answers[currentIdx] || "", q.answer || "") ? sfx.correct() : sfx.wrong()); setQuestionSubmitted(true); } }}
                           placeholder="Nhập đáp án..."
                           className={`w-full text-2xl font-black text-center p-6 border-b-4 rounded-2xl outline-none transition-all shadow-lg ${questionSubmitted ? (isAnswerCorrect(answers[currentIdx] || "", q.answer) ? "border-green-500 bg-green-50 text-green-700" : "border-red-500 bg-red-50 text-red-700") : "border-gray-200 bg-gray-50 focus:border-teal-500 focus:bg-white"}`}
                           disabled={questionSubmitted} />
@@ -375,16 +381,17 @@ export default function GrammarTab({ API_URL }: GrammarTabProps) {
                       </div>
                       <div className="w-full sm:w-auto">
                         {!questionSubmitted ? (
-                          <button onClick={() => setQuestionSubmitted(true)} disabled={!answers[currentIdx]}
-                            className="w-full sm:w-auto px-10 py-3.5 rounded-2xl font-black text-base text-white bg-teal-600 hover:bg-teal-700 shadow-lg active:scale-95 transition-all disabled:opacity-40 disabled:bg-gray-300 uppercase tracking-wider">
+                          <button onClick={() => { (isAnswerCorrect(answers[currentIdx] || "", q.answer || "") ? sfx.correct() : sfx.wrong()); setQuestionSubmitted(true); }} disabled={!answers[currentIdx]}
+                            className="duo-btn duo-btn--info duo-btn--lg w-full sm:w-auto">
                             Kiểm tra
                           </button>
                         ) : (
                           <button onClick={() => {
+                            sfx.click();
                             if (currentIdx < questions.length - 1) { setCurrentIdx(currentIdx + 1); setQuestionSubmitted(false); }
                             else { submitPractice(); }
                           }}
-                            className={`w-full sm:w-auto px-10 py-3.5 rounded-2xl font-black text-base text-white shadow-lg active:scale-95 transition-all uppercase tracking-wider flex items-center justify-center gap-2 ${isAnswerCorrect(String(answers[currentIdx]||""), String(q.answer||"")) ? "bg-green-600" : "bg-red-500"}`}>
+                            className={`duo-btn duo-btn--lg w-full sm:w-auto ${isAnswerCorrect(String(answers[currentIdx]||""), String(q.answer||"")) ? "duo-btn--correct" : "duo-btn--wrong"}`}>
                             {currentIdx < questions.length - 1 ? "Tiếp tục" : "Kết thúc"} <ArrowRight size={20} />
                           </button>
                         )}
@@ -570,6 +577,7 @@ export default function GrammarTab({ API_URL }: GrammarTabProps) {
 
   return (
     <div className="animate-in fade-in duration-300 pb-28">
+      <Confetti trigger={confettiTick} />
       {/* ── Hero ── */}
       <div className="bg-gradient-to-br from-teal-600 via-teal-700 to-blue-700 rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-8 mb-5 text-white relative overflow-hidden shadow-xl shadow-teal-200/40">
         <div className="absolute top-0 right-0 w-60 h-60 bg-white/5 rounded-full blur-3xl -mr-16 -mt-16" />
