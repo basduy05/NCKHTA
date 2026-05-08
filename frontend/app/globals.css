@@ -347,7 +347,7 @@
 
 /* ===== RICH TEXT CONTENT STYLES ===== */
 .rich-text h1, .rich-text h2 {
-  @apply font-black text-gray-900 mb-4 mt-6;
+  @apply font-bold text-gray-900 mb-4 mt-6;
 }
 .rich-text h1 { @apply text-3xl; }
 .rich-text h2 { @apply text-2xl; }
@@ -355,7 +355,7 @@
   @apply mb-4 leading-relaxed;
 }
 .rich-text b, .rich-text strong {
-  @apply font-black text-gray-900;
+  @apply font-bold text-gray-900;
 }
 .rich-text i, .rich-text em {
   @apply italic;

@@ -810,7 +810,7 @@ export default function PracticeTab({ API_URL, setShowCreditModal }: PracticeTab
                   <p className="text-xs font-semibold uppercase text-white/60 tracking-widest">Điểm số</p>
                   <p className="text-2xl font-semibold">{renderValue(reviewExam.score)}/{renderValue(reviewExam.max_score)}</p>
                </div>
-               <button onClick={() => setReviewExam(null)} className="bg-white text-indigo-600 hover:bg-indigo-50 px-6 py-3 rounded-2xl font-semibold text-sm transition shadow-lg">✕ THOÁT</button>
+               <button onClick={() => setReviewExam(null)} className="bg-white text-[var(--brand)] hover:bg-[var(--brand-soft)] px-6 py-3 rounded-2xl font-semibold text-sm transition shadow-lg">✕ THOÁT</button>
             </div>
           </div>
           
@@ -879,8 +879,8 @@ export default function PracticeTab({ API_URL, setShowCreditModal }: PracticeTab
               <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
                 <div className="md:col-span-4 grid grid-cols-2 gap-2">
                     <div className="relative">
-                      <p className="absolute -top-2.5 left-4 px-2 bg-white text-[10px] font-semibold text-indigo-400 uppercase tracking-widest z-20">Chứng chỉ</p>
-                      <select value={testType} onChange={e => { setTestType(e.target.value); setToeicPart(""); }} className="w-full h-14 bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 outline-none text-slate-900 font-semibold text-sm appearance-none focus:border-indigo-300 transition-all">
+                      <p className="absolute -top-2.5 left-4 px-2 bg-white text-[10px] font-semibold text-[var(--brand)] uppercase tracking-widest z-20">Chứng chỉ</p>
+                      <select value={testType} onChange={e => { setTestType(e.target.value); setToeicPart(""); }} className="w-full h-14 bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 outline-none text-slate-900 font-semibold text-sm appearance-none focus:border-[var(--brand)] transition-all">
                         <option value="TOEIC text-slate-900">🎯 TOEIC</option>
                         <option value="IELTS">📘 IELTS</option>
                         <option value="GENERAL">🌍 Giao tiếp</option>
@@ -897,8 +897,8 @@ export default function PracticeTab({ API_URL, setShowCreditModal }: PracticeTab
 
                 <div className="md:col-span-6">
                   {testType === "TOEIC" ? (
-                     <div className="bg-indigo-50/50 p-2 rounded-2xl border border-indigo-100 flex gap-2">
-                        <p className="hidden md:flex items-center px-4 font-semibold text-[10px] text-indigo-400 uppercase tracking-widest border-r border-indigo-100 mr-2">TOEIC PARTS</p>
+                     <div className="bg-[var(--brand-soft)]/50 p-2 rounded-2xl border border-[var(--brand)]/20 flex gap-2">
+                        <p className="hidden md:flex items-center px-4 font-semibold text-[10px] text-[var(--brand)] uppercase tracking-widest border-r border-[var(--brand)]/20 mr-2">TOEIC PARTS</p>
                         <div className="flex gap-1 overflow-x-auto pb-1 md:pb-0 scrollbar-hide">
                             {TOEIC_PARTS.slice(1).map(p => (
                               <button key={p.value} onClick={() => { setToeicPart(p.value); setSkill(p.type || 'reading'); }} className={`shrink-0 h-10 px-4 rounded-xl text-[10px] font-semibold transition-all ${toeicPart === p.value ? 'bg-[var(--brand)] text-white shadow-md shadow-blue-100 scale-105' : 'bg-white text-[var(--brand)] border border-[var(--brand)]/20 hover:bg-[var(--brand-soft)]'}`}>
@@ -932,7 +932,7 @@ export default function PracticeTab({ API_URL, setShowCreditModal }: PracticeTab
 
               {testType === "TOEIC" && (
                 <div className="mt-4 flex flex-wrap gap-3 items-center">
-                   <p className="text-[10px] font-semibold text-indigo-400 uppercase tracking-widest mr-2">Hoặc kỹ năng riêng:</p>
+                   <p className="text-[10px] font-semibold text-[var(--brand)] uppercase tracking-widest mr-2">Hoặc kỹ năng riêng:</p>
                    {['writing', 'speaking'].map(s => (
                      <button key={s} onClick={() => { setSkill(s); setToeicPart(""); }} className={`px-5 py-2 rounded-xl text-[10px] font-semibold uppercase transition-all ${toeicPart === "" && skill === s ? 'bg-[var(--brand-soft)] text-[var(--brand)] ring-2 ring-[var(--brand)]/20' : 'bg-slate-50 text-slate-400 border border-slate-100 hover:bg-white hover:border-[var(--brand)]/20'}`}>
                         TOEIC {s}
@@ -956,12 +956,12 @@ export default function PracticeTab({ API_URL, setShowCreditModal }: PracticeTab
             </div>
           </div>
           {historyLoading ? (
-            <div className="p-20 text-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div><p className="text-slate-400 font-bold text-xs mt-4 tracking-widest">ĐANG TẢI DỮ LIỆU...</p></div>
+            <div className="p-20 text-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[var(--brand)] mx-auto"></div><p className="text-slate-400 font-bold text-xs mt-4 tracking-widest">ĐANG TẢI DỮ LIỆU...</p></div>
           ) : examHistory.length === 0 ? (
             <div className="p-20 text-center">
                <div className="w-20 h-20 bg-slate-50 rounded-[2rem] flex items-center justify-center mx-auto mb-5 text-slate-200"><History size={40} /></div>
                <p className="text-slate-400 font-bold uppercase tracking-widest text-sm">Chưa có bài thi nào</p>
-               <button onClick={() => setShowHistory(false)} className="mt-6 text-indigo-600 font-semibold text-xs hover:underline">LUYỆN TẬP NGAY →</button>
+               <button onClick={() => setShowHistory(false)} className="mt-6 text-[var(--brand)] font-semibold text-xs hover:underline">LUYỆN TẬP NGAY →</button>
             </div>
           ) : (
             <div className="divide-y divide-slate-50">
@@ -1029,7 +1029,7 @@ export default function PracticeTab({ API_URL, setShowCreditModal }: PracticeTab
             {practice.passage && (
               <div className="bg-slate-50/50 p-8 rounded-[2rem] mb-10 border border-slate-100 whitespace-pre-wrap leading-relaxed text-slate-700 text-lg shadow-inner">
                 <h4 className="font-semibold text-slate-900 mb-4 flex items-center gap-2 text-sm uppercase tracking-widest">
-                  <FileText size={18} className="text-indigo-500" /> Nội dung bài đọc / Transcript:
+                  <FileText size={18} className="text-[var(--brand)]" /> Nội dung bài đọc / Transcript:
                 </h4>
                 {renderValue(practice.passage)}
               </div>
@@ -1038,7 +1038,7 @@ export default function PracticeTab({ API_URL, setShowCreditModal }: PracticeTab
             {practice.tips_vn?.length > 0 && (
               <div className="mb-8 flex flex-wrap gap-2">
                 {practice.tips_vn.map((tip: string, index: number) => (
-                  <span key={index} className="px-3 py-2 bg-indigo-50 text-indigo-700 rounded-xl text-xs font-bold border border-indigo-100">
+                  <span key={index} className="px-3 py-2 bg-[var(--brand-soft)] text-[var(--brand)] rounded-xl text-xs font-bold border border-[var(--brand)]/20">
                     {renderValue(tip)}
                   </span>
                 ))}
@@ -1130,13 +1130,13 @@ export default function PracticeTab({ API_URL, setShowCreditModal }: PracticeTab
                             </ul>
                         </div>
                         <div className="bg-[var(--brand-soft)] p-6 rounded-[var(--r-xl)] border border-[var(--brand)]/15">
-                            <h4 className="font-semibold text-indigo-900 mb-6 flex items-center gap-3 text-xs uppercase tracking-widest">
-                                <Bookmark size={18} className="text-indigo-500" /> Từ vựng nên dùng:
+                            <h4 className="font-semibold text-[var(--ink-1)] mb-6 flex items-center gap-3 text-xs uppercase tracking-widest">
+                                <Bookmark size={18} className="text-[var(--brand)]" /> Từ vựng nên dùng:
                             </h4>
                             <div className="flex flex-wrap gap-2">
                                 {practice.useful_vocabulary?.map((v: any, i: number) => (
                                     <div key={i} className="group relative">
-                                      <span className="px-4 py-2.5 bg-white border border-indigo-100 rounded-2xl text-[11px] font-semibold text-indigo-700 shadow-sm hover:bg-indigo-600 hover:text-white transition-all pointer-default">
+                                      <span className="px-4 py-2.5 bg-white border border-[var(--line)] rounded-2xl text-[11px] font-semibold text-[var(--brand)] shadow-sm hover:bg-[var(--brand)] hover:text-white transition-all pointer-default">
                                           {renderValue(v.phrase || v)}
                                       </span>
                                     </div>
@@ -1173,7 +1173,7 @@ export default function PracticeTab({ API_URL, setShowCreditModal }: PracticeTab
                              <div className="space-y-5">
                                 {practice.evaluation_criteria?.map((c: any, i: number) => (
                                     <div key={i} className="border-b border-slate-50 pb-4 last:border-0 last:pb-0">
-                                        <p className="font-semibold text-[10px] text-indigo-600 uppercase tracking-widest leading-none mb-2">{renderValue(c.criterion)}</p>
+                                        <p className="font-semibold text-[10px] text-[var(--brand)] uppercase tracking-widest leading-none mb-2">{renderValue(c.criterion)}</p>
                                         <p className="text-sm text-slate-500 font-bold">{renderValue(c.description_vn)}</p>
                                     </div>
                                 ))}
@@ -1255,7 +1255,7 @@ export default function PracticeTab({ API_URL, setShowCreditModal }: PracticeTab
 
           <div className="relative">
             <textarea 
-              className="w-full h-96 p-8 border-2 border-slate-100 rounded-[2.5rem] outline-none focus:border-blue-500 focus:ring-8 focus:ring-blue-500/5 transition-all font-serif text-xl leading-relaxed bg-white shadow-inner"
+              className="w-full h-96 p-6 border-2 border-[var(--line)] rounded-[var(--r-xl)] outline-none focus:border-[var(--brand)] focus:ring-4 focus:ring-[var(--brand-soft)] transition-all text-base leading-relaxed bg-white"
               placeholder="Bắt đầu viết bài của bạn tại đây..."
               value={currentWritingText}
               onChange={(e) => {

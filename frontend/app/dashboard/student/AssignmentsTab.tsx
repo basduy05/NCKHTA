@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { useNotification } from "../../context/NotificationContext";
+import { EmptyState } from "../../components/ui";
 
 interface AssignmentsTabProps {
   API_URL: string;
@@ -89,7 +90,7 @@ export default function AssignmentsTab({ API_URL }: AssignmentsTabProps) {
   };
 
   const TYPE_CONFIG: Record<string, { label: string; icon: any; color: string }> = {
-    quiz:     { label: "Trắc nghiệm", icon: Brain,    color: "bg-indigo-50 text-indigo-600 border-indigo-100" },
+    quiz:     { label: "Trắc nghiệm", icon: Brain,    color: "bg-[var(--brand-soft)] text-[var(--brand)] border-[var(--brand)]/20" },
     writing:  { label: "Bài viết",    icon: PenLine,  color: "bg-purple-50 text-purple-600 border-purple-100" },
     reading:  { label: "Đọc hiểu",   icon: BookOpen, color: "bg-teal-50 text-teal-600 border-teal-100" },
     speaking: { label: "Nói",         icon: Mic,      color: "bg-orange-50 text-orange-600 border-orange-100" },
@@ -133,8 +134,8 @@ export default function AssignmentsTab({ API_URL }: AssignmentsTabProps) {
               
               {takingQuiz.evaluation && (
                  <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm space-y-4">
-                    <h3 className="font-bold text-gray-900 text-lg flex items-center gap-2"><Sparkles className="text-indigo-500" size={20}/> Đánh giá từ AI</h3>
-                    <div className="bg-indigo-50 p-4 rounded-lg text-sm text-indigo-900 leading-relaxed">
+                    <h3 className="font-bold text-gray-900 text-lg flex items-center gap-2"><Sparkles className="text-[var(--brand)]" size={20}/> Đánh giá từ AI</h3>
+                    <div className="bg-[var(--brand-soft)] p-4 rounded-lg text-sm text-gray-800 leading-relaxed">
                       <p className="font-bold mb-1">Nhận xét chung:</p>
                       {renderValue(takingQuiz.evaluation.feedback_summary)}
                     </div>
@@ -146,7 +147,7 @@ export default function AssignmentsTab({ API_URL }: AssignmentsTabProps) {
                           {Object.entries(takingQuiz.evaluation.criteria_scores).map(([k, v]) => (
                             <div key={k} className="bg-gray-50 p-2 rounded flex justify-between text-sm">
                               <span className="text-gray-600">{k}</span>
-                              <span className="font-bold text-indigo-700">{renderValue(v)}</span>
+                              <span className="font-bold text-[var(--brand)]">{renderValue(v)}</span>
                             </div>
                           ))}
                         </div>
@@ -196,7 +197,7 @@ export default function AssignmentsTab({ API_URL }: AssignmentsTabProps) {
                 <button
                   onClick={() => submitAssignment()}
                   disabled={!quizAnswers["text"]?.trim()}
-                  className="bg-indigo-600 hover:bg-indigo-700 text-white px-10 py-3 rounded-xl text-base font-semibold shadow-sm hover:shadow-md disabled:opacity-50 transition"
+                  className="bg-[var(--brand)] hover:bg-[var(--brand-dark)] text-white px-10 py-3 rounded-xl text-base font-semibold shadow-sm hover:shadow-md disabled:opacity-50 transition"
                 >
                   Nộp bài viết
                 </button>
@@ -228,7 +229,7 @@ export default function AssignmentsTab({ API_URL }: AssignmentsTabProps) {
               </div>
             ))}
           </div>
-          <button onClick={() => { setTakingQuiz(null); setQuizResult(null); }} className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-xl font-semibold transition">
+          <button onClick={() => { setTakingQuiz(null); setQuizResult(null); }} className="bg-[var(--brand)] hover:bg-[var(--brand-dark)] text-white px-6 py-2.5 rounded-xl font-semibold transition">
             Quay lại danh sách
           </button>
         </div>
@@ -290,7 +291,7 @@ export default function AssignmentsTab({ API_URL }: AssignmentsTabProps) {
               <button
                 onClick={submitAssignment}
                 disabled={submitting || Object.keys(quizAnswers).length === 0}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white px-10 py-3 rounded-xl text-base font-semibold shadow-sm hover:shadow-md disabled:opacity-50 transition"
+                className="bg-[var(--brand)] hover:bg-[var(--brand-dark)] text-white px-10 py-3 rounded-xl text-base font-semibold shadow-sm hover:shadow-md disabled:opacity-50 transition"
               >
                 {submitting ? "Đang nộp bài..." : "Nộp bài & Xem kết quả"}
               </button>
@@ -307,10 +308,12 @@ export default function AssignmentsTab({ API_URL }: AssignmentsTabProps) {
   return (
     <div className="space-y-6">
       {assignments.length === 0 ? (
-        <div className="bg-white rounded-xl p-12 border border-gray-100 text-center">
-          <ClipboardList size={48} className="mx-auto text-gray-300 mb-4" />
-          <h3 className="text-lg font-bold text-gray-700 mb-2">Chưa có bài tập nào</h3>
-          <p className="text-gray-500">Giáo viên chưa giao bài tập cho các lớp bạn tham gia.</p>
+        <div className="app-card">
+          <EmptyState
+            icon={<ClipboardList size={28} />}
+            title="Chưa có bài tập nào"
+            body="Giáo viên chưa giao bài tập cho các lớp bạn tham gia."
+          />
         </div>
       ) : (
         <>
@@ -339,7 +342,7 @@ export default function AssignmentsTab({ API_URL }: AssignmentsTabProps) {
                         <p className="text-sm text-gray-500 mt-0.5">{a.class_name}{a.due_date ? ` · Hạn: ${a.due_date}` : ""}</p>
                         {a.description && <p className="text-sm text-gray-400 mt-1 line-clamp-1">{a.description}</p>}
                       </div>
-                      <button onClick={() => startQuiz(a.id)} className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-xl text-sm font-semibold flex items-center gap-1.5 shrink-0 transition">
+                      <button onClick={() => startQuiz(a.id)} className="bg-[var(--brand)] hover:bg-[var(--brand-dark)] text-white px-5 py-2 rounded-xl text-sm font-semibold flex items-center gap-1.5 shrink-0 transition">
                         Làm bài <ChevronRight size={15} />
                       </button>
                     </div>

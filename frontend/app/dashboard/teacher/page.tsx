@@ -53,7 +53,7 @@ function TeacherDashboardContent() {
   }, [isInitialized, token, user, router]);
 
   if (!isInitialized || !token || !user) {
-    return <div className="flex justify-center items-center h-64"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600"></div></div>;
+    return <div className="flex justify-center items-center h-64"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-[var(--brand)]"></div></div>;
   }
 
   const handleTextareaDoubleClick = async (e: React.MouseEvent<HTMLTextAreaElement>) => {
@@ -1180,7 +1180,7 @@ function AssignmentsTab({ handleTextareaDoubleClick }: { handleTextareaDoubleCli
 
 export default function TeacherPage() {
   return (
-    <Suspense fallback={<div className="flex justify-center items-center h-screen"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600"></div></div>}>
+    <Suspense fallback={<div className="flex justify-center items-center h-screen"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-[var(--brand)]"></div></div>}>
       <TeacherDashboardContent />
     </Suspense>
   );

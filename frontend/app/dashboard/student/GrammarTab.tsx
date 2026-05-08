@@ -452,16 +452,16 @@ export default function GrammarTab({ API_URL }: GrammarTabProps) {
         </div>
 
         {selectedRule.file_name && (
-          <div className="bg-indigo-50 p-5 rounded-[28px] border border-indigo-100 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="bg-[var(--brand-soft)] p-5 rounded-[var(--r-xl)] border border-[var(--brand)]/20 flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <div className="bg-white p-3 rounded-xl shadow text-indigo-500"><FileText size={28} /></div>
+              <div className="bg-white p-3 rounded-xl shadow text-[var(--brand)]"><FileText size={28} /></div>
               <div>
-                <h3 className="font-semibold text-indigo-900 text-base">Tài liệu học tập</h3>
-                <p className="text-sm text-indigo-600 font-bold truncate max-w-xs">{selectedRule.file_name}</p>
+                <h3 className="font-semibold text-gray-900 text-base">Tài liệu học tập</h3>
+                <p className="text-sm text-[var(--brand)] font-bold truncate max-w-xs">{selectedRule.file_name}</p>
               </div>
             </div>
             <a href={`${API_URL}/student/grammar/${selectedRule.id}/file`} target="_blank" rel="noopener noreferrer"
-              className="w-full sm:w-auto bg-white text-indigo-600 hover:bg-gray-900 hover:text-white px-6 py-3 rounded-xl font-semibold shadow-lg transition-all text-sm active:scale-95 flex items-center justify-center gap-2">
+              className="w-full sm:w-auto bg-white text-[var(--brand)] hover:bg-gray-900 hover:text-white px-6 py-3 rounded-xl font-semibold shadow-lg transition-all text-sm active:scale-95 flex items-center justify-center gap-2">
               Tải về <ArrowRight size={16} />
             </a>
           </div>
@@ -538,7 +538,7 @@ export default function GrammarTab({ API_URL }: GrammarTabProps) {
             <div className="flex-1 min-w-0" onClick={() => setSelectedRule(rule)}>
               <div className="flex items-center gap-1.5 mb-1 flex-wrap">
                 <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full border ${lvlCfg.chip}`}>{lvlCfg.label}</span>
-                {rule.file_name && <span className="flex items-center gap-0.5 px-1.5 py-0.5 bg-indigo-50 text-indigo-600 rounded-full font-semibold text-[9px] border border-indigo-100"><FileText size={8} /> FILE</span>}
+                {rule.file_name && <span className="flex items-center gap-0.5 px-1.5 py-0.5 bg-[var(--brand-soft)] text-[var(--brand)] rounded-full font-semibold text-[9px] border border-[var(--brand)]/20"><FileText size={8} /> FILE</span>}
                 {quizCount > 0 && <span className="flex items-center gap-0.5 px-1.5 py-0.5 bg-[var(--brand-soft)] text-[var(--brand)] rounded-full font-semibold text-[9px] border border-[var(--brand)]/20"><ListChecks size={8} /> {quizCount}</span>}
                 {hasChildren && <span className="text-[9px] font-medium text-gray-400">{rule.children.length} chủ đề con</span>}
               </div>
@@ -709,7 +709,7 @@ export default function GrammarTab({ API_URL }: GrammarTabProps) {
       {showPracticeConfig && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => { setShowPracticeConfig(false); setPendingStoredRuleId(null); }} />
-          <div className="relative z-10 bg-white w-full max-w-sm rounded-2xl shadow-2xl p-6">
+          <div className="relative z-10 bg-white w-full max-w-sm rounded-2xl shadow-[var(--sh-lg)] p-6">
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h3 className="text-lg font-semibold text-gray-900">Cấu hình luyện tập</h3>
@@ -778,7 +778,7 @@ export default function GrammarTab({ API_URL }: GrammarTabProps) {
       {showParseModal && (
         <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => { if (!parsing && !localParsing) { setShowParseModal(false); setParseError(null); setLocalParseError(null); setLocalParsedQuestions([]); setSavedSuccess(false); setEditingIdx(null); } }} />
-          <div className="relative z-10 bg-white w-full sm:max-w-2xl rounded-t-[28px] sm:rounded-2xl shadow-2xl flex flex-col max-h-[92vh]">
+          <div className="relative z-10 bg-white w-full sm:max-w-2xl rounded-t-[28px] sm:rounded-2xl shadow-[var(--sh-lg)] flex flex-col max-h-[92vh]">
             {/* Header */}
             <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-gray-100 flex-shrink-0">
               <div className="flex items-center gap-2.5">

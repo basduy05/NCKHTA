@@ -340,7 +340,7 @@ export default function IpaTab({ API_URL }: IpaTabProps) {
                              <h5 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2"><Sparkles size={20} className="text-blue-500"/> Minimal Pairs</h5>
                              <div className="space-y-4">
                                 {lesson.minimal_pairs.map((mp: any, i: number) => (
-                                    <div key={i} className="flex items-center justify-between p-4 bg-indigo-50/40 rounded-2xl border border-indigo-100/50">
+                                    <div key={i} className="flex items-center justify-between p-4 bg-[var(--brand-soft)]/40 rounded-2xl border border-[var(--brand)]/20">
                                         <div className="flex-1 flex justify-center gap-4 items-center">
                                            <div className="text-center group cursor-pointer" onClick={() => speak(mp.word1)}>
                                               <p className="text-xl font-bold text-gray-900 group-hover:text-[var(--brand)]">{mp.word1}</p>
@@ -381,7 +381,7 @@ export default function IpaTab({ API_URL }: IpaTabProps) {
                                       <p className="text-2xl font-bold text-gray-800 leading-tight italic">"{sentence}"</p>
                                     )}
                                     <div className="flex justify-end">
-                                      <button onClick={() => speak(sentence.replace("[blank]", answer))} className="text-indigo-600 hover:scale-110 transition-all p-3 bg-white rounded-2xl shadow-sm border border-indigo-50">
+                                      <button onClick={() => speak(sentence.replace("[blank]", answer))} className="text-[var(--brand)] hover:scale-110 transition-all p-3 bg-white rounded-2xl shadow-sm border border-[var(--line)]">
                                           <Volume2 size={24} />
                                       </button>
                                     </div>

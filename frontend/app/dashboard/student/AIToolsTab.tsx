@@ -58,7 +58,7 @@ export default function AIToolsTab({ setShowCreditModal, API_URL }: AIToolsTabPr
     return (
       <span className="leading-relaxed">
         {parts[0]}
-        <span className={`inline-flex items-center justify-center min-w-[140px] px-4 mx-2 border-b-4 font-black transition-all duration-300 ${
+        <span className={`inline-flex items-center justify-center min-w-[140px] px-4 mx-2 border-b-4 font-semibold transition-all duration-300 ${
           isQuizSubmitted ? (isCorrect ? "text-green-600 border-green-500 bg-green-50/50" : "text-red-600 border-red-500 bg-red-50/50") :
           answer ? "text-blue-600 border-blue-400 bg-blue-50/50" : "text-gray-300 border-gray-200 bg-gray-50 animate-pulse"
         } rounded-2xl py-2 -mb-2`}>
@@ -306,8 +306,8 @@ export default function AIToolsTab({ setShowCreditModal, API_URL }: AIToolsTabPr
                   >
                     <div onClick={() => setFlippedWord(flippedWord === idx ? null : idx)} className={`w-full h-full transition-all duration-700 transform-style-3d ${flippedWord === idx ? "rotate-y-180" : "hover:scale-[1.02] active:scale-95"}`}>
                       <div className="absolute w-full h-full backface-hidden bg-white border-2 border-blue-100 rounded-3xl shadow-sm group-hover:shadow-xl group-hover:border-blue-300 flex flex-col items-center justify-center p-6 transition-all">
-                        <span className="absolute top-4 right-4 px-3 py-1 bg-blue-50 text-blue-600 text-[10px] font-black rounded-full border border-blue-100">{w.level}</span>
-                        <h4 className="text-3xl font-black text-blue-800 lowercase tracking-tighter mb-2">{w.word}</h4>
+                        <span className="absolute top-4 right-4 px-3 py-1 bg-blue-50 text-blue-600 text-[10px] font-semibold rounded-full border border-blue-100">{w.level}</span>
+                        <h4 className="text-3xl font-semibold text-blue-800 lowercase tracking-tighter mb-2">{w.word}</h4>
                         <div className="flex flex-wrap justify-center gap-1.5 mb-3">
                           {simulateSyllabify(w.word).map((s, i) => (
                             <span key={i} className="px-2 py-0.5 bg-gray-50 text-gray-500 text-[9px] font-bold rounded-md border border-gray-100 italic">{s}</span>
@@ -317,11 +317,11 @@ export default function AIToolsTab({ setShowCreditModal, API_URL }: AIToolsTabPr
                            <Volume2 size={14} className="text-blue-400" />
                            <span className="font-mono text-xs font-bold leading-none">{w.phon}</span>
                         </div>
-                        {w.pos && <span className="text-[10px] font-black uppercase tracking-widest text-purple-600 mt-4 px-3 py-1 bg-purple-50 rounded-full">{w.pos}</span>}
+                        {w.pos && <span className="text-[10px] font-semibold uppercase tracking-widest text-purple-600 mt-4 px-3 py-1 bg-purple-50 rounded-full">{w.pos}</span>}
                       </div>
-                      <div className="absolute w-full h-full backface-hidden bg-gradient-to-br from-blue-600 to-indigo-700 rounded-3xl shadow-2xl flex flex-col items-center justify-center p-8 rotate-y-180 text-white text-center">
+                      <div className="absolute w-full h-full backface-hidden bg-[var(--brand)] rounded-[var(--r-2xl)] shadow-[var(--sh-md)] flex flex-col items-center justify-center p-8 rotate-y-180 text-white text-center">
                         <div className="w-10 h-1 bg-white/20 rounded-full mb-6" />
-                        <h4 className="text-xl font-black mb-2 leading-tight uppercase tracking-tight">{w.meaning}</h4>
+                        <h4 className="text-xl font-semibold mb-2 leading-tight uppercase tracking-tight">{w.meaning}</h4>
                         {w.meaning_en && <p className="text-blue-100 text-xs font-medium mb-4 leading-relaxed line-clamp-2">{w.meaning_en}</p>}
                         {w.example && (
                           <p className="text-blue-50/80 text-[11px] italic border-t border-white/10 pt-4 px-2 font-serif">
@@ -353,8 +353,8 @@ export default function AIToolsTab({ setShowCreditModal, API_URL }: AIToolsTabPr
 
           {result.words.length > 0 && (
             <div className="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm">
-              <h3 className="text-xl font-black text-gray-900 mb-6 flex items-center gap-3">
-                <div className="p-2 bg-indigo-100 rounded-lg text-indigo-600">
+              <h3 className="text-xl font-semibold text-gray-900 mb-6 flex items-center gap-3">
+                <div className="p-2 bg-[var(--brand-soft)] rounded-lg text-[var(--brand)]">
                   <BookText size={20} />
                 </div>
                 Detailed Word Analysis
@@ -363,22 +363,22 @@ export default function AIToolsTab({ setShowCreditModal, API_URL }: AIToolsTabPr
                 {result.words.map((w: any, idx: number) => {
                   const syllables = simulateSyllabify(w.word);
                   return (
-                    <div key={idx} className="group p-5 bg-gray-50/50 hover:bg-white rounded-2xl border border-transparent hover:border-indigo-100 hover:shadow-md transition-all flex flex-col md:flex-row md:items-center gap-6">
+                    <div key={idx} className="group p-5 bg-gray-50/50 hover:bg-white rounded-2xl border border-transparent hover:border-[var(--brand)]/20 hover:shadow-md transition-all flex flex-col md:flex-row md:items-center gap-6">
                       <div className="md:w-1/3">
                         <div className="flex items-center gap-2 mb-2">
-                           <span className="text-[9px] font-black uppercase tracking-widest text-indigo-500 bg-indigo-50 px-2 py-0.5 rounded">{w.pos || "Vocabulary"}</span>
-                           <span className="text-[9px] font-black uppercase text-white bg-indigo-600 px-2 py-0.5 rounded">{w.level || "B1"}</span>
+                           <span className="text-[9px] font-semibold uppercase tracking-widest text-[var(--brand)] bg-[var(--brand-soft)] px-2 py-0.5 rounded">{w.pos || "Vocabulary"}</span>
+                           <span className="text-[9px] font-semibold uppercase text-white bg-[var(--brand)] px-2 py-0.5 rounded">{w.level || "B1"}</span>
                         </div>
-                        <h4 className="text-2xl font-black text-gray-800 lowercase leading-none mb-3 group-hover:text-indigo-600 transition-colors">{w.word}</h4>
+                        <h4 className="text-2xl font-semibold text-gray-800 lowercase leading-none mb-3 group-hover:text-[var(--brand)] transition-colors">{w.word}</h4>
                         <div className="flex flex-wrap gap-1">
                           {syllables.map((s, i) => (
-                            <span key={i} className="px-2 py-0.5 bg-white text-gray-400 text-[10px] font-bold rounded-lg border border-gray-100 group-hover:border-indigo-100 group-hover:text-indigo-400 transition-all">{s}</span>
+                            <span key={i} className="px-2 py-0.5 bg-white text-gray-400 text-[10px] font-bold rounded-lg border border-gray-100 group-hover:border-[var(--brand)]/20 group-hover:text-[var(--brand)] transition-all">{s}</span>
                           ))}
                         </div>
                       </div>
-                      <div className="flex-1 space-y-2 border-l-0 md:border-l border-gray-200 md:pl-6 transition-colors group-hover:border-indigo-200">
+                      <div className="flex-1 space-y-2 border-l-0 md:border-l border-gray-200 md:pl-6 transition-colors group-hover:border-[var(--brand)]/30">
                         <div className="flex items-start gap-3">
-                           <div className="w-1.5 h-1.5 rounded-full bg-indigo-400 mt-2 shrink-0" />
+                           <div className="w-1.5 h-1.5 rounded-full bg-[var(--brand)] mt-2 shrink-0" />
                            <p className="text-sm font-bold text-gray-700 leading-tight">{w.meaning}</p>
                         </div>
                         {w.meaning_en && (
@@ -422,7 +422,7 @@ export default function AIToolsTab({ setShowCreditModal, API_URL }: AIToolsTabPr
                     <div key={idx} className="bg-white p-4 rounded-xl border border-blue-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
                       <div className="flex-1">
                         <span className="text-xs font-bold text-blue-400 uppercase tracking-wider">Nghĩa tiếng Việt</span>
-                        <h4 className="text-xl font-black text-blue-800">{w.meaning}</h4>
+                        <h4 className="text-xl font-semibold text-blue-800">{w.meaning}</h4>
                       </div>
                       <div className="flex-[2]">
                         <input 
@@ -448,7 +448,7 @@ export default function AIToolsTab({ setShowCreditModal, API_URL }: AIToolsTabPr
                     <div className="text-center mt-6">
                       <button 
                         onClick={() => setRecallSubmitted(true)}
-                        className="btn-primary px-8 py-3 rounded-xl shadow-xl shadow-blue-200"
+                        className="btn-primary px-8 py-3 rounded-xl shadow-[var(--sh-sm)]"
                       >
                         Kiểm tra kết quả
                       </button>
@@ -486,7 +486,7 @@ export default function AIToolsTab({ setShowCreditModal, API_URL }: AIToolsTabPr
                            <Trophy size={40} />
                         </div>
                         <div>
-                           <h4 className={`text-2xl font-black ${score / result.quiz.length >= 0.8 ? "text-green-800" : "text-orange-800"}`}>
+                           <h4 className={`text-2xl font-semibold ${score / result.quiz.length >= 0.8 ? "text-green-800" : "text-orange-800"}`}>
                               {score / result.quiz.length >= 0.8 ? "Tuyệt vời!" : (score / result.quiz.length >= 0.5 ? "Khá tốt!" : "Cố gắng lên!")}
                            </h4>
                            <p className="text-gray-600 font-bold">Bạn đã hoàn thành bài tập với {score}/{result.quiz.length} điểm.</p>
@@ -529,7 +529,7 @@ export default function AIToolsTab({ setShowCreditModal, API_URL }: AIToolsTabPr
                       {result.quiz[currentQuizIdx].type === 'FIB' ? 'Điền vào chỗ trống' : result.quiz[currentQuizIdx].type === 'SPELLING' ? 'Nghe và Viết' : result.quiz[currentQuizIdx].type === 'PARAPHRASE' ? 'Câu đồng nghĩa' : result.quiz[currentQuizIdx].type === 'MATCHING' ? 'Nối cặp từ' : 'Chọn đáp án đúng'}
                     </span>
                     
-                    <h2 className="text-3xl md:text-4xl font-black text-gray-800 leading-tight mb-6 px-4">
+                    <h2 className="text-3xl md:text-4xl font-semibold text-gray-800 leading-tight mb-6 px-4">
                       {result.quiz[currentQuizIdx].type === 'MATCHING' 
                         ? "Ghép từ với định nghĩa tương ứng" 
                         : (result.quiz[currentQuizIdx].type === 'FIB' || result.quiz[currentQuizIdx].type === 'SPELLING')
@@ -557,8 +557,8 @@ export default function AIToolsTab({ setShowCreditModal, API_URL }: AIToolsTabPr
                     {result.quiz[currentQuizIdx].type === 'MATCHING' ? (
                       <div className="space-y-6">
                         <div className="grid grid-cols-[1fr_2.5fr] gap-4 mb-2 px-4">
-                          <h4 className="font-black text-blue-500 uppercase tracking-widest text-[10px]">Từ vựng</h4>
-                          <h4 className="font-black text-purple-500 uppercase tracking-widest text-[10px]">Định nghĩa</h4>
+                          <h4 className="font-semibold text-blue-500 uppercase tracking-widest text-[10px]">Từ vựng</h4>
+                          <h4 className="font-semibold text-purple-500 uppercase tracking-widest text-[10px]">Định nghĩa</h4>
                         </div>
                         
                         <div className="grid grid-cols-[1fr_2.5fr] gap-x-6 gap-y-3 items-stretch">
@@ -577,7 +577,7 @@ export default function AIToolsTab({ setShowCreditModal, API_URL }: AIToolsTabPr
                                  <button 
                                    disabled={isQuizSubmitted || isWordMatched}
                                    onClick={() => setMatchingSelections(prev => ({ ...prev, word: word }))}
-                                   className={`p-4 md:p-5 rounded-2xl border-2 text-center font-black text-lg transition-all flex items-center justify-center ${
+                                   className={`p-4 md:p-5 rounded-2xl border-2 text-center font-semibold text-lg transition-all flex items-center justify-center ${
                                      isWordMatched ? "bg-green-50 border-green-200 text-green-600 opacity-50" :
                                      isWordSelected ? "bg-blue-50 border-blue-500 text-blue-700 shadow-sm ring-2 ring-blue-500/10" :
                                      "bg-white border-gray-100 hover:border-blue-200 text-gray-700 shadow-sm hover:shadow-md"
@@ -643,7 +643,7 @@ export default function AIToolsTab({ setShowCreditModal, API_URL }: AIToolsTabPr
                               }}
                               className={`p-6 md:p-8 rounded-3xl border-2 text-left transition-all duration-300 font-bold flex items-center gap-4 ${bgClass}`}
                             >
-                              <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center font-black ${isQuizSubmitted && isCorrect ? 'border-green-600 text-green-700 bg-white' : isSelected ? 'border-blue-600 text-blue-600 bg-white' : 'border-gray-300 text-gray-400'}`}>
+                              <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center font-semibold ${isQuizSubmitted && isCorrect ? 'border-green-600 text-green-700 bg-white' : isSelected ? 'border-blue-600 text-blue-600 bg-white' : 'border-gray-300 text-gray-400'}`}>
                                  {isQuizSubmitted && isCorrect ? <CheckCircle2 size={16}/> : i + 1}
                               </div>
                               <span className="flex-1 text-lg">{opt}</span>
@@ -659,7 +659,7 @@ export default function AIToolsTab({ setShowCreditModal, API_URL }: AIToolsTabPr
                           value={quizAnswers[currentQuizIdx] || ""}
                           disabled={isQuizSubmitted}
                           placeholder={result.quiz[currentQuizIdx].type === 'SPELLING' ? "Nghe và nhập chính xác..." : "Nhập đáp án..."}
-                          className={`w-full text-3xl font-black text-center p-8 border-b-4 rounded-3xl outline-none transition-all shadow-sm ${isQuizSubmitted ? ((quizAnswers[currentQuizIdx] || "").toLowerCase().trim() === String(result.quiz[currentQuizIdx].answer || "").toLowerCase().trim() ? "border-green-500 bg-green-50 text-green-700" : "border-red-500 bg-red-50 text-red-700") : "border-gray-300 bg-gray-50 focus:border-blue-500 focus:bg-white focus:shadow-xl"}`}
+                          className={`w-full text-3xl font-semibold text-center p-8 border-b-4 rounded-3xl outline-none transition-all shadow-sm ${isQuizSubmitted ? ((quizAnswers[currentQuizIdx] || "").toLowerCase().trim() === String(result.quiz[currentQuizIdx].answer || "").toLowerCase().trim() ? "border-green-500 bg-green-50 text-green-700" : "border-red-500 bg-red-50 text-red-700") : "border-gray-300 bg-gray-50 focus:border-blue-500 focus:bg-white focus:shadow-xl"}`}
                           onChange={(e) => setQuizAnswers({...quizAnswers, [currentQuizIdx]: e.target.value})}
                           onKeyDown={(e) => {
                              if (e.key === 'Enter' && quizAnswers[currentQuizIdx] && !isQuizSubmitted) { setIsQuizSubmitted(true); }
@@ -687,7 +687,7 @@ export default function AIToolsTab({ setShowCreditModal, API_URL }: AIToolsTabPr
                                  {((quizAnswers[currentQuizIdx] || "").toLowerCase().trim() === (result.quiz[currentQuizIdx].answer || "").toLowerCase().trim() || quizAnswers[currentQuizIdx] === "MATCHED") ? <CheckCircle2 size={28} /> : <X size={28} />}
                               </div>
                               <div>
-                                 <h3 className={`font-black text-xl leading-none ${((quizAnswers[currentQuizIdx] || "").toLowerCase().trim() === (result.quiz[currentQuizIdx].answer || "").toLowerCase().trim() || quizAnswers[currentQuizIdx] === "MATCHED") ? "text-green-800" : "text-red-800"}`}>
+                                 <h3 className={`font-semibold text-xl leading-none ${((quizAnswers[currentQuizIdx] || "").toLowerCase().trim() === (result.quiz[currentQuizIdx].answer || "").toLowerCase().trim() || quizAnswers[currentQuizIdx] === "MATCHED") ? "text-green-800" : "text-red-800"}`}>
                                     {((quizAnswers[currentQuizIdx] || "").toLowerCase().trim() === (result.quiz[currentQuizIdx].answer || "").toLowerCase().trim() || quizAnswers[currentQuizIdx] === "MATCHED") ? "Tuyệt vời!" : "Sai rồi!"}
                                  </h3>
                                  {result.quiz[currentQuizIdx].type !== 'MATCHING' && (
@@ -702,7 +702,7 @@ export default function AIToolsTab({ setShowCreditModal, API_URL }: AIToolsTabPr
                             <button
                               disabled={!quizAnswers[currentQuizIdx]}
                               onClick={() => setIsQuizSubmitted(true)}
-                              className="w-full md:w-auto px-10 py-3 rounded-2xl bg-blue-500 hover:bg-blue-600 text-white font-black shadow-[0_4px_0_0_#2563ea] active:shadow-none active:translate-y-[4px] transition-all uppercase tracking-widest text-sm"
+                              className="w-full md:w-auto px-10 py-3 rounded-2xl bg-blue-500 hover:bg-blue-600 text-white font-semibold shadow-[0_4px_0_0_#2563ea] active:shadow-none active:translate-y-[4px] transition-all uppercase tracking-widest text-sm"
                             >
                                Kiểm tra
                             </button>
@@ -716,7 +716,7 @@ export default function AIToolsTab({ setShowCreditModal, API_URL }: AIToolsTabPr
                                      setMatches({});
                                      setMatchingSelections({ word: null, def: null });
                                   }}
-                                  className="w-full md:w-auto px-10 py-3 rounded-2xl bg-gray-800 hover:bg-black text-white font-black shadow-[0_4px_0_0_#000] active:shadow-none active:translate-y-[4px] transition-all uppercase tracking-widest text-sm"
+                                  className="w-full md:w-auto px-10 py-3 rounded-2xl bg-gray-800 hover:bg-black text-white font-semibold shadow-[0_4px_0_0_#000] active:shadow-none active:translate-y-[4px] transition-all uppercase tracking-widest text-sm"
                                 >
                                   Tiếp tục
                                 </button>
@@ -732,7 +732,7 @@ export default function AIToolsTab({ setShowCreditModal, API_URL }: AIToolsTabPr
                                     setScore(s);
                                     setSubmitted(true);
                                   }}
-                                  className="w-full md:w-auto px-10 py-3 rounded-2xl bg-green-600 hover:bg-green-700 text-white font-black shadow-[0_4px_0_0_#059669] active:shadow-none active:translate-y-[4px] transition-all uppercase tracking-widest text-sm"
+                                  className="w-full md:w-auto px-10 py-3 rounded-2xl bg-green-600 hover:bg-green-700 text-white font-semibold shadow-[0_4px_0_0_#059669] active:shadow-none active:translate-y-[4px] transition-all uppercase tracking-widest text-sm"
                                 >
                                   Hoàn thành
                                 </button>
@@ -751,15 +751,15 @@ export default function AIToolsTab({ setShowCreditModal, API_URL }: AIToolsTabPr
 
       {selectedWordInfo && (
         <div className="fixed inset-0 !mt-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden border border-blue-100 transform animate-in zoom-in-95 duration-200">
-            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-6 text-white relative">
+          <div className="app-card max-w-md w-full overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="bg-[var(--brand)] px-6 py-5 text-white relative">
               <button 
                 onClick={() => setSelectedWordInfo(null)}
                 className="absolute top-4 right-4 bg-white/20 hover:bg-white/30 p-1.5 rounded-full transition"
               >
                 <X size={18} />
               </button>
-              <h3 className="text-2xl font-black mb-1">{selectedWordInfo.word}</h3>
+              <h3 className="text-2xl font-semibold mb-1">{selectedWordInfo.word}</h3>
               <div className="flex items-center gap-3 mt-2">
                 <button onClick={() => speak(selectedWordInfo.word)} className="flex items-center gap-1.5 bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-lg transition">
                   <Volume2 size={16} /> <span className="font-mono text-sm">{selectedWordInfo.phonetic}</span>
@@ -770,21 +770,21 @@ export default function AIToolsTab({ setShowCreditModal, API_URL }: AIToolsTabPr
             
             <div className="p-6 space-y-4">
               <div>
-                <span className="text-xs font-bold text-blue-400 uppercase tracking-widest block mb-1">Loại từ & Nghĩa</span>
-                <p className="text-gray-900 font-bold text-lg leading-tight">
-                  <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-sm mr-2">{selectedWordInfo.type}</span> 
+                <span className="text-[10px] font-semibold text-[var(--ink-3)] uppercase tracking-wide block mb-1">Loại từ & Nghĩa</span>
+                <p className="text-[var(--ink-1)] font-semibold text-base leading-tight">
+                  <span className="bg-[var(--brand-soft)] text-[var(--brand)] px-2 py-0.5 rounded text-xs mr-2">{selectedWordInfo.type}</span>
                   {selectedWordInfo.translation}
                 </p>
               </div>
 
               <div>
-                <span className="text-xs font-bold text-blue-400 uppercase tracking-widest block mb-1">Định nghĩa tiếng Anh</span>
-                <p className="text-gray-700 text-sm italic leading-relaxed">"{selectedWordInfo.engMeaning}"</p>
+                <span className="text-[10px] font-semibold text-[var(--ink-3)] uppercase tracking-wide block mb-1">Định nghĩa tiếng Anh</span>
+                <p className="text-[var(--ink-2)] text-sm italic leading-relaxed">"{selectedWordInfo.engMeaning}"</p>
               </div>
 
               <div>
-                <span className="text-xs font-bold text-blue-400 uppercase tracking-widest block mb-1">Ví dụ</span>
-                <p className="text-gray-700 text-sm leading-relaxed">{selectedWordInfo.example}</p>
+                <span className="text-[10px] font-semibold text-[var(--ink-3)] uppercase tracking-wide block mb-1">Ví dụ</span>
+                <p className="text-[var(--ink-2)] text-sm leading-relaxed">{selectedWordInfo.example}</p>
               </div>
 
               <div className="pt-4 flex gap-3">

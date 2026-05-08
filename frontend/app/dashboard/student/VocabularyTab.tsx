@@ -55,7 +55,7 @@ export default function VocabularyTab({ API_URL }: VocabularyTabProps) {
     return (
       <span className="leading-relaxed">
         {parts[0]}
-        <span className={`inline-flex items-center justify-center min-w-[140px] px-4 mx-2 border-b-4 font-black transition-all duration-300 ${
+        <span className={`inline-flex items-center justify-center min-w-[140px] px-4 mx-2 border-b-4 font-semibold transition-all duration-300 ${
           exerciseSubmitted ? (isCorrect ? "text-green-600 border-green-500 bg-green-50/50" : "text-red-600 border-red-500 bg-red-50/50") :
           answer ? "text-blue-600 border-blue-400 bg-blue-50/50" : "text-gray-300 border-gray-200 bg-gray-50 animate-pulse"
         } rounded-2xl py-2 -mb-2`}>
@@ -402,7 +402,7 @@ export default function VocabularyTab({ API_URL }: VocabularyTabProps) {
 
       {generatingPractice && (
           <div className="flex flex-col items-center justify-center py-16 space-y-4">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-[var(--brand)]"></div>
             <p className="text-gray-500 font-medium">AI đang tạo bài luyện tập từ vựng...</p>
           </div>
         )}
@@ -457,8 +457,8 @@ export default function VocabularyTab({ API_URL }: VocabularyTabProps) {
               {currentEx.type === 'MATCHING' ? (
                 <div className="space-y-6">
                   <div className="grid grid-cols-[1fr_2.5fr] gap-4 mb-2 px-4">
-                    <h4 className="font-black text-blue-500 uppercase tracking-widest text-[10px]">Từ vựng</h4>
-                    <h4 className="font-black text-purple-500 uppercase tracking-widest text-[10px]">Định nghĩa</h4>
+                    <h4 className="font-semibold text-blue-500 uppercase tracking-widest text-[10px]">Từ vựng</h4>
+                    <h4 className="font-semibold text-purple-500 uppercase tracking-widest text-[10px]">Định nghĩa</h4>
                   </div>
                   
                   <div className="grid grid-cols-[1fr_2.5fr] gap-x-6 gap-y-3 items-stretch">
@@ -477,7 +477,7 @@ export default function VocabularyTab({ API_URL }: VocabularyTabProps) {
                            <button 
                              disabled={exerciseSubmitted || isWordMatched}
                              onClick={() => setMatchingSelections(prev => ({ ...prev, word: word }))}
-                             className={`p-4 md:p-5 rounded-2xl border-2 text-center font-black text-lg transition-all flex items-center justify-center ${
+                             className={`p-4 md:p-5 rounded-2xl border-2 text-center font-semibold text-lg transition-all flex items-center justify-center ${
                                isWordMatched ? "bg-green-50 border-green-200 text-green-600 opacity-50" :
                                isWordSelected ? "bg-blue-50 border-blue-500 text-blue-700 shadow-sm ring-2 ring-blue-500/10" :
                                "bg-white border-gray-100 hover:border-blue-200 text-gray-700 shadow-sm hover:shadow-md"
@@ -540,7 +540,7 @@ export default function VocabularyTab({ API_URL }: VocabularyTabProps) {
                         onClick={() => setPracticeAnswers({ ...practiceAnswers, [currentExerciseIdx]: opt })}
                         className={`p-6 md:p-8 rounded-3xl border-2 text-left transition-all duration-300 font-bold text-lg md:text-xl flex items-center gap-4 ${bgClass}`}
                       >
-                        <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center font-black ${exerciseSubmitted && isCorrect ? 'border-green-600 text-green-700 bg-white' : exerciseSubmitted && isSelected ? 'border-red-500 text-red-600 bg-white' : isSelected ? 'border-blue-600 text-blue-600 bg-white' : 'border-gray-300 text-gray-400'}`}>
+                        <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center font-semibold ${exerciseSubmitted && isCorrect ? 'border-green-600 text-green-700 bg-white' : exerciseSubmitted && isSelected ? 'border-red-500 text-red-600 bg-white' : isSelected ? 'border-blue-600 text-blue-600 bg-white' : 'border-gray-300 text-gray-400'}`}>
                            {exerciseSubmitted && isCorrect ? <CheckCircle2 size={16}/> : exerciseSubmitted && isSelected ? <X size={16}/> : i + 1}
                         </div>
                         <span className="flex-1">{opt}</span>
@@ -556,7 +556,7 @@ export default function VocabularyTab({ API_URL }: VocabularyTabProps) {
                     onChange={e => setPracticeAnswers({ ...practiceAnswers, [currentExerciseIdx]: e.target.value })}
                     onKeyDown={e => { if (e.key === 'Enter' && !exerciseSubmitted && practiceAnswers[currentExerciseIdx]) submitCurrentExercise(); }}
                     placeholder={currentEx.type === 'SPELLING' ? "Nghe và nhập chính xác từ..." : "Nhập đáp án..."}
-                    className={`w-full text-3xl font-black text-center p-8 border-b-4 rounded-3xl outline-none transition-all shadow-sm ${exerciseSubmitted ? (String(practiceAnswers[currentExerciseIdx] || "").toLowerCase().trim() === String(currentEx.answer || "").toLowerCase().trim() ? "border-green-500 bg-green-50 text-green-700" : "border-red-500 bg-red-50 text-red-700") : "border-gray-300 bg-gray-50 focus:border-blue-500 focus:bg-white focus:shadow-xl"}`}
+                    className={`w-full text-3xl font-semibold text-center p-8 border-b-4 rounded-3xl outline-none transition-all shadow-sm ${exerciseSubmitted ? (String(practiceAnswers[currentExerciseIdx] || "").toLowerCase().trim() === String(currentEx.answer || "").toLowerCase().trim() ? "border-green-500 bg-green-50 text-green-700" : "border-red-500 bg-red-50 text-red-700") : "border-gray-300 bg-gray-50 focus:border-blue-500 focus:bg-white focus:shadow-xl"}`}
                     disabled={exerciseSubmitted}
                   />
                   {currentEx.type === 'SPELLING' && !exerciseSubmitted && (
@@ -632,7 +632,7 @@ export default function VocabularyTab({ API_URL }: VocabularyTabProps) {
                                     sfx.click();
                                     setPracticeResults(prev => { const next = [...prev]; next[next.length - 1].rating = btn.r; return next; });
                                     nextExercise();
-                                }} className={`w-14 h-14 flex flex-col items-center justify-center rounded-2xl font-black transition-colors bg-white shadow-sm active:scale-95 ${btn.c}`}>
+                                }} className={`w-14 h-14 flex flex-col items-center justify-center rounded-2xl font-semibold transition-colors bg-white shadow-sm active:scale-95 ${btn.c}`}>
                                     <span className="text-[15px]">{btn.l}</span>
                                     <span className="text-[10px] opacity-70">Rate: {btn.r}</span>
                                 </button>

@@ -48,7 +48,7 @@ function StudentDashboardContent() {
   }, [isInitialized, token, user, router]);
 
   if (!isInitialized || !token || !user) {
-    return <div className="flex justify-center items-center h-64"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600"></div></div>;
+    return <div className="flex justify-center items-center h-64"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-[var(--brand)]"></div></div>;
   }
 
   const renderTab = (tabName: string) => {
@@ -90,7 +90,7 @@ function StudentDashboardContent() {
             </p>
             <button
               onClick={() => setShowCreditModal(false)}
-              className="w-full bg-indigo-600 text-white py-3 rounded-xl font-semibold hover:bg-indigo-700 transition"
+              className="w-full bg-[var(--brand)] text-white py-3 rounded-xl font-semibold hover:bg-[var(--brand-dark)] transition"
             >
               Đã hiểu
             </button>
@@ -105,7 +105,7 @@ function StudentDashboardContent() {
 
 export default function StudentDashboard() {
   return (
-    <Suspense fallback={<div className="flex items-center justify-center py-20"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" /></div>}>
+    <Suspense fallback={<div className="flex items-center justify-center py-20"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-[var(--brand)]" /></div>}>
       <StudentDashboardContent />
     </Suspense>
   );

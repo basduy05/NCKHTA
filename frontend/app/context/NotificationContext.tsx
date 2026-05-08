@@ -128,7 +128,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
                   {modal.type === 'warning' && <AlertTriangle size={40} />}
                   {modal.type === 'info' && <Info size={40} />}
                 </div>
-                <h3 className="text-2xl font-black text-gray-900 leading-tight">{modal.title}</h3>
+                <h3 className="text-xl font-bold text-[var(--ink-1)] leading-tight">{modal.title}</h3>
               </div>
               
               <p className="text-gray-600 text-center leading-relaxed mb-10 text-lg">{modal.message}</p>

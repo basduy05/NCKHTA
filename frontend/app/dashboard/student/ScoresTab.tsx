@@ -1,6 +1,7 @@
 "use client";
 import React, { useState, useEffect } from "react";
 import { BarChart3, Trophy, CheckCircle2, TrendingUp } from "lucide-react";
+import { EmptyState } from "../../components/ui";
 import { useAuth } from "../../context/AuthContext";
 
 interface ScoresTabProps {
@@ -33,10 +34,12 @@ export default function ScoresTab({ API_URL }: ScoresTabProps) {
 
   if (scores.length === 0) {
     return (
-      <div className="bg-white rounded-xl p-12 border border-gray-100 text-center">
-        <BarChart3 size={48} className="mx-auto text-gray-300 mb-4" />
-        <h3 className="text-lg font-bold text-gray-700 mb-2">Chưa có kết quả nào</h3>
-        <p className="text-gray-500">Hoàn thành bài tập để xem kết quả tại đây.</p>
+      <div className="app-card">
+        <EmptyState
+          icon={<BarChart3 size={28} />}
+          title="Chưa có kết quả nào"
+          body="Hoàn thành bài tập & bài kiểm tra để xem điểm số tại đây."
+        />
       </div>
     );
   }
@@ -58,7 +61,7 @@ export default function ScoresTab({ API_URL }: ScoresTabProps) {
     { label: "Xuất sắc (≥80%)", value: excellentCount, icon: Trophy, color: "yellow" },
   ];
   const colorMap: Record<string, { icon: string; bg: string }> = {
-    indigo: { icon: "text-indigo-600", bg: "bg-indigo-50" },
+    indigo: { icon: "text-[var(--brand)]", bg: "bg-[var(--brand-soft)]" },
     green:  { icon: "text-green-600",  bg: "bg-green-50" },
     yellow: { icon: "text-yellow-600", bg: "bg-yellow-50" },
   };
@@ -82,7 +85,7 @@ export default function ScoresTab({ API_URL }: ScoresTabProps) {
 
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
         <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-2">
-          <TrendingUp size={16} className="text-indigo-600" />
+          <TrendingUp size={16} className="text-[var(--brand)]" />
           <h3 className="font-semibold text-gray-900">Chi tiết kết quả</h3>
         </div>
         <div className="divide-y divide-gray-50">

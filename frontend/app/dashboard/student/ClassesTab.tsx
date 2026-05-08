@@ -66,11 +66,11 @@ export default function ClassesTab({ API_URL }: ClassesTabProps) {
           <button
             key={c.id}
             onClick={() => loadLessons(c.id)}
-            className={`w-full text-left p-5 rounded-xl border transition-all ${selectedClass === c.id ? "bg-indigo-600 border-indigo-600 shadow-lg shadow-indigo-100 text-white" : "bg-white border-gray-100 shadow-sm hover:border-indigo-200 text-gray-700"}`}
+            className={`w-full text-left p-5 rounded-xl border transition-all ${selectedClass === c.id ? "bg-[var(--brand)] border-[var(--brand)] shadow-[var(--sh-sm)] text-white" : "bg-white border-gray-100 shadow-sm hover:border-[var(--brand)] text-gray-700"}`}
           >
             <div className="flex justify-between items-start">
               <div>
-                <p className={`text-xs font-semibold uppercase tracking-wider mb-1 ${selectedClass === c.id ? "text-indigo-100" : "text-gray-400"}`}>Lớp của {c.teacher_name}</p>
+                <p className={`text-xs font-semibold uppercase tracking-wider mb-1 ${selectedClass === c.id ? "text-blue-100" : "text-gray-400"}`}>Lớp của {c.teacher_name}</p>
                 <h4 className="font-extrabold text-lg leading-tight">{c.name}</h4>
               </div>
               <ChevronRight size={20} className={selectedClass === c.id ? "text-white" : "text-gray-300"} />
@@ -84,12 +84,12 @@ export default function ClassesTab({ API_URL }: ClassesTabProps) {
 
       <div className="lg:col-span-2">
         {!selectedClass ? (
-          <div className="bg-indigo-50/50 rounded-2xl p-12 text-center border-2 border-dashed border-indigo-100">
-            <BookOpen size={48} className="mx-auto text-indigo-200 mb-4" />
-            <p className="text-indigo-600 font-medium">Chọn một lớp học để xem bài học</p>
+          <div className="bg-[var(--brand-soft)]/50 rounded-2xl p-12 text-center border-2 border-dashed border-[var(--brand)]/20">
+            <BookOpen size={48} className="mx-auto text-[var(--brand)]/30 mb-4" />
+            <p className="text-[var(--brand)] font-medium">Chọn một lớp học để xem bài học</p>
           </div>
         ) : lessonsLoading ? (
-          <div className="flex justify-center py-20"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" /></div>
+          <div className="flex justify-center py-20"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-[var(--brand)]" /></div>
         ) : lessons.length === 0 ? (
           <div className="bg-white rounded-2xl p-12 text-center border border-gray-100">
             <p className="text-gray-500">Chưa có bài học nào trong lớp này.</p>

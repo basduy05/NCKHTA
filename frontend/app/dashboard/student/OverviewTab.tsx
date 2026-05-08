@@ -66,14 +66,14 @@ export default function OverviewTab({ API_URL }: OverviewTabProps) {
   ];
 
   const colorMap: Record<string, { icon: string; text: string; bg: string }> = {
-    indigo: { icon: "text-indigo-600", text: "text-indigo-700", bg: "bg-indigo-50" },
+    indigo: { icon: "text-[var(--brand)]", text: "text-[var(--brand)]", bg: "bg-[var(--brand-soft)]" },
     orange: { icon: "text-orange-500", text: "text-orange-700", bg: "bg-orange-50" },
     blue:   { icon: "text-blue-600",   text: "text-blue-700",   bg: "bg-blue-50" },
     purple: { icon: "text-purple-600", text: "text-purple-700", bg: "bg-purple-50" },
   };
 
   const quickLinks = [
-    { label: "Tra từ điển",    href: "/dashboard/student?tab=dictionary",  icon: BookMarked, color: "bg-indigo-600" },
+    { label: "Tra từ điển",    href: "/dashboard/student?tab=dictionary",  icon: BookMarked, color: "bg-[var(--brand)]" },
     { label: "Luyện thi",      href: "/dashboard/student?tab=practice",    icon: Trophy,     color: "bg-blue-600" },
     { label: "Kho ngữ pháp",   href: "/dashboard/student?tab=grammar",     icon: Layers,     color: "bg-teal-600" },
     { label: "Học với AI",     href: "/dashboard/student?tab=ai-tools",    icon: Sparkles,   color: "bg-violet-600" },
@@ -82,22 +82,22 @@ export default function OverviewTab({ API_URL }: OverviewTabProps) {
   return (
     <div className="space-y-6">
       {/* Hero banner */}
-      <div className="bg-gradient-to-br from-indigo-600 to-blue-600 rounded-2xl p-8 text-white relative overflow-hidden">
+      <div className="bg-[var(--brand)] rounded-[var(--r-xl)] p-8 text-white relative overflow-hidden">
         <div className="absolute inset-0 opacity-10">
           <div className="absolute top-0 right-0 w-64 h-64 bg-white rounded-full -mr-20 -mt-20" />
           <div className="absolute bottom-0 left-0 w-40 h-40 bg-white rounded-full -ml-10 -mb-10" />
         </div>
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div>
-            <p className="text-indigo-200 text-sm font-medium mb-1">Xin chào trở lại</p>
+            <p className="text-blue-200 text-sm font-medium mb-1">Xin chào trở lại</p>
             <h2 className="text-2xl font-bold mb-1">{user?.name} 👋</h2>
-            <p className="text-indigo-100">Tiếp tục hành trình học tiếng Anh của bạn.</p>
+            <p className="text-blue-100">Tiếp tục hành trình học tiếng Anh của bạn.</p>
           </div>
           {stats && (
             <div className="flex items-center gap-3 bg-white/15 backdrop-blur-sm px-5 py-3 rounded-xl border border-white/20 self-start md:self-auto">
               <Trophy size={22} className="text-yellow-300 flex-shrink-0" />
               <div>
-                <p className="text-xs text-indigo-200">Điểm trung bình</p>
+                <p className="text-xs text-blue-200">Điểm trung bình</p>
                 <p className="text-2xl font-bold">{stats?.average_percent ?? 0}%</p>
               </div>
             </div>
@@ -127,11 +127,11 @@ export default function OverviewTab({ API_URL }: OverviewTabProps) {
       {stats && stats.assignments_submitted > 0 && (
         <div className="bg-white rounded-xl p-6 border border-gray-100 shadow-sm">
           <h3 className="font-semibold text-gray-900 mb-5 flex items-center gap-2">
-            <BarChart3 size={18} className="text-indigo-600" /> Tổng kết học tập
+            <BarChart3 size={18} className="text-[var(--brand)]" /> Tổng kết học tập
           </h3>
           <div className="grid grid-cols-3 gap-4 text-center">
             {[
-              { label: "Tổng điểm",      value: `${stats.total_score}/${stats.total_max_score}`, color: "text-indigo-600" },
+              { label: "Tổng điểm",      value: `${stats.total_score}/${stats.total_max_score}`, color: "text-[var(--brand)]" },
               { label: "Điểm trung bình", value: `${stats.average_percent}%`,                     color: "text-green-600" },
               { label: "Bài hoàn thành", value: stats.assignments_submitted,                       color: "text-purple-600" },
             ].map((item, i) => (
@@ -147,7 +147,7 @@ export default function OverviewTab({ API_URL }: OverviewTabProps) {
       {/* Quick access */}
       <div className="bg-white rounded-xl p-6 border border-gray-100 shadow-sm">
         <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
-          <TrendingUp size={18} className="text-indigo-600" /> Truy cập nhanh
+          <TrendingUp size={18} className="text-[var(--brand)]" /> Truy cập nhanh
         </h3>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {quickLinks.map((ql, i) => (

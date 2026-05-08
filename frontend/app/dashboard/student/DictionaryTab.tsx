@@ -412,7 +412,7 @@ export default function DictionaryTab({ API_URL }: DictionaryTabProps) {
               return (
                 <div key={i} className={`border-l-4 ${colors.accent} pl-5 py-1 relative hover:bg-gray-50/50 transition-colors rounded-r-xl`}>
                   <div className="flex items-center gap-2 mb-2 flex-wrap">
-                    <span className={`${colors.bg} ${colors.text} px-2.5 py-1 rounded-lg text-xs font-black uppercase border ${colors.border} shadow-sm`}>
+                    <span className={`${colors.bg} ${colors.text} px-2.5 py-1 rounded-lg text-xs font-semibold uppercase border ${colors.border} shadow-sm`}>
                       {POS_MAP[(m.pos || result.pos)?.toLowerCase()] || (m.pos || result.pos)}
                     </span>
                     {i === 0 ? (
@@ -425,7 +425,7 @@ export default function DictionaryTab({ API_URL }: DictionaryTabProps) {
                       </span>
                     )}
                     {m.register && (
-                      <span className="bg-yellow-100 text-yellow-700 px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest border border-yellow-200 italic">{m.register}</span>
+                      <span className="bg-yellow-100 text-yellow-700 px-2 py-1 rounded-lg text-[10px] font-semibold uppercase tracking-widest border border-yellow-200 italic">{m.register}</span>
                     )}
                   </div>
                 <p className="text-gray-900 font-medium text-lg">{m.definition_en}</p>
