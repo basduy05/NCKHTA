@@ -1,12 +1,12 @@
 "use client";
 import React, { useState, useEffect, useCallback, useMemo } from "react";
-import { 
-  BookMarked, Clock, Search, PlayCircle, Volume2, Edit3, Trash2, 
-  Brain, X, Sparkles, CheckCircle2, ArrowRight, Lightbulb 
+import {
+  BookMarked, Clock, Search, PlayCircle, Volume2, Edit3, Trash2,
+  Brain, X, Sparkles, CheckCircle2, ArrowRight, Lightbulb
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { useNotification } from "../../context/NotificationContext";
-import { Button, Card, Chip, Modal, Confetti, useSound } from "../../components/ui";
+import { Button, Modal, Confetti, useSound, EmptyState, Skeleton } from "../../components/ui";
 
 interface VocabularyTabProps {
   API_URL: string;
@@ -270,10 +270,10 @@ export default function VocabularyTab({ API_URL }: VocabularyTabProps) {
   const currentEx = practiceExercises[currentExerciseIdx];
 
   if (loading) return (
-    <div className="space-y-6 animate-pulse">
-      <div className="h-16 bg-gray-100 rounded-2xl" />
+    <div className="space-y-5">
+      <Skeleton variant="card" height={68} />
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {Array(6).fill(0).map((_, i) => <div key={i} className="h-40 bg-gray-100 rounded-2xl" />)}
+        {Array(6).fill(0).map((_, i) => <Skeleton key={i} variant="card" height={160} />)}
       </div>
     </div>
   );
@@ -281,90 +281,120 @@ export default function VocabularyTab({ API_URL }: VocabularyTabProps) {
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       <Confetti trigger={confettiTick} />
-      <Card className="!p-4 sm:!p-5 flex flex-col md:flex-row justify-between items-stretch md:items-center gap-4">
-        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-            <Chip intent="info" className="!text-sm !py-1.5 !px-3">
-              <BookMarked size={16} /> {words.length} từ đã lưu
-            </Chip>
-            {words.some(w => !w.scheduled_at || new Date(w.scheduled_at) <= new Date()) && (
-              <Chip intent="streak" className="!text-sm !py-1.5 !px-3 animate-pulse">
-                <Clock size={16} /> {words.filter(w => !w.scheduled_at || new Date(w.scheduled_at) <= new Date()).length} cần ôn
-              </Chip>
-            )}
-            <div className="hidden lg:flex items-center gap-1">
-              {levels.map(l => {
-                const count = words.filter(w => w.level === l).length;
-                if (count === 0) return null;
-                return <span key={l} className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-gray-100 text-gray-600">{l}:{count}</span>;
-              })}
-            </div>
+      {/* Stats row */}
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-blue-50 text-[var(--brand)] border border-blue-100">
+          <BookMarked size={13} /> {words.length} từ đã lưu
+        </span>
+        {words.some(w => !w.scheduled_at || new Date(w.scheduled_at) <= new Date()) && (
+          <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-amber-50 text-amber-700 border border-amber-100">
+            <Clock size={13} /> {words.filter(w => !w.scheduled_at || new Date(w.scheduled_at) <= new Date()).length} cần ôn
+          </span>
+        )}
+        <div className="hidden lg:flex items-center gap-1 ml-1">
+          {levels.map(l => {
+            const count = words.filter(w => w.level === l).length;
+            if (count === 0) return null;
+            return (
+              <span key={l} className="text-[10px] px-2 py-0.5 rounded-full font-semibold bg-[var(--surface-3)] text-[var(--ink-2)]">
+                {l}:{count}
+              </span>
+            );
+          })}
         </div>
+      </div>
 
-        <div className="flex items-center gap-3 w-full md:w-auto">
-          <div className="relative flex-1">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input
-              type="text" placeholder="Tìm từ vựng..."
-              className="pl-9 pr-3 py-2 border-2 border-gray-200 rounded-xl text-sm outline-none w-full md:w-48 focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
-              value={search} onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
-          <Button
-            onClick={startRichPractice}
-            disabled={generatingPractice || words.length === 0}
-            loading={generatingPractice}
-            iconLeft={!generatingPractice ? <PlayCircle size={18} /> : null}
-            size="sm"
-          >
-            Luyện tập SR
-          </Button>
+      {/* Toolbar */}
+      <div className="app-card p-3 flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-between">
+        <div className="relative flex-1 max-w-xs">
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--ink-3)]" />
+          <input
+            type="text" placeholder="Tìm từ vựng..."
+            className="pl-9 pr-3 py-2 w-full bg-[var(--surface-2)] border border-[var(--line)] rounded-lg text-sm text-[var(--ink-1)] placeholder:text-[var(--ink-3)] outline-none focus:border-[var(--brand)] focus:ring-2 focus:ring-blue-100 transition"
+            value={search} onChange={(e) => setSearch(e.target.value)}
+          />
         </div>
-      </Card>
+        <Button
+          intent="brand"
+          onClick={startRichPractice}
+          disabled={generatingPractice || words.length === 0}
+          loading={generatingPractice}
+          iconLeft={!generatingPractice ? <PlayCircle size={16} /> : null}
+          size="sm"
+        >
+          Luyện tập SR
+        </Button>
+      </div>
 
       {words.length === 0 ? (
-        <Card className="!p-12 text-center">
-          <BookMarked size={48} className="mx-auto text-gray-200 mb-4" />
-          <h3 className="text-lg font-bold text-gray-700">Chưa có từ vựng nào</h3>
-          <p className="text-gray-500 text-sm">Tra từ điển để lưu từ mới vào kho.</p>
-        </Card>
+        <div className="app-card">
+          <EmptyState
+            icon={<BookMarked size={24} />}
+            title="Chưa có từ vựng nào"
+            body="Tra từ điển và nhấn 'Lưu từ' để thêm từ vào kho của bạn."
+          />
+        </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {words.map((w) => {
             const isDue = !w.scheduled_at || new Date(w.scheduled_at) <= new Date();
             return (
-              <Card interactive key={w.id} className="!p-5 group relative overflow-hidden">
-                {isDue && <div className="absolute top-0 right-0 bg-orange-500 text-white text-[10px] px-2 py-0.5 font-bold rounded-bl-lg">CẦN ÔN TẬP</div>}
+              <div key={w.id} className="app-card app-card--hover p-5 group relative overflow-hidden">
+                {isDue && (
+                  <div className="absolute top-0 right-0 bg-amber-500 text-white text-[9px] px-2.5 py-0.5 font-semibold rounded-bl-lg tracking-wide uppercase">
+                    Cần ôn
+                  </div>
+                )}
                 <div className="flex items-start justify-between mb-3">
                   <div>
-                    <h3 className="text-lg font-extrabold text-blue-800">{w.word}</h3>
-                    <div className="flex items-center gap-2 mt-1">
-                        <span className="text-[10px] px-2 py-0.5 rounded-md bg-purple-50 text-purple-600 font-bold uppercase">{w.pos || 'N/A'}</span>
-                        <span className="text-[10px] px-2 py-0.5 rounded-md bg-blue-50 text-blue-600 font-bold">{w.level || 'B1'}</span>
+                    <h3 className="text-base font-bold text-[var(--brand)]">{w.word}</h3>
+                    <div className="flex items-center gap-1.5 mt-1">
+                      <span className="text-[10px] px-2 py-0.5 rounded-md bg-[var(--brand-soft)] text-[var(--brand)] font-semibold uppercase">{w.pos || 'N/A'}</span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-md bg-[var(--surface-3)] text-[var(--ink-2)] font-semibold">{w.level || 'B1'}</span>
                     </div>
                   </div>
-                  <button onClick={() => speak(w.word, w.audio_url)} className="p-2 rounded-full hover:bg-blue-50 text-gray-400 hover:text-blue-600 transition"><Volume2 size={18} /></button>
+                  <button
+                    onClick={() => speak(w.word, w.audio_url)}
+                    className="p-1.5 rounded-lg hover:bg-[var(--surface-3)] text-[var(--ink-3)] hover:text-[var(--brand)] transition"
+                  >
+                    <Volume2 size={16} />
+                  </button>
                 </div>
-                
-                <p className="text-gray-800 font-medium line-clamp-2 mb-2">{w.meaning_vn}</p>
-                {w.example && <p className="text-gray-500 text-xs italic line-clamp-2 border-l-2 border-gray-200 pl-2">{w.example}</p>}
-                
+
+                <p className="text-sm text-[var(--ink-1)] font-medium line-clamp-2 mb-2">{w.meaning_vn}</p>
+                {w.example && (
+                  <p className="text-xs text-[var(--ink-3)] italic line-clamp-2 border-l-2 border-[var(--line)] pl-2">
+                    {w.example}
+                  </p>
+                )}
+
                 {renderFSRSStatus(w)}
 
-                <div className="mt-4 pt-4 border-t border-gray-50 flex justify-between items-center text-[10px] text-gray-400">
-                    <div className="flex gap-2">
-                        <span>Đã thuộc: {Math.min(w.review_count || 0, 5)}/5</span>
-                        <div className="flex gap-0.5 items-center">
-                            {[1,2,3,4,5].map(step => (
-                                <div key={step} className={`w-1.5 h-1.5 rounded-full ${step <= (w.review_count || 0) ? 'bg-green-500' : 'bg-gray-200'}`} />
-                            ))}
-                        </div>
+                <div className="mt-4 pt-3 border-t border-[var(--line)] flex justify-between items-center">
+                  <div className="flex items-center gap-1.5 text-[10px] text-[var(--ink-3)]">
+                    <span>{Math.min(w.review_count || 0, 5)}/5</span>
+                    <div className="flex gap-0.5">
+                      {[1,2,3,4,5].map(step => (
+                        <div key={step} className={`w-1.5 h-1.5 rounded-full ${step <= (w.review_count || 0) ? 'bg-[var(--accent)]' : 'bg-[var(--surface-3)]'}`} />
+                      ))}
                     </div>
-                    <div className="flex gap-2">
-                        <button onClick={() => setEditingWord(w)} className="opacity-0 group-hover:opacity-100 text-blue-400 hover:text-blue-600 transition"><Edit3 size={14} /></button>
-                        <button onClick={() => deleteWord(w.id)} className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 transition"><Trash2 size={14} /></button>
-                    </div>
+                  </div>
+                  <div className="flex gap-1.5 opacity-0 group-hover:opacity-100 transition">
+                    <button
+                      onClick={() => setEditingWord(w)}
+                      className="p-1 text-[var(--ink-3)] hover:text-[var(--brand)] hover:bg-blue-50 rounded-lg transition"
+                    >
+                      <Edit3 size={14} />
+                    </button>
+                    <button
+                      onClick={() => deleteWord(w.id)}
+                      className="p-1 text-[var(--ink-3)] hover:text-red-500 hover:bg-red-50 rounded-lg transition"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
                 </div>
-              </Card>
+              </div>
             );
           })}
         </div>
@@ -380,26 +410,26 @@ export default function VocabularyTab({ API_URL }: VocabularyTabProps) {
       {practiceExercises.length > 0 && !generatingPractice && currentEx && (
         <div className="fixed inset-0 !mt-0 z-50 flex flex-col bg-white overflow-y-auto animate-in slide-in-from-bottom-5 duration-300">
           {/* Top Progress Header */}
-          <div className="sticky top-0 bg-white/80 backdrop-blur-md z-10 px-6 py-4 flex items-center gap-6 border-b border-gray-100">
-            <button onClick={() => setPracticeExercises([])} className="text-gray-400 hover:text-gray-600 transition"><X size={28} /></button>
-            <div className="flex-1 h-3 bg-gray-100 rounded-full overflow-hidden">
-                <div 
-                  className="h-full bg-green-500 transition-all duration-500 rounded-full" 
-                  style={{ width: `${((currentExerciseIdx) / practiceExercises.length) * 100}%` }}
-                />
+          <div className="sticky top-0 bg-white/90 backdrop-blur-md z-10 px-5 py-3.5 flex items-center gap-4 border-b border-[var(--line)]">
+            <button onClick={() => setPracticeExercises([])} className="text-[var(--ink-3)] hover:text-[var(--ink-1)] transition p-1"><X size={22} /></button>
+            <div className="flex-1 h-2.5 bg-[var(--surface-3)] rounded-full overflow-hidden">
+              <div
+                className="h-full bg-[var(--accent)] transition-all duration-500 rounded-full"
+                style={{ width: `${((currentExerciseIdx) / practiceExercises.length) * 100}%` }}
+              />
             </div>
-            <span className="font-extrabold text-blue-600 text-lg">{currentExerciseIdx + 1} / {practiceExercises.length}</span>
+            <span className="font-bold text-[var(--brand)] text-sm tabular-nums">{currentExerciseIdx + 1} / {practiceExercises.length}</span>
           </div>
           
           {/* Main Quiz Content */}
           <div className="flex-1 max-w-3xl w-full mx-auto p-6 md:p-12 flex flex-col justify-center">
             
             <div className="mb-10 text-center">
-              <span className="inline-block px-4 py-1.5 bg-blue-50 text-blue-600 rounded-xl font-bold uppercase tracking-widest text-xs mb-6 shadow-sm border border-blue-100">
+              <span className="inline-block px-3 py-1 bg-[var(--brand-soft)] text-[var(--brand)] rounded-lg font-semibold uppercase tracking-wide text-xs mb-5 border border-blue-100">
                 {currentEx.type === 'FIB' ? 'Điền vào chỗ trống' : currentEx.type === 'SPELLING' ? 'Nghe và Viết' : currentEx.type === 'PARAPHRASE' ? 'Cụm từ đồng nghĩa' : 'Chọn đáp án đúng'}
               </span>
-              
-              <h2 className="text-3xl md:text-4xl font-black text-gray-800 leading-tight mb-6 px-4">
+
+              <h2 className="text-2xl md:text-3xl font-bold text-[var(--ink-1)] leading-tight mb-6 px-4">
                 {currentEx.type === 'MATCHING' 
                   ? "Ghép từ với định nghĩa tương ứng" 
                   : (currentEx.type === 'FIB' || currentEx.type === 'SPELLING')
@@ -550,7 +580,7 @@ export default function VocabularyTab({ API_URL }: VocabularyTabProps) {
           </div>
 
           {/* Bottom Action Footer */}
-          <div className={`border-t-2 sm:px-12 p-6 transition-colors duration-300 ${exerciseSubmitted ? (String(practiceAnswers[currentExerciseIdx] || "").toLowerCase().trim() === String(currentEx.answer || "").toLowerCase().trim() ? "bg-green-100 border-green-200" : "bg-red-100 border-red-200") : "bg-white border-gray-100"}`}>
+          <div className={`border-t sm:px-12 p-5 transition-colors duration-300 ${exerciseSubmitted ? (String(practiceAnswers[currentExerciseIdx] || "").toLowerCase().trim() === String(currentEx.answer || "").toLowerCase().trim() ? "bg-[var(--duo-correct-soft,#D7FFB8)] border-green-200" : "bg-[var(--duo-wrong-soft,#FFDFE0)] border-red-200") : "bg-white border-[var(--line)]"}`}>
             <div className="max-w-5xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-6">
                
                {/* Left side: Status or Feedback */}
@@ -565,10 +595,10 @@ export default function VocabularyTab({ API_URL }: VocabularyTabProps) {
                          {String(practiceAnswers[currentExerciseIdx] || "").toLowerCase().trim() === String(currentEx.answer || "").toLowerCase().trim() ? <CheckCircle2 size={40} /> : <X size={40} />}
                        </div>
                        <div>
-                         <h3 className={`font-black text-2xl ${String(practiceAnswers[currentExerciseIdx] || "").toLowerCase().trim() === String(currentEx.answer || "").toLowerCase().trim() ? "text-green-800" : "text-red-800"}`}>
+                         <h3 className={`font-bold text-xl ${String(practiceAnswers[currentExerciseIdx] || "").toLowerCase().trim() === String(currentEx.answer || "").toLowerCase().trim() ? "text-green-800" : "text-red-700"}`}>
                            {String(practiceAnswers[currentExerciseIdx] || "").toLowerCase().trim() === String(currentEx.answer || "").toLowerCase().trim() ? "Tuyệt vời!" : "Sai rồi!"}
                          </h3>
-                         <p className={`font-bold mt-1 text-lg ${String(practiceAnswers[currentExerciseIdx] || "").toLowerCase().trim() === String(currentEx.answer || "").toLowerCase().trim() ? "text-green-700" : "text-red-700"}`}>
+                         <p className={`font-semibold mt-1 text-base ${String(practiceAnswers[currentExerciseIdx] || "").toLowerCase().trim() === String(currentEx.answer || "").toLowerCase().trim() ? "text-green-700" : "text-red-600"}`}>
                             Đáp án: <span className="underline decoration-4 underline-offset-4">{currentEx.answer}</span>
                          </p>
                          {currentEx.explanation_en && <p className="text-sm mt-2 opacity-80 text-gray-800 max-w-xl">{currentEx.explanation_en}</p>}
@@ -646,33 +676,33 @@ export default function VocabularyTab({ API_URL }: VocabularyTabProps) {
           <form onSubmit={updateWord} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Từ vựng</label>
-                <input type="text" className="w-full px-4 py-2 bg-gray-50 border-2 border-gray-200 rounded-xl outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100 font-bold" value={editingWord.word} onChange={e => setEditingWord({...editingWord, word: e.target.value})} />
+                <label className="block text-xs font-medium text-[var(--ink-3)] uppercase tracking-wide mb-1.5">Từ vựng</label>
+                <input type="text" className="w-full px-3 py-2 bg-[var(--surface-2)] border border-[var(--line)] rounded-xl text-sm outline-none focus:border-[var(--brand)] focus:ring-2 focus:ring-blue-100 font-semibold transition" value={editingWord.word} onChange={e => setEditingWord({...editingWord, word: e.target.value})} />
               </div>
               <div>
-                <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Phát âm</label>
-                <input type="text" className="w-full px-4 py-2 bg-gray-50 border-2 border-gray-200 rounded-xl outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100 font-mono" value={editingWord.phonetic || ""} onChange={e => setEditingWord({...editingWord, phonetic: e.target.value})} />
+                <label className="block text-xs font-medium text-[var(--ink-3)] uppercase tracking-wide mb-1.5">Phát âm</label>
+                <input type="text" className="w-full px-3 py-2 bg-[var(--surface-2)] border border-[var(--line)] rounded-xl text-sm outline-none focus:border-[var(--brand)] focus:ring-2 focus:ring-blue-100 font-mono transition" value={editingWord.phonetic || ""} onChange={e => setEditingWord({...editingWord, phonetic: e.target.value})} />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Loại từ (POS)</label>
-                <input type="text" className="w-full px-4 py-2 bg-gray-50 border-2 border-gray-200 rounded-xl outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100" value={editingWord.pos || ""} onChange={e => setEditingWord({...editingWord, pos: e.target.value})} />
+                <label className="block text-xs font-medium text-[var(--ink-3)] uppercase tracking-wide mb-1.5">Loại từ (POS)</label>
+                <input type="text" className="w-full px-3 py-2 bg-[var(--surface-2)] border border-[var(--line)] rounded-xl text-sm outline-none focus:border-[var(--brand)] focus:ring-2 focus:ring-blue-100 transition" value={editingWord.pos || ""} onChange={e => setEditingWord({...editingWord, pos: e.target.value})} />
               </div>
               <div>
-                <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Cấp độ (CEFR)</label>
-                <select className="w-full px-4 py-2 bg-gray-50 border-2 border-gray-200 rounded-xl outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100" value={editingWord.level || "B1"} onChange={e => setEditingWord({...editingWord, level: e.target.value})}>
+                <label className="block text-xs font-medium text-[var(--ink-3)] uppercase tracking-wide mb-1.5">Cấp độ (CEFR)</label>
+                <select className="w-full px-3 py-2 bg-[var(--surface-2)] border border-[var(--line)] rounded-xl text-sm outline-none focus:border-[var(--brand)] focus:ring-2 focus:ring-blue-100 transition" value={editingWord.level || "B1"} onChange={e => setEditingWord({...editingWord, level: e.target.value})}>
                   {levels.map(l => <option key={l} value={l}>{l}</option>)}
                 </select>
               </div>
             </div>
             <div>
-              <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Nghĩa tiếng Việt</label>
-              <input type="text" className="w-full px-4 py-2 bg-gray-50 border-2 border-gray-200 rounded-xl outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100 font-bold text-blue-800" value={editingWord.meaning_vn || ""} onChange={e => setEditingWord({...editingWord, meaning_vn: e.target.value})} />
+              <label className="block text-xs font-medium text-[var(--ink-3)] uppercase tracking-wide mb-1.5">Nghĩa tiếng Việt</label>
+              <input type="text" className="w-full px-3 py-2 bg-[var(--surface-2)] border border-[var(--line)] rounded-xl text-sm outline-none focus:border-[var(--brand)] focus:ring-2 focus:ring-blue-100 font-semibold text-[var(--brand)] transition" value={editingWord.meaning_vn || ""} onChange={e => setEditingWord({...editingWord, meaning_vn: e.target.value})} />
             </div>
             <div>
-              <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Ví dụ</label>
-              <textarea rows={2} className="w-full px-4 py-2 bg-gray-50 border-2 border-gray-200 rounded-xl outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100 italic" value={editingWord.example || ""} onChange={e => setEditingWord({...editingWord, example: e.target.value})} />
+              <label className="block text-xs font-medium text-[var(--ink-3)] uppercase tracking-wide mb-1.5">Ví dụ</label>
+              <textarea rows={2} className="w-full px-3 py-2 bg-[var(--surface-2)] border border-[var(--line)] rounded-xl text-sm outline-none focus:border-[var(--brand)] focus:ring-2 focus:ring-blue-100 italic transition" value={editingWord.example || ""} onChange={e => setEditingWord({...editingWord, example: e.target.value})} />
             </div>
             <button type="submit" className="hidden" />
           </form>

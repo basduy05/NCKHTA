@@ -1,9 +1,10 @@
 "use client";
 import React, { useState, useEffect, useRef } from "react";
-import { 
-  Search, X, AlertCircle, Volume2, Bookmark, CheckCircle2, 
-  Star, Network, ArrowRight, RefreshCw 
+import {
+  Search, X, AlertCircle, Volume2, Bookmark, CheckCircle2,
+  Star, Network, ArrowRight, RefreshCw
 } from "lucide-react";
+import { Button } from "../../components/ui";
 import { useAuth } from "../../context/AuthContext";
 import { useChatContext } from "../../context/ChatContext";
 import {
@@ -262,13 +263,13 @@ export default function DictionaryTab({ API_URL }: DictionaryTabProps) {
 
   return (
     <div className="space-y-6">
-      <div className="bg-white p-4 sm:p-6 rounded-xl border border-gray-100 shadow-sm">
+      <div className="app-card p-4 sm:p-5">
         <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
           <div className="relative flex-1">
-            <Search size={18} className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+            <Search size={17} className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 text-[var(--ink-3)]" />
             <input
               type="text"
-              className="w-full pl-10 sm:pl-12 pr-10 py-3 sm:py-3.5 bg-gray-50 border border-gray-200 rounded-xl text-gray-700 focus:bg-white focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 outline-none transition text-base sm:text-lg"
+              className="w-full pl-10 sm:pl-11 pr-10 py-2.5 sm:py-3 bg-[var(--surface-2)] border border-[var(--line)] rounded-xl text-[var(--ink-1)] focus:bg-white focus:ring-2 focus:ring-blue-100 focus:border-[var(--brand)] outline-none transition text-sm sm:text-base"
               placeholder="Nhập từ tiếng Anh cần tra..."
               value={word}
               onChange={(e) => setWord(e.target.value)}
@@ -277,61 +278,50 @@ export default function DictionaryTab({ API_URL }: DictionaryTabProps) {
             {word && (
               <button
                 onClick={() => setWord("")}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--ink-3)] hover:text-[var(--ink-1)]"
               >
-                <X size={18} />
+                <X size={16} />
               </button>
             )}
           </div>
-          <div className="flex gap-2 flex-shrink-0">
-            <button
+          <div className="flex gap-2 shrink-0">
+            <Button
+              intent="brand"
               onClick={() => lookup(false)}
               disabled={loading || !word.trim()}
-              className="btn-primary flex-1 sm:flex-none py-3 sm:py-3.5 px-5 sm:px-8 rounded-xl flex items-center justify-center gap-2 shadow-md disabled:opacity-50 transition text-base sm:text-lg"
+              loading={loading}
+              iconLeft={!loading ? <Search size={16} /> : undefined}
             >
-              {loading ? (
-                <div className="flex gap-1 justify-center items-center h-5">
-                  <div className="w-1 h-3 bg-yellow-300 animate-bounce [animation-delay:-0.3s]"></div>
-                  <div className="w-1 h-4 bg-yellow-300 animate-bounce [animation-delay:-0.15s]"></div>
-                  <div className="w-1 h-3 bg-yellow-300 animate-bounce"></div>
-                </div>
-              ) : (
-                <Search size={18} />
-              )}
               <span className="hidden sm:inline">{loading ? "Đang xử lý..." : "Tra từ"}</span>
               <span className="sm:hidden">{loading ? "..." : "Tra"}</span>
-            </button>
+            </Button>
             {loading && (
-              <button
-                onClick={cancelLookup}
-                className="px-4 sm:px-6 py-3 sm:py-3.5 border border-red-200 text-red-500 rounded-xl hover:bg-red-50 transition font-medium text-sm sm:text-base"
-              >
-                Hủy
-              </button>
+              <Button intent="wrong" size="sm" onClick={cancelLookup}>Hủy</Button>
             )}
           </div>
         </div>
       </div>
 
       {history.length > 0 && (
-        <div className="mt-3 flex items-center gap-2 flex-wrap">
-          <span className="text-xs text-gray-400">Gần đây:</span>
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs text-[var(--ink-3)]">Gần đây:</span>
           {history.slice(0, 10).map((h, i) => (
-            <button key={i} onClick={() => { setWord(h); }} className="text-xs px-2.5 py-1 bg-gray-100 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition">
+            <button
+              key={i}
+              onClick={() => { setWord(h); }}
+              className="text-xs px-2.5 py-1 bg-[var(--surface-3)] hover:bg-[var(--brand-soft)] hover:text-[var(--brand)] rounded-lg transition font-medium"
+            >
               {h}
             </button>
           ))}
         </div>
       )}
       {error && (
-        <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-center gap-3">
-          <AlertCircle size={20} className="text-red-500 flex-shrink-0" />
+        <div className="app-card p-4 flex items-center gap-3 border-l-4 border-[var(--danger)]">
+          <AlertCircle size={18} className="text-[var(--danger)] shrink-0" />
           <div>
-            <p className="text-red-700 font-medium">{error}</p>
-            <button
-              onClick={() => setError(null)}
-              className="text-red-500 text-sm underline hover:text-red-600"
-            >
+            <p className="text-sm text-[var(--ink-1)] font-medium">{error}</p>
+            <button onClick={() => setError(null)} className="text-xs text-[var(--danger)] underline mt-0.5">
               Đóng
             </button>
           </div>
@@ -339,7 +329,7 @@ export default function DictionaryTab({ API_URL }: DictionaryTabProps) {
       )}
 
       {result && (
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500">
+        <div className="app-card overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500">
           {result.status === "thinking" && (!result.meanings || result.meanings.length === 0) && (
             <>
               <div className="absolute top-0 left-0 w-full h-[2px] z-50 overflow-hidden">
@@ -362,10 +352,10 @@ export default function DictionaryTab({ API_URL }: DictionaryTabProps) {
               <p className="text-sm text-gray-600">Vui lòng liên hệ admin để cập nhật API key mới.</p>
             </div>
           )}
-          <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-4 sm:p-6 text-white">
+          <div className="bg-[var(--brand)] p-4 sm:p-5 text-white">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div className="min-w-0">
-                <h2 className="text-2xl sm:text-3xl font-extrabold mb-1 break-words">{result.word}</h2>
+                <h2 className="text-2xl sm:text-[28px] font-bold mb-1 tracking-tight break-words">{result.word}</h2>
                 <div className="flex items-center gap-2 sm:gap-4 mt-2 flex-wrap">
                   {result.phonetic_uk && (
                     <button onClick={() => speak(result.word, "en-GB")} className="flex items-center gap-1 sm:gap-1.5 bg-white/20 hover:bg-white/30 px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg transition text-sm">
@@ -426,7 +416,7 @@ export default function DictionaryTab({ API_URL }: DictionaryTabProps) {
                       {POS_MAP[(m.pos || result.pos)?.toLowerCase()] || (m.pos || result.pos)}
                     </span>
                     {i === 0 ? (
-                      <span className="bg-indigo-600 text-white px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-tighter shadow-md shadow-indigo-100 flex items-center gap-1">
+                      <span className="bg-[var(--brand)] text-white px-2.5 py-1 rounded-lg text-[10px] font-semibold uppercase tracking-wide flex items-center gap-1">
                         <Star size={10} fill="currentColor" /> Nghĩa chính
                       </span>
                     ) : (
