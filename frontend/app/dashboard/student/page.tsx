@@ -2,8 +2,7 @@
 import React, { useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useAuth } from "../../context/AuthContext";
-import { Trophy, Sparkles, AlertCircle } from "lucide-react";
-import { PageHeader } from "../../components/ui";
+import { AlertCircle } from "lucide-react";
 
 // Modularized Tab Components
 import OverviewTab from "./OverviewTab";
@@ -76,43 +75,8 @@ function StudentDashboardContent() {
     );
   };
 
-  const getTitle = (tab: string) => {
-    switch (tab) {
-      case "overview": return "Tổng quan";
-      case "classes": return "Lớp học của tôi";
-      case "assignments": return "Bài tập & Kiểm tra";
-      case "dictionary": return "Tra từ điển";
-      case "vocabulary": return "Từ vựng đã lưu";
-      case "ai-tools": return "Học với AI";
-      case "grammar": return "Kho Ngữ Pháp";
-      case "scores": return "Kết quả học tập";
-      case "ipa": return "Luyện phát âm IPA";
-      case "practice": return "Luyện thi";
-      case "ranking": return "Bảng xếp hạng toàn cầu";
-      case "roadmap": return "Lộ trình học tập cá nhân";
-      default: return "Dashboard";
-    }
-  };
-
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title={getTitle(activeTab)}
-        description={<>Học sinh · <span className="font-medium text-slate-700">{user?.name}</span></>}
-        action={
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => refreshUser()}
-              className="flex items-center gap-1.5 bg-amber-50 text-amber-700 px-3 py-1.5 rounded-lg border border-amber-100 font-semibold text-xs hover:bg-amber-100 transition"
-            >
-              <Trophy size={13} className="text-amber-500" /> {user?.points || 0} pts
-            </button>
-            <div className="flex items-center gap-1.5 bg-blue-50 text-[var(--brand)] px-3 py-1.5 rounded-lg border border-blue-100 font-semibold text-xs">
-              <Sparkles size={13} /> {user?.credits_ai || 0} credits
-            </div>
-          </div>
-        }
-      />
+    <div className="space-y-5">
 
       {showCreditModal && (
         <div className="fixed inset-0 !mt-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4">

@@ -46,10 +46,10 @@ function buildLinks(role: string): NavItem[] {
     { name: "Bài tập & Kiểm tra", href: "/dashboard/student?tab=assignments", icon: ClipboardList,   id: "assignments" },
     { name: "Tra từ điển",        href: "/dashboard/student?tab=dictionary",  icon: Search,          id: "dictionary" },
     { name: "Từ vựng đã lưu",     href: "/dashboard/student?tab=vocabulary",  icon: BookMarked,      id: "vocabulary" },
+    { name: "Kho Ngữ Pháp",       href: "/dashboard/student?tab=grammar",     icon: BookText,        id: "grammar" },
     { name: "Luyện phát âm IPA",  href: "/dashboard/student?tab=ipa",         icon: Mic,             id: "ipa" },
     { name: "Luyện thi",          href: "/dashboard/student?tab=practice",    icon: Award,           id: "practice" },
     { name: "Học với AI",         href: "/dashboard/student?tab=ai-tools",    icon: Sparkles,        id: "ai-tools" },
-    { name: "Kho Ngữ Pháp",       href: "/dashboard/student?tab=grammar",     icon: BookText,        id: "grammar" },
     { name: "Kết quả học tập",    href: "/dashboard/student?tab=scores",      icon: Component,       id: "scores" },
     { name: "Bảng xếp hạng",      href: "/dashboard/student?tab=ranking",     icon: Trophy,          id: "ranking" },
     { name: "Lộ trình học tập",   href: "/dashboard/student?tab=roadmap",     icon: TrendingUp,      id: "roadmap" },
@@ -77,10 +77,10 @@ function buildBottomNav(role: string, base: string): BottomItem[] {
   // student
   return [
     { name: "Tổng quan", href: `${base}?tab=overview`,   icon: LayoutDashboard, ids: ["overview", "classes", "assignments"] },
-    { name: "Học",       href: `${base}?tab=vocabulary`, icon: BookOpen,        ids: ["vocabulary", "dictionary", "grammar", "ai-tools"] },
+    { name: "Học",       href: `${base}?tab=vocabulary`, icon: BookOpen,        ids: ["vocabulary", "dictionary", "grammar"] },
     { name: "Luyện",     href: `${base}?tab=practice`,   icon: Award,           ids: ["practice", "ipa"] },
+    { name: "AI",        href: `${base}?tab=ai-tools`,   icon: Sparkles,        ids: ["ai-tools"] },
     { name: "Tiến độ",   href: `${base}?tab=scores`,     icon: TrendingUp,      ids: ["scores", "ranking", "roadmap"] },
-    { name: "Cá nhân",   href: "/profile",               icon: User,            ids: [] },
   ];
 }
 
@@ -337,7 +337,9 @@ function FeedbackModal({ feature, onClose }: { feature: string; onClose: () => v
 
 // ─── App header (universal, 56px) ────────────────────────────────────────────
 
-function AppHeader({ user, logout, currentTab }: { user: any; logout: () => void; currentTab: string }) {
+function AppHeader({ user, logout, currentTab, refreshUser }: { user: any; logout: () => void; currentTab: string; refreshUser: () => void }) {
+  const isStudent = (user?.role ?? "").toString().toLowerCase() === "student";
+
   return (
     <header className="h-14 shrink-0 bg-[var(--surface-1)] border-b border-[var(--line)] flex items-center px-4 sm:px-5 gap-3 sticky top-0 z-30">
       {/* Logo (always visible) */}
@@ -350,6 +352,22 @@ function AppHeader({ user, logout, currentTab }: { user: any; logout: () => void
 
       {/* Right side */}
       <div className="flex items-center gap-2">
+        {/* Pts / Credits badges — student only */}
+        {isStudent && (
+          <div className="hidden sm:flex items-center gap-1.5">
+            <button
+              onClick={() => refreshUser()}
+              className="flex items-center gap-1.5 bg-amber-50 text-amber-700 px-2.5 py-1 rounded-lg border border-amber-100 font-semibold text-xs hover:bg-amber-100 transition"
+              title="Điểm tích lũy"
+            >
+              <Trophy size={12} className="text-amber-500" /> {user?.points || 0} pts
+            </button>
+            <div className="flex items-center gap-1.5 bg-blue-50 text-[var(--brand)] px-2.5 py-1 rounded-lg border border-blue-100 font-semibold text-xs">
+              <Sparkles size={12} /> {user?.credits_ai || 0}
+            </div>
+          </div>
+        )}
+
         {/* Search placeholder */}
         <button
           className="hidden sm:flex items-center gap-1.5 h-8 px-3 rounded-lg border border-[var(--line)] text-xs text-[var(--ink-3)] hover:border-slate-300 hover:text-[var(--ink-2)] transition"
@@ -396,7 +414,7 @@ function BottomNav({ role, currentTab, basePath }: { role: string; currentTab: s
 // ─── Layout root ─────────────────────────────────────────────────────────────
 
 function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
-  const { user, logout, isInitialized } = useAuth();
+  const { user, logout, isInitialized, refreshUser } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -426,7 +444,7 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex flex-col h-screen bg-[var(--surface-2)] overflow-hidden">
-      <AppHeader user={user} logout={logout} currentTab={currentTab} />
+      <AppHeader user={user} logout={logout} currentTab={currentTab} refreshUser={refreshUser} />
 
       <div className="flex flex-1 min-h-0">
         {/* Sidebar — desktop only */}

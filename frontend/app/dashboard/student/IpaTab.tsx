@@ -202,7 +202,7 @@ export default function IpaTab({ API_URL }: IpaTabProps) {
   return (
     <div className="space-y-8 pb-12 w-full">
       <Confetti trigger={confettiTick} />
-      <section className="bg-white p-8 rounded-3xl border-2 border-gray-100 shadow-xl relative overflow-hidden">
+      <section className="app-card p-6 sm:p-8 relative overflow-hidden">
         <div className="absolute top-0 right-0 w-32 h-32 bg-blue-50 rounded-full -mr-16 -mt-16 opacity-50" />
         <div className="relative z-10">
           <div className="flex flex-col md:flex-row gap-6 mb-8 justify-between items-start md:items-end border-b border-gray-100 pb-8">
@@ -246,7 +246,7 @@ export default function IpaTab({ API_URL }: IpaTabProps) {
                       <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
                          <div className="p-1.5 bg-blue-50 text-blue-600 rounded-lg"><Volume2 size={14} /></div>
                       </div>
-                      <span className="text-3xl font-black text-blue-800 mb-1 group-hover:scale-110 transition-transform">/{item.ipa}/</span>
+                      <span className="text-3xl font-bold text-[var(--brand)] mb-1 group-hover:scale-110 transition-transform">/{item.ipa}/</span>
                       <span className="text-xs text-gray-400 font-bold uppercase group-hover:text-blue-600 transition-colors">{item.example}</span>
                       <span className="text-[10px] text-gray-300 font-medium mt-0.5 tracking-widest hidden group-hover:block transition-all">/{item.transcription}/</span>
                   </button>
@@ -255,6 +255,7 @@ export default function IpaTab({ API_URL }: IpaTabProps) {
 
           <div className="mt-10 flex justify-center">
               <Button
+                intent="brand"
                 onClick={generateLesson}
                 disabled={loading}
                 loading={loading}
@@ -269,31 +270,31 @@ export default function IpaTab({ API_URL }: IpaTabProps) {
 
       {lesson && (
           <div className="space-y-12 animate-in fade-in slide-in-from-bottom-12 duration-700">
-              <header className="bg-gradient-to-br from-indigo-950 to-blue-900 rounded-[3rem] p-12 text-white shadow-3xl relative overflow-hidden">
-                  <div className="relative z-10 flex flex-col md:flex-row items-center gap-10">
-                      <button 
-                        onClick={() => speak(lesson.lesson_title || lesson.target_ipa || "Pronunciation")} 
-                        className="bg-white/10 backdrop-blur-md border border-white/20 w-32 h-32 rounded-[2.5rem] flex items-center justify-center hover:bg-white/20 hover:scale-110 transition-all shrink-0 shadow-2xl"
+              <header className="bg-[var(--brand)] rounded-[var(--r-2xl)] p-8 sm:p-10 text-white shadow-lg relative overflow-hidden">
+                  <div className="relative z-10 flex flex-col md:flex-row items-center gap-8">
+                      <button
+                        onClick={() => speak(lesson.lesson_title || lesson.target_ipa || "Pronunciation")}
+                        className="bg-white/10 backdrop-blur-md border border-white/20 w-24 h-24 rounded-[var(--r-xl)] flex items-center justify-center hover:bg-white/20 hover:scale-110 transition-all shrink-0"
                       >
-                        <Volume2 size={48} className="text-blue-200" />
+                        <Volume2 size={40} className="text-blue-200" />
                       </button>
                       <div>
-                          <div className="inline-flex items-center gap-2 px-6 py-2 bg-blue-500/20 border border-blue-400/30 rounded-full text-sm font-black uppercase tracking-tighter text-blue-300 mb-6 italic">
-                             <Sparkles size={16} /> Personalized content for your level
+                          <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-white/10 border border-white/20 rounded-full text-xs font-semibold uppercase tracking-wide text-blue-100 mb-4">
+                             <Sparkles size={14} /> Personalized content for your level
                           </div>
-                          <h2 className="text-4xl md:text-5xl font-black mb-4 tracking-tight">
-                            {lesson.lesson_title ? lesson.lesson_title : <span>Target: <span className="text-blue-400 italic">/{lesson.target_ipa}/</span></span>}
+                          <h2 className="text-2xl md:text-3xl font-bold mb-3 tracking-tight">
+                            {lesson.lesson_title ? lesson.lesson_title : <span>Target: <span className="text-blue-300 italic">/{lesson.target_ipa}/</span></span>}
                           </h2>
-                          <p className="text-2xl text-blue-100/80 font-medium leading-relaxed max-w-2xl">{lesson.introduction || renderValue(lesson.description_vn)}</p>
+                          <p className="text-base text-blue-100/80 font-medium leading-relaxed max-w-2xl">{lesson.introduction || renderValue(lesson.description_vn)}</p>
                       </div>
                   </div>
-                  <div className="absolute -bottom-10 -right-10 w-64 h-64 bg-blue-500/20 rounded-full blur-[80px]" />
+                  <div className="absolute -bottom-10 -right-10 w-48 h-48 bg-white/5 rounded-full blur-[60px]" />
               </header>
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-                  <div className="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-xl group hover:shadow-2xl transition-all h-full">
-                      <h4 className="text-3xl font-black text-gray-900 mb-8 flex items-center gap-4">
-                        <div className="w-14 h-14 bg-green-50 rounded-2xl flex items-center justify-center text-green-600 shadow-inner"><CheckCircle2 size={32} /></div>
+                  <div className="app-card app-card--hover p-8 h-full">
+                      <h4 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-3">
+                        <div className="w-10 h-10 bg-green-50 rounded-xl flex items-center justify-center text-green-600"><CheckCircle2 size={22} /></div>
                         Core Vocabulary
                       </h4>
                       <div className="space-y-4">
@@ -304,7 +305,7 @@ export default function IpaTab({ API_URL }: IpaTabProps) {
                                          <div className="flex items-center justify-between mb-3 border-b border-gray-200/60 pb-3">
                                             <div className="flex items-center gap-3">
                                                 <button onClick={() => speak(ex.name)} className="w-8 h-8 bg-white rounded-lg flex items-center justify-center text-blue-600 shadow-sm border border-gray-100"><Volume2 size={16} /></button>
-                                                <span className="text-2xl font-black text-blue-800">{ex.symbol}</span>
+                                                <span className="text-2xl font-bold text-[var(--brand)]">{ex.symbol}</span>
                                             </div>
                                             <span className="text-sm font-bold text-gray-500 uppercase">{ex.name}</span>
                                          </div>
@@ -324,11 +325,11 @@ export default function IpaTab({ API_URL }: IpaTabProps) {
                                       <div className="flex items-center gap-6">
                                           <button onClick={() => speak(ex.word)} className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-blue-600 shadow-sm border border-gray-100 group-hover/item:scale-110 transition-all"><Volume2 size={24} /></button>
                                           <div>
-                                              <p className="text-2xl font-black text-gray-900 uppercase tracking-tight">{ex.word}</p>
-                                              <p className="text-md text-blue-500 font-black font-mono">/{ex.ipa}/</p>
+                                              <p className="text-xl font-bold text-gray-900 uppercase tracking-tight">{ex.word}</p>
+                                              <p className="text-sm text-[var(--brand)] font-semibold font-mono">/{ex.ipa}/</p>
                                           </div>
                                       </div>
-                                      <p className="text-lg font-black text-gray-400 uppercase">{renderValue(ex.meaning_vn)}</p>
+                                      <p className="text-sm font-semibold text-gray-400 uppercase">{renderValue(ex.meaning_vn)}</p>
                                   </div>
                               );
                           })}
@@ -342,12 +343,12 @@ export default function IpaTab({ API_URL }: IpaTabProps) {
                                     <div key={i} className="flex items-center justify-between p-4 bg-indigo-50/40 rounded-2xl border border-indigo-100/50">
                                         <div className="flex-1 flex justify-center gap-4 items-center">
                                            <div className="text-center group cursor-pointer" onClick={() => speak(mp.word1)}>
-                                              <p className="text-xl font-black text-gray-900 group-hover:text-blue-600">{mp.word1}</p>
+                                              <p className="text-xl font-bold text-gray-900 group-hover:text-[var(--brand)]">{mp.word1}</p>
                                               <p className="text-sm font-mono text-blue-500">{mp.ipa1}</p>
                                            </div>
                                            <div className="px-6 text-gray-400 font-extrabold italic">VS</div>
                                            <div className="text-center group cursor-pointer" onClick={() => speak(mp.word2)}>
-                                              <p className="text-xl font-black text-gray-900 group-hover:text-blue-600">{mp.word2}</p>
+                                              <p className="text-xl font-bold text-gray-900 group-hover:text-[var(--brand)]">{mp.word2}</p>
                                               <p className="text-sm font-mono text-blue-500">{mp.ipa2}</p>
                                            </div>
                                         </div>
@@ -358,9 +359,9 @@ export default function IpaTab({ API_URL }: IpaTabProps) {
                       )}
                   </div>
 
-                  <div className="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-xl group hover:shadow-2xl transition-all h-full">
-                      <h4 className="text-3xl font-black text-gray-900 mb-8 flex items-center gap-4">
-                        <div className="w-14 h-14 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600 shadow-inner"><Info size={32} /></div>
+                  <div className="app-card app-card--hover p-8 h-full">
+                      <h4 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-3">
+                        <div className="w-10 h-10 bg-[var(--brand-soft)] rounded-xl flex items-center justify-center text-[var(--brand)]"><Info size={22} /></div>
                         Interactive Use
                       </h4>
                       <div className="space-y-6">
@@ -369,7 +370,7 @@ export default function IpaTab({ API_URL }: IpaTabProps) {
                             const answer = typeof item === 'object' ? (item.answer || item.focus_word) : "";
                             
                             return (
-                                <div key={i} className="p-8 bg-indigo-50/30 rounded-[2.5rem] border border-indigo-100 space-y-4">
+                                <div key={i} className="p-5 bg-[var(--surface-2)] rounded-[var(--r-xl)] border border-[var(--line)] space-y-4">
                                     {sentence.includes("[blank]") ? (
                                       <SentenceWithBlank 
                                         sentence={sentence} 
@@ -392,39 +393,39 @@ export default function IpaTab({ API_URL }: IpaTabProps) {
               </div>
 
               {lesson.quiz && (
-                  <div className="bg-white p-12 rounded-[4rem] border border-gray-100 shadow-3xl relative overflow-hidden">
-                      <div className="absolute top-0 left-0 w-full h-3 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500" />
-                      <h3 className="text-4xl font-black text-gray-900 mb-12 flex items-center gap-5">
-                          <div className="w-16 h-16 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-3xl flex items-center justify-center text-blue-700 shadow-inner"><Brain size={36} /></div>
+                  <div className="app-card p-8 relative overflow-hidden">
+                      <div className="absolute top-0 left-0 w-full h-1 bg-[var(--brand)]" />
+                      <h3 className="text-xl font-bold text-gray-900 mb-8 flex items-center gap-4">
+                          <div className="w-10 h-10 bg-[var(--brand-soft)] rounded-xl flex items-center justify-center text-[var(--brand)]"><Brain size={22} /></div>
                           Phonetic Challenge Quiz
                       </h3>
-                      <div className="space-y-16">
+                      <div className="space-y-8">
                           {lesson.quiz.map((q: any, i: number) => (
-                              <div key={i} className="space-y-8 animate-in fade-in duration-500" style={{ animationDelay: `${i * 100}ms` }}>
-                                  <div className="flex items-start gap-6">
-                                      <span className="w-12 h-12 bg-gray-100 text-gray-500 rounded-2xl flex items-center justify-center shrink-0 font-black text-xl border-4 border-white shadow-md">{i+1}</span>
-                                      <p className="text-2xl font-black text-gray-800 leading-snug pt-1">{q.question}</p>
+                              <div key={i} className="space-y-4 animate-in fade-in duration-500" style={{ animationDelay: `${i * 100}ms` }}>
+                                  <div className="flex items-start gap-4">
+                                      <span className="w-8 h-8 bg-[var(--surface-3)] text-[var(--ink-2)] rounded-xl flex items-center justify-center shrink-0 font-semibold text-sm">{i+1}</span>
+                                      <p className="text-base font-bold text-gray-800 leading-snug pt-1">{q.question}</p>
                                   </div>
-                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pl-16">
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pl-12">
                                       {q.options.map((opt: string, oi: number) => {
                                           const isSelected = quizAnswers[i] === oi;
                                           const correctAnswer = q.correct_answer || q.answer;
-                                          const isCorrect = q.correct_index === oi || 
+                                          const isCorrect = q.correct_index === oi ||
                                                             (typeof correctAnswer === 'string' && q.options[oi]?.toLowerCase().trim() === correctAnswer.toLowerCase().trim());
-                                          
-                                          let btnCls = "bg-white border-gray-100 hover:border-blue-400 hover:shadow-2xl hover:scale-[1.02] text-gray-700";
+
+                                          let btnCls = "bg-white border-[var(--line)] hover:border-[var(--brand)] hover:shadow-md text-gray-700";
                                           if (quizSubmitted) {
-                                              if (isCorrect) btnCls = "border-green-500 bg-green-50 text-green-700 shadow-green-100 scale-[1.02]";
+                                              if (isCorrect) btnCls = "border-green-500 bg-green-50 text-green-700 scale-[1.01]";
                                               else if (isSelected) btnCls = "border-red-500 bg-red-50 text-red-700";
-                                              else btnCls = "opacity-40 grayscale-[20%]";
-                                          } else if (isSelected) btnCls = "border-blue-600 bg-blue-50 text-blue-700 shadow-blue-100 scale-[1.02]";
-                                          
+                                              else btnCls = "opacity-40";
+                                          } else if (isSelected) btnCls = "border-[var(--brand)] bg-[var(--brand-soft)] text-[var(--brand)] scale-[1.01]";
+
                                           return (
                                               <button
                                                 key={oi}
                                                 disabled={quizSubmitted}
                                                 onClick={() => { sfx.click(); setQuizAnswers(p => ({...p, [i]: oi})); }}
-                                                className={`p-6 rounded-3xl border-2 text-left text-xl font-black transition-all duration-300 active:scale-[0.98] ${btnCls}`}
+                                                className={`p-4 rounded-[var(--r-lg)] border-2 text-left text-sm font-semibold transition-all duration-300 active:scale-[0.98] ${btnCls}`}
                                               >
                                                 {opt}
                                               </button>
@@ -436,31 +437,30 @@ export default function IpaTab({ API_URL }: IpaTabProps) {
                       </div>
 
                       {!quizSubmitted ? (
-                          <div className="mt-20 text-center">
+                          <div className="mt-10 text-center">
                               <Button
+                                intent="brand"
                                 onClick={handleQuizSubmit}
                                 disabled={Object.keys(quizAnswers).length < lesson.quiz.length}
                                 size="lg"
-                                intent="primary"
                               >
                                 FINISH & SEE RESULTS
                               </Button>
                           </div>
                       ) : (
-                          <div className="mt-20 bg-gradient-to-br from-blue-100/50 to-indigo-100/50 rounded-[4rem] p-16 border-4 border-white flex flex-col md:flex-row items-center justify-between gap-12 relative overflow-hidden backdrop-blur-xl">
-                              <div className="relative z-10 text-center md:text-left">
-                                  <p className="text-blue-900 font-black text-6xl mb-4">Level Up! 🌟</p>
-                                  <p className="text-3xl font-black text-indigo-700 uppercase tracking-tighter">Your Score: {quizScore}/{lesson.quiz.length}</p>
-                                  <div className="mt-8 inline-flex items-center gap-4 bg-white px-10 py-4 rounded-full border-4 border-indigo-100 shadow-xl">
-                                    <Sparkles className="text-yellow-500 w-8 h-8" />
-                                    <span className="font-black text-3xl text-blue-700">+{quizScore * 10} XP</span>
+                          <div className="mt-8 bg-[var(--brand-soft)] rounded-[var(--r-2xl)] p-8 border border-[var(--brand)]/20 flex flex-col md:flex-row items-center justify-between gap-8">
+                              <div className="text-center md:text-left">
+                                  <p className="text-[var(--brand)] font-bold text-3xl mb-2">Level Up! 🌟</p>
+                                  <p className="text-xl font-bold text-[var(--ink-1)] uppercase tracking-tight">Your Score: {quizScore}/{lesson.quiz.length}</p>
+                                  <div className="mt-4 inline-flex items-center gap-3 bg-white px-6 py-2.5 rounded-full border border-[var(--line)] shadow-sm">
+                                    <Sparkles className="text-yellow-500 w-5 h-5" />
+                                    <span className="font-bold text-xl text-[var(--brand)]">+{quizScore * 10} XP</span>
                                   </div>
                               </div>
                               <Button
                                 onClick={() => setLesson(null)}
                                 intent="ghost"
                                 size="lg"
-                                className="relative z-10"
                               >
                                 NEW LESSON
                               </Button>

@@ -33,7 +33,7 @@ export function ChatTriggerButton() {
   return (
     <button
       onClick={() => openChat()}
-      className="fixed bottom-6 right-6 z-[100] w-14 h-14 rounded-full bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-300/40 hover:shadow-xl hover:shadow-indigo-400/50 hover:scale-105 active:scale-95 transition-all duration-200 flex items-center justify-center"
+      className="fixed bottom-[76px] lg:bottom-6 right-4 lg:right-6 z-[100] w-12 h-12 lg:w-14 lg:h-14 rounded-full bg-[var(--brand)] hover:bg-[var(--brand-dark)] text-white shadow-lg shadow-blue-300/40 hover:shadow-xl hover:scale-105 active:scale-95 transition-all duration-200 flex items-center justify-center"
       title="Mở AI Trợ lý"
     >
       <MessageCircle size={24} />
@@ -185,7 +185,7 @@ export default function AIChatbot() {
   return (
     <div
       className={`fixed z-[110] flex flex-col bg-white rounded-2xl border border-gray-200 shadow-2xl transition-all duration-300 overflow-hidden
-        bottom-4 right-4 sm:bottom-6 sm:right-6
+        bottom-[76px] right-4 sm:bottom-[76px] sm:right-4 lg:bottom-6 lg:right-6
         ${isMinimized ? "w-56 sm:w-64 h-14" : "w-[calc(100vw-32px)] sm:w-[390px] h-[520px] sm:h-[580px]"}`}
     >
       {/* ── Header ── */}
