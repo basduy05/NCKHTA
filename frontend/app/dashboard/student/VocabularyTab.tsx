@@ -7,6 +7,7 @@ import {
 import { useAuth } from "../../context/AuthContext";
 import { useNotification } from "../../context/NotificationContext";
 import FeedbackButton from "../../components/FeedbackButton";
+import { Button, Card, Chip, Modal, Confetti, useSound } from "../../components/ui";
 
 interface VocabularyTabProps {
   API_URL: string;
@@ -15,6 +16,8 @@ interface VocabularyTabProps {
 export default function VocabularyTab({ API_URL }: VocabularyTabProps) {
   const { token, authFetch, refreshUser } = useAuth();
   const { showAlert, showConfirm } = useNotification();
+  const sfx = useSound();
+  const [confettiTick, setConfettiTick] = useState(0);
   const [words, setWords] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -210,6 +213,7 @@ export default function VocabularyTab({ API_URL }: VocabularyTabProps) {
     const finalRating = rating || (isCorrect ? 3 : 1);
     setPracticeResults(prev => [...prev, { word_id: ex.word_id, correct: isCorrect, rating: finalRating }]);
     setExerciseSubmitted(true);
+    if (isCorrect) sfx.correct(); else sfx.wrong();
   };
 
   const nextExercise = async () => {
@@ -232,15 +236,21 @@ export default function VocabularyTab({ API_URL }: VocabularyTabProps) {
             refreshUser();
             const correctCount = practiceResults.filter(r => r.correct).length;
             const percentage = (correctCount / practiceExercises.length) * 100;
-            
+
             let message = "";
             let type: 'success' | 'warning' | 'info' = 'success';
-            
-            if (percentage >= 80) message = `Tuyệt vời! Bạn đã hoàn thành xuất sắc bài ôn tập.`;
-            else if (percentage >= 50) message = `Khá tốt! Bạn đã hoàn thành bài ôn tập.`;
-            else {
+
+            if (percentage >= 80) {
+              message = `Tuyệt vời! Bạn đã hoàn thành xuất sắc bài ôn tập.`;
+              sfx.levelUp();
+              setConfettiTick(t => t + 1);
+            } else if (percentage >= 50) {
+              message = `Khá tốt! Bạn đã hoàn thành bài ôn tập.`;
+              sfx.finish();
+            } else {
                 message = `Bạn đã hoàn thành bài ôn tập. Hãy cố gắng hơn ở lần sau nhé!`;
                 type = 'info';
+                sfx.finish();
             }
             
             showAlert(`${message}\nĐúng: ${correctCount}/${practiceExercises.length}\nĐiểm thưởng: +${correctCount * 10}`, type);
@@ -271,15 +281,16 @@ export default function VocabularyTab({ API_URL }: VocabularyTabProps) {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
-      <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex flex-col md:flex-row justify-between items-center gap-4">
-        <div className="flex items-center gap-4">
-            <div className="bg-blue-50 text-blue-600 px-4 py-2 rounded-xl font-bold flex items-center gap-2">
-              <BookMarked size={18} /> {words.length} từ đã lưu
-            </div>
+      <Confetti trigger={confettiTick} />
+      <Card className="!p-4 sm:!p-5 flex flex-col md:flex-row justify-between items-stretch md:items-center gap-4">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            <Chip intent="info" className="!text-sm !py-1.5 !px-3">
+              <BookMarked size={16} /> {words.length} từ đã lưu
+            </Chip>
             {words.some(w => !w.scheduled_at || new Date(w.scheduled_at) <= new Date()) && (
-               <div className="bg-orange-100 text-orange-600 px-4 py-2 rounded-xl font-bold flex items-center gap-2 animate-pulse">
-                 <Clock size={18} /> {words.filter(w => !w.scheduled_at || new Date(w.scheduled_at) <= new Date()).length} từ cần ôn
-               </div>
+              <Chip intent="streak" className="!text-sm !py-1.5 !px-3 animate-pulse">
+                <Clock size={16} /> {words.filter(w => !w.scheduled_at || new Date(w.scheduled_at) <= new Date()).length} cần ôn
+              </Chip>
             )}
             <div className="hidden lg:flex items-center gap-1">
               {levels.map(l => {
@@ -289,39 +300,40 @@ export default function VocabularyTab({ API_URL }: VocabularyTabProps) {
               })}
             </div>
         </div>
-        
+
         <div className="flex items-center gap-3 w-full md:w-auto">
           <div className="relative flex-1">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
               type="text" placeholder="Tìm từ vựng..."
-              className="pl-9 pr-3 py-2 border border-gray-200 rounded-xl text-sm outline-none w-full md:w-48 focus:ring-2 focus:ring-blue-500/20"
+              className="pl-9 pr-3 py-2 border-2 border-gray-200 rounded-xl text-sm outline-none w-full md:w-48 focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
               value={search} onChange={(e) => setSearch(e.target.value)}
             />
           </div>
-          <button
+          <Button
             onClick={startRichPractice}
             disabled={generatingPractice || words.length === 0}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white py-2 px-6 rounded-xl font-semibold text-sm flex items-center gap-2 shadow-sm whitespace-nowrap disabled:opacity-50 transition"
+            loading={generatingPractice}
+            iconLeft={!generatingPractice ? <PlayCircle size={18} /> : null}
+            size="sm"
           >
-            {generatingPractice ? <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" /> : <PlayCircle size={18} />}
             Luyện tập SR
-          </button>
+          </Button>
         </div>
-      </div>
+      </Card>
 
       {words.length === 0 ? (
-        <div className="bg-white rounded-2xl p-12 border border-gray-100 text-center">
+        <Card className="!p-12 text-center">
           <BookMarked size={48} className="mx-auto text-gray-200 mb-4" />
           <h3 className="text-lg font-bold text-gray-700">Chưa có từ vựng nào</h3>
           <p className="text-gray-500 text-sm">Tra từ điển để lưu từ mới vào kho.</p>
-        </div>
+        </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {words.map((w) => {
             const isDue = !w.scheduled_at || new Date(w.scheduled_at) <= new Date();
             return (
-              <div key={w.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 hover:shadow-md transition group relative overflow-hidden">
+              <Card interactive key={w.id} className="!p-5 group relative overflow-hidden">
                 {isDue && <div className="absolute top-0 right-0 bg-orange-500 text-white text-[10px] px-2 py-0.5 font-bold rounded-bl-lg">CẦN ÔN TẬP</div>}
                 <div className="flex items-start justify-between mb-3">
                   <div>
@@ -353,7 +365,7 @@ export default function VocabularyTab({ API_URL }: VocabularyTabProps) {
                         <button onClick={() => deleteWord(w.id)} className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 transition"><Trash2 size={14} /></button>
                     </div>
                 </div>
-              </div>
+              </Card>
             );
           })}
         </div>
@@ -569,37 +581,44 @@ export default function VocabularyTab({ API_URL }: VocabularyTabProps) {
                {/* Right side: Action Buttons */}
                <div className="w-full sm:w-auto flex-shrink-0">
                  {!exerciseSubmitted ? (
-                    <button 
-                      onClick={() => submitCurrentExercise()} 
-                      disabled={!practiceAnswers[currentExerciseIdx]} 
-                      className="w-full sm:w-auto px-12 py-5 rounded-2xl font-black text-xl text-white bg-blue-500 hover:bg-blue-600 shadow-[0_6px_0_0_#2563ea] active:shadow-[0_0px_0_0_#2563ea] active:translate-y-[6px] transition-all disabled:opacity-50 disabled:shadow-none disabled:translate-y-[6px] disabled:bg-gray-300 uppercase tracking-widest"
+                    <Button
+                      onClick={() => submitCurrentExercise()}
+                      disabled={!practiceAnswers[currentExerciseIdx]}
+                      intent="info"
+                      size="lg"
+                      block
                     >
                         Kiểm tra
-                    </button>
+                    </Button>
                  ) : (
                     <div className="flex flex-col sm:flex-row items-center gap-4 w-full">
                         <div className="bg-white/50 backdrop-blur-sm p-2 rounded-2xl flex gap-2 shadow-sm w-full sm:w-auto">
-                            {[ 
-                                { r: 1, l: "Lại", c: "hover:bg-red-100 text-red-600 border border-red-200" },
-                                { r: 2, l: "Khó", c: "hover:bg-orange-100 text-orange-600 border border-orange-200" },
-                                { r: 3, l: "Khá", c: "hover:bg-green-100 text-green-600 border border-green-200" },
-                                { r: 4, l: "Dễ", c: "hover:bg-blue-100 text-blue-600 border border-blue-200" }
+                            {[
+                                { r: 1, l: "Lại", c: "hover:bg-red-100 text-red-600 border-2 border-red-200" },
+                                { r: 2, l: "Khó", c: "hover:bg-orange-100 text-orange-600 border-2 border-orange-200" },
+                                { r: 3, l: "Khá", c: "hover:bg-green-100 text-green-600 border-2 border-green-200" },
+                                { r: 4, l: "Dễ", c: "hover:bg-blue-100 text-blue-600 border-2 border-blue-200" }
                             ].map(btn => (
                                 <button key={btn.r} onClick={() => {
+                                    sfx.click();
                                     setPracticeResults(prev => { const next = [...prev]; next[next.length - 1].rating = btn.r; return next; });
                                     nextExercise();
-                                }} className={`w-14 h-14 flex flex-col items-center justify-center rounded-xl font-black transition-colors bg-white shadow-sm ${btn.c}`}>
+                                }} className={`w-14 h-14 flex flex-col items-center justify-center rounded-2xl font-black transition-colors bg-white shadow-sm active:scale-95 ${btn.c}`}>
                                     <span className="text-[15px]">{btn.l}</span>
                                     <span className="text-[10px] opacity-70">Rate: {btn.r}</span>
                                 </button>
                             ))}
                         </div>
-                        <button 
-                          onClick={nextExercise} 
-                          className={`w-full sm:w-auto px-10 py-5 rounded-2xl font-black text-xl text-white shadow-[0_6px_0_0_rgba(0,0,0,0.2)] active:shadow-none active:translate-y-[6px] transition-all uppercase tracking-widest ${String(practiceAnswers[currentExerciseIdx] || "").toLowerCase().trim() === String(currentEx.answer || "").toLowerCase().trim() ? "bg-green-600" : "bg-red-600"}`}
+                        <Button
+                          onClick={() => { sfx.click(); nextExercise(); }}
+                          intent={String(practiceAnswers[currentExerciseIdx] || "").toLowerCase().trim() === String(currentEx.answer || "").toLowerCase().trim() ? "correct" : "wrong"}
+                          size="lg"
+                          withSound={false}
+                          iconRight={<ArrowRight size={20} />}
+                          className="w-full sm:w-auto"
                         >
-                          {currentExerciseIdx < practiceExercises.length - 1 ? "Tiếp tục" : "Hoàn thành"} <ArrowRight size={24} className="inline ml-2 -mt-1" />
-                        </button>
+                          {currentExerciseIdx < practiceExercises.length - 1 ? "Tiếp tục" : "Hoàn thành"}
+                        </Button>
                     </div>
                  )}
                </div>
@@ -608,55 +627,55 @@ export default function VocabularyTab({ API_URL }: VocabularyTabProps) {
         </div>
       )}
 
-      {editingWord && (
-        <div className="fixed inset-0 !mt-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden border border-blue-100 transform animate-in zoom-in-95 duration-200">
-            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-6 text-white relative">
-              <button onClick={() => setEditingWord(null)} className="absolute top-4 right-4 bg-white/20 hover:bg-white/30 p-1.5 rounded-full transition"><X size={18} /></button>
-              <h3 className="text-2xl font-black mb-1">Chỉnh sửa từ vựng</h3>
-              <p className="opacity-80 text-sm">Cập nhật thông tin cho từ "{editingWord.word}"</p>
+      <Modal
+        open={!!editingWord}
+        onClose={() => setEditingWord(null)}
+        title={editingWord ? `Chỉnh sửa "${editingWord.word}"` : "Chỉnh sửa từ vựng"}
+        size="md"
+      >
+        {editingWord && (
+          <form onSubmit={updateWord} className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Từ vựng</label>
+                <input type="text" className="w-full px-4 py-2 bg-gray-50 border-2 border-gray-200 rounded-xl outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100 font-bold" value={editingWord.word} onChange={e => setEditingWord({...editingWord, word: e.target.value})} />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Phát âm</label>
+                <input type="text" className="w-full px-4 py-2 bg-gray-50 border-2 border-gray-200 rounded-xl outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100 font-mono" value={editingWord.phonetic || ""} onChange={e => setEditingWord({...editingWord, phonetic: e.target.value})} />
+              </div>
             </div>
-            <form onSubmit={updateWord} className="p-6 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Từ vựng</label>
-                  <input type="text" className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500/20 font-bold" value={editingWord.word} onChange={e => setEditingWord({...editingWord, word: e.target.value})} />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Phát âm</label>
-                  <input type="text" className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500/20 font-mono" value={editingWord.phonetic || ""} onChange={e => setEditingWord({...editingWord, phonetic: e.target.value})} />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                 <div>
-                  <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Loại từ (POS)</label>
-                  <input type="text" className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500/20" value={editingWord.pos || ""} onChange={e => setEditingWord({...editingWord, pos: e.target.value})} />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Cấp độ (CEFR)</label>
-                  <select className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500/20" value={editingWord.level || "B1"} onChange={e => setEditingWord({...editingWord, level: e.target.value})}>
-                    {levels.map(l => <option key={l} value={l}>{l}</option>)}
-                  </select>
-                </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Loại từ (POS)</label>
+                <input type="text" className="w-full px-4 py-2 bg-gray-50 border-2 border-gray-200 rounded-xl outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100" value={editingWord.pos || ""} onChange={e => setEditingWord({...editingWord, pos: e.target.value})} />
               </div>
               <div>
-                <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Nghĩa tiếng Việt</label>
-                <input type="text" className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500/20 font-bold text-blue-800" value={editingWord.meaning_vn || ""} onChange={e => setEditingWord({...editingWord, meaning_vn: e.target.value})} />
+                <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Cấp độ (CEFR)</label>
+                <select className="w-full px-4 py-2 bg-gray-50 border-2 border-gray-200 rounded-xl outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100" value={editingWord.level || "B1"} onChange={e => setEditingWord({...editingWord, level: e.target.value})}>
+                  {levels.map(l => <option key={l} value={l}>{l}</option>)}
+                </select>
               </div>
-              <div>
-                <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Ví dụ</label>
-                <textarea rows={2} className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500/20 italic" value={editingWord.example || ""} onChange={e => setEditingWord({...editingWord, example: e.target.value})} />
-              </div>
-              <div className="pt-4 flex gap-3">
-                <button type="submit" disabled={isUpdating} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl shadow-lg shadow-blue-200 transition disabled:opacity-50">
-                  {isUpdating ? "Đang lưu..." : "Cập nhật"}
-                </button>
-                <button type="button" onClick={() => setEditingWord(null)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-3 rounded-xl transition">Hủy</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Nghĩa tiếng Việt</label>
+              <input type="text" className="w-full px-4 py-2 bg-gray-50 border-2 border-gray-200 rounded-xl outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100 font-bold text-blue-800" value={editingWord.meaning_vn || ""} onChange={e => setEditingWord({...editingWord, meaning_vn: e.target.value})} />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Ví dụ</label>
+              <textarea rows={2} className="w-full px-4 py-2 bg-gray-50 border-2 border-gray-200 rounded-xl outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100 italic" value={editingWord.example || ""} onChange={e => setEditingWord({...editingWord, example: e.target.value})} />
+            </div>
+            <div className="pt-2 flex gap-3">
+              <Button type="submit" intent="primary" loading={isUpdating} block>
+                {isUpdating ? "Đang lưu..." : "Cập nhật"}
+              </Button>
+              <Button type="button" intent="ghost" onClick={() => setEditingWord(null)} block>
+                Hủy
+              </Button>
+            </div>
+          </form>
+        )}
+      </Modal>
 
       <FeedbackButton feature="vocabulary" />
     </div>
