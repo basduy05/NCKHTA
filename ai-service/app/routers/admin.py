@@ -903,20 +903,35 @@ def list_feedback(
 
     conn = get_db()
     try:
-        # Ensure table exists with all required columns
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS user_feedback (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
-                user_name TEXT,
-                feedback_type TEXT NOT NULL DEFAULT '',
-                feature TEXT NOT NULL DEFAULT '',
-                content TEXT NOT NULL DEFAULT '',
-                status TEXT DEFAULT 'pending',
-                admin_note TEXT,
-                created_at TIMESTAMP DEFAULT (DATETIME('now', '+7 hours'))
-            )
-        """)
+        # Verify table exists; create with minimal schema if missing.
+        # Use a separate try/except so a malformed CREATE on libsql doesn't kill the request.
+        try:
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS user_feedback (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    user_name TEXT,
+                    feedback_type TEXT NOT NULL DEFAULT '',
+                    feature TEXT NOT NULL DEFAULT '',
+                    content TEXT NOT NULL DEFAULT '',
+                    status TEXT DEFAULT 'pending',
+                    admin_note TEXT,
+                    created_at TIMESTAMP
+                )
+            """)
+        except Exception as ce:
+            print(f"[ADMIN FEEDBACK] CREATE TABLE skipped: {ce}", flush=True)
+
+        # Detect available columns so the SELECT works on legacy schemas
+        try:
+            cursor = conn.execute("PRAGMA table_info(user_feedback)")
+            existing_cols = {row["name"] for row in cursor.fetchall()}
+        except Exception as pe:
+            print(f"[ADMIN FEEDBACK] PRAGMA failed: {pe}", flush=True)
+            existing_cols = {"id", "user_id", "user_name", "feedback_type", "feature", "content", "status", "admin_note", "created_at"}
+
+        type_col = "feedback_type" if "feedback_type" in existing_cols else ("type" if "type" in existing_cols else None)
+        note_col = "admin_note" if "admin_note" in existing_cols else ("admin_notes" if "admin_notes" in existing_cols else None)
 
         conditions = []
         params: list = []
@@ -927,52 +942,73 @@ def list_feedback(
         if feature:
             conditions.append("feature = ?")
             params.append(feature)
-        if feedback_type:
-            conditions.append("feedback_type = ?")
+        if feedback_type and type_col:
+            conditions.append(f"{type_col} = ?")
             params.append(feedback_type)
 
         where_clause = ("WHERE " + " AND ".join(conditions)) if conditions else ""
 
-        cursor = conn.execute(f"""
+        type_select = f"COALESCE({type_col}, '') AS feedback_type" if type_col else "'' AS feedback_type"
+        note_select = f"COALESCE({note_col}, '') AS admin_note" if note_col else "'' AS admin_note"
+        user_name_select = "COALESCE(user_name, '') AS user_name" if "user_name" in existing_cols else "'' AS user_name"
+
+        sql = f"""
             SELECT
                 id,
                 user_id,
-                COALESCE(user_name, '') AS user_name,
-                COALESCE(feedback_type, '') AS feedback_type,
+                {user_name_select},
+                {type_select},
                 COALESCE(feature, '') AS feature,
                 COALESCE(content, '') AS content,
                 COALESCE(status, 'pending') AS status,
-                COALESCE(admin_note, '') AS admin_note,
+                {note_select},
                 created_at
             FROM user_feedback
             {where_clause}
             ORDER BY created_at DESC
             LIMIT ? OFFSET ?
-        """, (*params, limit, offset))
-        items = [dict(row) for row in cursor.fetchall()]
+        """
+        cursor = conn.execute(sql, tuple([*params, limit, offset]))
+        rows = cursor.fetchall()
+        items = []
+        for row in rows:
+            try:
+                items.append({k: row[k] for k in row.keys()})
+            except Exception:
+                items.append(dict(row))
 
-        cursor = conn.execute(f"SELECT COUNT(*) FROM user_feedback {where_clause}", params)
-        total = cursor.fetchone()[0]
+        cursor = conn.execute(f"SELECT COUNT(*) FROM user_feedback {where_clause}", tuple(params))
+        first = cursor.fetchone()
+        total = (first[0] if first is not None else 0) or 0
 
-        cursor = conn.execute("""
+        type_bug_sum = f"SUM(CASE WHEN COALESCE({type_col},'') = 'bug_report'  THEN 1 ELSE 0 END)" if type_col else "0"
+        type_sug_sum = f"SUM(CASE WHEN COALESCE({type_col},'') = 'suggestion'  THEN 1 ELSE 0 END)" if type_col else "0"
+
+        cursor = conn.execute(f"""
             SELECT
                 COUNT(*) as total,
-                SUM(CASE WHEN COALESCE(status,'pending') = 'pending'  THEN 1 ELSE 0 END) as pending,
-                SUM(CASE WHEN status = 'reviewed' THEN 1 ELSE 0 END) as reviewed,
-                SUM(CASE WHEN status = 'resolved' THEN 1 ELSE 0 END) as resolved,
-                SUM(CASE WHEN COALESCE(feedback_type,'') = 'bug_report'  THEN 1 ELSE 0 END) as bugs,
-                SUM(CASE WHEN COALESCE(feedback_type,'') = 'suggestion'  THEN 1 ELSE 0 END) as suggestions
+                COALESCE(SUM(CASE WHEN COALESCE(status,'pending') = 'pending'  THEN 1 ELSE 0 END), 0) as pending,
+                COALESCE(SUM(CASE WHEN status = 'reviewed' THEN 1 ELSE 0 END), 0) as reviewed,
+                COALESCE(SUM(CASE WHEN status = 'resolved' THEN 1 ELSE 0 END), 0) as resolved,
+                COALESCE({type_bug_sum}, 0) as bugs,
+                COALESCE({type_sug_sum}, 0) as suggestions
             FROM user_feedback
         """)
         row = cursor.fetchone()
-        stats = dict(row) if row else {"total": 0, "pending": 0, "reviewed": 0, "resolved": 0, "bugs": 0, "suggestions": 0}
+        if row is not None:
+            try:
+                stats = {k: (row[k] if row[k] is not None else 0) for k in row.keys()}
+            except Exception:
+                stats = {"total": 0, "pending": 0, "reviewed": 0, "resolved": 0, "bugs": 0, "suggestions": 0}
+        else:
+            stats = {"total": 0, "pending": 0, "reviewed": 0, "resolved": 0, "bugs": 0, "suggestions": 0}
 
-        conn.close()
+        print(f"[ADMIN FEEDBACK] returned {len(items)} items, total={total}, stats={stats}", flush=True)
         return {"items": items, "total": total, "stats": stats}
     except Exception as e:
-        if conn:
-            try: conn.close()
-            except: pass
+        import traceback
+        tb = traceback.format_exc()
+        print(f"[ADMIN FEEDBACK ERROR] {e}\n{tb}", flush=True)
         raise HTTPException(status_code=500, detail=f"Feedback list error: {str(e)}")
 
 
