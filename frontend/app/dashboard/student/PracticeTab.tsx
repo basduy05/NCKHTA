@@ -792,6 +792,7 @@ export default function PracticeTab({ API_URL, setShowCreditModal }: PracticeTab
 
   return (
     <div className="space-y-6">
+      <Confetti trigger={confettiTick} />
       {/* ── REVIEW MODE ──────────────────── */}
       {reviewExam ? (
         <div className="space-y-6 animate-in fade-in duration-300">
@@ -1354,7 +1355,7 @@ export default function PracticeTab({ API_URL, setShowCreditModal }: PracticeTab
               </div>
 
               <div className="pt-12 text-center">
-                 <button onClick={() => { setPractice(null); setSubmitted(false); setEvalResult(null); }} className="bg-slate-900 text-white px-12 py-5 rounded-[2rem] font-black text-lg shadow-xl">LUYỆN TẬP BÀI KHÁC</button>
+                 <Button onClick={() => { setPractice(null); setSubmitted(false); setEvalResult(null); }} intent="primary" size="lg">LUYỆN TẬP BÀI KHÁC</Button>
               </div>
             </div>
           ) : (
@@ -1367,8 +1368,8 @@ export default function PracticeTab({ API_URL, setShowCreditModal }: PracticeTab
                 <div className="text-7xl font-black mb-4">{score}/{practice?.questions?.length || 0}</div>
                 <p className="text-xl font-medium text-blue-100 mb-10 max-w-md mx-auto">Chúc mừng bạn đã hoàn thành bài luyện tập. Hãy tiếp tục để đạt kết quả cao hơn!</p>
                 <div className="flex flex-col md:flex-row justify-center gap-4">
-                  <button onClick={() => { setPractice(null); setSubmitted(false); setAnswers({}); }} className="bg-white text-indigo-600 px-12 py-5 rounded-[2rem] font-black text-lg shadow-xl hover:scale-105 transition-all">LUYỆN TẬP TIẾP</button>
-                  <button onClick={() => setShowHistory(true)} className="bg-indigo-500/30 text-white border border-white/20 px-10 py-5 rounded-[2rem] font-black text-lg">XEM LỊCH SỬ</button>
+                  <Button onClick={() => { setPractice(null); setSubmitted(false); setAnswers({}); }} intent="streak" size="lg">LUYỆN TẬP TIẾP</Button>
+                  <Button onClick={() => setShowHistory(true)} intent="ghost" size="lg">XEM LỊCH SỬ</Button>
                 </div>
               </div>
               <Sparkles className="absolute -right-20 -bottom-20 w-96 h-96 text-white/10" />
