@@ -92,18 +92,15 @@ function DashboardSidebar({ role, currentTab }: { role: string; currentTab: stri
 
   return (
     <aside className="hidden lg:flex flex-col w-[220px] shrink-0 bg-[var(--surface-1)] border-r border-[var(--line)] h-full">
-      {/* Logo */}
-      <div className="px-5 py-4 border-b border-[var(--line)] flex items-center gap-2.5">
-        <Link href="/" className="flex items-center gap-2 min-w-0">
-          <Image src="/logo.png" alt="iEdu" width={80} height={29} style={{ height: "auto" }} />
-          <span className="text-[10px] font-semibold text-[var(--ink-3)] bg-[var(--surface-3)] px-1.5 py-0.5 rounded-full shrink-0">
-            {roleLabel}
-          </span>
-        </Link>
+      {/* Role badge */}
+      <div className="px-4 pt-3 pb-2">
+        <span className="text-[10px] font-semibold text-[var(--ink-3)] uppercase tracking-wide">
+          {roleLabel}
+        </span>
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-2.5 py-3 space-y-0.5 overflow-y-auto">
+      <nav className="flex-1 px-2.5 pb-3 space-y-0.5 overflow-y-auto">
         {links.map((link) => {
           const isActive = link.id === currentTab;
           const Icon = link.icon;
