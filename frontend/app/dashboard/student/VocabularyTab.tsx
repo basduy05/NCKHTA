@@ -6,7 +6,6 @@ import {
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { useNotification } from "../../context/NotificationContext";
-import FeedbackButton from "../../components/FeedbackButton";
 import { Button, Card, Chip, Modal, Confetti, useSound } from "../../components/ui";
 
 interface VocabularyTabProps {
@@ -680,7 +679,6 @@ export default function VocabularyTab({ API_URL }: VocabularyTabProps) {
         )}
       </Modal>
 
-      <FeedbackButton feature="vocabulary" />
     </div>
   );
 }

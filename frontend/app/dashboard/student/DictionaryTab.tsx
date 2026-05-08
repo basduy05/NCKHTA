@@ -9,7 +9,6 @@ import { useChatContext } from "../../context/ChatContext";
 import {
   ALL_WORDS_DATABASE, getPosColor, POS_MAP
 } from "../../components/DictionaryData";
-import FeedbackButton from "../../components/FeedbackButton";
 
 interface DictionaryTabProps {
   API_URL: string;
@@ -567,7 +566,6 @@ export default function DictionaryTab({ API_URL }: DictionaryTabProps) {
         </div>
       )}
 
-      <FeedbackButton feature="dictionary" />
     </div>
   );
 }

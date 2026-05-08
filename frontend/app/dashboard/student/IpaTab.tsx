@@ -4,7 +4,6 @@ import {
   Volume2, Sparkles, Brain, CheckCircle2, X, Info
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
-import FeedbackButton from "../../components/FeedbackButton";
 import { Button, Card, Confetti, useSound } from "../../components/ui";
 
 const IPA_DATA = {
@@ -472,7 +471,6 @@ export default function IpaTab({ API_URL }: IpaTabProps) {
           </div>
       )}
 
-      <FeedbackButton feature="ipa" />
     </div>
   );
 }

@@ -4,7 +4,6 @@ import { Award, Mic, Trophy, Sparkles, CheckCircle2, X, Layers, Bookmark, Volume
 import { useAuth } from "../../context/AuthContext";
 import { useNotification } from "../../context/NotificationContext";
 import { MOCK_PRACTICE_TESTS } from "../../components/MockPracticeData";
-import FeedbackButton from "../../components/FeedbackButton";
 import { Button, Confetti, useSound } from "../../components/ui";
 
 interface PracticeTabProps {
@@ -1394,7 +1393,6 @@ export default function PracticeTab({ API_URL, setShowCreditModal }: PracticeTab
       </>
       )}
 
-      <FeedbackButton feature="practice" />
     </div>
   );
 }

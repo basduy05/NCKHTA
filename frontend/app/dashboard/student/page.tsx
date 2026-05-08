@@ -2,9 +2,8 @@
 import React, { useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useAuth } from "../../context/AuthContext";
-import { 
-  Trophy, Sparkles, AlertCircle 
-} from "lucide-react";
+import { Trophy, Sparkles, AlertCircle } from "lucide-react";
+import { PageHeader } from "../../components/ui";
 
 // Modularized Tab Components
 import OverviewTab from "./OverviewTab";
@@ -97,25 +96,23 @@ function StudentDashboardContent() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">{getTitle(activeTab)}</h1>
-          <p className="text-gray-400 text-sm mt-0.5">
-            Học sinh · <span className="text-gray-600 font-medium">{user?.name}</span>
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => refreshUser()}
-            className="flex items-center gap-1.5 bg-yellow-50 text-yellow-700 px-3.5 py-2 rounded-xl border border-yellow-100 font-semibold text-sm hover:bg-yellow-100 transition"
-          >
-            <Trophy size={14} className="text-yellow-500" /> {user?.points || 0} pts
-          </button>
-          <div className="flex items-center gap-1.5 bg-indigo-50 text-indigo-700 px-3.5 py-2 rounded-xl border border-indigo-100 font-semibold text-sm">
-            <Sparkles size={14} className="text-indigo-500" /> {user?.credits_ai || 0} credits
+      <PageHeader
+        title={getTitle(activeTab)}
+        description={<>Học sinh · <span className="font-medium text-slate-700">{user?.name}</span></>}
+        action={
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => refreshUser()}
+              className="flex items-center gap-1.5 bg-amber-50 text-amber-700 px-3 py-1.5 rounded-lg border border-amber-100 font-semibold text-xs hover:bg-amber-100 transition"
+            >
+              <Trophy size={13} className="text-amber-500" /> {user?.points || 0} pts
+            </button>
+            <div className="flex items-center gap-1.5 bg-blue-50 text-[var(--brand)] px-3 py-1.5 rounded-lg border border-blue-100 font-semibold text-xs">
+              <Sparkles size={13} /> {user?.credits_ai || 0} credits
+            </div>
           </div>
-        </div>
-      </div>
+        }
+      />
 
       {showCreditModal && (
         <div className="fixed inset-0 !mt-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4">

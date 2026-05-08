@@ -8,7 +8,6 @@ import {
 import { useAuth } from "../../context/AuthContext";
 import { ALL_WORDS_DATABASE, simulateSyllabify, WordDetail } from "../../components/DictionaryData";
 import { useNotification } from "../../context/NotificationContext";
-import FeedbackButton from "../../components/FeedbackButton";
 
 interface AIToolsTabProps {
   setShowCreditModal: (s: boolean) => void;
@@ -827,7 +826,6 @@ export default function AIToolsTab({ setShowCreditModal, API_URL }: AIToolsTabPr
         </div>
       )}
 
-      <FeedbackButton feature="ai-tools" />
     </div>
   );
 }

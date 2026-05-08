@@ -10,7 +10,6 @@ import {
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { useNotification } from "../../context/NotificationContext";
-import FeedbackButton from "../../components/FeedbackButton";
 import { Confetti, useSound } from "../../components/ui";
 
 interface GrammarTabProps {
@@ -689,7 +688,6 @@ export default function GrammarTab({ API_URL }: GrammarTabProps) {
         )}
       </div>
 
-      <FeedbackButton feature="grammar" />
 
       {/* ── Sticky Practice Bar ── */}
       {selectedRules.length > 0 && (

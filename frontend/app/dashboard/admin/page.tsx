@@ -4,6 +4,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { Users, Database, Plus, UploadCloud, FileSpreadsheet, Save, Edit, Trash2, GraduationCap, X, Check, Copy, BookOpen, BookText, Settings, RefreshCw, Mail, Eye, EyeOff, Sparkles, ClipboardList, Bold, Italic, Underline, Heading1, Heading2, List, ListOrdered, TrendingUp, Network, Activity, MessageCircleWarning, Bug, Lightbulb, CheckCircle, Clock, ClipboardPaste, ListChecks, Loader2, AlertCircle, CheckCircle2, ChevronUp, ChevronDown } from "lucide-react";
 import { useAuth } from "@/app/context/AuthContext";
 import { useNotification } from "@/app/context/NotificationContext";
+import { PageHeader } from "@/app/components/ui";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://iedu-ksk7.onrender.com";
 
@@ -35,22 +36,20 @@ function AdminDashboardContent() {
     return <div className="text-indigo-600 font-medium">Đang chuyển hướng...</div>;
   }
 
+  const getAdminTitle = (tab: string) => {
+    const m: Record<string, string> = {
+      overview: "Tổng quan hệ thống", users: "Quản lý Người dùng & GV",
+      vocab: "Kho Từ Vựng Graph", classes: "Quản lý Lớp Học",
+      lessons: "Quản lý Bài Học", assignments: "Quản lý Bài tập & Đề thi",
+      grammar: "Kho Ngữ Pháp (AI)", ai_monitoring: "Giám sát hiệu năng AI",
+      feedback: "Quản lý Góp ý & Lỗi", settings: "Cài đặt hệ thống",
+    };
+    return m[tab] ?? "Admin";
+  };
+
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">
-          {activeTab === 'overview' && 'Tổng quan hệ thống'}
-          {activeTab === 'users' && 'Quản lý Người dùng & GV'}
-          {activeTab === 'vocab' && 'Kho Từ Vựng Graph'}
-          {activeTab === 'classes' && 'Quản lý Lớp Học'}
-          {activeTab === 'lessons' && 'Quản lý Bài Học'}
-          {activeTab === 'assignments' && 'Quản lý Bài tập & Đề thi'}
-          {activeTab === 'grammar' && 'Kho Ngữ Pháp (AI)'}
-          {activeTab === 'ai_monitoring' && 'Giám sát hiệu năng AI'}
-          {activeTab === 'feedback' && 'Quản lý Góp ý & Lỗi'}
-          {activeTab === 'settings' && 'Cài đặt hệ thống'}
-        </h1>
-      </div>
+      <PageHeader title={getAdminTitle(activeTab)} description="Quản trị viên hệ thống" />
 
       {activeTab === 'overview' && <OverviewTab />}
       {activeTab === 'users' && <UsersTab />}

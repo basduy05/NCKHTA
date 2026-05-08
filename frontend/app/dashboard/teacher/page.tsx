@@ -17,6 +17,7 @@ import { GrammarTab } from "./GrammarTab";
 import { IpaTab } from "./IpaTab";
 import { PracticeTab } from "./PracticeTab";
 import { useNotification } from "../../context/NotificationContext";
+import { PageHeader } from "../../components/ui";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://iedu-ksk7.onrender.com";
 
@@ -114,29 +115,27 @@ function TeacherDashboardContent() {
     }
   };
 
+  const getTeacherTitle = (tab: string) => {
+    const m: Record<string, string> = {
+      overview: "Tổng quan", classes: "Lớp học của tôi", students: "Quản lý Học sinh",
+      lessons: "Quản lý Bài học", assignments: "Bài tập & Kiểm tra",
+      "ai-tools": "Công cụ AI", grammar: "Kho Ngữ Pháp",
+      practice: "Luyện thi IELTS/TOEIC", ipa: "Luyện phát âm IPA",
+    };
+    return m[tab] ?? "Dashboard";
+  };
+
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">
-            {activeTab === "overview" && "Tổng quan"}
-            {activeTab === "classes" && "Lớp học của tôi"}
-            {activeTab === "students" && "Quản lý Học sinh"}
-            {activeTab === "lessons" && "Quản lý Bài học"}
-            {activeTab === "assignments" && "Bài tập & Kiểm tra"}
-            {activeTab === "ai-tools" && "Công cụ AI"}
-            {activeTab === "grammar" && "Kho Ngữ Pháp"}
-            {activeTab === "practice" && "Luyện thi IELTS/TOEIC"}
-            {activeTab === "ipa" && "Luyện phát âm IPA"}
-          </h1>
-          <p className="text-gray-400 text-sm mt-0.5">
-            Giáo viên · <span className="text-gray-600 font-medium">{user?.name}</span>
-          </p>
-        </div>
-        <div className="flex items-center gap-2.5 bg-indigo-50 text-indigo-700 px-4 py-2 rounded-xl border border-indigo-100 font-semibold text-sm">
-          <Sparkles size={15} className="text-indigo-500" /> {user?.credits_ai || 0} AI Credits
-        </div>
-      </div>
+      <PageHeader
+        title={getTeacherTitle(activeTab)}
+        description={<>Giáo viên · <span className="font-medium text-slate-700">{user?.name}</span></>}
+        action={
+          <div className="flex items-center gap-1.5 bg-blue-50 text-[var(--brand)] px-3 py-1.5 rounded-lg border border-blue-100 font-semibold text-xs">
+            <Sparkles size={13} /> {user?.credits_ai || 0} AI Credits
+          </div>
+        }
+      />
 
       {showCreditModal && (
         <div className="fixed inset-0 !mt-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
