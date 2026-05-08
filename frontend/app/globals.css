@@ -49,6 +49,42 @@
   --duo-shadow-btn-streak: 0 4px 0 0 var(--duo-streak-dark);
   --duo-shadow-btn-info:   0 4px 0 0 var(--duo-info-dark);
   --duo-shadow-card:       0 2px 0 0 rgba(0,0,0,0.06);
+
+  /* =============================================================
+   * EDTECH-ACADEMIC TOKENS (Phiên A — chạy song song với --duo-*)
+   * App shell (layout, header, link, primary CTA app-level) dùng
+   * các token này. Quiz / semantic correct vẫn dùng --duo-*.
+   * =============================================================*/
+  --brand:           #2563EB;   /* blue-600 */
+  --brand-dark:      #1E40AF;   /* blue-800 */
+  --brand-soft:      #DBEAFE;   /* blue-100 */
+  --accent:          #10B981;   /* emerald-500 — progress, success secondary */
+  --accent-dark:     #047857;
+  --warn:            #F59E0B;   /* amber-500 — streak, attention */
+  --warn-dark:       #B45309;
+  --danger:          #EF4444;   /* red-500 — destructive */
+  --danger-dark:     #B91C1C;
+
+  --surface-1:       #FFFFFF;   /* card */
+  --surface-2:       #F8FAFC;   /* page bg (slate-50) */
+  --surface-3:       #F1F5F9;   /* hover bg (slate-100) */
+  --ink-1:           #0F172A;   /* slate-900 — primary text */
+  --ink-2:           #475569;   /* slate-600 — secondary */
+  --ink-3:           #94A3B8;   /* slate-400 — muted */
+  --line:            #E2E8F0;   /* slate-200 — borders */
+
+  /* Radius scale */
+  --r-sm:  8px;
+  --r-md:  12px;
+  --r-lg:  16px;
+  --r-xl:  20px;
+  --r-2xl: 28px;
+
+  /* Shadow scale (light, học thuật — không đa neon) */
+  --sh-xs: 0 1px 2px rgba(15,23,42,.05);
+  --sh-sm: 0 2px 6px rgba(15,23,42,.06);
+  --sh-md: 0 8px 24px rgba(15,23,42,.08);
+  --sh-lg: 0 16px 40px rgba(15,23,42,.12);
 }
 
 @layer components {
@@ -81,6 +117,8 @@
   .duo-btn--info     { background:var(--duo-info);     color:#fff; border-color:var(--duo-info-dark);     }
   .duo-btn--ghost    { background:#fff; color:var(--duo-ink); border-color:var(--duo-line); }
   .duo-btn--ghost:hover { background:var(--duo-bg); }
+  .duo-btn--brand    { background:var(--brand);     color:#fff; border-color:var(--brand-dark);     }
+  .duo-btn--brand:hover { background:var(--brand-dark); }
   .duo-btn--sm  { @apply text-sm px-4 py-2 rounded-xl border-b-[3px]; }
   .duo-btn--lg  { @apply text-lg px-8 py-4 rounded-2xl border-b-[5px]; }
 
@@ -118,6 +156,23 @@
   }
   .duo-banner--correct { background: var(--duo-correct-soft); color: var(--duo-correct-dark); }
   .duo-banner--wrong   { background: var(--duo-wrong-soft);   color: var(--duo-wrong-dark);   }
+
+  /* === EdTech primitive helpers === */
+  .app-card {
+    background: var(--surface-1);
+    border: 1px solid var(--line);
+    border-radius: var(--r-xl);
+    box-shadow: var(--sh-sm);
+  }
+  .app-card--hover { transition: box-shadow .15s ease, transform .15s ease; }
+  .app-card--hover:hover { box-shadow: var(--sh-md); transform: translateY(-1px); }
+
+  .skeleton {
+    background: linear-gradient(90deg, var(--surface-3) 0%, #e9eef5 50%, var(--surface-3) 100%);
+    background-size: 200% 100%;
+    animation: shimmer 1.4s ease-in-out infinite;
+    border-radius: var(--r-md);
+  }
 
   /* Progress bar (XP / quiz progress) */
   .duo-progress {

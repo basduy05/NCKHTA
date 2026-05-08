@@ -60,7 +60,7 @@ function playTone(spec: ToneSpec, startOffsetMs = 0) {
   const dur = spec.durationMs / 1000;
   const attack = (spec.attackMs ?? 8) / 1000;
   const release = (spec.releaseMs ?? 80) / 1000;
-  const peak = spec.gain ?? 0.18;
+  const peak = spec.gain ?? 0.12;
 
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
@@ -131,38 +131,38 @@ export function useSound(): SoundApi {
   if (!apiRef.current) {
     apiRef.current = {
       click: () =>
-        playTone({ freq: 600, durationMs: 60, type: "triangle", gain: 0.08 }),
+        playTone({ freq: 600, durationMs: 60, type: "triangle", gain: 0.05 }),
       correct: () =>
         playSequence([
-          { freq: 660, durationMs: 110, type: "triangle", gain: 0.18 },
-          { freq: 990, durationMs: 180, type: "triangle", gain: 0.2 },
+          { freq: 660, durationMs: 110, type: "triangle", gain: 0.12 },
+          { freq: 990, durationMs: 180, type: "triangle", gain: 0.13 },
         ]),
       wrong: () =>
         playSequence([
-          { freq: 220, durationMs: 130, type: "square", gain: 0.14 },
-          { freq: 165, durationMs: 200, type: "square", gain: 0.14 },
+          { freq: 220, durationMs: 130, type: "square", gain: 0.09 },
+          { freq: 165, durationMs: 200, type: "square", gain: 0.09 },
         ]),
       streak: () =>
         playSequence([
-          { freq: 880, durationMs: 90, type: "triangle", gain: 0.16 },
-          { freq: 1175, durationMs: 90, type: "triangle", gain: 0.16 },
-          { freq: 1568, durationMs: 160, type: "triangle", gain: 0.18 },
+          { freq: 880, durationMs: 90, type: "triangle", gain: 0.11 },
+          { freq: 1175, durationMs: 90, type: "triangle", gain: 0.11 },
+          { freq: 1568, durationMs: 160, type: "triangle", gain: 0.12 },
         ]),
       levelUp: () =>
         playSequence([
-          { freq: 523, durationMs: 110, type: "triangle", gain: 0.16 }, // C5
-          { freq: 659, durationMs: 110, type: "triangle", gain: 0.16 }, // E5
-          { freq: 784, durationMs: 110, type: "triangle", gain: 0.18 }, // G5
-          { freq: 1047, durationMs: 260, type: "triangle", gain: 0.2 }, // C6
+          { freq: 523, durationMs: 110, type: "triangle", gain: 0.11 }, // C5
+          { freq: 659, durationMs: 110, type: "triangle", gain: 0.11 }, // E5
+          { freq: 784, durationMs: 110, type: "triangle", gain: 0.12 }, // G5
+          { freq: 1047, durationMs: 260, type: "triangle", gain: 0.13 }, // C6
         ]),
       finish: () =>
         playSequence([
-          { freq: 784, durationMs: 100, type: "triangle", gain: 0.16 },
-          { freq: 988, durationMs: 100, type: "triangle", gain: 0.18 },
-          { freq: 1319, durationMs: 220, type: "triangle", gain: 0.2 },
+          { freq: 784, durationMs: 100, type: "triangle", gain: 0.11 },
+          { freq: 988, durationMs: 100, type: "triangle", gain: 0.12 },
+          { freq: 1319, durationMs: 220, type: "triangle", gain: 0.13 },
         ]),
       tick: () =>
-        playTone({ freq: 1200, durationMs: 30, type: "square", gain: 0.05 }),
+        playTone({ freq: 1200, durationMs: 30, type: "square", gain: 0.03 }),
       setMuted: (m: boolean) => {
         _muted = m;
         try {

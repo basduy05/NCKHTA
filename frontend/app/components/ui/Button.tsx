@@ -2,7 +2,7 @@
 import React from "react";
 import { useSound } from "./useSound";
 
-type Intent = "primary" | "correct" | "wrong" | "streak" | "info" | "ghost";
+type Intent = "primary" | "brand" | "correct" | "wrong" | "streak" | "info" | "ghost";
 type Size = "sm" | "md" | "lg";
 
 interface ButtonProps
@@ -19,6 +19,7 @@ interface ButtonProps
 
 const intentRing: Record<Intent, string> = {
   primary: "focus-visible:ring-green-300",
+  brand:   "focus-visible:ring-blue-300",
   correct: "focus-visible:ring-green-300",
   wrong:   "focus-visible:ring-red-300",
   streak:  "focus-visible:ring-amber-300",
