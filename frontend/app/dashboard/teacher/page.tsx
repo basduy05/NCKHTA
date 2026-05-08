@@ -17,7 +17,7 @@ import { GrammarTab } from "./GrammarTab";
 import { IpaTab } from "./IpaTab";
 import { PracticeTab } from "./PracticeTab";
 import { useNotification } from "../../context/NotificationContext";
-import { PageHeader } from "../../components/ui";
+import { Stat } from "../../components/ui";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://iedu-ksk7.onrender.com";
 
@@ -115,41 +115,22 @@ function TeacherDashboardContent() {
     }
   };
 
-  const getTeacherTitle = (tab: string) => {
-    const m: Record<string, string> = {
-      overview: "Tổng quan", classes: "Lớp học của tôi", students: "Quản lý Học sinh",
-      lessons: "Quản lý Bài học", assignments: "Bài tập & Kiểm tra",
-      "ai-tools": "Công cụ AI", grammar: "Kho Ngữ Pháp",
-      practice: "Luyện thi IELTS/TOEIC", ipa: "Luyện phát âm IPA",
-    };
-    return m[tab] ?? "Dashboard";
-  };
-
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title={getTeacherTitle(activeTab)}
-        description={<>Giáo viên · <span className="font-medium text-slate-700">{user?.name}</span></>}
-        action={
-          <div className="flex items-center gap-1.5 bg-blue-50 text-[var(--brand)] px-3 py-1.5 rounded-lg border border-blue-100 font-semibold text-xs">
-            <Sparkles size={13} /> {user?.credits_ai || 0} AI Credits
-          </div>
-        }
-      />
+    <div className="space-y-5">
 
       {showCreditModal && (
         <div className="fixed inset-0 !mt-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-300 border border-gray-100">
-            <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
-              <AlertCircle size={40} className="text-red-500" />
+          <div className="app-card p-8 max-w-md w-full animate-in zoom-in-95 duration-300">
+            <div className="w-14 h-14 bg-red-50 rounded-2xl flex items-center justify-center mx-auto mb-5">
+              <AlertCircle size={32} className="text-red-500" />
             </div>
-            <h3 className="text-2xl font-black text-gray-900 text-center mb-2">Hết lượt sử dụng AI!</h3>
-            <p className="text-gray-600 text-center mb-8">
-              Bạn đã sử dụng hết số credits AI trong ngày. Vui lòng quay lại vào ngày mai hoặc nâng cấp gói dịch vụ.
+            <h3 className="text-xl font-bold text-[var(--ink-1)] text-center mb-2">Hết lượt sử dụng AI!</h3>
+            <p className="text-[var(--ink-3)] text-sm text-center mb-6">
+              Bạn đã sử dụng hết số credits AI trong ngày. Vui lòng quay lại vào ngày mai hoặc liên hệ quản trị viên.
             </p>
-            <button 
+            <button
               onClick={() => setShowCreditModal(false)}
-              className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-bold text-lg shadow-xl shadow-indigo-200 hover:bg-indigo-700 transition"
+              className="w-full bg-[var(--brand)] text-white py-3 rounded-xl font-semibold hover:bg-[var(--brand-dark)] transition"
             >
               Đã hiểu
             </button>
@@ -160,46 +141,43 @@ function TeacherDashboardContent() {
       {/* Word Lookup Modal */}
       {selectedWordInfo && (
         <div className="fixed inset-0 !mt-0 z-[110] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden border border-indigo-50 transform animate-in zoom-in-95 duration-200">
-            <div className="bg-gradient-to-r from-indigo-600 to-purple-600 p-6 text-white relative">
-              <button 
+          <div className="app-card max-w-md w-full overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="bg-[var(--brand)] px-6 py-5 text-white relative">
+              <button
                 onClick={() => setSelectedWordInfo(null)}
-                className="absolute top-4 right-4 bg-white/20 hover:bg-white/30 p-1.5 rounded-full transition"
+                className="absolute top-4 right-4 bg-white/20 hover:bg-white/30 p-1.5 rounded-lg transition"
               >
-                <X size={18} />
+                <X size={16} />
               </button>
-              <h3 className="text-2xl font-black mb-1">{selectedWordInfo.word}</h3>
+              <h3 className="text-xl font-bold mb-1">{selectedWordInfo.word}</h3>
               <div className="flex items-center gap-3 mt-2">
-                <button onClick={() => speak(selectedWordInfo.word)} className="flex items-center gap-1.5 bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-lg transition">
-                  <Volume2 size={16} /> <span className="font-mono text-sm">{selectedWordInfo.phonetic}</span>
+                <button onClick={() => speak(selectedWordInfo.word)} className="flex items-center gap-1.5 bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-lg transition text-sm">
+                  <Volume2 size={14} /> <span className="font-mono">{selectedWordInfo.phonetic}</span>
                 </button>
-                <span className="bg-white/20 px-2.5 py-1 rounded-lg text-xs font-bold uppercase">{selectedWordInfo.level || 'N/A'}</span>
+                <span className="bg-white/20 px-2.5 py-1 rounded-lg text-xs font-semibold uppercase">{selectedWordInfo.level || 'N/A'}</span>
               </div>
             </div>
-            
-            <div className="p-6 space-y-4">
+
+            <div className="p-5 space-y-3">
               <div>
-                <span className="text-xs font-bold text-indigo-400 uppercase tracking-widest block mb-1">Loại từ & Nghĩa</span>
-                <p className="text-gray-900 font-bold text-lg leading-tight">
-                  <span className="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded text-sm mr-2">{selectedWordInfo.type}</span> 
+                <span className="text-[10px] font-semibold text-[var(--ink-3)] uppercase tracking-wide block mb-1">Loại từ & Nghĩa</span>
+                <p className="text-[var(--ink-1)] font-semibold text-base leading-tight">
+                  <span className="bg-[var(--brand-soft)] text-[var(--brand)] px-2 py-0.5 rounded text-xs mr-2">{selectedWordInfo.type}</span>
                   {selectedWordInfo.translation}
                 </p>
               </div>
-
               <div>
-                <span className="text-xs font-bold text-indigo-400 uppercase tracking-widest block mb-1">Định nghĩa tiếng Anh</span>
-                <p className="text-gray-700 text-sm italic leading-relaxed">"{selectedWordInfo.engMeaning}"</p>
+                <span className="text-[10px] font-semibold text-[var(--ink-3)] uppercase tracking-wide block mb-1">Định nghĩa tiếng Anh</span>
+                <p className="text-[var(--ink-2)] text-sm italic leading-relaxed">"{selectedWordInfo.engMeaning}"</p>
               </div>
-
               <div>
-                <span className="text-xs font-bold text-indigo-400 uppercase tracking-widest block mb-1">Ví dụ</span>
-                <p className="text-gray-700 text-sm leading-relaxed">{selectedWordInfo.example}</p>
+                <span className="text-[10px] font-semibold text-[var(--ink-3)] uppercase tracking-wide block mb-1">Ví dụ</span>
+                <p className="text-[var(--ink-2)] text-sm leading-relaxed">{selectedWordInfo.example}</p>
               </div>
-
-              <div className="pt-2">
+              <div className="pt-1">
                 <button
                   onClick={() => setSelectedWordInfo(null)}
-                  className="w-full py-3 bg-gray-50 text-gray-700 font-bold rounded-xl border border-gray-100 hover:bg-gray-100 transition"
+                  className="w-full py-2.5 bg-[var(--surface-3)] text-[var(--ink-2)] font-semibold rounded-xl text-sm hover:bg-[var(--line)] transition"
                 >
                   Đóng
                 </button>
@@ -250,27 +228,18 @@ function OverviewTab() {
   ];
 
   return (
-    <div className="space-y-6">
-      <div className="bg-gradient-to-br from-indigo-600 to-purple-600 rounded-2xl p-8 text-white relative overflow-hidden">
-        <div className="absolute inset-0 opacity-10">
-          <div className="absolute top-0 right-0 w-56 h-56 bg-white rounded-full -mr-16 -mt-16" />
-        </div>
-        <div className="relative z-10">
-          <p className="text-indigo-200 text-sm font-medium mb-1">Xin chào trở lại</p>
-          <h2 className="text-2xl font-bold mb-1">{stats.teacher_name || "Giáo viên"} 👋</h2>
-          <p className="text-indigo-100">Chào mừng bạn quay trở lại hệ thống iEdu.</p>
-        </div>
+    <div className="space-y-4">
+      <div className="bg-[var(--brand)] rounded-[var(--r-xl)] px-6 py-5 text-white">
+        <p className="text-blue-100 text-xs font-medium mb-1">Xin chào trở lại</p>
+        <h2 className="text-xl font-bold">{stats.teacher_name || "Giáo viên"} 👋</h2>
+        <p className="text-blue-100 text-sm mt-0.5">Chào mừng bạn quay trở lại hệ thống iEdu.</p>
       </div>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {cards.map((c, i) => (
-          <div key={i} className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-all">
-            <div className={`w-10 h-10 rounded-xl ${c.bg} flex items-center justify-center mb-4`}>
-              <c.icon className={c.color} size={19} />
-            </div>
-            <p className="text-2xl font-bold text-gray-900">{loading ? "—" : c.value}</p>
-            <p className="text-sm text-gray-500 mt-0.5">{c.label}</p>
-          </div>
-        ))}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {cards.map((c, i) => {
+          const Icon = c.icon;
+          const tones = ["neutral", "brand", "warn", "accent"] as const;
+          return <Stat key={i} label={c.label} value={loading ? "—" : c.value} icon={<Icon size={18} />} tone={tones[i]} />;
+        })}
       </div>
     </div>
   );
@@ -344,22 +313,22 @@ function ClassesTab() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-black text-gray-900">Lớp học của tôi</h2>
+          <h2 className="text-2xl font-semibold text-gray-900">Lớp học của tôi</h2>
           <p className="text-gray-400 font-medium mt-1">{classes.length} lớp đang quản lý</p>
         </div>
         <button onClick={() => { setShowForm(true); setEditId(null); setFormName(""); }}
-          className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-indigo-600 text-white hover:bg-indigo-700 font-black shadow-lg shadow-indigo-200 transition-all active:scale-95">
+          className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-[var(--brand)] text-white hover:bg-[var(--brand-dark)] font-semibold shadow-lg shadow-blue-200 transition-all active:scale-95">
           <Plus size={20} /> Tạo lớp mới
         </button>
       </div>
 
       {showForm && (
         <div className="bg-white p-8 rounded-3xl border border-gray-100 shadow-xl animate-in slide-in-from-top-4 duration-300">
-          <h3 className="font-black text-xl text-gray-900 mb-6">{editId ? "Sửa lớp học" : "Tạo lớp học mới"}</h3>
+          <h3 className="font-semibold text-xl text-gray-900 mb-6">{editId ? "Sửa lớp học" : "Tạo lớp học mới"}</h3>
           <div className="flex gap-3">
             <input value={formName} onChange={e => setFormName(e.target.value)} placeholder="Tên lớp học (ví dụ: Lớp Anh Văn A1 — 2024)"
               className="flex-1 border-2 border-gray-100 focus:border-indigo-400 rounded-2xl p-4 outline-none font-bold text-gray-700 transition-all shadow-sm" />
-            <button onClick={handleSave} className="px-6 py-3 bg-indigo-600 text-white rounded-2xl hover:bg-indigo-700 font-black flex items-center gap-2 shadow-sm transition-all active:scale-95">
+            <button onClick={handleSave} className="px-6 py-3 bg-[var(--brand)] text-white rounded-2xl hover:bg-[var(--brand-dark)] font-semibold flex items-center gap-2 shadow-sm transition-all active:scale-95">
               <Check size={18} /> Lưu
             </button>
             <button onClick={() => setShowForm(false)} className="px-4 py-3 bg-gray-100 text-gray-600 rounded-2xl hover:bg-gray-200 transition-all">
@@ -378,14 +347,14 @@ function ClassesTab() {
           <div className="bg-indigo-50 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4">
             <GraduationCap size={32} className="text-indigo-400" />
           </div>
-          <h3 className="font-black text-gray-400 text-xl">Chưa có lớp học nào</h3>
+          <h3 className="font-semibold text-gray-400 text-xl">Chưa có lớp học nào</h3>
           <p className="text-gray-400 mt-2 font-medium">Nhấn "Tạo lớp mới" để bắt đầu.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {classes.map((c: any, idx: number) => {
             const colors = [
-              { bg: "from-indigo-500 to-purple-600", light: "bg-indigo-50", text: "text-indigo-600" },
+              { bg: "from-indigo-500 to-purple-600", light: "bg-indigo-50", text: "text-[var(--brand)]" },
               { bg: "from-blue-500 to-cyan-600", light: "bg-blue-50", text: "text-blue-600" },
               { bg: "from-emerald-500 to-teal-600", light: "bg-emerald-50", text: "text-emerald-600" },
               { bg: "from-orange-500 to-amber-600", light: "bg-orange-50", text: "text-orange-600" },
@@ -408,7 +377,7 @@ function ClassesTab() {
                         className="p-2 bg-white/20 hover:bg-red-400/50 rounded-xl transition"><Trash2 size={15} /></button>
                     </div>
                   </div>
-                  <h3 className="font-black text-xl mt-4 leading-tight">{c.name}</h3>
+                  <h3 className="font-semibold text-xl mt-4 leading-tight">{c.name}</h3>
                   <p className="text-white/70 text-sm font-medium mt-1">GV: {c.teacher_name || "Tôi"}</p>
                 </div>
                 <div className="p-5">
@@ -418,11 +387,11 @@ function ClassesTab() {
                         <Users size={16} className={color.text} />
                       </div>
                       <div>
-                        <p className="font-black text-gray-900 text-lg">{c.enrolled_count || 0}</p>
+                        <p className="font-semibold text-gray-900 text-lg">{c.enrolled_count || 0}</p>
                         <p className="text-xs text-gray-400 font-bold -mt-0.5">Học sinh</p>
                       </div>
                     </div>
-                    <span className="text-xs font-black text-gray-300 uppercase tracking-widest">
+                    <span className="text-xs font-semibold text-gray-300 uppercase tracking-widest">
                       {c.created_at ? new Date(c.created_at).toLocaleDateString("vi-VN") : "—"}
                     </span>
                   </div>
@@ -545,7 +514,7 @@ function StudentsTab() {
           </select>
         </div>
         <button onClick={openEnrollModal}
-          className="ml-auto flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 font-semibold text-sm transition">
+          className="ml-auto flex items-center gap-2 px-4 py-2 bg-[var(--brand)] text-white rounded-xl hover:bg-[var(--brand-dark)] font-semibold text-sm transition">
           <UserPlus size={16} /> Thêm học sinh
         </button>
       </div>
@@ -576,7 +545,7 @@ function StudentsTab() {
                     </div>
                   </div>
                   <button onClick={() => handleEnroll(s.id)}
-                    className="px-3 py-1.5 bg-indigo-600 text-white text-xs rounded-lg hover:bg-indigo-700 flex items-center gap-1 font-semibold transition">
+                    className="px-3 py-1.5 bg-[var(--brand)] text-white text-xs rounded-lg hover:bg-[var(--brand-dark)] flex items-center gap-1 font-semibold transition">
                     <UserPlus size={13} /> Thêm
                   </button>
                 </div>
@@ -590,7 +559,7 @@ function StudentsTab() {
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
         <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
           <h3 className="font-semibold text-gray-900 flex items-center gap-2">
-            <Users size={16} className="text-indigo-600" /> Danh sách học sinh
+            <Users size={16} className="text-[var(--brand)]" /> Danh sách học sinh
           </h3>
           <span className="text-sm text-gray-400 font-medium">{students.length} học sinh</span>
         </div>
@@ -731,7 +700,7 @@ function LessonsTab({ handleTextareaDoubleClick }: { handleTextareaDoubleClick: 
           </select>
         </div>
         <button onClick={() => { setShowForm(true); setEditId(null); setFormTitle(""); setFormContent(""); setFormFile(null); }}
-          className="ml-auto flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 font-semibold text-sm transition">
+          className="ml-auto flex items-center gap-2 px-4 py-2 bg-[var(--brand)] text-white rounded-xl hover:bg-[var(--brand-dark)] font-semibold text-sm transition">
           <Plus size={16} /> Thêm bài học
         </button>
       </div>
@@ -763,7 +732,7 @@ function LessonsTab({ handleTextareaDoubleClick }: { handleTextareaDoubleClick: 
                 <Upload size={15} /> {formFile ? formFile.name : "Đính kèm file"}
                 <input type="file" className="hidden" onChange={e => setFormFile(e.target.files?.[0] || null)} />
               </label>
-              <button onClick={handleSave} className="ml-auto px-6 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 font-semibold text-sm flex items-center gap-1.5 transition">
+              <button onClick={handleSave} className="ml-auto px-6 py-2 bg-[var(--brand)] text-white rounded-xl hover:bg-[var(--brand-dark)] font-semibold text-sm flex items-center gap-1.5 transition">
                 <Check size={15} /> Lưu bài học
               </button>
             </div>
@@ -774,7 +743,7 @@ function LessonsTab({ handleTextareaDoubleClick }: { handleTextareaDoubleClick: 
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
         <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
           <h3 className="font-semibold text-gray-900 flex items-center gap-2">
-            <BookOpen size={16} className="text-indigo-600" /> Danh sách bài học
+            <BookOpen size={16} className="text-[var(--brand)]" /> Danh sách bài học
           </h3>
           <span className="text-sm text-gray-400 font-medium">{lessons.length} bài học</span>
         </div>
@@ -788,13 +757,13 @@ function LessonsTab({ handleTextareaDoubleClick }: { handleTextareaDoubleClick: 
             {lessons.map((l: any) => (
               <div key={l.id} className="flex items-center gap-4 px-5 py-4 hover:bg-gray-50 transition group">
                 <div className="p-2 bg-indigo-50 rounded-xl flex-shrink-0">
-                  <BookOpen size={16} className="text-indigo-600" />
+                  <BookOpen size={16} className="text-[var(--brand)]" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-gray-900 text-sm">{l.title}</p>
                   {l.content && <p className="text-xs text-gray-400 line-clamp-1 mt-0.5">{l.content}</p>}
                   {l.file_name && (
-                    <span className="text-xs text-indigo-600 flex items-center gap-1 mt-1">
+                    <span className="text-xs text-[var(--brand)] flex items-center gap-1 mt-1">
                       <FileText size={11} /> {l.file_name}
                     </span>
                   )}
@@ -994,14 +963,14 @@ function AssignmentsTab({ handleTextareaDoubleClick }: { handleTextareaDoubleCli
       {/* Header */}
       <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
         <div className="flex items-center gap-4">
-          <label className="font-black text-gray-700">Lớp:</label>
+          <label className="font-semibold text-gray-700">Lớp:</label>
           <select value={selectedClass || ""} onChange={e => setSelectedClass(Number(e.target.value))}
             className="border-2 border-gray-100 focus:border-indigo-400 rounded-2xl px-5 py-3 outline-none font-bold text-gray-700 min-w-[220px] transition-all">
             {classes.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         </div>
         <button onClick={() => { setShowForm(true); setFormTitle(""); setFormDesc(""); setFormDue(""); setFormType("quiz"); setFormQuizText(""); setGeneratedQuiz([]); }}
-          className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-2xl hover:bg-indigo-700 font-black shadow-lg shadow-indigo-200 transition-all active:scale-95">
+          className="flex items-center gap-2 px-6 py-3 bg-[var(--brand)] text-white rounded-2xl hover:bg-[var(--brand-dark)] font-semibold shadow-lg shadow-blue-200 transition-all active:scale-95">
           <Plus size={20} /> Tạo bài tập mới
         </button>
       </div>
@@ -1009,20 +978,20 @@ function AssignmentsTab({ handleTextareaDoubleClick }: { handleTextareaDoubleCli
       {showForm && (
         <div className="bg-white p-8 rounded-3xl border border-gray-100 shadow-xl space-y-6 animate-in slide-in-from-top-4 duration-300">
           <div className="flex justify-between items-center">
-            <h3 className="font-black text-xl text-gray-900">Tạo bài tập mới</h3>
+            <h3 className="font-semibold text-xl text-gray-900">Tạo bài tập mới</h3>
             <button onClick={() => setShowForm(false)} className="p-2 text-gray-400 hover:text-gray-900 hover:bg-gray-100 rounded-xl transition"><X size={20} /></button>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <div className="md:col-span-2">
-              <label className="text-xs font-black text-gray-400 uppercase tracking-widest mb-2 block">Tiêu đề bài tập</label>
+              <label className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-2 block">Tiêu đề bài tập</label>
               <input value={formTitle} onChange={e => setFormTitle(e.target.value)} placeholder="VD: Grammar Quiz - Unit 5: Present Perfect"
                 className="w-full border-2 border-gray-100 focus:border-indigo-400 rounded-2xl px-5 py-4 outline-none font-bold text-gray-700 transition-all" />
             </div>
             <div>
-              <label className="text-xs font-black text-gray-400 uppercase tracking-widest mb-2 block">Loại bài tập</label>
+              <label className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-2 block">Loại bài tập</label>
               <select value={formType} onChange={e => setFormType(e.target.value)}
-                className="w-full border-2 border-gray-100 focus:border-indigo-400 rounded-2xl px-5 py-4 outline-none font-black text-gray-700 transition-all">
+                className="w-full border-2 border-gray-100 focus:border-indigo-400 rounded-2xl px-5 py-4 outline-none font-semibold text-gray-700 transition-all">
                 <option value="quiz">Quiz (Trắc nghiệm)</option>
                 <option value="reading">Reading (Đọc hiểu)</option>
                 <option value="writing">Writing (Viết bài)</option>
@@ -1030,12 +999,12 @@ function AssignmentsTab({ handleTextareaDoubleClick }: { handleTextareaDoubleCli
               </select>
             </div>
             <div>
-              <label className="text-xs font-black text-gray-400 uppercase tracking-widest mb-2 block">Hạn nộp bài</label>
+              <label className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-2 block">Hạn nộp bài</label>
               <input type="date" value={formDue} onChange={e => setFormDue(e.target.value)}
                 className="w-full border-2 border-gray-100 focus:border-indigo-400 rounded-2xl px-5 py-4 outline-none font-bold text-gray-700 transition-all" />
             </div>
             <div className="md:col-span-2">
-              <label className="text-xs font-black text-gray-400 uppercase tracking-widest mb-2 block">Mô tả (tuỳ chọn)</label>
+              <label className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-2 block">Mô tả (tuỳ chọn)</label>
               <textarea value={formDesc} onChange={e => setFormDesc(e.target.value)} onDoubleClick={handleTextareaDoubleClick}
                 placeholder="Hướng dẫn làm bài..." rows={2}
                 className="w-full border-2 border-gray-100 focus:border-indigo-400 rounded-2xl px-5 py-4 outline-none font-medium text-gray-700 transition-all resize-none" />
@@ -1044,12 +1013,12 @@ function AssignmentsTab({ handleTextareaDoubleClick }: { handleTextareaDoubleCli
 
           {formType === "quiz" && (
             <div className="bg-gradient-to-r from-purple-50 to-indigo-50 p-6 rounded-2xl border border-indigo-100">
-              <h4 className="font-black text-indigo-700 mb-4 flex items-center gap-2 text-lg"><Sparkles size={20} /> Tạo Quiz bằng AI</h4>
+              <h4 className="font-semibold text-indigo-700 mb-4 flex items-center gap-2 text-lg"><Sparkles size={20} /> Tạo Quiz bằng AI</h4>
               <textarea value={formQuizText} onChange={e => setFormQuizText(e.target.value)} onDoubleClick={handleTextareaDoubleClick}
                 placeholder="Dán đoạn văn tiếng Anh vào đây, AI sẽ tự động tạo câu hỏi trắc nghiệm..." rows={4}
                 className="w-full border-2 border-indigo-100 focus:border-indigo-400 rounded-2xl px-5 py-4 outline-none font-medium text-gray-700 transition-all resize-none bg-white" />
               <button onClick={handleGenerateQuiz} disabled={generating}
-                className="mt-4 px-6 py-3 bg-indigo-600 text-white rounded-2xl hover:bg-indigo-700 font-black flex items-center gap-2 disabled:opacity-50 shadow-sm transition-all active:scale-95">
+                className="mt-4 px-6 py-3 bg-[var(--brand)] text-white rounded-2xl hover:bg-[var(--brand-dark)] font-semibold flex items-center gap-2 disabled:opacity-50 shadow-sm transition-all active:scale-95">
                 <Brain size={18} /> {generating ? "Đang tạo..." : "Tạo Quiz với AI"}
               </button>
             </div>
@@ -1057,9 +1026,9 @@ function AssignmentsTab({ handleTextareaDoubleClick }: { handleTextareaDoubleCli
 
           {formType === "reading" && (
             <div className="bg-gradient-to-r from-blue-50 to-cyan-50 p-6 rounded-2xl border border-blue-100">
-              <h4 className="font-black text-blue-700 mb-4 flex items-center gap-2 text-lg"><BookOpen size={20} /> Reading từ News API</h4>
+              <h4 className="font-semibold text-blue-700 mb-4 flex items-center gap-2 text-lg"><BookOpen size={20} /> Reading từ News API</h4>
               <button onClick={fetchNewsTopics} disabled={newsLoading}
-                className="px-5 py-3 bg-white text-blue-600 border-2 border-blue-200 rounded-2xl text-sm font-black hover:bg-blue-50 disabled:opacity-50 transition-all active:scale-95">
+                className="px-5 py-3 bg-white text-blue-600 border-2 border-blue-200 rounded-2xl text-sm font-semibold hover:bg-blue-50 disabled:opacity-50 transition-all active:scale-95">
                 {newsLoading ? "Đang tải..." : "Lấy tin tức mới (The Guardian)"}
               </button>
               {newsTopics.length > 0 && (
@@ -1067,7 +1036,7 @@ function AssignmentsTab({ handleTextareaDoubleClick }: { handleTextareaDoubleCli
                   {newsTopics.map((news, idx) => (
                     <div key={idx} onClick={() => setSelectedNews(news)}
                       className={`p-4 border-2 rounded-2xl cursor-pointer text-sm transition-all ${selectedNews?.title === news.title ? "bg-blue-100 border-blue-500" : "bg-white border-blue-100 hover:border-blue-300"}`}>
-                      <p className="font-black text-gray-900">{news.title}</p>
+                      <p className="font-semibold text-gray-900">{news.title}</p>
                       <p className="text-xs text-gray-500 line-clamp-1 mt-1">{news.content}</p>
                     </div>
                   ))}
@@ -1075,7 +1044,7 @@ function AssignmentsTab({ handleTextareaDoubleClick }: { handleTextareaDoubleCli
               )}
               {selectedNews && (
                 <button onClick={handleGenerateReading} disabled={generating}
-                  className="mt-4 px-6 py-3 bg-blue-600 text-white rounded-2xl hover:bg-blue-700 font-black flex items-center gap-2 disabled:opacity-50 shadow-sm transition-all active:scale-95">
+                  className="mt-4 px-6 py-3 bg-blue-600 text-white rounded-2xl hover:bg-blue-700 font-semibold flex items-center gap-2 disabled:opacity-50 shadow-sm transition-all active:scale-95">
                   <Brain size={18} /> {generating ? "Đang tạo bài Reading..." : "Tạo bài Reading test"}
                 </button>
               )}
@@ -1084,26 +1053,26 @@ function AssignmentsTab({ handleTextareaDoubleClick }: { handleTextareaDoubleCli
 
           {generatedQuiz.length > 0 && (
             <div className="bg-green-50 p-6 border border-green-100 rounded-2xl">
-              <p className="font-black text-green-800 mb-4 flex items-center gap-2">
+              <p className="font-semibold text-green-800 mb-4 flex items-center gap-2">
                 <CheckCircle2 size={20} /> Đã tạo {generatedQuiz.length} câu hỏi
               </p>
               <div className="space-y-3 max-h-60 overflow-y-auto">
                 {generatedQuiz.map((q: any, i: number) => (
                   <div key={i} className="bg-white p-4 rounded-2xl text-sm shadow-sm border border-gray-100">
-                    {q.type && <span className="inline-block px-2.5 py-1 bg-purple-50 text-purple-700 rounded-full text-[10px] mb-2 font-black uppercase">{q.type}</span>}
+                    {q.type && <span className="inline-block px-2.5 py-1 bg-purple-50 text-purple-700 rounded-full text-[10px] mb-2 font-semibold uppercase">{q.type}</span>}
                     <p className="font-bold text-gray-900">{i + 1}. {q.question || q.q}</p>
                     <div className="ml-4 mt-2 space-y-1 text-gray-600">
                       {(q.options || []).map((opt: string, j: number) => {
                         const ans = q.correct_answer ?? q.ans;
                         const isCorrect = (typeof ans === "number" && j === ans) || (typeof ans === "string" && opt === ans);
                         return (
-                          <p key={j} className={isCorrect ? "text-green-700 font-black flex items-center gap-1.5" : ""}>
+                          <p key={j} className={isCorrect ? "text-green-700 font-semibold flex items-center gap-1.5" : ""}>
                             {isCorrect && <CheckCircle2 size={13} />} {String.fromCharCode(65 + j)}. {opt}
                           </p>
                         );
                       })}
                     </div>
-                    {q.explanation && <p className="text-xs text-indigo-600 mt-2 italic bg-indigo-50 p-2 rounded-xl">Giải thích: {q.explanation}</p>}
+                    {q.explanation && <p className="text-xs text-[var(--brand)] mt-2 italic bg-indigo-50 p-2 rounded-xl">Giải thích: {q.explanation}</p>}
                   </div>
                 ))}
               </div>
@@ -1111,9 +1080,9 @@ function AssignmentsTab({ handleTextareaDoubleClick }: { handleTextareaDoubleCli
           )}
 
           <div className="flex justify-end gap-3 pt-2">
-            <button onClick={() => setShowForm(false)} className="px-6 py-3 font-black text-gray-400 hover:text-gray-900 transition">Hủy</button>
+            <button onClick={() => setShowForm(false)} className="px-6 py-3 font-semibold text-gray-400 hover:text-gray-900 transition">Hủy</button>
             <button onClick={handleSaveAssignment}
-              className="px-8 py-3 bg-green-600 text-white rounded-2xl hover:bg-green-700 font-black flex items-center gap-2 shadow-sm transition-all active:scale-95">
+              className="px-8 py-3 bg-green-600 text-white rounded-2xl hover:bg-green-700 font-semibold flex items-center gap-2 shadow-sm transition-all active:scale-95">
               <Check size={18} /> Lưu bài tập
             </button>
           </div>
@@ -1127,7 +1096,7 @@ function AssignmentsTab({ handleTextareaDoubleClick }: { handleTextareaDoubleCli
             <div className="bg-indigo-50 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4">
               <ClipboardList size={32} className="text-indigo-400" />
             </div>
-            <h3 className="font-black text-gray-400 text-xl">Chưa có bài tập nào</h3>
+            <h3 className="font-semibold text-gray-400 text-xl">Chưa có bài tập nào</h3>
             <p className="text-gray-400 mt-2 font-medium">Nhấn "Tạo bài tập mới" để bắt đầu.</p>
           </div>
         ) : assignments.map((a: any) => {
@@ -1142,17 +1111,17 @@ function AssignmentsTab({ handleTextareaDoubleClick }: { handleTextareaDoubleCli
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex flex-wrap items-center gap-2 mb-1">
-                      <span className={`text-[10px] font-black px-2.5 py-1 rounded-full border uppercase ${typeConf.bg} ${typeConf.color}`}>{typeConf.label}</span>
+                      <span className={`text-[10px] font-semibold px-2.5 py-1 rounded-full border uppercase ${typeConf.bg} ${typeConf.color}`}>{typeConf.label}</span>
                       {a.due_date && (
-                        <span className={`text-[10px] font-black px-2.5 py-1 rounded-full border ${isOverdue ? "bg-red-50 text-red-600 border-red-100" : "bg-gray-50 text-gray-500 border-gray-100"}`}>
+                        <span className={`text-[10px] font-semibold px-2.5 py-1 rounded-full border ${isOverdue ? "bg-red-50 text-red-600 border-red-100" : "bg-gray-50 text-gray-500 border-gray-100"}`}>
                           Hạn: {new Date(a.due_date).toLocaleDateString("vi-VN")}
                         </span>
                       )}
                     </div>
-                    <h4 className="font-black text-gray-900 text-lg leading-tight">{a.title}</h4>
+                    <h4 className="font-semibold text-gray-900 text-lg leading-tight">{a.title}</h4>
                     {a.description && <p className="text-sm text-gray-500 mt-1 line-clamp-1">{a.description}</p>}
                     <div className="flex items-center gap-4 mt-3">
-                      <span className="text-sm font-black text-indigo-600 flex items-center gap-1.5">
+                      <span className="text-sm font-semibold text-[var(--brand)] flex items-center gap-1.5">
                         <Users size={14} /> {a.submissions || 0} bài nộp
                       </span>
                     </div>
@@ -1160,7 +1129,7 @@ function AssignmentsTab({ handleTextareaDoubleClick }: { handleTextareaDoubleCli
                 </div>
                 <div className="flex gap-2 flex-shrink-0">
                   <button onClick={() => toggleScores(a.id)}
-                    className={`p-2.5 rounded-xl transition-all ${expandedScores === a.id ? "bg-indigo-100 text-indigo-700" : "text-indigo-400 hover:bg-indigo-50 hover:text-indigo-600"}`}
+                    className={`p-2.5 rounded-xl transition-all ${expandedScores === a.id ? "bg-indigo-100 text-indigo-700" : "text-indigo-400 hover:bg-indigo-50 hover:text-[var(--brand)]"}`}
                     title="Xem điểm số">
                     <BarChart3 size={18} />
                   </button>
@@ -1171,7 +1140,7 @@ function AssignmentsTab({ handleTextareaDoubleClick }: { handleTextareaDoubleCli
 
               {expandedScores === a.id && (
                 <div className="border-t border-gray-100 p-6 bg-gray-50/70">
-                  <h5 className="font-black text-gray-700 mb-4 text-sm uppercase tracking-widest">Kết quả học sinh</h5>
+                  <h5 className="font-semibold text-gray-700 mb-4 text-sm uppercase tracking-widest">Kết quả học sinh</h5>
                   {scores.length === 0 ? (
                     <p className="text-gray-400 font-medium text-sm">Chưa có học sinh nào nộp bài.</p>
                   ) : (
@@ -1179,9 +1148,9 @@ function AssignmentsTab({ handleTextareaDoubleClick }: { handleTextareaDoubleCli
                       <table className="w-full text-sm text-left">
                         <thead>
                           <tr className="text-gray-400 text-xs uppercase tracking-widest border-b border-gray-200">
-                            <th className="pb-3 font-black">Học sinh</th>
-                            <th className="pb-3 font-black">Điểm</th>
-                            <th className="pb-3 font-black">Nộp lúc</th>
+                            <th className="pb-3 font-semibold">Học sinh</th>
+                            <th className="pb-3 font-semibold">Điểm</th>
+                            <th className="pb-3 font-semibold">Nộp lúc</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
@@ -1189,7 +1158,7 @@ function AssignmentsTab({ handleTextareaDoubleClick }: { handleTextareaDoubleCli
                             <tr key={s.id} className="hover:bg-white transition-colors">
                               <td className="py-3 font-bold text-gray-900">{s.student_name}</td>
                               <td className="py-3">
-                                <span className="font-black text-indigo-600 bg-indigo-50 px-3 py-1 rounded-xl text-xs">{s.score}/{s.max_score}</span>
+                                <span className="font-semibold text-[var(--brand)] bg-indigo-50 px-3 py-1 rounded-xl text-xs">{s.score}/{s.max_score}</span>
                               </td>
                               <td className="py-3 text-gray-400 text-xs">{new Date(s.submitted_at).toLocaleString("vi-VN")}</td>
                             </tr>

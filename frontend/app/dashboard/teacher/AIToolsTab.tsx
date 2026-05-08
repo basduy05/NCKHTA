@@ -187,66 +187,62 @@ export function AIToolsTab({ authFetch, user, API_URL, setShowCreditModal, handl
     <div className="space-y-8 max-w-5xl mx-auto pb-12">
       <section className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-black text-gray-900 tracking-tight">Teacher Dashboard</h1>
+          <h1 className="text-3xl font-semibold text-gray-900 tracking-tight">Teacher Dashboard</h1>
           <p className="text-gray-500 font-medium mt-1">Quản lý lớp học và sử dụng Lexicon AI để tối ưu bài giảng.</p>
         </div>
       </section>
 
-      <section className="bg-gradient-to-r from-indigo-600 to-violet-700 rounded-[2.5rem] p-10 text-white shadow-2xl shadow-indigo-200 relative overflow-hidden group">
-        <div className="relative z-10 flex flex-col md:flex-row gap-8 items-center">
-          <div className="w-20 h-20 bg-white/20 backdrop-blur-md rounded-3xl flex items-center justify-center border border-white/30 shadow-inner group-hover:scale-110 transition-transform duration-500">
-             <Sparkles size={40} className="text-yellow-300 animate-pulse" />
-          </div>
-          <div className="text-center md:text-left">
-            <h2 className="text-3xl font-black mb-2 tracking-tight">Nâng tầm giảng dạy với Lexicon AI</h2>
-            <p className="text-indigo-100/90 text-lg font-medium max-w-xl">Trích xuất từ vựng thông minh, tạo Flashcards tự động và xây dựng kho ngữ liệu chỉ trong vài giây.</p>
-          </div>
+      <section className="bg-[var(--brand)] rounded-[var(--r-2xl)] px-8 py-6 text-white flex flex-col md:flex-row gap-5 items-center">
+        <div className="w-14 h-14 bg-white/15 rounded-[var(--r-xl)] flex items-center justify-center shrink-0">
+          <Sparkles size={28} className="text-yellow-300" />
         </div>
-        <div className="absolute -right-20 -top-20 w-80 h-80 bg-white/10 rounded-full blur-3xl group-hover:bg-white/15 transition-colors"></div>
-        <div className="absolute -left-10 -bottom-10 w-64 h-64 bg-indigo-400/20 rounded-full blur-2xl"></div>
+        <div className="text-center md:text-left">
+          <h2 className="text-xl font-bold mb-1">Nâng tầm giảng dạy với Lexicon AI</h2>
+          <p className="text-blue-100 text-sm max-w-xl">Trích xuất từ vựng thông minh, tạo Flashcards tự động và xây dựng kho ngữ liệu chỉ trong vài giây.</p>
+        </div>
       </section>
 
-      <section className="bg-white rounded-3xl border border-indigo-50 p-6 shadow-xl shadow-indigo-100/20">
+      <section className="app-card p-6">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
-            <div className="p-2 bg-indigo-50 rounded-xl">
-              <Sparkles className="text-indigo-600" size={20} />
+            <div className="p-2 bg-[var(--brand-soft)] rounded-xl">
+              <Sparkles className="text-[var(--brand)]" size={20} />
             </div>
-            <h2 className="text-lg font-black text-gray-900">Magic AI Input</h2>
+            <h2 className="text-lg font-semibold text-gray-900">Magic AI Input</h2>
           </div>
-          <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest bg-indigo-50 px-2.5 py-1 rounded-full border border-indigo-100/50">Smart Extraction</span>
+          <span className="text-[10px] font-bold text-[var(--brand)] uppercase tracking-widest bg-[var(--brand-soft)] px-2.5 py-1 rounded-full border border-[var(--line)]/50">Smart Extraction</span>
         </div>
         
         <div className="space-y-4">
           <div className="relative group">
             {inputMode === "text" ? (
               <textarea 
-                className="w-full bg-slate-50 border border-gray-100 rounded-2xl p-6 text-base font-medium placeholder:text-slate-400 min-h-[160px] focus:ring-4 focus:ring-indigo-100 focus:border-indigo-400 transition-all resize-none shadow-inner" 
+                className="w-full bg-slate-50 border border-gray-100 rounded-2xl p-6 text-base font-medium placeholder:text-slate-400 min-h-[160px] focus:ring-4 focus:ring-[var(--brand-soft)] focus:border-[var(--brand)] transition-all resize-none shadow-inner" 
                 placeholder="Dán văn bản tiếng Anh vào đây... Lexicon AI sẽ tự động phân tích và trích xuất từ vựng, tạo flashcards và bài luyện tập thử nghiệm."
                 value={text}
                 onChange={e => setText(e.target.value)}
                 onDoubleClick={handleTextareaDoubleClick}
               />
             ) : (
-              <div className="border-4 border-dashed border-indigo-100 bg-slate-50 rounded-2xl p-12 flex flex-col items-center justify-center relative cursor-pointer hover:bg-slate-100 transition min-h-[160px]">
+              <div className="border-4 border-dashed border-[var(--line)] bg-slate-50 rounded-2xl p-12 flex flex-col items-center justify-center relative cursor-pointer hover:bg-slate-100 transition min-h-[160px]">
                 <input type="file" className="absolute inset-0 opacity-0 cursor-pointer w-full h-full" onChange={(e) => {
                   if (e.target.files && e.target.files.length > 0) setFile(e.target.files[0]);
                 }} accept=".txt,.pdf,.docx" />
                 <div className="w-16 h-16 bg-white rounded-2xl shadow-md flex items-center justify-center mb-4">
-                  <Upload size={32} className="text-indigo-400" />
+                  <Upload size={32} className="text-[var(--brand)]" />
                 </div>
-                <p className="font-black text-gray-700">{file ? file.name : "Kéo thả hoặc nhấn để chọn tệp học liệu"}</p>
+                <p className="font-semibold text-gray-700">{file ? file.name : "Kéo thả hoặc nhấn để chọn tệp học liệu"}</p>
                 <p className="text-sm text-slate-400 mt-2">Hỗ trợ định dạng .txt, .pdf, .docx</p>
               </div>
             )}
             {loading && (
               <div className="absolute inset-0 bg-white/60 backdrop-blur-sm rounded-2xl flex flex-col items-center justify-center z-10 animate-in fade-in duration-300">
                 <div className="flex gap-1.5 mb-3">
-                  <div className="w-3 h-3 bg-indigo-600 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
-                  <div className="w-3 h-3 bg-indigo-600 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
-                  <div className="w-3 h-3 bg-indigo-600 rounded-full animate-bounce"></div>
+                  <div className="w-3 h-3 bg-[var(--brand)] rounded-full animate-bounce [animation-delay:-0.3s]"></div>
+                  <div className="w-3 h-3 bg-[var(--brand)] rounded-full animate-bounce [animation-delay:-0.15s]"></div>
+                  <div className="w-3 h-3 bg-[var(--brand)] rounded-full animate-bounce"></div>
                 </div>
-                <p className="text-indigo-700 font-bold text-sm">Lexicon AI đang phân tích...</p>
+                <p className="text-[var(--brand)] font-bold text-sm">Lexicon AI đang phân tích...</p>
               </div>
             )}
           </div>
@@ -255,13 +251,13 @@ export function AIToolsTab({ authFetch, user, API_URL, setShowCreditModal, handl
             <div className="flex gap-2">
               <button 
                 onClick={() => setInputMode("text")}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border ${inputMode === "text" ? "bg-indigo-600 text-white border-indigo-600 shadow-lg shadow-indigo-200" : "bg-white text-slate-600 border-gray-100 hover:bg-slate-50"}`}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border ${inputMode === "text" ? "bg-[var(--brand)] text-white border-[var(--brand)] shadow-lg shadow-indigo-200" : "bg-white text-slate-600 border-gray-100 hover:bg-slate-50"}`}
               >
                 Nhập văn bản
               </button>
               <button 
                 onClick={() => setInputMode("file")}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border ${inputMode === "file" ? "bg-indigo-600 text-white border-indigo-600 shadow-lg shadow-indigo-200" : "bg-white text-slate-600 border-gray-100 hover:bg-slate-50"}`}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border ${inputMode === "file" ? "bg-[var(--brand)] text-white border-[var(--brand)] shadow-lg shadow-indigo-200" : "bg-white text-slate-600 border-gray-100 hover:bg-slate-50"}`}
               >
                 Tải tệp
               </button>
@@ -271,14 +267,14 @@ export function AIToolsTab({ authFetch, user, API_URL, setShowCreditModal, handl
               <button 
                 onClick={() => inputMode === "text" ? handleExtractVocab() : handleFileProcess()}
                 disabled={loading || (inputMode === "text" ? !text.trim() : !file)}
-                className="bg-indigo-600 text-white px-6 py-3 rounded-2xl font-black text-sm flex items-center gap-2 hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-200 disabled:opacity-50 hover:scale-[1.02] active:scale-95"
+                className="bg-[var(--brand)] text-white px-6 py-3 rounded-2xl font-semibold text-sm flex items-center gap-2 hover:bg-[var(--brand-dark)] transition-all shadow-[var(--sh-sm)] disabled:opacity-50 hover:scale-[1.02] active:scale-95"
               >
                 <Layers size={18} /> Extract Vocab
               </button>
               <button 
                 onClick={() => handleGenerateQuiz()}
                 disabled={loading || !text.trim() || inputMode === "file"}
-                className="bg-rose-500 text-white px-6 py-3 rounded-2xl font-black text-sm flex items-center gap-2 hover:bg-rose-600 transition-all shadow-xl shadow-rose-200 disabled:opacity-30 hover:scale-[1.02] active:scale-95"
+                className="bg-rose-500 text-white px-6 py-3 rounded-2xl font-semibold text-sm flex items-center gap-2 hover:bg-rose-600 transition-all shadow-xl shadow-rose-200 disabled:opacity-30 hover:scale-[1.02] active:scale-95"
               >
                 <Brain size={18} /> Generate Quiz
               </button>
@@ -298,7 +294,7 @@ export function AIToolsTab({ authFetch, user, API_URL, setShowCreditModal, handl
             <button
               key={tab.id}
               onClick={() => setActiveAI(tab.id as any)}
-              className={`flex items-center gap-2 px-6 py-3 rounded-2xl font-bold text-sm transition-all shrink-0 border ${activeAI === tab.id ? "bg-indigo-600 text-white border-indigo-600 shadow-xl shadow-indigo-100" : "bg-white text-slate-600 border-gray-100 hover:bg-slate-50"}`}
+              className={`flex items-center gap-2 px-6 py-3 rounded-2xl font-bold text-sm transition-all shrink-0 border ${activeAI === tab.id ? "bg-[var(--brand)] text-white border-[var(--brand)] shadow-[var(--sh-sm)]" : "bg-white text-slate-600 border-gray-100 hover:bg-slate-50"}`}
             >
               <Icon size={18} /> {tab.label}
             </button>
@@ -312,11 +308,11 @@ export function AIToolsTab({ authFetch, user, API_URL, setShowCreditModal, handl
             <>
               <section>
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
-                  <h3 className="text-xl font-black text-gray-900 flex items-center gap-2">
-                    <BrainCircuit className="text-indigo-600" size={24} />
+                  <h3 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
+                    <BrainCircuit className="text-[var(--brand)]" size={24} />
                     Flashcard Slider
                   </h3>
-                  <div className="bg-indigo-50 text-indigo-700 px-4 py-1.5 rounded-xl border border-indigo-100 font-bold text-xs">
+                  <div className="bg-[var(--brand-soft)] text-[var(--brand)] px-4 py-1.5 rounded-xl border border-[var(--line)] font-bold text-xs">
                     Card {currentCardIdx + 1} of {vocabResult.length}
                   </div>
                 </div>
@@ -325,7 +321,7 @@ export function AIToolsTab({ authFetch, user, API_URL, setShowCreditModal, handl
                   <button 
                     onClick={() => { setCurrentCardIdx(prev => Math.max(0, prev - 1)); setFlippedWord(null); }}
                     disabled={currentCardIdx === 0}
-                    className="absolute -left-16 top-1/2 w-12 h-12 bg-white rounded-2xl border border-gray-100 shadow-xl flex items-center justify-center text-indigo-600 hover:bg-indigo-50 transition-all disabled:opacity-0 z-20"
+                    className="absolute -left-16 top-1/2 w-12 h-12 bg-white rounded-2xl border border-gray-100 shadow-xl flex items-center justify-center text-[var(--brand)] hover:bg-[var(--brand-soft)] transition-all disabled:opacity-0 z-20"
                     style={{ top: '50%', transform: 'translateY(-50%)' }}
                   >
                     <ChevronUp className="-rotate-90" size={24} />
@@ -333,7 +329,7 @@ export function AIToolsTab({ authFetch, user, API_URL, setShowCreditModal, handl
                   <button 
                     onClick={() => { setCurrentCardIdx(prev => Math.min(vocabResult.length - 1, prev + 1)); setFlippedWord(null); }}
                     disabled={currentCardIdx === vocabResult.length - 1}
-                    className="absolute -right-16 top-1/2 w-12 h-12 bg-white rounded-2xl border border-gray-100 shadow-xl flex items-center justify-center text-indigo-600 hover:bg-indigo-50 transition-all disabled:opacity-0 z-20"
+                    className="absolute -right-16 top-1/2 w-12 h-12 bg-white rounded-2xl border border-gray-100 shadow-xl flex items-center justify-center text-[var(--brand)] hover:bg-[var(--brand-soft)] transition-all disabled:opacity-0 z-20"
                     style={{ top: '50%', transform: 'translateY(-50%)' }}
                   >
                     <ChevronDown className="-rotate-90" size={24} />
@@ -348,30 +344,30 @@ export function AIToolsTab({ authFetch, user, API_URL, setShowCreditModal, handl
                           onClick={() => setFlippedWord(flippedWord === idx ? null : idx)}
                           className={`relative w-full h-full transition-all duration-700 preserve-3d cursor-pointer ${flippedWord === idx ? 'rotate-y-180' : ''}`}
                         >
-                          <div className="absolute inset-0 backface-hidden bg-white border border-indigo-50 rounded-[3rem] shadow-2xl flex flex-col items-center justify-center p-10 transition-all hover:border-indigo-200">
+                          <div className="absolute inset-0 backface-hidden bg-white border border-[var(--line)] rounded-[var(--r-2xl)] shadow-[var(--sh-md)] flex flex-col items-center justify-center p-10 transition-all hover:border-[var(--brand)]">
                             <div className="absolute top-8 left-10">
-                              <span className="text-[10px] font-bold text-indigo-500 bg-indigo-50 px-2.5 py-1 rounded-full uppercase tracking-widest">{w.level || 'B2'}</span>
+                              <span className="text-[10px] font-bold text-blue-500 bg-[var(--brand-soft)] px-2.5 py-1 rounded-full uppercase tracking-widest">{w.level || 'B2'}</span>
                             </div>
-                            <div className="w-20 h-20 bg-indigo-50 rounded-3xl flex items-center justify-center mb-6 ring-8 ring-indigo-50/50">
-                              <Sparkles className="text-indigo-600" size={32} />
+                            <div className="w-20 h-20 bg-[var(--brand-soft)] rounded-[var(--r-xl)] flex items-center justify-center mb-6 ring-8 ring-[var(--brand-soft)]">
+                              <Sparkles className="text-[var(--brand)]" size={32} />
                             </div>
-                            <h4 className="text-5xl font-black text-indigo-900 mb-2 tracking-tight line-clamp-1">{w.word}</h4>
+                            <h4 className="text-5xl font-semibold text-[var(--ink-1)] mb-2 tracking-tight line-clamp-1">{w.word}</h4>
                             <div className="flex gap-1 mb-4">
                               {simulateSyllabify(w.word).map((s: string, i: number) => (
                                 <span key={i} className="px-3 py-1 bg-slate-50 text-slate-500 text-xs font-bold rounded-lg border border-slate-100">{s}</span>
                               ))}
                             </div>
                             <div className="flex items-center gap-2 text-slate-400 font-bold text-lg mb-8">
-                               <Volume2 size={24} className="text-indigo-400" />
+                               <Volume2 size={24} className="text-[var(--brand)]" />
                                <span>{w.phonetic || w.phon || "/.../"}</span>
                             </div>
                             {w.pos && <span className="text-[11px] font-bold text-purple-600 bg-purple-50 px-3 py-1.5 rounded-xl uppercase border border-purple-100/50">{w.pos}</span>}
                           </div>
                           
-                          <div className="absolute inset-0 backface-hidden bg-gradient-to-br from-indigo-600 to-violet-700 rounded-[3rem] shadow-2xl flex flex-col items-center justify-center p-10 rotate-y-180 text-white text-center">
-                            <span className="text-[10px] font-bold text-indigo-200 uppercase tracking-widest mb-6">Translation</span>
-                            <h4 className="text-4xl font-black mb-4 text-indigo-50">{w.meaning_vn || w.meaning}</h4>
-                            {w.meaning_en && <p className="text-indigo-100 text-lg mb-8 leading-relaxed italic line-clamp-3">"{w.meaning_en}"</p>}
+                          <div className="absolute inset-0 backface-hidden bg-[var(--brand)] rounded-[var(--r-2xl)] shadow-[var(--sh-md)] flex flex-col items-center justify-center p-10 rotate-y-180 text-white text-center">
+                            <span className="text-[10px] font-semibold text-blue-200 uppercase tracking-widest mb-6">Translation</span>
+                            <h4 className="text-3xl font-bold mb-4 tabular-nums">{w.meaning_vn || w.meaning}</h4>
+                            {w.meaning_en && <p className="text-blue-100 text-base mb-6 leading-relaxed italic line-clamp-3">"{w.meaning_en}"</p>}
                             {w.example && (
                               <div className="bg-white/10 p-6 rounded-2xl border border-white/10 backdrop-blur-sm mt-4">
                                 <p className="text-white text-lg italic leading-relaxed line-clamp-3">&ldquo;{w.example}&rdquo;</p>
@@ -386,7 +382,7 @@ export function AIToolsTab({ authFetch, user, API_URL, setShowCreditModal, handl
                   <div className="mt-8 flex justify-center gap-4">
                      <button 
                        onClick={(e) => { e.stopPropagation(); speak(vocabResult[currentCardIdx].word); }}
-                       className="flex items-center gap-2 px-8 py-4 bg-indigo-600 text-white rounded-2xl font-bold shadow-xl shadow-indigo-200 hover:bg-indigo-700 transition transform hover:scale-105 active:scale-95"
+                       className="flex items-center gap-2 px-8 py-4 bg-[var(--brand)] text-white rounded-2xl font-bold shadow-[var(--sh-sm)] hover:bg-[var(--brand-dark)] transition transform hover:scale-105 active:scale-95"
                      >
                        <Volume2 size={24} /> Pronounce
                      </button>
@@ -410,29 +406,29 @@ export function AIToolsTab({ authFetch, user, API_URL, setShowCreditModal, handl
                 </div>
               </section>
 
-              <div className="bg-slate-50 p-8 rounded-[3rem] border border-slate-100">
-                <h3 className="text-xl font-black text-slate-900 mb-6 flex items-center gap-3">
-                  <BookText size={24} className="text-indigo-600" />
+              <div className="bg-[var(--surface-2)] p-6 rounded-[var(--r-xl)] border border-[var(--line)]">
+                <h3 className="text-xl font-semibold text-slate-900 mb-6 flex items-center gap-3">
+                  <BookText size={24} className="text-[var(--brand)]" />
                   Syllable & Pronunciation Guide
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {vocabResult.map((w: any, idx: number) => {
                     const syllables = simulateSyllabify(w.word);
                     return (
-                      <div key={idx} className="bg-white p-5 rounded-3xl border border-slate-100 flex items-center justify-between gap-4 shadow-sm group hover:border-indigo-200 transition-all">
+                      <div key={idx} className="bg-white p-5 rounded-[var(--r-xl)] border border-slate-100 flex items-center justify-between gap-4 shadow-sm group hover:border-[var(--brand)] transition-all">
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-1">
-                            <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">{w.pos || "Vocab"}</span>
-                            <span className="px-2 py-0.5 bg-indigo-600 text-white text-[10px] font-bold rounded-lg">{w.level || "B2"}</span>
+                            <span className="text-[10px] font-bold text-[var(--brand)] uppercase tracking-widest">{w.pos || "Vocab"}</span>
+                            <span className="px-2 py-0.5 bg-[var(--brand)] text-white text-[10px] font-bold rounded-lg">{w.level || "B2"}</span>
                           </div>
-                          <h4 className="text-xl font-black text-slate-800 tracking-tight">{w.word}</h4>
+                          <h4 className="text-xl font-semibold text-slate-800 tracking-tight">{w.word}</h4>
                           <div className="flex flex-wrap gap-1.5 mt-2">
                             {syllables.map((s, i) => (
-                              <span key={i} className="px-3 py-1 bg-indigo-50 text-indigo-600 text-[10px] font-black rounded-lg border border-indigo-100/50">{s}</span>
+                              <span key={i} className="px-3 py-1 bg-[var(--brand-soft)] text-[var(--brand)] text-[10px] font-semibold rounded-lg border border-[var(--line)]/50">{s}</span>
                             ))}
                           </div>
                         </div>
-                        <button onClick={() => speak(w.word)} className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center hover:bg-indigo-600 hover:text-white transition-all shadow-sm">
+                        <button onClick={() => speak(w.word)} className="w-12 h-12 bg-[var(--brand-soft)] text-[var(--brand)] rounded-2xl flex items-center justify-center hover:bg-[var(--brand)] hover:text-white transition-all shadow-sm">
                           <Volume2 size={24} />
                         </button>
                       </div>
@@ -441,18 +437,18 @@ export function AIToolsTab({ authFetch, user, API_URL, setShowCreditModal, handl
                 </div>
               </div>
 
-              <div className="bg-indigo-900 p-8 rounded-[3rem] shadow-2xl shadow-indigo-200 text-white overflow-hidden relative">
+              <div className="bg-[var(--brand)] p-8 rounded-[var(--r-2xl)] shadow-[var(--sh-md)] text-white overflow-hidden relative">
                 <div className="relative z-10 flex flex-col md:flex-row justify-between items-center gap-6 mb-8">
                   <div>
-                    <h3 className="text-2xl font-black flex items-center gap-3">
-                      <Brain size={28} className="text-indigo-300" />
+                    <h3 className="text-2xl font-semibold flex items-center gap-3">
+                      <Brain size={28} className="text-blue-200" />
                       Recall Master Challenge
                     </h3>
-                    <p className="text-indigo-200 font-medium text-sm mt-1">Kiểm tra khả năng ghi nhớ nghĩa của các từ vừa trích xuất.</p>
+                    <p className="text-blue-100 font-medium text-sm mt-1">Kiểm tra khả năng ghi nhớ nghĩa của các từ vừa trích xuất.</p>
                   </div>
                   <button 
                     onClick={() => { setShowRecallQuiz(!showRecallQuiz); setRecallAnswers({}); setRecallSubmitted(false); }}
-                    className="bg-white text-indigo-900 px-8 py-3 rounded-2xl font-black text-sm shadow-xl hover:bg-indigo-50 transition-all flex items-center gap-2 hover:scale-105 active:scale-95"
+                    className="bg-white text-[var(--ink-1)] px-8 py-3 rounded-2xl font-semibold text-sm shadow-xl hover:bg-[var(--brand-soft)] transition-all flex items-center gap-2 hover:scale-105 active:scale-95"
                   >
                     {showRecallQuiz ? <><X size={18} /> Close Quiz</> : <><PlayCircle size={18} /> Start Recall Quiz</>}
                   </button>
@@ -461,18 +457,18 @@ export function AIToolsTab({ authFetch, user, API_URL, setShowCreditModal, handl
                 {showRecallQuiz && (
                   <div className="space-y-4 animate-in slide-in-from-top-6 duration-500 relative z-10">
                     {vocabResult.map((w: any, idx: number) => (
-                      <div key={idx} className="bg-white/10 backdrop-blur-md border border-white/10 p-5 rounded-3xl flex flex-col md:flex-row md:items-center justify-between gap-6 transition-all hover:bg-white/15">
+                      <div key={idx} className="bg-white/10 backdrop-blur-md border border-white/10 p-5 rounded-[var(--r-xl)] flex flex-col md:flex-row md:items-center justify-between gap-6 transition-all hover:bg-white/15">
                         <div className="flex-1">
-                          <span className="text-[10px] font-bold text-indigo-300 uppercase tracking-widest mb-1 block">Meaning</span>
-                          <h4 className="text-xl font-black text-white">{w.meaning_vn || w.meaning}</h4>
+                          <span className="text-[10px] font-bold text-blue-200 uppercase tracking-widest mb-1 block">Meaning</span>
+                          <h4 className="text-xl font-semibold text-white">{w.meaning_vn || w.meaning}</h4>
                         </div>
                         <div className="flex-[1.5] relative">
                           <input 
                             type="text"
-                            className={`w-full bg-white/5 border-2 px-6 py-3 rounded-2xl outline-none transition-all font-black text-lg ${
+                            className={`w-full bg-white/5 border-2 px-6 py-3 rounded-2xl outline-none transition-all font-semibold text-lg ${
                               recallSubmitted 
                                 ? (recallAnswers[idx]?.toLowerCase().trim() === w.word.toLowerCase().trim() ? "border-emerald-400 text-emerald-300" : "border-rose-400 text-rose-300")
-                                : "border-white/10 focus:border-indigo-400 text-white focus:bg-white/10"
+                                : "border-white/10 focus:border-[var(--brand)] text-white focus:bg-white/10"
                             }`}
                             placeholder="Type the English word..."
                             value={recallAnswers[idx] || ""}
@@ -492,7 +488,7 @@ export function AIToolsTab({ authFetch, user, API_URL, setShowCreditModal, handl
                       <div className="text-center mt-8">
                         <button 
                           onClick={() => setRecallSubmitted(true)}
-                          className="bg-indigo-400 text-white px-12 py-4 rounded-2xl font-black text-lg shadow-2xl shadow-indigo-500/50 hover:bg-indigo-300 transition-all hover:scale-105 active:scale-95"
+                          className="bg-white text-[var(--brand)] px-10 py-3 rounded-[var(--r-lg)] font-semibold text-base shadow-[var(--sh-sm)] hover:bg-[var(--surface-3)] transition-all active:scale-95"
                         >
                           Finish & Check Progress
                         </button>
@@ -501,7 +497,7 @@ export function AIToolsTab({ authFetch, user, API_URL, setShowCreditModal, handl
                   </div>
                 )}
                 
-                <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/20 rounded-full blur-3xl -mr-32 -mt-32"></div>
+                <div className="absolute top-0 right-0 w-64 h-64 bg-[var(--brand-soft)]0/20 rounded-full blur-3xl -mr-32 -mt-32"></div>
                 <div className="absolute bottom-0 left-0 w-48 h-48 bg-violet-600/20 rounded-full blur-3xl -ml-24 -mb-24"></div>
               </div>
             </>
@@ -510,7 +506,7 @@ export function AIToolsTab({ authFetch, user, API_URL, setShowCreditModal, handl
           {quizResult.length > 0 && (
             <section className="space-y-6 pt-8 border-t border-slate-100">
               <div className="flex items-center justify-between mb-4">
-                 <h3 className="text-xl font-black text-gray-900 flex items-center gap-2">
+                 <h3 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
                    <Brain className="text-rose-500" size={24} />
                    Interactive AI Practice
                  </h3>
@@ -519,15 +515,15 @@ export function AIToolsTab({ authFetch, user, API_URL, setShowCreditModal, handl
                  </div>
               </div>
 
-              <div className="bg-white rounded-[2.5rem] border border-rose-50 p-8 shadow-2xl shadow-rose-100/20 relative overflow-hidden min-h-[500px]">
+              <div className="app-card p-8 relative overflow-hidden min-h-[500px]">
                  <div className="mb-10">
                     <div className="flex justify-between items-center mb-3">
                       <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Question {currentQuizIdx + 1} of {quizResult.length}</span>
-                      <span className="text-xs font-black text-rose-600 bg-rose-50 px-2 py-0.5 rounded-full">{Math.round(((currentQuizIdx + 1) / quizResult.length) * 100)}% Progress</span>
+                      <span className="text-xs font-semibold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-full">{Math.round(((currentQuizIdx + 1) / quizResult.length) * 100)}% Progress</span>
                     </div>
                     <div className="h-3 w-full bg-slate-50 rounded-full p-0.5 border border-slate-100 shadow-inner">
                       <div 
-                        className="h-full bg-gradient-to-r from-rose-500 to-indigo-600 rounded-full transition-all duration-700 shadow-sm" 
+                        className="h-full bg-[var(--brand)] rounded-full transition-all duration-700" 
                         style={{ width: `${((currentQuizIdx + 1) / quizResult.length) * 100}%` }}
                       ></div>
                     </div>
@@ -537,7 +533,7 @@ export function AIToolsTab({ authFetch, user, API_URL, setShowCreditModal, handl
                      <div className="w-16 h-16 bg-rose-50 rounded-2xl flex items-center justify-center mb-6 ring-4 ring-rose-50/50">
                         <Lightbulb className="text-rose-500" size={32} />
                      </div>
-                     <h4 className="text-2xl font-black text-gray-900 mb-10 max-w-2xl leading-tight text-center">
+                     <h4 className="text-2xl font-semibold text-gray-900 mb-10 max-w-2xl leading-tight text-center">
                         {quizResult[currentQuizIdx].question || quizResult[currentQuizIdx].q}
                      </h4>
 
@@ -547,8 +543,8 @@ export function AIToolsTab({ authFetch, user, API_URL, setShowCreditModal, handl
                           const correctAnsIdx = typeof quizResult[currentQuizIdx].ans === 'number' ? quizResult[currentQuizIdx].ans : (quizResult[currentQuizIdx].options?.findIndex((o: string) => o === (quizResult[currentQuizIdx].correct_answer || quizResult[currentQuizIdx].answer)) ?? -1);
                           const isCorrect = i === correctAnsIdx;
                           
-                          let btnClass = "bg-slate-50 border-transparent text-slate-600 hover:border-indigo-200 hover:bg-white";
-                          if (isSelected) btnClass = "bg-indigo-50 border-indigo-500 text-indigo-900 ring-4 ring-indigo-50/50";
+                          let btnClass = "bg-slate-50 border-transparent text-slate-600 hover:border-[var(--brand)] hover:bg-white";
+                          if (isSelected) btnClass = "bg-[var(--brand-soft)] border-[var(--brand)] text-[var(--ink-1)] ring-4 ring-[var(--brand-soft)]";
                           if (quizSubmitted) {
                             if (isCorrect) btnClass = "bg-emerald-50 border-emerald-500 text-emerald-900";
                             else if (isSelected) btnClass = "bg-rose-50 border-rose-500 text-rose-900";
@@ -560,10 +556,10 @@ export function AIToolsTab({ authFetch, user, API_URL, setShowCreditModal, handl
                               key={i}
                               disabled={quizSubmitted}
                               onClick={() => setQuizAnswers(prev => ({ ...prev, [currentQuizIdx]: i }))}
-                              className={`p-6 rounded-3xl border-2 font-bold text-left transition-all relative group ${btnClass}`}
+                              className={`p-6 rounded-[var(--r-xl)] border-2 font-bold text-left transition-all relative group ${btnClass}`}
                             >
                                <div className="flex items-center gap-4">
-                                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-sm font-black transition-colors ${isSelected ? "bg-indigo-600 text-white" : "bg-white text-slate-400 group-hover:bg-indigo-100 group-hover:text-indigo-600"}`}>
+                                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-sm font-semibold transition-colors ${isSelected ? "bg-[var(--brand)] text-white" : "bg-white text-slate-400 group-hover:bg-[var(--brand-soft)] group-hover:text-[var(--brand)]"}`}>
                                     {String.fromCharCode(65 + i)}
                                   </div>
                                   <span className="text-base">{opt}</span>
@@ -577,7 +573,7 @@ export function AIToolsTab({ authFetch, user, API_URL, setShowCreditModal, handl
                         {currentQuizIdx > 0 && !quizSubmitted && (
                           <button 
                             onClick={() => setCurrentQuizIdx(prev => prev - 1)}
-                            className="bg-white text-slate-400 px-6 py-4 rounded-[1.25rem] font-black border border-gray-100 hover:bg-slate-50 transition-all"
+                            className="bg-white text-slate-400 px-6 py-4 rounded-[var(--r-lg)] font-semibold border border-gray-100 hover:bg-slate-50 transition-all"
                           >
                             Back
                           </button>
@@ -596,14 +592,14 @@ export function AIToolsTab({ authFetch, user, API_URL, setShowCreditModal, handl
                                 setQuizSubmitted(true);
                               }}
                               disabled={Object.keys(quizAnswers).length < quizResult.length}
-                              className="bg-emerald-600 text-white px-8 py-4 rounded-[1.25rem] font-black hover:bg-emerald-700 transition-all shadow-xl shadow-emerald-100 disabled:opacity-40"
+                              className="bg-emerald-600 text-white px-8 py-4 rounded-[var(--r-lg)] font-semibold hover:bg-emerald-700 transition-all shadow-xl shadow-emerald-100 disabled:opacity-40"
                             >
                               Submit & Finalize
                             </button>
                           ) : (
                             <button 
                               onClick={() => setCurrentQuizIdx(prev => Math.min(quizResult.length - 1, prev + 1))}
-                              className="bg-indigo-600 text-white px-8 py-4 rounded-[1.25rem] font-black hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-100"
+                              className="bg-[var(--brand)] text-white px-8 py-4 rounded-[var(--r-lg)] font-semibold hover:bg-[var(--brand-dark)] transition-all shadow-[var(--sh-sm)]"
                             >
                               Next Question
                             </button>
@@ -616,7 +612,7 @@ export function AIToolsTab({ authFetch, user, API_URL, setShowCreditModal, handl
                               setQuizScore(0);
                               setCurrentQuizIdx(0);
                             }}
-                            className="bg-slate-900 text-white px-10 py-4 rounded-[1.25rem] font-black hover:bg-black transition-all shadow-xl shadow-slate-200"
+                            className="bg-slate-900 text-white px-10 py-4 rounded-[var(--r-lg)] font-semibold hover:bg-black transition-all shadow-xl shadow-slate-200"
                           >
                             Try Again
                           </button>
@@ -626,7 +622,7 @@ export function AIToolsTab({ authFetch, user, API_URL, setShowCreditModal, handl
                 </div>
 
                 <div className="absolute top-0 right-0 w-32 h-32 bg-rose-50 rounded-full -mr-16 -mt-16"></div>
-                <div className="absolute bottom-0 left-0 w-24 h-24 bg-indigo-50 rounded-full -ml-12 -mb-12"></div>
+                <div className="absolute bottom-0 left-0 w-24 h-24 bg-[var(--brand-soft)] rounded-full -ml-12 -mb-12"></div>
             </section>
           )}
         </div>
@@ -634,17 +630,17 @@ export function AIToolsTab({ authFetch, user, API_URL, setShowCreditModal, handl
 
       {activeAI === "dict" && (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-          <div className="bg-white p-8 rounded-[2.5rem] border border-indigo-50 shadow-xl shadow-indigo-100/20">
-            <h3 className="text-xl font-black text-gray-900 mb-6 flex items-center gap-2">
-              <Search className="text-indigo-600" size={24} />
+          <div className="bg-white p-8 rounded-[var(--r-2xl)] border border-indigo-50 shadow-[var(--sh-sm)]/20">
+            <h3 className="text-xl font-semibold text-gray-900 mb-6 flex items-center gap-2">
+              <Search className="text-[var(--brand)]" size={24} />
               Lexicon Dictionary
             </h3>
             <div className="flex items-center gap-4">
               <div className="relative flex-1 group">
-                <Search size={22} className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-indigo-500 transition-colors" />
+                <Search size={22} className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-blue-500 transition-colors" />
                 <input
                   type="text"
-                  className="w-full pl-14 pr-6 py-4 bg-slate-50 border border-gray-100 rounded-2xl text-lg font-bold placeholder:text-slate-300 focus:bg-white focus:ring-4 focus:ring-indigo-100 focus:border-indigo-400 outline-none transition-all shadow-inner"
+                  className="w-full pl-14 pr-6 py-4 bg-slate-50 border border-gray-100 rounded-2xl text-lg font-bold placeholder:text-slate-300 focus:bg-white focus:ring-4 focus:ring-[var(--brand-soft)] focus:border-[var(--brand)] outline-none transition-all shadow-inner"
                   placeholder="Tra từ vựng English (vd: elusive, persistence...)"
                   value={dictWord}
                   onChange={(e) => setDictWord(e.target.value)}
@@ -653,7 +649,7 @@ export function AIToolsTab({ authFetch, user, API_URL, setShowCreditModal, handl
               </div>
               <button 
                 onClick={handleDictSearch} 
-                className="bg-indigo-600 text-white py-4 px-10 rounded-2xl font-black text-lg shadow-xl shadow-indigo-200 hover:bg-indigo-700 transition-all disabled:opacity-50 hover:scale-[1.02] active:scale-95 translate-y-0"
+                className="bg-[var(--brand)] text-white py-4 px-10 rounded-2xl font-semibold text-lg shadow-[var(--sh-sm)] hover:bg-[var(--brand-dark)] transition-all disabled:opacity-50 hover:scale-[1.02] active:scale-95 translate-y-0"
                 disabled={dictLoading}
               >
                 {dictLoading ? (
@@ -672,35 +668,35 @@ export function AIToolsTab({ authFetch, user, API_URL, setShowCreditModal, handl
                 <AlertCircle size={28} className="text-rose-500" />
               </div>
               <div>
-                <p className="text-rose-900 font-black text-lg">{dictError}</p>
+                <p className="text-rose-900 font-semibold text-lg">{dictError}</p>
                 <p className="text-rose-700 text-sm mt-1">Vui lòng kiểm tra lại từ khóa và thử lại.</p>
               </div>
-              <button onClick={() => setDictError(null)} className="text-rose-600 text-xs font-black uppercase tracking-widest hover:text-rose-800 transition-colors">Dismiss</button>
+              <button onClick={() => setDictError(null)} className="text-rose-600 text-xs font-semibold uppercase tracking-widest hover:text-rose-800 transition-colors">Dismiss</button>
             </div>
           )}
 
           {dictResult && (
-            <div className="bg-white p-10 rounded-[2.5rem] border border-gray-100 shadow-xl animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="bg-white p-10 rounded-[var(--r-2xl)] border border-gray-100 shadow-xl animate-in fade-in slide-in-from-bottom-4 duration-500">
                 <div className="flex flex-col md:flex-row justify-between items-start gap-8 mb-10 pb-8 border-b border-gray-100">
                   <div className="flex-1">
                     <div className="flex items-center gap-4 mb-4">
-                       <h2 className="text-6xl font-black text-slate-900 tracking-tighter">{dictResult.word}</h2>
-                       <button onClick={() => speak(dictResult.word)} className="w-16 h-16 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600 hover:bg-indigo-600 hover:text-white transition-all shadow-sm">
+                       <h2 className="text-6xl font-semibold text-slate-900 tracking-tighter">{dictResult.word}</h2>
+                       <button onClick={() => speak(dictResult.word)} className="w-16 h-16 bg-[var(--brand-soft)] rounded-2xl flex items-center justify-center text-[var(--brand)] hover:bg-[var(--brand)] hover:text-white transition-all shadow-sm">
                          <Volume2 size={32} />
                        </button>
                     </div>
                     
                     <div className="flex flex-wrap gap-4 items-center mt-6">
                       {dictResult.phonetic_uk && (
-                        <button onClick={() => speak(dictResult.word)} className="flex items-center gap-2 px-4 py-2 bg-slate-50 rounded-xl border border-gray-100 hover:bg-indigo-50 transition-colors">
-                          <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">UK</span>
+                        <button onClick={() => speak(dictResult.word)} className="flex items-center gap-2 px-4 py-2 bg-slate-50 rounded-xl border border-gray-100 hover:bg-[var(--brand-soft)] transition-colors">
+                          <span className="text-[10px] font-semibold text-[var(--brand)] uppercase tracking-widest">UK</span>
                           <span className="font-bold text-slate-700">{dictResult.phonetic_uk}</span>
-                          <Volume2 size={16} className="text-indigo-400" />
+                          <Volume2 size={16} className="text-[var(--brand)]" />
                         </button>
                       )}
                       {dictResult.phonetic_us && (
-                        <button onClick={() => speak(dictResult.word)} className="flex items-center gap-2 px-4 py-2 bg-slate-50 rounded-xl border border-gray-100 hover:bg-indigo-50 transition-colors">
-                          <span className="text-[10px] font-black text-rose-400 uppercase tracking-widest">US</span>
+                        <button onClick={() => speak(dictResult.word)} className="flex items-center gap-2 px-4 py-2 bg-slate-50 rounded-xl border border-gray-100 hover:bg-[var(--brand-soft)] transition-colors">
+                          <span className="text-[10px] font-semibold text-rose-400 uppercase tracking-widest">US</span>
                           <span className="font-bold text-slate-700">{dictResult.phonetic_us}</span>
                           <Volume2 size={16} className="text-rose-400" />
                         </button>
@@ -709,13 +705,13 @@ export function AIToolsTab({ authFetch, user, API_URL, setShowCreditModal, handl
                   </div>
 
                   {dictResult.wikipedia && (
-                    <div className="w-full md:w-80 bg-blue-50/50 rounded-3xl p-6 border border-blue-100 shadow-inner">
+                    <div className="w-full md:w-80 bg-blue-50/50 rounded-[var(--r-xl)] p-6 border border-blue-100 shadow-inner">
                       <div className="flex items-center gap-2 mb-3">
                          <Globe className="text-blue-500" size={18} />
-                         <span className="text-xs font-black text-blue-600 uppercase tracking-widest">Knowledge Base</span>
+                         <span className="text-xs font-semibold text-blue-600 uppercase tracking-widest">Knowledge Base</span>
                       </div>
                       {dictResult.wikipedia.title && (
-                        <p className="text-sm font-black text-slate-900 mb-2 truncate">{dictResult.wikipedia.title}</p>
+                        <p className="text-sm font-semibold text-slate-900 mb-2 truncate">{dictResult.wikipedia.title}</p>
                       )}
                       {dictResult.wikipedia.extract && (
                         <p className="text-blue-700 text-xs mt-2 line-clamp-4">{dictResult.wikipedia.extract}</p>
@@ -731,7 +727,7 @@ export function AIToolsTab({ authFetch, user, API_URL, setShowCreditModal, handl
 
                 {dictResult.meanings && dictResult.meanings.map((m: any, i: number) => {
                   const colors = [
-                    { bg: "bg-indigo-50", text: "text-indigo-700", accent: "border-indigo-500" },
+                    { bg: "bg-[var(--brand-soft)]", text: "text-[var(--brand)]", accent: "border-[var(--brand)]" },
                     { bg: "bg-rose-50", text: "text-rose-700", accent: "border-rose-500" },
                     { bg: "bg-teal-50", text: "text-teal-700", accent: "border-teal-500" },
                     { bg: "bg-amber-50", text: "text-amber-700", accent: "border-amber-500" }
@@ -739,12 +735,12 @@ export function AIToolsTab({ authFetch, user, API_URL, setShowCreditModal, handl
                   return (
                     <div key={i} className={`border-l-4 ${colors.accent} pl-5 py-1 relative hover:bg-slate-50 transition-colors rounded-r-xl mb-6`}>
                       <div className="flex items-center gap-2 mb-2 flex-wrap">
-                        <span className={`text-[10px] font-black uppercase tracking-widest px-2.5 py-1 ${colors.bg} ${colors.text} rounded-lg border border-current opacity-60`}>{m.part_of_speech || "Word"}</span>
+                        <span className={`text-[10px] font-semibold uppercase tracking-widest px-2.5 py-1 ${colors.bg} ${colors.text} rounded-lg border border-current opacity-60`}>{m.part_of_speech || "Word"}</span>
                         {m.tags?.map((t: string, j: number) => (
                            <span key={j} className="text-[10px] font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded-md uppercase tracking-wide">{t}</span>
                         ))}
                       </div>
-                      <h4 className="text-2xl font-black text-slate-800 tracking-tight leading-snug">{m.definition_vn || m.definition}</h4>
+                      <h4 className="text-2xl font-semibold text-slate-800 tracking-tight leading-snug">{m.definition_vn || m.definition}</h4>
                       {m.definition_en && <p className="text-slate-500 font-medium text-lg mt-2 italic leading-relaxed">"{m.definition_en}"</p>}
                       
                       {m.examples?.length > 0 && (
@@ -777,8 +773,8 @@ export function AIToolsTab({ authFetch, user, API_URL, setShowCreditModal, handl
 
       {activeAI === "graph" && (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-          <div className="bg-white p-8 rounded-[2.5rem] border border-cyan-50 shadow-xl shadow-cyan-100/20">
-            <h3 className="text-xl font-black text-gray-900 mb-6 flex items-center gap-2">
+          <div className="bg-white p-8 rounded-[var(--r-2xl)] border border-cyan-50 shadow-xl shadow-cyan-100/20">
+            <h3 className="text-xl font-semibold text-gray-900 mb-6 flex items-center gap-2">
               <Network className="text-cyan-600" size={24} />
               Knowledge Mapping
             </h3>
@@ -796,7 +792,7 @@ export function AIToolsTab({ authFetch, user, API_URL, setShowCreditModal, handl
               <button 
                 onClick={handleLoadGraph} 
                 disabled={graphLoading}
-                className="bg-cyan-600 text-white py-4 px-10 rounded-2xl font-black text-lg shadow-xl shadow-cyan-200 hover:bg-cyan-700 transition-all disabled:opacity-50 hover:scale-[1.02] active:scale-95 translate-y-0"
+                className="bg-cyan-600 text-white py-4 px-10 rounded-2xl font-semibold text-lg shadow-xl shadow-cyan-200 hover:bg-cyan-700 transition-all disabled:opacity-50 hover:scale-[1.02] active:scale-95 translate-y-0"
               >
                 {graphLoading ? (
                   <div className="flex items-center gap-3">

@@ -4,7 +4,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { Users, Database, Plus, UploadCloud, FileSpreadsheet, Save, Edit, Trash2, GraduationCap, X, Check, Copy, BookOpen, BookText, Settings, RefreshCw, Mail, Eye, EyeOff, Sparkles, ClipboardList, Bold, Italic, Underline, Heading1, Heading2, List, ListOrdered, TrendingUp, Network, Activity, MessageCircleWarning, Bug, Lightbulb, CheckCircle, Clock, ClipboardPaste, ListChecks, Loader2, AlertCircle, CheckCircle2, ChevronUp, ChevronDown } from "lucide-react";
 import { useAuth } from "@/app/context/AuthContext";
 import { useNotification } from "@/app/context/NotificationContext";
-import { PageHeader } from "@/app/components/ui";
+import { Stat } from "@/app/components/ui";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://iedu-ksk7.onrender.com";
 
@@ -30,10 +30,10 @@ function AdminDashboardContent() {
   }, [isInitialized, token, user, router]);
 
   if (!isInitialized) {
-    return <div className="text-indigo-600 font-medium">Đang khởi tạo phiên đăng nhập...</div>;
+    return <div className="text-[var(--brand)] font-medium">Đang khởi tạo phiên đăng nhập...</div>;
   }
   if (!token || !user) {
-    return <div className="text-indigo-600 font-medium">Đang chuyển hướng...</div>;
+    return <div className="text-[var(--brand)] font-medium">Đang chuyển hướng...</div>;
   }
 
   const getAdminTitle = (tab: string) => {
@@ -49,8 +49,6 @@ function AdminDashboardContent() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title={getAdminTitle(activeTab)} description="Quản trị viên hệ thống" />
-
       {activeTab === 'overview' && <OverviewTab />}
       {activeTab === 'users' && <UsersTab />}
       {activeTab === 'vocab' && <VocabTab />}
@@ -67,7 +65,7 @@ function AdminDashboardContent() {
 
 export default function AdminDashboard() {
   return (
-    <Suspense fallback={<div className="text-indigo-600 font-medium">Đang tải bảng điều khiển...</div>}>
+    <Suspense fallback={<div className="text-[var(--brand)] font-medium">Đang tải bảng điều khiển...</div>}>
       <AdminDashboardContent />
     </Suspense>
   )
@@ -98,18 +96,11 @@ function OverviewTab() {
   }, [isInitialized, token]);
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-4 gap-6 animate-in fade-in zoom-in-95 duration-300">
-      {[
-        { label: "Tổng người dùng", value: loading ? "..." : stats.users, icon: Users, color: "text-blue-600", bg: "bg-blue-100" },
-        { label: "Tổng Lớp học", value: loading ? "..." : stats.classes, icon: GraduationCap, color: "text-purple-600", bg: "bg-purple-100" },
-        { label: "Tổng Bài học", value: loading ? "..." : stats.lessons, icon: BookOpen, color: "text-orange-600", bg: "bg-orange-100" },
-        { label: "Từ vựng (Neo4j)", value: loading ? "..." : stats.vocab, icon: Database, color: "text-indigo-600", bg: "bg-indigo-100" }
-      ].map((stat, i) => (
-        <div key={i} className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex items-center">
-          <div className={`p-4 rounded-2xl ${stat.bg} mr-4`}><stat.icon className={stat.color} size={28} /></div>
-          <div><p className="text-sm font-medium text-gray-500">{stat.label}</p><h3 className="text-2xl font-bold text-gray-900">{stat.value}</h3></div>
-        </div>
-      ))}
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 animate-in fade-in zoom-in-95 duration-300">
+      <Stat label="Tổng người dùng" value={loading ? "—" : stats.users}   icon={<Users size={18} />}         tone="brand"   />
+      <Stat label="Tổng Lớp học"    value={loading ? "—" : stats.classes}  icon={<GraduationCap size={18} />} tone="neutral"  />
+      <Stat label="Tổng Bài học"    value={loading ? "—" : stats.lessons}  icon={<BookOpen size={18} />}      tone="warn"    />
+      <Stat label="Từ vựng (Neo4j)" value={loading ? "—" : stats.vocab}    icon={<Database size={18} />}      tone="brand"   />
     </div>
   );
 }
@@ -241,7 +232,7 @@ function UsersTab() {
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in duration-300">
-      <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+      <div className="lg:col-span-2 app-card p-6">
         <h2 className="text-lg font-bold text-gray-900 mb-4">Danh sách Người dùng</h2>
         {loading ? <p>Đang tải...</p> : (
           <div className="overflow-x-auto">
@@ -267,7 +258,7 @@ function UsersTab() {
                       </span>
                     </td>
                     <td className="py-4 text-gray-700 font-bold">{u.credits_ai || 0}</td>
-                    <td className="py-4 text-indigo-600 font-bold">{u.points || 0}</td>
+                    <td className="py-4 text-[var(--brand)] font-bold">{u.points || 0}</td>
                     <td className="py-4 flex gap-2 justify-end">
                       <button onClick={() => handleEditClick(u)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded"><Edit size={16} /></button>
                       <button onClick={() => handleDeleteUser(u.id)} className="p-1.5 text-red-600 hover:bg-red-50 rounded"><Trash2 size={16} /></button>
@@ -281,9 +272,9 @@ function UsersTab() {
       </div>
 
         <div className="space-y-6">
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 h-fit">
+          <div className="app-card p-6 h-fit">
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-lg font-bold text-gray-900 flex"><Users className="mr-2 text-indigo-600" /> {isEditing ? 'Sửa Người Dùng' : 'Thêm Người Dùng'}</h2>
+              <h2 className="text-lg font-bold text-gray-900 flex"><Users className="mr-2 text-[var(--brand)]" /> {isEditing ? 'Sửa Người Dùng' : 'Thêm Người Dùng'}</h2>
               {isEditing && <button onClick={resetForm} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>}
             </div>
             <form className="space-y-4">
@@ -319,13 +310,13 @@ function UsersTab() {
                   <input type="number" value={formUser.points} onChange={e => setFormUser({ ...formUser, points: parseInt(e.target.value) || 0 })} className="w-full border rounded-lg p-2 focus:ring-2 outline-none" />
                 </div>
               </div>
-              <button type="button" onClick={handleSaveUser} className="w-full py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition flex justify-center items-center">
+              <button type="button" onClick={handleSaveUser} className="w-full py-2 bg-[var(--brand)] text-white rounded-lg hover:bg-[var(--brand-dark)] transition flex justify-center items-center">
                 {isEditing ? <><Check size={18} className="mr-2" /> Lưu thay đổi</> : 'Tạo tài khoản'}
               </button>
             </form>
           </div>
 
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 h-fit h-auto">
+          <div className="app-card p-6 h-fit h-auto">
             <h2 className="text-lg font-bold text-gray-900 flex items-center mb-4"><RefreshCw className="mr-2 text-blue-600" /> Cập nhật hàng loạt</h2>
             <div className="space-y-4">
               <div className="flex gap-4">
@@ -441,7 +432,7 @@ function ClassesTab() {
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-in fade-in duration-300">
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+      <div className="app-card p-6">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-lg font-bold text-gray-900">{isEditing ? 'Sửa Lớp Học' : 'Tạo Lớp Học Mới'}</h2>
           {isEditing && <button onClick={resetForm} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>}
@@ -450,13 +441,13 @@ function ClassesTab() {
           <input type="text" value={formClass.name} onChange={e => setFormClass({ ...formClass, name: e.target.value })} placeholder="Tên Lớp (VD: IELTS Căn bản)" className="w-full border rounded-lg p-2 focus:ring-2 outline-none" />
           <input type="text" value={formClass.teacher_name} onChange={e => setFormClass({ ...formClass, teacher_name: e.target.value })} placeholder="Tên Giáo viên phụ trách" className="w-full border rounded-lg p-2 focus:ring-2 outline-none" />
           <input type="number" value={formClass.students_count} onChange={e => setFormClass({ ...formClass, students_count: parseInt(e.target.value) || 0 })} placeholder="Sĩ số" className="w-full border rounded-lg p-2 focus:ring-2 outline-none" />
-          <button onClick={handleSave} className="w-full py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition">
+          <button onClick={handleSave} className="w-full py-2 bg-[var(--brand)] text-white rounded-lg hover:bg-[var(--brand-dark)] transition">
             {isEditing ? <><Check size={18} className="inline mr-1" /> Lưu thay đổi</> : '+ Thêm Lớp Này'}
           </button>
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 flex-grow">
+      <div className="app-card p-6 flex-grow">
         <h2 className="text-lg font-bold text-gray-900 mb-4">Danh sách Lớp</h2>
         <ul className="space-y-3 max-h-[500px] overflow-y-auto">
           {classes.length === 0 && <p className="text-gray-400 text-sm">Chưa có lớp nào.</p>}
@@ -600,7 +591,7 @@ function LessonsTab() {
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-in fade-in duration-300">
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+      <div className="app-card p-6">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-lg font-bold text-gray-900 flex items-center"><BookOpen className="mr-2 text-orange-600" size={20} /> {isEditing ? 'Sửa Bài Học' : 'Thêm Bài Học Mới'}</h2>
           {isEditing && <button onClick={resetForm} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>}
@@ -637,7 +628,7 @@ function LessonsTab() {
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 flex-grow">
+      <div className="app-card p-6 flex-grow">
         <h2 className="text-lg font-bold text-gray-900 mb-4">Danh sách Bài học</h2>
         <ul className="space-y-3 max-h-[500px] overflow-y-auto">
           {lessons.length === 0 && <p className="text-gray-400 text-sm">Chưa có bài học nào.</p>}
@@ -650,7 +641,7 @@ function LessonsTab() {
                   {l.content && <p className="text-xs text-gray-600 mt-1 line-clamp-2">{l.content}</p>}
                   {l.file_name && (
                     <a href={`${API_URL}/admin/lessons/${l.id}/file`} target="_blank" rel="noopener noreferrer"
-                      className="inline-flex items-center mt-2 text-xs text-indigo-600 hover:underline">
+                      className="inline-flex items-center mt-2 text-xs text-[var(--brand)] hover:underline">
                       <FileSpreadsheet size={14} className="mr-1" /> {l.file_name}
                     </a>
                   )}
@@ -795,29 +786,29 @@ function VocabTab() {
     <div className="space-y-6 animate-in fade-in duration-300">
       {/* Upload + Stats */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-          <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center"><FileSpreadsheet className="mr-2 text-indigo-600" /> Nhập Nhanh (CSV)</h2>
+        <div className="app-card p-6">
+          <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center"><FileSpreadsheet className="mr-2 text-[var(--brand)]" /> Nhập Nhanh (CSV)</h2>
           <p className="text-sm text-gray-500 mb-4">Upload file thêm hàng loạt từ vựng vào Neo4j Graph Database.</p>
           <div className="border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer hover:border-indigo-400 hover:bg-gray-50 transition">
             <input type="file" accept=".csv" className="hidden" id="file-upload" onChange={(e) => e.target.files && setFile(e.target.files[0])} />
             <label htmlFor="file-upload" className="cursor-pointer text-gray-500 flex flex-col items-center">
-              {file ? <FileSpreadsheet size={40} className="text-indigo-600 mb-2" /> : <UploadCloud size={40} className="mb-2" />}
+              {file ? <FileSpreadsheet size={40} className="text-[var(--brand)] mb-2" /> : <UploadCloud size={40} className="mb-2" />}
               <span className="font-medium text-gray-700">{file ? file.name : "Click chọn file .csv"}</span>
             </label>
           </div>
-          <button onClick={handleUpload} disabled={!file || uploading} className="w-full mt-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition">{uploading ? "Đang import..." : "Bắt đầu Import"}</button>
+          <button onClick={handleUpload} disabled={!file || uploading} className="w-full mt-4 py-2 bg-[var(--brand)] text-white rounded-lg hover:bg-[var(--brand-dark)] disabled:opacity-50 transition">{uploading ? "Đang import..." : "Bắt đầu Import"}</button>
         </div>
 
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-          <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center"><Database className="mr-2 text-indigo-600" /> Thống kê & Tạo từ</h2>
+        <div className="app-card p-6">
+          <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center"><Database className="mr-2 text-[var(--brand)]" /> Thống kê & Tạo từ</h2>
           <div className="text-center py-4">
-            <p className="text-4xl font-bold text-indigo-600">{totalWords}</p>
+            <p className="text-4xl font-bold text-[var(--brand)]">{totalWords}</p>
             <p className="text-gray-500 mt-1">từ vựng trong Neo4j</p>
           </div>
           <div className="flex flex-wrap gap-2 justify-center mb-4">
             {['', 'A1', 'A2', 'B1', 'B2', 'C1', 'C2'].map(level => (
               <button key={level} onClick={() => handleFilterChange(level)}
-                className={`px-3 py-1 rounded-full text-sm font-medium transition ${filterLevel === level ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+                className={`px-3 py-1 rounded-full text-sm font-medium transition ${filterLevel === level ? 'bg-[var(--brand)] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
                 {level || 'Tất cả'}
               </button>
             ))}
@@ -847,20 +838,20 @@ function VocabTab() {
             </select>
             <input value={formWord.example} onChange={e => setFormWord({ ...formWord, example: e.target.value })} placeholder="Ví dụ" className="border rounded-lg p-2 focus:ring-2 outline-none" />
           </div>
-          <button onClick={handleSaveWord} disabled={savingWord} className="mt-4 px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition">
+          <button onClick={handleSaveWord} disabled={savingWord} className="mt-4 px-6 py-2 bg-[var(--brand)] text-white rounded-lg hover:bg-[var(--brand-dark)] disabled:opacity-50 transition">
             {savingWord ? 'Đang lưu...' : <><Check size={18} className="inline mr-1" /> Lưu</>}
           </button>
         </div>
       )}
 
       {/* Word List with search + pagination */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+      <div className="app-card p-6">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-3">
-          <h2 className="text-lg font-bold text-gray-900 flex items-center"><Database className="mr-2 text-indigo-600" size={20} /> Danh sách Từ Vựng</h2>
+          <h2 className="text-lg font-bold text-gray-900 flex items-center"><Database className="mr-2 text-[var(--brand)]" size={20} /> Danh sách Từ Vựng</h2>
           <div className="flex gap-2">
             <input value={search} onChange={e => setSearch(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSearch()} placeholder="Tìm từ..." className="border rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-2 w-48" />
             <button onClick={handleSearch} className="px-3 py-1.5 bg-indigo-100 text-indigo-700 rounded-lg text-sm hover:bg-indigo-200">Tìm</button>
-            <button onClick={() => fetchWords()} className="text-indigo-600 hover:text-indigo-800 text-sm flex items-center"><RefreshCw size={14} className="mr-1" /> Làm mới</button>
+            <button onClick={() => fetchWords()} className="text-[var(--brand)] hover:text-indigo-800 text-sm flex items-center"><RefreshCw size={14} className="mr-1" /> Làm mới</button>
           </div>
         </div>
         {loadingWords ? <p className="text-gray-400 text-sm py-4">Đang tải từ Neo4j...</p> : words.length === 0 ? <p className="text-gray-400 text-sm py-4">Không có từ vựng nào.</p> : (
@@ -1150,20 +1141,20 @@ function GrammarTab() {
 
   return (
     <div className="animate-in fade-in duration-300">
-      <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-8 mb-8">
+      <div className="app-card p-8 mb-8">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
-            <div className="bg-teal-50 p-3 rounded-2xl">
-              <BookText className="text-teal-600" size={32} />
+            <div className="bg-[var(--brand-soft)] p-3 rounded-2xl">
+              <BookText className="text-[var(--brand)]" size={32} />
             </div>
             <div>
-              <h2 className="text-2xl font-black text-gray-900 leading-none">Kho Ngữ Pháp (AI)</h2>
+              <h2 className="text-2xl font-semibold text-gray-900 leading-none">Kho Ngữ Pháp (AI)</h2>
               <p className="text-gray-500 text-sm mt-1 font-medium italic">Quản lý cấu trúc ngữ pháp hệ thống.</p>
             </div>
           </div>
           <button
             onClick={() => { setShowParseModal(true); setParseTab("local"); setLocalParsedQuestions([]); setSavedSuccess(false); }}
-            className="flex items-center gap-2 px-6 py-3 bg-orange-500 hover:bg-orange-600 text-white font-black rounded-xl shadow-sm transition-all active:scale-95 self-start sm:self-auto whitespace-nowrap"
+            className="flex items-center gap-2 px-6 py-3 bg-orange-500 hover:bg-orange-600 text-white font-semibold rounded-xl shadow-sm transition-all active:scale-95 self-start sm:self-auto whitespace-nowrap"
           >
             <ClipboardPaste size={18} />
             Nhập bài tập từ đề thi
@@ -1175,8 +1166,8 @@ function GrammarTab() {
         <div className="xl:col-span-2 space-y-6">
           <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
             <div className="flex justify-between items-center mb-8">
-              <h3 className="text-xl font-black flex items-center gap-2">
-                <Plus className="text-teal-600" size={24} /> 
+              <h3 className="text-xl font-semibold flex items-center gap-2">
+                <Plus className="text-[var(--brand)]" size={24} /> 
                 {isEditing ? 'Cập nhật Cấu trúc' : 'Soạn thảo Ngữ pháp mới'}
               </h3>
               {isEditing && <button onClick={resetForm} className="p-2 hover:bg-gray-100 rounded-xl transition"><X size={20} /></button>}
@@ -1184,10 +1175,10 @@ function GrammarTab() {
             
             <div className="space-y-4">
                <div className="space-y-2">
-                <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-1">Tên cấu trúc ngữ pháp</label>
+                <label className="text-xs font-semibold text-gray-400 uppercase tracking-widest px-1">Tên cấu trúc ngữ pháp</label>
                 <div className="flex gap-2">
                   <input type="text" value={name} onChange={e => setName(e.target.value)} className="flex-1 bg-gray-50 border-2 border-gray-200 focus:border-teal-500 rounded-xl p-3 outline-none transition-all font-bold text-base" placeholder="VD: Hiện tại tiếp diễn..." />
-                  <button onClick={handleAIGenerate} disabled={generatingAI} className="px-4 py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition-all font-black flex items-center gap-1.5 shadow-sm text-sm whitespace-nowrap">
+                  <button onClick={handleAIGenerate} disabled={generatingAI} className="px-4 py-3 bg-[var(--brand)] text-white rounded-xl hover:bg-[var(--brand-dark)] disabled:opacity-50 transition-all font-semibold flex items-center gap-1.5 shadow-sm text-sm whitespace-nowrap">
                      {generatingAI ? <RefreshCw className="animate-spin" size={16} /> : <Sparkles size={16} />}
                      AI Mô tả
                   </button>
@@ -1197,14 +1188,14 @@ function GrammarTab() {
               {/* Level + Parent topic */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-black text-gray-400 uppercase tracking-widest">Cấp độ CEFR</label>
+                  <label className="text-xs font-semibold text-gray-400 uppercase tracking-widest">Cấp độ CEFR</label>
                   <select value={level} onChange={e => setLevel(e.target.value)}
                     className="w-full bg-gray-50 border-2 border-gray-200 focus:border-teal-500 rounded-xl p-2.5 outline-none font-bold text-sm text-gray-700">
                     {['Pre-A1','A1','A2','B1','B2','C1'].map(l => <option key={l} value={l}>{l}</option>)}
                   </select>
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-black text-gray-400 uppercase tracking-widest">Chủ đề cha (tuỳ chọn)</label>
+                  <label className="text-xs font-semibold text-gray-400 uppercase tracking-widest">Chủ đề cha (tuỳ chọn)</label>
                   <select value={parentId} onChange={e => setParentId(e.target.value)}
                     className="w-full bg-gray-50 border-2 border-gray-200 focus:border-teal-500 rounded-xl p-2.5 outline-none font-bold text-sm text-gray-700">
                     <option value="">— Chủ đề gốc —</option>
@@ -1216,7 +1207,7 @@ function GrammarTab() {
               </div>
 
               <div className="space-y-2">
-                <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-1">Nội dung chi tiết & Cấu trúc</label>
+                <label className="text-xs font-semibold text-gray-400 uppercase tracking-widest px-1">Nội dung chi tiết & Cấu trúc</label>
                 <div className="border-2 border-gray-200 rounded-2xl overflow-hidden focus-within:border-teal-500 transition-all bg-white shadow-sm">
                     {/* Toolbar */}
                     <div className="bg-white border-b-4 border-teal-500 p-4 flex flex-wrap gap-2.5 items-center sticky top-0 z-20 shadow-md">
@@ -1231,7 +1222,7 @@ function GrammarTab() {
                         <EditorToolbarButton onClick={() => handleEditorCommand('insertOrderedList')} icon={<ListOrdered size={20}/>} tooltip="Danh sách số" label="Num" />
                         <div className="w-[3px] h-8 bg-gray-200 mx-2"></div>
                         <div className="flex items-center gap-2">
-                            <span className="text-[10px] font-black uppercase text-gray-400">Font:</span>
+                            <span className="text-[10px] font-semibold uppercase text-gray-400">Font:</span>
                             <select onChange={(e) => handleEditorCommand('fontName', e.target.value)} className="bg-white border-2 border-gray-100 rounded-lg px-2 py-1 text-xs font-bold outline-none focus:border-teal-400 transition">
                                 <option value="Inter, sans-serif">Sans</option>
                                 <option value="'Roboto Slab', serif">Serif</option>
@@ -1249,15 +1240,15 @@ function GrammarTab() {
                 </div>
               </div>
 
-              <div className="border-2 border-dashed border-gray-200 rounded-xl p-4 text-center hover:border-teal-400 hover:bg-teal-50/30 transition-all group">
+              <div className="border-2 border-dashed border-gray-200 rounded-xl p-4 text-center hover:border-teal-400 hover:bg-[var(--brand-soft)]/30 transition-all group">
                 <input type="file" className="hidden" id="admin-grammar-file" onChange={e => { if (e.target.files) setFile(e.target.files[0]); }} />
                 <label htmlFor="admin-grammar-file" className="cursor-pointer text-gray-500 flex items-center justify-center gap-3">
-                  <UploadCloud size={24} className={`transition flex-shrink-0 ${file ? "text-teal-600" : "group-hover:-translate-y-0.5"}`} />
+                  <UploadCloud size={24} className={`transition flex-shrink-0 ${file ? "text-[var(--brand)]" : "group-hover:-translate-y-0.5"}`} />
                   <span className="font-bold text-sm">{file ? file.name : "Đính kèm tài liệu (.pdf, .docx, .png) — tối đa 10MB"}</span>
                 </label>
               </div>
 
-              <button onClick={handleSave} disabled={saving} className="w-full bg-teal-600 text-white py-3.5 rounded-xl font-black text-base hover:bg-teal-700 disabled:opacity-50 transition-all shadow-sm active:scale-[0.98] flex items-center justify-center gap-2">
+              <button onClick={handleSave} disabled={saving} className="w-full bg-teal-600 text-white py-3.5 rounded-xl font-semibold text-base hover:bg-teal-700 disabled:opacity-50 transition-all shadow-sm active:scale-[0.98] flex items-center justify-center gap-2">
                 {saving ? <RefreshCw className="animate-spin" size={18} /> : isEditing ? <><Save size={18} /> Lưu thay đổi</> : <Plus size={18} />}
                 {saving ? "Đang xử lý..." : isEditing ? "Cập nhật" : "Tạo mới"}
               </button>
@@ -1266,7 +1257,7 @@ function GrammarTab() {
         </div>
 
         <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm flex flex-col h-fit">
-          <h3 className="text-lg font-black mb-4 flex justify-between items-center">
+          <h3 className="text-lg font-semibold mb-4 flex justify-between items-center">
             Danh sách chủ đề
             <span className="text-xs bg-gray-100 text-gray-400 px-2.5 py-1 rounded-full">{rules.length}</span>
           </h3>
@@ -1301,19 +1292,19 @@ function GrammarTab() {
                     <div className="flex items-start gap-2">
                       {hasKids ? (
                         <button onClick={() => setExpandedAdminNodes(prev => { const s = new Set(prev); s.has(rule.id) ? s.delete(rule.id) : s.add(rule.id); return s; })}
-                          className="mt-0.5 text-gray-400 hover:text-teal-600 flex-shrink-0 transition">
+                          className="mt-0.5 text-gray-400 hover:text-[var(--brand)] flex-shrink-0 transition">
                           {isExp ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                         </button>
                       ) : <div className="w-3.5 flex-shrink-0" />}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
-                          <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full ${CEFR_CHIP[rule.level] || 'bg-gray-100 text-gray-500'}`}>{rule.level || 'B1'}</span>
+                          <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full ${CEFR_CHIP[rule.level] || 'bg-gray-100 text-gray-500'}`}>{rule.level || 'B1'}</span>
                           {hasKids && <span className="text-[9px] text-gray-400 font-bold">{rule.children.length} con</span>}
                         </div>
-                        <p className="font-black text-gray-900 text-sm leading-tight group-hover:text-teal-600 transition-colors">{rule.name}</p>
+                        <p className="font-semibold text-gray-900 text-sm leading-tight group-hover:text-[var(--brand)] transition-colors">{rule.name}</p>
                         {rule.file_name && (
                           <a href={`${API_URL}/admin/grammar/${rule.id}/file`} target="_blank" rel="noopener noreferrer"
-                            className="inline-flex items-center mt-0.5 text-[10px] text-indigo-500 font-black hover:underline gap-0.5">
+                            className="inline-flex items-center mt-0.5 text-[10px] text-indigo-500 font-semibold hover:underline gap-0.5">
                             <FileSpreadsheet size={10} /> {rule.file_name}
                           </a>
                         )}
@@ -1342,13 +1333,13 @@ function GrammarTab() {
       {showParseModal && (
         <div className="fixed inset-0 !mt-0 z-[200] flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={closeParseModal} />
-          <div className="relative z-10 bg-white w-full sm:max-w-2xl rounded-t-[32px] sm:rounded-[32px] shadow-2xl flex flex-col max-h-[90vh]">
+          <div className="relative z-10 bg-white w-full sm:max-w-2xl rounded-t-[var(--r-2xl)] sm:rounded-[var(--r-2xl)] shadow-[var(--sh-lg)] flex flex-col max-h-[90vh]">
             {/* Header */}
             <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-gray-100 flex-shrink-0">
               <div className="flex items-center gap-3">
                 <div className="bg-orange-100 p-2.5 rounded-2xl"><ClipboardPaste size={22} className="text-orange-600" /></div>
                 <div>
-                  <h3 className="text-lg font-black text-gray-900">Nhập bài tập từ đề thi</h3>
+                  <h3 className="text-lg font-semibold text-gray-900">Nhập bài tập từ đề thi</h3>
                   <p className="text-xs text-gray-400 font-bold">Trích xuất câu hỏi & đáp án từ văn bản, lưu vào kho ngữ pháp</p>
                 </div>
               </div>
@@ -1361,11 +1352,11 @@ function GrammarTab() {
             {/* Tabs */}
             <div className="flex border-b border-gray-100 px-6 flex-shrink-0">
               <button onClick={() => { setParseTab("ai"); setLocalParsedQuestions([]); }}
-                className={`pb-3 pt-4 px-4 font-black text-sm flex items-center gap-2 border-b-2 transition-all ${parseTab === "ai" ? "border-teal-500 text-teal-700" : "border-transparent text-gray-400 hover:text-gray-700"}`}>
+                className={`pb-3 pt-4 px-4 font-semibold text-sm flex items-center gap-2 border-b-2 transition-all ${parseTab === "ai" ? "border-teal-500 text-teal-700" : "border-transparent text-gray-400 hover:text-gray-700"}`}>
                 <Sparkles size={15} /> AI Phân tích <span className="text-xs bg-teal-100 text-teal-700 px-2 py-0.5 rounded-full">3 credits</span>
               </button>
               <button onClick={() => { setParseTab("local"); setLocalParsedQuestions([]); setSavedSuccess(false); }}
-                className={`pb-3 pt-4 px-4 font-black text-sm flex items-center gap-2 border-b-2 transition-all ${parseTab === "local" ? "border-orange-500 text-orange-700" : "border-transparent text-gray-400 hover:text-gray-700"}`}>
+                className={`pb-3 pt-4 px-4 font-semibold text-sm flex items-center gap-2 border-b-2 transition-all ${parseTab === "local" ? "border-orange-500 text-orange-700" : "border-transparent text-gray-400 hover:text-gray-700"}`}>
                 <ListChecks size={15} /> Phân tích thông minh <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Miễn phí</span>
               </button>
             </div>
@@ -1374,8 +1365,8 @@ function GrammarTab() {
             <div className="p-6 flex-1 overflow-y-auto space-y-4">
               {parseTab === "ai" ? (
                 <>
-                  <div className="bg-teal-50 border border-teal-100 rounded-2xl p-4 text-sm text-teal-700 font-medium">
-                    <p className="font-black mb-1">Cách sử dụng:</p>
+                  <div className="bg-[var(--brand-soft)] border border-teal-100 rounded-2xl p-4 text-sm text-teal-700 font-medium">
+                    <p className="font-semibold mb-1">Cách sử dụng:</p>
                     <ul className="space-y-1 text-xs opacity-80">
                       <li>• Copy đoạn văn bản từ file PDF/Word chứa câu hỏi trắc nghiệm</li>
                       <li>• Dán vào ô bên dưới và nhấn <strong>Phân tích</strong></li>
@@ -1399,13 +1390,13 @@ function GrammarTab() {
                   )}
                   <div className="flex items-center justify-between text-xs text-gray-400">
                     <span>{parseText.length} / 12,000 ký tự</span>
-                    <span className="font-bold text-teal-600">3 credits</span>
+                    <span className="font-bold text-[var(--brand)]">3 credits</span>
                   </div>
                 </>
               ) : (
                 <>
                   <div className="bg-orange-50 border border-orange-100 rounded-2xl p-4 text-sm text-orange-700 font-medium">
-                    <p className="font-black mb-1">Phân tích thông minh — không cần AI:</p>
+                    <p className="font-semibold mb-1">Phân tích thông minh — không cần AI:</p>
                     <ul className="space-y-1 text-xs opacity-80">
                       <li>• Hệ thống tự nhận diện câu hỏi theo số thứ tự (1. 2. 3. ...)</li>
                       <li>• Tự phát hiện đáp án A. B. C. D. và đáp án đúng</li>
@@ -1438,14 +1429,14 @@ function GrammarTab() {
                   ) : (
                     <>
                       <div className="flex items-center justify-between mb-2">
-                        <p className="font-black text-gray-900 text-sm flex items-center gap-1.5"><Eye size={14} className="text-teal-600" /> {localParsedQuestions.length} câu hỏi</p>
+                        <p className="font-semibold text-gray-900 text-sm flex items-center gap-1.5"><Eye size={14} className="text-[var(--brand)]" /> {localParsedQuestions.length} câu hỏi</p>
                         <button onClick={() => { setLocalParsedQuestions([]); setSavedSuccess(false); }}
-                          className="text-xs font-black text-gray-400 hover:text-gray-600 flex items-center gap-1"><X size={11} /> Nhập lại</button>
+                          className="text-xs font-semibold text-gray-400 hover:text-gray-600 flex items-center gap-1"><X size={11} /> Nhập lại</button>
                       </div>
                       <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
                         {localParsedQuestions.map((q: any, i: number) => (
                           <div key={i} className="bg-gray-50 rounded-xl p-3 border border-gray-100">
-                            <p className="font-black text-gray-900 text-xs mb-1.5">{i + 1}. {q.question}</p>
+                            <p className="font-semibold text-gray-900 text-xs mb-1.5">{i + 1}. {q.question}</p>
                             {q.options && q.options.length > 0 && (
                               <div className="grid grid-cols-2 gap-1 mb-1">
                                 {q.options.map((opt: string, j: number) => (
@@ -1455,14 +1446,14 @@ function GrammarTab() {
                                 ))}
                               </div>
                             )}
-                            {q.answer && <p className="text-[10px] font-black text-teal-600">Đáp án: {q.answer}</p>}
+                            {q.answer && <p className="text-[10px] font-semibold text-[var(--brand)]">Đáp án: {q.answer}</p>}
                           </div>
                         ))}
                       </div>
 
                       {!savedSuccess ? (
                         <div className="bg-blue-50 border border-blue-100 rounded-xl p-3">
-                          <p className="font-black text-blue-900 text-xs mb-2 flex items-center gap-1.5"><Save size={13} /> Lưu vào chủ đề ngữ pháp</p>
+                          <p className="font-semibold text-blue-900 text-xs mb-2 flex items-center gap-1.5"><Save size={13} /> Lưu vào chủ đề ngữ pháp</p>
                           <div className="flex gap-2">
                             <select value={selectedSaveRuleId} onChange={e => setSelectedSaveRuleId(e.target.value)}
                               className="flex-1 bg-white border-2 border-blue-200 rounded-lg px-2 py-1.5 outline-none font-bold text-gray-700 text-xs focus:border-blue-400">
@@ -1470,13 +1461,13 @@ function GrammarTab() {
                               {rules.map((r: any) => <option key={r.id} value={r.id}>{r.name} ({r.level || 'B1'})</option>)}
                             </select>
                             <button onClick={saveLocalQuizzes} disabled={!selectedSaveRuleId || savingQuizzes}
-                              className="px-3 py-1.5 bg-blue-600 text-white rounded-lg font-black text-xs hover:bg-blue-700 transition disabled:opacity-40 flex items-center gap-1 flex-shrink-0">
+                              className="px-3 py-1.5 bg-blue-600 text-white rounded-lg font-semibold text-xs hover:bg-blue-700 transition disabled:opacity-40 flex items-center gap-1 flex-shrink-0">
                               {savingQuizzes ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />} Lưu
                             </button>
                           </div>
                         </div>
                       ) : (
-                        <div className="bg-green-50 border border-green-200 rounded-xl p-3 flex items-center gap-2 text-green-700 font-black text-xs">
+                        <div className="bg-green-50 border border-green-200 rounded-xl p-3 flex items-center gap-2 text-green-700 font-semibold text-xs">
                           <CheckCircle2 size={14} /> Đã lưu thành công!
                         </div>
                       )}
@@ -1491,24 +1482,24 @@ function GrammarTab() {
               {parseTab === "ai" && localParsedQuestions.length === 0 ? (
                 <>
                   <button onClick={closeParseModal} disabled={parsing}
-                    className="flex-1 py-2.5 rounded-xl font-black text-sm text-gray-500 bg-gray-100 hover:bg-gray-200 transition disabled:opacity-40">Hủy</button>
+                    className="flex-1 py-2.5 rounded-xl font-semibold text-sm text-gray-500 bg-gray-100 hover:bg-gray-200 transition disabled:opacity-40">Hủy</button>
                   <button onClick={handleAIParse} disabled={parsing || !parseText.trim()}
-                    className="flex-1 sm:flex-none sm:px-8 py-2.5 rounded-xl font-black text-sm text-white bg-teal-600 hover:bg-teal-700 transition flex items-center justify-center gap-1.5 shadow-lg disabled:opacity-40">
+                    className="flex-1 sm:flex-none sm:px-8 py-2.5 rounded-xl font-semibold text-sm text-white bg-teal-600 hover:bg-teal-700 transition flex items-center justify-center gap-1.5 shadow-lg disabled:opacity-40">
                     {parsing ? <><Loader2 size={15} className="animate-spin" /> Đang phân tích...</> : <><Sparkles size={15} /> Phân tích ngay</>}
                   </button>
                 </>
               ) : parseTab === "local" && localParsedQuestions.length === 0 ? (
                 <>
                   <button onClick={closeParseModal} disabled={localParsing}
-                    className="flex-1 py-2.5 rounded-xl font-black text-sm text-gray-500 bg-gray-100 hover:bg-gray-200 transition disabled:opacity-40">Hủy</button>
+                    className="flex-1 py-2.5 rounded-xl font-semibold text-sm text-gray-500 bg-gray-100 hover:bg-gray-200 transition disabled:opacity-40">Hủy</button>
                   <button onClick={handleLocalParse} disabled={localParsing || !parseText.trim()}
-                    className="flex-1 sm:flex-none sm:px-8 py-2.5 rounded-xl font-black text-sm text-white bg-orange-500 hover:bg-orange-600 transition flex items-center justify-center gap-1.5 shadow-lg disabled:opacity-40">
+                    className="flex-1 sm:flex-none sm:px-8 py-2.5 rounded-xl font-semibold text-sm text-white bg-orange-500 hover:bg-orange-600 transition flex items-center justify-center gap-1.5 shadow-lg disabled:opacity-40">
                     {localParsing ? <><Loader2 size={15} className="animate-spin" /> Đang phân tích...</> : <><ListChecks size={15} /> Phân tích ngay</>}
                   </button>
                 </>
               ) : (
                 <button onClick={closeParseModal}
-                  className="flex-1 py-2.5 rounded-xl font-black text-sm text-gray-500 bg-gray-100 hover:bg-gray-200 transition">Đóng</button>
+                  className="flex-1 py-2.5 rounded-xl font-semibold text-sm text-gray-500 bg-gray-100 hover:bg-gray-200 transition">Đóng</button>
               )}
             </div>
           </div>
@@ -1527,11 +1518,11 @@ function EditorToolbarButton({ onClick, icon, tooltip, label }: { onClick: () =>
                 e.preventDefault(); 
                 onClick(); 
             }}
-            className="px-3 py-2 bg-white hover:bg-teal-50 text-gray-900 border-2 border-gray-100 hover:border-teal-400 rounded-xl transition shadow-sm hover:shadow-md active:scale-95 flex items-center gap-2 min-w-[50px] justify-center"
+            className="px-3 py-2 bg-white hover:bg-[var(--brand-soft)] text-gray-900 border-2 border-gray-100 hover:border-teal-400 rounded-xl transition shadow-sm hover:shadow-md active:scale-95 flex items-center gap-2 min-w-[50px] justify-center"
             title={tooltip}
         >
             {icon}
-            {label && <span className="text-[10px] font-black uppercase tracking-widest hidden lg:inline">{label}</span>}
+            {label && <span className="text-[10px] font-semibold uppercase tracking-widest hidden lg:inline">{label}</span>}
         </button>
     );
 }
@@ -1705,10 +1696,10 @@ function SettingsTab() {
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       {/* AI API Keys */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+      <div className="app-card p-6">
         <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <h2 className="text-lg font-bold text-gray-900 flex items-center">
-            <Settings className="mr-2 text-indigo-600" size={20} /> API Keys (AI)
+            <Settings className="mr-2 text-[var(--brand)]" size={20} /> API Keys (AI)
           </h2>
           <div className="flex flex-wrap gap-2">
             <button onClick={handleListGeminiModels} disabled={testingGeminiModels} className="px-4 py-2 bg-indigo-100 text-indigo-700 rounded-lg text-sm font-medium hover:bg-indigo-200 disabled:opacity-50 flex items-center">
@@ -1727,10 +1718,10 @@ function SettingsTab() {
       </div>
 
       {/* Neo4j */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+      <div className="app-card p-6">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-lg font-bold text-gray-900 flex items-center">
-            <Database className="mr-2 text-indigo-600" size={20} /> Neo4j Graph Database
+            <Database className="mr-2 text-[var(--brand)]" size={20} /> Neo4j Graph Database
           </h2>
           <button onClick={handleTestNeo4j} disabled={testingNeo4j} className="px-4 py-1.5 bg-indigo-100 text-indigo-700 rounded-lg text-sm font-medium hover:bg-indigo-200 disabled:opacity-50 flex items-center">
             <RefreshCw size={14} className={`mr-1.5 ${testingNeo4j ? 'animate-spin' : ''}`} /> {testingNeo4j ? 'Testing...' : 'Test connection'}
@@ -1745,10 +1736,10 @@ function SettingsTab() {
       </div>
 
       {/* Email Configuration */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+      <div className="app-card p-6">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-lg font-bold text-gray-900 flex items-center">
-            <Mail className="mr-2 text-indigo-600" size={20} /> Email Configuration
+            <Mail className="mr-2 text-[var(--brand)]" size={20} /> Email Configuration
           </h2>
           <button onClick={handleTestEmail} disabled={testingEmail} className="px-4 py-1.5 bg-green-100 text-green-700 rounded-lg text-sm font-medium hover:bg-green-200 disabled:opacity-50 flex items-center">
             <Mail size={14} className="mr-1.5" /> {testingEmail ? 'Sending...' : 'Send test email'}
@@ -1784,9 +1775,9 @@ function SettingsTab() {
       </div>
 
       {/* Frontend URL */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+      <div className="app-card p-6">
         <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center">
-          <Settings className="mr-2 text-indigo-600" size={20} /> Frontend URL
+          <Settings className="mr-2 text-[var(--brand)]" size={20} /> Frontend URL
         </h2>
         <div className="grid grid-cols-1 gap-4">
           {renderField('FRONTEND_URL', 'Frontend URL (for password reset links)', 'https://your-app.vercel.app')}
@@ -1795,17 +1786,17 @@ function SettingsTab() {
 
       {/* Save Button */}
       <div className="flex justify-end">
-        <button onClick={handleSave} disabled={saving} className="px-8 py-3 bg-indigo-600 text-white rounded-xl font-medium hover:bg-indigo-700 disabled:opacity-50 transition shadow-lg flex items-center">
+        <button onClick={handleSave} disabled={saving} className="px-8 py-3 bg-[var(--brand)] text-white rounded-xl font-medium hover:bg-[var(--brand-dark)] disabled:opacity-50 transition shadow-lg flex items-center">
           <Save size={18} className="mr-2" /> {saving ? 'Saving...' : 'Save all settings'}
         </button>
       </div>
 
       {showGeminiModelsModal && (
         <div className="fixed inset-0 !mt-0 z-[9999] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm" onClick={() => setShowGeminiModelsModal(false)}>
-          <div className="w-full max-w-3xl overflow-hidden rounded-2xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
+          <div className="w-full max-w-3xl overflow-hidden rounded-2xl bg-white shadow-[var(--sh-lg)]" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
-              <h3 className="text-lg font-black text-gray-900 flex items-center">
-                <Sparkles size={18} className="mr-2 text-indigo-600" /> Gemini Models
+              <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+                <Sparkles size={18} className="mr-2 text-[var(--brand)]" /> Gemini Models
               </h3>
               <button onClick={() => setShowGeminiModelsModal(false)} className="rounded-full p-2 text-gray-400 hover:bg-red-50 hover:text-red-500">
                 <X size={18} />
@@ -1817,7 +1808,7 @@ function SettingsTab() {
               </pre>
             </div>
             <div className="flex justify-end gap-3 border-t border-gray-100 px-6 py-4">
-              <button onClick={handleCopyGeminiModels} className={`min-w-[140px] rounded-lg px-4 py-2.5 text-sm font-bold transition ${copiedGeminiModels ? 'bg-green-100 text-green-700' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}>
+              <button onClick={handleCopyGeminiModels} className={`min-w-[140px] rounded-lg px-4 py-2.5 text-sm font-bold transition ${copiedGeminiModels ? 'bg-green-100 text-green-700' : 'bg-[var(--brand)] text-white hover:bg-[var(--brand-dark)]'}`}>
                 {copiedGeminiModels ? <><Check size={16} className="mr-2 inline" />Da copy</> : <><Copy size={16} className="mr-2 inline" />Copy ket qua</>}
               </button>
               <button onClick={() => setShowGeminiModelsModal(false)} className="rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-bold text-gray-700 hover:bg-gray-50">
@@ -1830,9 +1821,9 @@ function SettingsTab() {
 
       {showCohereModelsModal && (
         <div className="fixed inset-0 !mt-0 z-[9999] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm" onClick={() => setShowCohereModelsModal(false)}>
-          <div className="w-full max-w-3xl overflow-hidden rounded-2xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
+          <div className="w-full max-w-3xl overflow-hidden rounded-2xl bg-white shadow-[var(--sh-lg)]" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
-              <h3 className="text-lg font-black text-gray-900 flex items-center">
+              <h3 className="text-lg font-semibold text-gray-900 flex items-center">
                 <Sparkles size={18} className="mr-2 text-emerald-600" /> Cohere Models
               </h3>
               <button onClick={() => setShowCohereModelsModal(false)} className="rounded-full p-2 text-gray-400 hover:bg-red-50 hover:text-red-500">
@@ -2023,7 +2014,7 @@ function FeedbackTab() {
       )}
 
       {/* Main Content */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col md:flex-row min-h-[600px]">
+      <div className="app-card overflow-hidden flex flex-col md:flex-row min-h-[600px]">
         {/* List Section */}
         <div className="w-full md:w-1/2 lg:w-2/3 border-r border-gray-100 flex flex-col">
           <div className="p-4 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between">
@@ -2144,7 +2135,7 @@ function FeedbackTab() {
                     <button 
                       onClick={saveAdminNote}
                       disabled={savingNote || adminNote === (selectedItem.admin_note || "")}
-                      className="text-xs bg-indigo-50 text-indigo-600 px-3 py-1 rounded-md font-semibold hover:bg-indigo-100 transition disabled:opacity-50"
+                      className="text-xs bg-indigo-50 text-[var(--brand)] px-3 py-1 rounded-md font-semibold hover:bg-indigo-100 transition disabled:opacity-50"
                     >
                       {savingNote ? "Đang lưu..." : "Lưu ghi chú"}
                     </button>
@@ -2258,8 +2249,8 @@ function AssignmentsTab() {
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-in fade-in duration-300">
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-        <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center"><ClipboardList className="mr-2 text-indigo-600" size={20} /> Tạo Bài tập / Đề thi</h2>
+      <div className="app-card p-6">
+        <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center"><ClipboardList className="mr-2 text-[var(--brand)]" size={20} /> Tạo Bài tập / Đề thi</h2>
         <div className="space-y-3">
           <select value={form.class_id} onChange={e => setForm({ ...form, class_id: e.target.value })} className="w-full border rounded-lg p-2 bg-white outline-none focus:ring-2">
             <option value="">-- Chọn Lớp --</option>
@@ -2292,10 +2283,10 @@ function AssignmentsTab() {
               </select>
             </div>
           </div>
-          <button onClick={handleSave} className="w-full py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition mt-2">+ Thêm Bài Tập</button>
+          <button onClick={handleSave} className="w-full py-2 bg-[var(--brand)] text-white rounded-lg hover:bg-[var(--brand-dark)] transition mt-2">+ Thêm Bài Tập</button>
         </div>
       </div>
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 flex-grow">
+      <div className="app-card p-6 flex-grow">
         <h2 className="text-lg font-bold text-gray-900 mb-4">Danh sách Tổng quát</h2>
         {loading ? <p>Đang tải...</p> : (
           <ul className="space-y-3 max-h-[500px] overflow-y-auto">
@@ -2383,21 +2374,21 @@ function AILogsTab() {
     <div className="space-y-6 animate-in fade-in duration-300 pb-12">
       {/* Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
+        <div className="app-card p-6">
           <div className="flex items-center justify-between mb-4">
             <p className="text-sm font-bold text-gray-400 uppercase tracking-widest">Tổng yêu cầu</p>
             <div className="p-2 bg-blue-50 rounded-lg text-blue-600"><Sparkles size={20} /></div>
           </div>
-          <h3 className="text-3xl font-black text-gray-900">{total.toLocaleString()}</h3>
+          <h3 className="text-3xl font-semibold text-gray-900">{total.toLocaleString()}</h3>
           <p className="text-xs text-gray-500 mt-2">Dữ liệu từ lúc triển khai monitoring</p>
         </div>
 
-        <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
+        <div className="app-card p-6">
           <div className="flex items-center justify-between mb-4">
             <p className="text-sm font-bold text-gray-400 uppercase tracking-widest">Tốc độ TB (Latency)</p>
             <div className="p-2 bg-orange-50 rounded-lg text-orange-600"><TrendingUp size={20} /></div>
           </div>
-          <h3 className="text-3xl font-black text-gray-900">
+          <h3 className="text-3xl font-semibold text-gray-900">
             {stats?.model_performance?.length > 0
               ? Math.round(stats.model_performance.filter(s => s.model !== 'KnowledgeGraph').reduce((acc, s) => acc + s.avg_latency, 0) / Math.max(1, stats.model_performance.filter(s => s.model !== 'KnowledgeGraph').length))
               : 0} ms
@@ -2405,12 +2396,12 @@ function AILogsTab() {
           <p className="text-xs text-gray-500 mt-2">Trung bình cộng của tất cả LLM</p>
         </div>
         
-        <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
+        <div className="app-card p-6">
           <div className="flex items-center justify-between mb-4">
             <p className="text-sm font-bold text-gray-400 uppercase tracking-widest">Truy vấn Graph</p>
             <div className="p-2 bg-purple-50 rounded-lg text-purple-600"><Network size={20} /></div>
           </div>
-          <h3 className="text-3xl font-black text-gray-900">
+          <h3 className="text-3xl font-semibold text-gray-900">
             {stats?.model_performance?.find(s => s.model === 'KnowledgeGraph')?.avg_latency 
                 ? Math.round(stats.model_performance.find(s => s.model === 'KnowledgeGraph').avg_latency) 
                 : 0} ms
@@ -2418,12 +2409,12 @@ function AILogsTab() {
           <p className="text-xs text-gray-500 mt-2">Tốc độ tìm kiếm tri thức (Neo4j)</p>
         </div>
 
-        <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
+        <div className="app-card p-6">
           <div className="flex items-center justify-between mb-4">
             <p className="text-sm font-bold text-gray-400 uppercase tracking-widest">Chất lượng AI</p>
             <div className="p-2 bg-green-50 rounded-lg text-green-600"><GraduationCap size={20} /></div>
           </div>
-          <h3 className="text-3xl font-black text-gray-900">
+          <h3 className="text-3xl font-semibold text-gray-900">
             {stats?.feature_performance?.length > 0
               ? (stats.feature_performance.reduce((acc, f) => acc + (f.avg_score || 0), 0) / stats.feature_performance.filter(f => f.avg_score).length || 0).toFixed(1)
               : 0} / 10
@@ -2434,12 +2425,12 @@ function AILogsTab() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Model Performance Table */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 h-full max-h-[350px] flex flex-col flex-1">
-          <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center shrink-0"><Database className="mr-2 text-indigo-600" /> Hiệu năng theo Model</h2>
+        <div className="app-card p-6 h-full max-h-[350px] flex flex-col flex-1">
+          <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center shrink-0"><Database className="mr-2 text-[var(--brand)]" /> Hiệu năng theo Model</h2>
           <div className="overflow-auto flex-1 custom-scrollbar">
             <table className="w-full text-left text-sm relative">
               <thead className="sticky top-0 bg-white shadow-sm z-10">
-                <tr className="border-b border-gray-100 text-gray-400 uppercase text-[10px] font-black tracking-widest">
+                <tr className="border-b border-gray-100 text-gray-400 uppercase text-[10px] font-semibold tracking-widest">
                   <th className="pb-3 pt-2">Model</th>
                   <th className="pb-3 pt-2">Độ khó</th>
                   <th className="pb-3 pt-2">Latency TB</th>
@@ -2449,14 +2440,14 @@ function AILogsTab() {
               <tbody>
                 {stats?.model_performance?.map((s, i) => (
                   <tr key={i} className="border-b border-gray-50 hover:bg-gray-50 transition min-h-[40px]">
-                    <td className="py-3 font-black text-gray-700">
+                    <td className="py-3 font-semibold text-gray-700">
                       {s.model === 'KnowledgeGraph' ? (
                         <span className="flex items-center text-purple-600"><Network size={14} className="mr-1" /> Knowledge Graph</span>
                       ) : s.model}
                     </td>
                     <td className="py-3 capitalize text-gray-500 font-bold">{s.difficulty || "N/A"}</td>
                     <td className="py-3">
-                      <span className={`font-black ${s.avg_latency > 5000 ? 'text-red-500' : s.avg_latency > 2000 ? 'text-orange-500' : 'text-green-500'}`}>
+                      <span className={`font-semibold ${s.avg_latency > 5000 ? 'text-red-500' : s.avg_latency > 2000 ? 'text-orange-500' : 'text-green-500'}`}>
                         {Math.round(s.avg_latency).toLocaleString()} ms
                       </span>
                     </td>
@@ -2469,12 +2460,12 @@ function AILogsTab() {
         </div>
 
         {/* Feature Performance Table */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 h-full max-h-[350px] flex flex-col flex-1">
-          <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center shrink-0"><Activity className="mr-2 text-indigo-600" /> Hiệu năng theo Tính năng</h2>
+        <div className="app-card p-6 h-full max-h-[350px] flex flex-col flex-1">
+          <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center shrink-0"><Activity className="mr-2 text-[var(--brand)]" /> Hiệu năng theo Tính năng</h2>
           <div className="overflow-auto flex-1 custom-scrollbar">
             <table className="w-full text-left text-sm relative">
               <thead className="sticky top-0 bg-white shadow-sm z-10">
-                <tr className="border-b border-gray-100 text-gray-400 uppercase text-[10px] font-black tracking-widest">
+                <tr className="border-b border-gray-100 text-gray-400 uppercase text-[10px] font-semibold tracking-widest">
                   <th className="pb-3 pt-2">Tính năng</th>
                   <th className="pb-3 pt-2">Latency TB</th>
                   <th className="pb-3 pt-2">Tỷ lệ OK</th>
@@ -2484,9 +2475,9 @@ function AILogsTab() {
               <tbody>
                 {stats?.feature_performance?.map((f, i) => (
                   <tr key={i} className="border-b border-gray-50 hover:bg-gray-50 transition min-h-[40px]">
-                    <td className="py-3 font-black text-gray-700">{f.feature}</td>
+                    <td className="py-3 font-semibold text-gray-700">{f.feature}</td>
                     <td className="py-3">
-                      <span className={`font-black ${f.avg_latency > 10000 ? 'text-red-500' : f.avg_latency > 3000 ? 'text-orange-500' : 'text-green-500'}`}>
+                      <span className={`font-semibold ${f.avg_latency > 10000 ? 'text-red-500' : f.avg_latency > 3000 ? 'text-orange-500' : 'text-green-500'}`}>
                         {Math.round(f.avg_latency).toLocaleString()} ms
                       </span>
                     </td>
@@ -2505,13 +2496,13 @@ function AILogsTab() {
       </div>
 
       {/* Detailed Log Table */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 flex flex-col flex-1">
+      <div className="app-card p-6 flex flex-col flex-1">
         <div className="flex justify-between items-center mb-6 shrink-0">
           <h2 className="text-lg font-bold text-gray-900 flex items-center">
-            <ClipboardList className="mr-2 text-indigo-600" /> Log chi tiết gần đây 
+            <ClipboardList className="mr-2 text-[var(--brand)]" /> Log chi tiết gần đây 
             {refreshing && <span className="ml-3 text-[10px] bg-green-100 text-green-700 font-bold px-2 flex items-center rounded-full animate-pulse transition"><RefreshCw size={10} className="mr-1 animate-spin" /> Live Data</span>}
           </h2>
-          <button onClick={() => fetchData(false)} disabled={loading || refreshing} className="text-indigo-600 hover:text-indigo-800 text-sm font-bold flex items-center gap-1 border border-indigo-100 bg-indigo-50 px-3 py-1.5 rounded-lg transition-colors">
+          <button onClick={() => fetchData(false)} disabled={loading || refreshing} className="text-[var(--brand)] hover:text-indigo-800 text-sm font-bold flex items-center gap-1 border border-indigo-100 bg-indigo-50 px-3 py-1.5 rounded-lg transition-colors">
              <RefreshCw size={14} className={loading || refreshing ? "animate-spin" : ""} /> Làm mới ngay
           </button>
         </div>
@@ -2522,7 +2513,7 @@ function AILogsTab() {
           ) : (
             <table className="w-full text-left text-sm border-collapse relative min-w-[800px]">
               <thead className="sticky top-0 bg-white shadow-sm z-20 outline outline-1 outline-gray-100">
-                <tr className="border-b border-gray-200 text-gray-400 font-black uppercase text-[10px] tracking-widest">
+                <tr className="border-b border-gray-200 text-gray-400 font-semibold uppercase text-[10px] tracking-widest">
                   <th className="py-3 px-4 w-32">Thời gian</th>
                   <th className="py-3 px-4 w-40">Tính năng</th>
                   <th className="py-3 px-4 w-36">Model</th>
@@ -2541,10 +2532,10 @@ function AILogsTab() {
                         {l.feature || "N/A"}
                       </span>
                     </td>
-                    <td className="py-3 px-4 font-black text-gray-700 text-[11px] truncate max-w-[150px]">{l.model}</td>
+                    <td className="py-3 px-4 font-semibold text-gray-700 text-[11px] truncate max-w-[150px]">{l.model}</td>
                     <td className="py-3 px-4 text-center">
                       {l.eval_score ? (
-                        <span className={`px-2.5 py-1 rounded-md font-black text-[10px] ${
+                        <span className={`px-2.5 py-1 rounded-md font-semibold text-[10px] ${
                           l.eval_score >= 8 ? 'bg-green-100 text-green-800' : 
                           l.eval_score >= 5 ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'
                         }`}>
@@ -2554,7 +2545,7 @@ function AILogsTab() {
                     </td>
                     <td className="py-3 px-4">
                       <div 
-                        className="text-[11px] text-gray-600 line-clamp-2 leading-tight cursor-pointer hover:text-indigo-600 transition-colors" 
+                        className="text-[11px] text-gray-600 line-clamp-2 leading-tight cursor-pointer hover:text-[var(--brand)] transition-colors" 
                         title="Click to view full feedback"
                         onClick={() => setSelectedFeedback(l.eval_feedback || l.error_message)}
                       >
@@ -2567,7 +2558,7 @@ function AILogsTab() {
                       </span>
                     </td>
                     <td className="py-3 px-4 text-center whitespace-nowrap">
-                      <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-wider ${
+                      <span className={`px-2.5 py-1 rounded-full text-[9px] font-semibold uppercase tracking-wider ${
                         l.status === 'success' ? 'bg-green-100 text-green-700' : 
                         l.status === 'evaluated' ? 'bg-blue-100 text-blue-700' : 
                         l.status === 'fallback' ? 'bg-orange-100 text-orange-700' : 
@@ -2610,8 +2601,8 @@ function AILogsTab() {
         <div className="!m-0 fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-sm animate-in fade-in duration-200" style={{ margin: 0, top: 0, left: 0 }} onClick={() => setSelectedFeedback(null)}>
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[80vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
             <div className="flex justify-between items-center p-5 border-b border-gray-100 bg-gray-50/50">
-              <h3 className="text-lg font-black text-gray-900 flex items-center">
-                <ClipboardList className="mr-2 text-indigo-600" size={20} />
+              <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+                <ClipboardList className="mr-2 text-[var(--brand)]" size={20} />
                 Chi tiết Feedback
               </h3>
               <button 
@@ -2629,7 +2620,7 @@ function AILogsTab() {
             <div className="p-4 border-t border-gray-100 flex justify-end gap-3 bg-gray-50">
               <button 
                 onClick={() => handleCopyFeedback(selectedFeedback)}
-                className={`px-5 py-2.5 rounded-lg font-black text-[13px] uppercase tracking-wider flex items-center justify-center min-w-[140px] transition-all duration-300 ${copied ? 'bg-green-100 text-green-700 scale-95' : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-md hover:shadow-lg'}`}
+                className={`px-5 py-2.5 rounded-lg font-semibold text-[13px] uppercase tracking-wider flex items-center justify-center min-w-[140px] transition-all duration-300 ${copied ? 'bg-green-100 text-green-700 scale-95' : 'bg-[var(--brand)] text-white hover:bg-[var(--brand-dark)] shadow-md hover:shadow-lg'}`}
               >
                 {copied ? <><Check size={16} className="mr-2" /> Đã Copy</> : <><Copy size={16} className="mr-2" /> Copy Text</>}
               </button>

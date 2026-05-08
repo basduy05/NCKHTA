@@ -69,7 +69,7 @@ export function IpaTab({ authFetch, API_URL }: IpaTabProps) {
     <div className="space-y-8 animate-in fade-in duration-500">
       <div className="bg-white rounded-[2rem] border border-gray-100 shadow-xl p-8 flex flex-col md:flex-row justify-between items-center gap-6">
         <div>
-          <h2 className="text-3xl font-black text-gray-900 tracking-tight flex items-center gap-3">
+          <h2 className="text-3xl font-semibold text-gray-900 tracking-tight flex items-center gap-3">
             <Languages className="text-indigo-600" size={32} />
             IPA Pronunciation Master
           </h2>
@@ -77,7 +77,7 @@ export function IpaTab({ authFetch, API_URL }: IpaTabProps) {
         </div>
         <div className="flex bg-slate-100 p-1.5 rounded-2xl gap-1">
           {["vowels", "diphthongs", "consonants"].map(t => (
-            <button key={t} onClick={() => setFocus(t)} className={`px-6 py-2.5 rounded-xl text-[10px] sm:text-xs font-black mt-0.5 uppercase tracking-widest transition-all ${focus === t ? "bg-white text-indigo-600 shadow-md" : "text-slate-500 hover:bg-white/50"}`}>{t}</button>
+            <button key={t} onClick={() => setFocus(t)} className={`px-6 py-2.5 rounded-xl text-[10px] sm:text-xs font-semibold mt-0.5 uppercase tracking-widest transition-all ${focus === t ? "bg-white text-indigo-600 shadow-md" : "text-slate-500 hover:bg-white/50"}`}>{t}</button>
           ))}
         </div>
       </div>
@@ -88,7 +88,7 @@ export function IpaTab({ authFetch, API_URL }: IpaTabProps) {
             <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
                <button onClick={(e) => { e.stopPropagation(); speak(item.example); }} className="p-1.5 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100"><Volume2 size={14} /></button>
             </div>
-            <span className="text-3xl font-black text-indigo-700 mb-1 group-hover:scale-110 transition-transform">/{item.ipa}/</span>
+            <span className="text-3xl font-semibold text-indigo-700 mb-1 group-hover:scale-110 transition-transform">/{item.ipa}/</span>
             <span className="text-xs font-bold text-slate-400 uppercase group-hover:text-indigo-600 transition-colors">{item.example}</span>
             <span className="text-[10px] text-slate-300 font-medium mt-0.5 tracking-widest hidden group-hover:block transition-all">/{item.transcription}/</span>
           </button>
@@ -98,7 +98,7 @@ export function IpaTab({ authFetch, API_URL }: IpaTabProps) {
       {loading && (
         <div className="bg-white p-12 rounded-[2rem] border border-indigo-50 flex flex-col items-center justify-center animate-pulse">
            <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mb-4"></div>
-           <p className="text-indigo-600 font-black">Genrating AI Lesson...</p>
+           <p className="text-indigo-600 font-semibold">Genrating AI Lesson...</p>
         </div>
       )}
 
@@ -107,7 +107,7 @@ export function IpaTab({ authFetch, API_URL }: IpaTabProps) {
           <div className="relative z-10">
             <div className="flex justify-between items-start mb-6 md:mb-8">
                <div>
-                  <h3 className="text-3xl md:text-4xl font-black mb-2 flex items-center gap-4">
+                  <h3 className="text-3xl md:text-4xl font-semibold mb-2 flex items-center gap-4">
                     <Sparkles className="text-yellow-400" />
                     Bí kíp phát âm: {lesson.symbol}
                   </h3>
@@ -118,11 +118,11 @@ export function IpaTab({ authFetch, API_URL }: IpaTabProps) {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/10">
-                  <h4 className="text-xl font-black mb-4 flex items-center gap-2"><BookText className="text-indigo-300" /> Hướng dẫn chi tiết</h4>
+                  <h4 className="text-xl font-semibold mb-4 flex items-center gap-2"><BookText className="text-indigo-300" /> Hướng dẫn chi tiết</h4>
                   <ul className="space-y-4 text-indigo-50">
                     {lesson.tutorial?.map((step: string, i: number) => (
                       <li key={i} className="flex gap-4">
-                        <span className="w-5 h-5 p-0.5 bg-indigo-500 rounded-full flex items-center justify-center shrink-0 text-[10px] sm:text-xs font-black mt-0.5">{i+1}</span>
+                        <span className="w-5 h-5 p-0.5 bg-indigo-500 rounded-full flex items-center justify-center shrink-0 text-[10px] sm:text-xs font-semibold mt-0.5">{i+1}</span>
                         <p className="text-sm sm:text-base leading-relaxed">{step}</p>
                       </li>
                     ))}
@@ -131,12 +131,12 @@ export function IpaTab({ authFetch, API_URL }: IpaTabProps) {
 
                <div className="space-y-4 md:space-y-6">
                   <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/10">
-                     <h4 className="text-xl font-black mb-4">Từ vựng mẫu</h4>
+                     <h4 className="text-xl font-semibold mb-4">Từ vựng mẫu</h4>
                      <div className="grid grid-cols-2 gap-3">
                         {lesson.examples?.map((ex: any, i: number) => (
                           <div key={i} className="bg-black/20 p-4 rounded-2xl border border-white/5 group hover:bg-black/30 transition-colors cursor-pointer" onClick={() => speak(ex.word)}>
                              <div className="flex justify-between items-center mb-1">
-                                <span className="text-lg font-black">{ex.word}</span>
+                                <span className="text-lg font-semibold">{ex.word}</span>
                                 <Volume2 size={16} className="text-indigo-300 group-hover:scale-110 transition-transform" />
                              </div>
                              <p className="text-[10px] text-indigo-200 font-bold uppercase tracking-widest">{ex.meaning}</p>
@@ -146,7 +146,7 @@ export function IpaTab({ authFetch, API_URL }: IpaTabProps) {
                   </div>
 
                   <div className="bg-gradient-to-br from-rose-500 to-rose-600 rounded-2xl p-6 shadow-xl">
-                     <h4 className="text-xl font-black mb-2 flex items-center gap-2">⚠️ Lỗi thường gặp</h4>
+                     <h4 className="text-xl font-semibold mb-2 flex items-center gap-2">⚠️ Lỗi thường gặp</h4>
                      <p className="text-rose-100 italic leading-relaxed">{lesson.common_mistake}</p>
                   </div>
                </div>
