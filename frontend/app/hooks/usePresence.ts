@@ -7,6 +7,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://iedu-ksk7.onrender.c
 export function usePresence() {
   const { token, user } = useAuth();
   const [onlineUserIds, setOnlineUserIds] = useState<Set<number>>(new Set());
+  const [unreadChatCount, setUnreadChatCount] = useState<number>(0);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Fetch online users list
@@ -22,6 +23,25 @@ export function usePresence() {
       }
     } catch {
       // Ignore network errors in polling
+    }
+  }, [token]);
+
+  // Fetch total unread messages count
+  const fetchUnreadCount = useCallback(async () => {
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_URL}/chat/rooms`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const rooms = await res.json();
+        if (Array.isArray(rooms)) {
+          const total = rooms.reduce((acc: number, r: any) => acc + (r.unread_count || 0), 0);
+          setUnreadChatCount(total);
+        }
+      }
+    } catch {
+      // Ignore
     }
   }, [token]);
 
@@ -44,17 +64,19 @@ export function usePresence() {
     // Initial fetch & heartbeat
     sendHeartbeat();
     fetchOnlineUsers();
+    fetchUnreadCount();
 
     // Poll every 25 seconds
     intervalRef.current = setInterval(() => {
       sendHeartbeat();
       fetchOnlineUsers();
+      fetchUnreadCount();
     }, 25000);
 
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [token, user, sendHeartbeat, fetchOnlineUsers]);
+  }, [token, user, sendHeartbeat, fetchOnlineUsers, fetchUnreadCount]);
 
   const isUserOnline = useCallback((userId: number): boolean => {
     return onlineUserIds.has(userId);
@@ -63,6 +85,8 @@ export function usePresence() {
   return {
     onlineUserIds,
     isUserOnline,
-    refreshPresence: fetchOnlineUsers
+    unreadChatCount,
+    refreshPresence: fetchOnlineUsers,
+    refreshUnread: fetchUnreadCount
   };
 }

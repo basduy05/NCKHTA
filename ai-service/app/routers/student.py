@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Header, Query, UploadFile, File, Form, BackgroundTasks, Response
-from ..database import get_db, log_ai_request
+from ..database import get_db, log_ai_request, award_points
 from ..services import auth_service, llm_service, graph_service, file_service
 from pydantic import BaseModel
 from typing import Optional, List
@@ -276,30 +276,75 @@ import time
 _ranking_cache = {"data": None, "timestamp": 0}
 
 @router.get("/ranking")
-def get_ranking(authorization: str = Header(...)):
-    """Get global student leaderboard."""
-    _get_current_student(authorization) # Ensure auth
-    
-    # Return cache if less than 60 seconds old
-    if _ranking_cache["data"] is not None and time.time() - _ranking_cache["timestamp"] < 60:
-        return _ranking_cache["data"]
+@router.get("/leaderboard")
+def get_ranking(
+    period: str = Query("all", pattern="^(all|week|month|class)$"),
+    authorization: str = Header(...)
+):
+    """Get student leaderboard filtered by period: all, week, month, or class."""
+    student = _get_current_student(authorization)
+    user_id = student["id"]
 
     conn = get_db()
     try:
-        cursor = conn.execute(
-            "SELECT name, points FROM users WHERE role = 'STUDENT' ORDER BY points DESC LIMIT 100"
-        )
+        if period == "week":
+            cursor = conn.execute("""
+                SELECT u.id, u.name, COALESCE(SUM(p.points), 0) as points, u.role
+                FROM users u
+                LEFT JOIN user_point_logs p ON u.id = p.user_id AND p.created_at >= datetime('now', '-7 days')
+                WHERE u.role = 'STUDENT'
+                GROUP BY u.id
+                ORDER BY points DESC LIMIT 100
+            """)
+        elif period == "month":
+            cursor = conn.execute("""
+                SELECT u.id, u.name, COALESCE(SUM(p.points), 0) as points, u.role
+                FROM users u
+                LEFT JOIN user_point_logs p ON u.id = p.user_id AND p.created_at >= datetime('now', '-30 days')
+                WHERE u.role = 'STUDENT'
+                GROUP BY u.id
+                ORDER BY points DESC LIMIT 100
+            """)
+        elif period == "class":
+            cursor = conn.execute("""
+                SELECT u.id, u.name, COALESCE(u.points, 0) as points, u.role
+                FROM users u
+                JOIN enrollments e ON u.id = e.student_id
+                WHERE e.class_id IN (SELECT class_id FROM enrollments WHERE student_id = ?)
+                GROUP BY u.id
+                ORDER BY points DESC LIMIT 100
+            """, (user_id,))
+        else:
+            cursor = conn.execute("""
+                SELECT id, name, COALESCE(points, 0) as points, role 
+                FROM users 
+                WHERE role = 'STUDENT' 
+                ORDER BY points DESC LIMIT 100
+            """)
+
         ranking = [dict(row) for row in cursor.fetchall()]
         conn.close()
-        
-        # Update cache
-        _ranking_cache["data"] = ranking
-        _ranking_cache["timestamp"] = time.time()
-        
         return ranking
     except Exception as e:
         if conn: conn.close()
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/points/history")
+def get_points_history(limit: int = Query(30, ge=1, le=100), authorization: str = Header(...)):
+    """Get transparent points transaction history for the logged-in student."""
+    student = _get_current_student(authorization)
+    conn = get_db()
+    try:
+        rows = conn.execute("""
+            SELECT id, action, points, details, created_at 
+            FROM user_point_logs 
+            WHERE user_id = ? 
+            ORDER BY id DESC LIMIT ?
+        """, (student["id"], limit)).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
 
 @router.post("/vocabulary/practice")
 async def start_vocab_practice(req: VocabPracticeReq, authorization: str = Header(...)):
@@ -1753,6 +1798,75 @@ def clear_dictionary_cache(word: str, authorization: str = Header(...)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ─── SEARCH HISTORY (Phase 1.4) ──────────────────────────────────────────────
+
+def _record_search_history(user_id: int, word: str):
+    """Store searched word in user's search history, bounded to 50 items."""
+    clean_word = word.strip()
+    if not clean_word:
+        return
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO search_history (user_id, word, searched_at)
+            VALUES (?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(user_id, word) DO UPDATE SET searched_at = CURRENT_TIMESTAMP
+        """, (user_id, clean_word))
+        # Keep only 50 most recent words
+        cursor.execute("""
+            DELETE FROM search_history 
+            WHERE user_id = ? AND id NOT IN (
+                SELECT id FROM search_history WHERE user_id = ? ORDER BY searched_at DESC LIMIT 50
+            )
+        """, (user_id, user_id))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"[SEARCH HISTORY ERROR] {e}")
+
+
+@router.get("/dictionary/history")
+def get_search_history(authorization: str = Header(...)):
+    """Retrieve up to 50 recent searched words for the current student."""
+    user = _get_current_student(authorization)
+    conn = get_db()
+    try:
+        rows = conn.execute(
+            "SELECT word, searched_at FROM search_history WHERE user_id = ? ORDER BY searched_at DESC LIMIT 50",
+            (user["id"],)
+        ).fetchall()
+        return [{"word": r["word"], "searched_at": str(r["searched_at"])} for r in rows]
+    finally:
+        conn.close()
+
+
+@router.delete("/dictionary/history/{word}")
+def delete_search_history_item(word: str, authorization: str = Header(...)):
+    """Delete a specific word from user search history."""
+    user = _get_current_student(authorization)
+    conn = get_db()
+    try:
+        conn.execute("DELETE FROM search_history WHERE user_id = ? AND word = ?", (user["id"], word.strip()))
+        conn.commit()
+        return {"success": True}
+    finally:
+        conn.close()
+
+
+@router.delete("/dictionary/history")
+def clear_all_search_history(authorization: str = Header(...)):
+    """Clear all search history for the current student."""
+    user = _get_current_student(authorization)
+    conn = get_db()
+    try:
+        conn.execute("DELETE FROM search_history WHERE user_id = ?", (user["id"],))
+        conn.commit()
+        return {"success": True}
+    finally:
+        conn.close()
+
+
 # ─── DICTIONARY LOOKUP ────────────────────────────────────────────────────────
 
 class DictionaryRequest(BaseModel):
@@ -1784,6 +1898,9 @@ async def dictionary_lookup(req: DictionaryRequest, authorization: str = Header(
     
     if not word_original or len(word_original) > 100:
         raise HTTPException(status_code=400, detail="Invalid word")
+
+    # Record search history asynchronously / directly (Phase 1.4)
+    _record_search_history(user_id, word_original)
 
     is_abbreviation = word_original.isupper() and len(word_original) >= 2
     lookup_key = word_original if is_abbreviation else word_lower
@@ -2810,4 +2927,292 @@ async def send_test_push(authorization: str = Header(...)):
         url="/dashboard/student?tab=overview"
     )
     return res
+
+
+# ==================== PLACEMENT TEST (Phase 1.13) ====================
+
+PLACEMENT_QUESTIONS = [
+    # A1 - Sơ cấp
+    {
+        "id": 1,
+        "level": "A1",
+        "category": "grammar",
+        "question": "She _____ from Vietnam.",
+        "options": ["is", "are", "be", "am"],
+        "answer_idx": 0,
+        "explanation": "'She' là ngôi thứ 3 số ít nên dùng động từ to be 'is'."
+    },
+    {
+        "id": 2,
+        "level": "A1",
+        "category": "vocabulary",
+        "question": "I have breakfast in the _____.",
+        "options": ["night", "morning", "afternoon", "evening"],
+        "answer_idx": 1,
+        "explanation": "Bữa sáng (breakfast) được ăn vào buổi sáng (morning)."
+    },
+    {
+        "id": 3,
+        "level": "A1",
+        "category": "grammar",
+        "question": "They _____ to school by bus every day.",
+        "options": ["goes", "going", "go", "gone"],
+        "answer_idx": 2,
+        "explanation": "Chủ ngữ 'They' ở thì hiện tại đơn đi với động từ nguyên mẫu 'go'."
+    },
+    # A2 - Cơ bản
+    {
+        "id": 4,
+        "level": "A2",
+        "category": "grammar",
+        "question": "Yesterday, we _____ a very interesting movie.",
+        "options": ["see", "saw", "seen", "seeing"],
+        "answer_idx": 1,
+        "explanation": "'Yesterday' là dấu hiệu thì quá khứ đơn, quá khứ của 'see' là 'saw'."
+    },
+    {
+        "id": 5,
+        "level": "A2",
+        "category": "vocabulary",
+        "question": "Could you please _____ the window? It's very cold outside.",
+        "options": ["open", "close", "break", "clean"],
+        "answer_idx": 1,
+        "explanation": "Trời lạnh thì cần đóng (close) cửa sổ."
+    },
+    {
+        "id": 6,
+        "level": "A2",
+        "category": "reading",
+        "question": "Sign: 'Staff Only Beyond This Point'. What does this mean?",
+        "options": [
+            "Everyone can enter freely",
+            "Only employees are allowed to enter",
+            "You must buy a ticket to enter",
+            "The area is under construction"
+        ],
+        "answer_idx": 1,
+        "explanation": "'Staff Only' nghĩa là chỉ nhân viên mới được phép vào."
+    },
+    # B1 - Trung cấp
+    {
+        "id": 7,
+        "level": "B1",
+        "category": "grammar",
+        "question": "If it rains tomorrow, we _____ the picnic.",
+        "options": ["cancel", "would cancel", "will cancel", "canceled"],
+        "answer_idx": 2,
+        "explanation": "Câu điều kiện loại 1 (Conditional Type 1): If + hiện tại đơn, S + will + V."
+    },
+    {
+        "id": 8,
+        "level": "B1",
+        "category": "vocabulary",
+        "question": "She has been working hard to _____ her English speaking skills.",
+        "options": ["increase", "improve", "expand", "broaden"],
+        "answer_idx": 1,
+        "explanation": "Cụm từ chuẩn là 'improve skills' (cải thiện kỹ năng)."
+    },
+    {
+        "id": 9,
+        "level": "B1",
+        "category": "grammar",
+        "question": "I haven't seen Mark _____ we graduated from high school.",
+        "options": ["for", "since", "during", "while"],
+        "answer_idx": 1,
+        "explanation": "'Since' đi với mốc thời gian / mệnh đề quá khứ trong thì hiện tại hoàn thành."
+    },
+    # B2 - Trung cao cấp
+    {
+        "id": 10,
+        "level": "B2",
+        "category": "grammar",
+        "question": "Had I known about the traffic jam, I _____ an earlier train.",
+        "options": ["would take", "would have taken", "will take", "had taken"],
+        "answer_idx": 1,
+        "explanation": "Đảo ngữ câu điều kiện loại 3: Had + S + V3, S + would have + V3."
+    },
+    {
+        "id": 11,
+        "level": "B2",
+        "category": "vocabulary",
+        "question": "The government is taking urgent measures to _____ inflation.",
+        "options": ["tackle", "collide", "demolish", "collapse"],
+        "answer_idx": 0,
+        "explanation": "'Tackle inflation/problem' nghĩa là giải quyết, đối phó với lạm phát/vấn đề."
+    },
+    {
+        "id": 12,
+        "level": "B2",
+        "category": "reading",
+        "question": "'Despite the initial setbacks, the project was ultimately deemed a success.' What does 'setbacks' mean?",
+        "options": [
+            "Unexpected advantages",
+            "Difficulties or delays",
+            "Financial investments",
+            "Technical guidelines"
+        ],
+        "answer_idx": 1,
+        "explanation": "'Setback' nghĩa là khó khăn, trở ngại, sự chậm trễ."
+    },
+    # C1 - Nâng cao
+    {
+        "id": 13,
+        "level": "C1",
+        "category": "grammar",
+        "question": "Scarcely _____ the room when the phone began ringing insistently.",
+        "options": [
+            "he had entered",
+            "had he entered",
+            "did he enter",
+            "he entered"
+        ],
+        "answer_idx": 1,
+        "explanation": "Đảo ngữ với Scarcely: Scarcely + had + S + V3/ed + when + S + V2/ed."
+    },
+    {
+        "id": 14,
+        "level": "C1",
+        "category": "vocabulary",
+        "question": "Her explanation was so _____ that everyone immediately grasped the complex concept.",
+        "options": ["ambiguous", "lucid", "opaque", "convoluted"],
+        "answer_idx": 1,
+        "explanation": "'Lucid' nghĩa là rõ ràng, minh bạch, dễ hiểu."
+    },
+    {
+        "id": 15,
+        "level": "C1",
+        "category": "reading",
+        "question": "The author's tone in criticizing the unregulated expansion can best be described as _____.",
+        "options": ["complacent", "apprehensive", "laudatory", "indifferent"],
+        "answer_idx": 1,
+        "explanation": "'Apprehensive' nghĩa là lo lắng, e ngại về tương lai."
+    }
+]
+
+class PlacementSubmitRequest(BaseModel):
+    answers: dict  # {"1": 0, "2": 1, ...} question_id -> chosen index
+
+
+@router.get("/placement-test")
+def get_placement_test(authorization: str = Header(...)):
+    """Retrieve placement test questions (without answer keys)."""
+    _get_current_student(authorization)
+    # Strip answer_idx and explanation from student view
+    safe_questions = [
+        {
+            "id": q["id"],
+            "level": q["level"],
+            "category": q["category"],
+            "question": q["question"],
+            "options": q["options"],
+        }
+        for q in PLACEMENT_QUESTIONS
+    ]
+    return {
+        "title": "Bài Kiểm Tra Phân Loại Đầu Vào (CEFR Placement Test)",
+        "total_questions": len(safe_questions),
+        "questions": safe_questions
+    }
+
+
+@router.get("/placement-test/status")
+def get_placement_status(authorization: str = Header(...)):
+    """Check if the student has taken the placement test and return results."""
+    student = _get_current_student(authorization)
+    conn = get_db()
+    try:
+        row = conn.execute(
+            "SELECT * FROM user_placement_results WHERE user_id = ?",
+            (student["id"],)
+        ).fetchone()
+        if not row:
+            return {"completed": False, "cefr_level": student.get("cefr_level", "B1")}
+        return {
+            "completed": True,
+            "score": row["score"],
+            "total_questions": row["total_questions"],
+            "cefr_level": row["cefr_level"],
+            "breakdown": json.loads(row["breakdown_json"] or "{}"),
+            "completed_at": str(row["completed_at"])
+        }
+    finally:
+        conn.close()
+
+
+@router.post("/placement-test/submit")
+def submit_placement_test(data: PlacementSubmitRequest, authorization: str = Header(...)):
+    """Score the placement test, determine CEFR level, update student profile and award bonus points."""
+    student = _get_current_student(authorization)
+    user_id = student["id"]
+
+    total = len(PLACEMENT_QUESTIONS)
+    score = 0
+    category_scores = {"grammar": {"correct": 0, "total": 0}, "vocabulary": {"correct": 0, "total": 0}, "reading": {"correct": 0, "total": 0}}
+    review = []
+
+    for q in PLACEMENT_QUESTIONS:
+        qid_str = str(q["id"])
+        chosen_idx = data.answers.get(qid_str)
+        cat = q["category"]
+        category_scores[cat]["total"] += 1
+
+        is_correct = chosen_idx is not None and int(chosen_idx) == q["answer_idx"]
+        if is_correct:
+            score += 1
+            category_scores[cat]["correct"] += 1
+
+        review.append({
+            "id": q["id"],
+            "question": q["question"],
+            "chosen": q["options"][int(chosen_idx)] if chosen_idx is not None and 0 <= int(chosen_idx) < len(q["options"]) else "Chưa trả lời",
+            "correct_answer": q["options"][q["answer_idx"]],
+            "is_correct": is_correct,
+            "explanation": q["explanation"]
+        })
+
+    # Determine CEFR level
+    if score <= 3:
+        cefr_level = "A1"
+        desc = "A1 - Sơ cấp (Beginner): Bắt đầu làm quen với từ vựng cơ bản và cấu trúc câu đơn giản."
+    elif score <= 6:
+        cefr_level = "A2"
+        desc = "A2 - Cơ bản (Elementary): Có khả năng giao tiếp đơn giản và hiểu các đoạn văn ngắn thông dụng."
+    elif score <= 9:
+        cefr_level = "B1"
+        desc = "B1 - Trung cấp (Intermediate): Nắm vững ngữ pháp nền tảng, có thể thảo luận các chủ đề quen thuộc."
+    elif score <= 12:
+        cefr_level = "B2"
+        desc = "B2 - Trung cao cấp (Upper-Intermediate): Đọc hiểu tài liệu chuyên môn, diễn đạt ý tưởng trôi chảy và tự nhiên."
+    else:
+        cefr_level = "C1"
+        desc = "C1 - Nâng cao (Advanced): Sử dụng tiếng Anh linh hoạt, hiểu được các tầng nghĩa tinh tế trong văn bản học thuật."
+
+    conn = get_db()
+    try:
+        # Update user's CEFR level
+        conn.execute("UPDATE users SET cefr_level = ? WHERE id = ?", (cefr_level, user_id))
+        # Record placement result
+        conn.execute("""
+            INSERT OR REPLACE INTO user_placement_results (user_id, score, total_questions, cefr_level, breakdown_json, completed_at)
+            VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        """, (user_id, score, total, cefr_level, json.dumps(category_scores)))
+        conn.commit()
+    finally:
+        conn.close()
+
+    # Award bonus 50 points and log in user_point_logs
+    award_points(user_id, 50, "Placement Test", f"Hoàn thành phân loại đầu vào: Đạt trình độ {cefr_level} ({score}/{total} điểm)")
+
+    return {
+        "status": "success",
+        "score": score,
+        "total_questions": total,
+        "percentage": round(score / total * 100),
+        "cefr_level": cefr_level,
+        "level_description": desc,
+        "category_breakdown": category_scores,
+        "review": review,
+        "points_awarded": 50
+    }
+
 

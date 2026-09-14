@@ -18,8 +18,8 @@ class ChatConnectionManager:
         # Set of currently online user IDs
         self.online_users: Set[int] = set()
 
-    async def connect(self, websocket: WebSocket, room_id: int, user_id: int):
-        await websocket.accept()
+    async def connect(self, websocket: WebSocket, room_id: int, user_id: int, subprotocol: Optional[str] = None):
+        await websocket.accept(subprotocol=subprotocol)
 
         if room_id not in self.room_connections:
             self.room_connections[room_id] = {}

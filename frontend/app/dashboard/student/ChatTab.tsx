@@ -123,14 +123,19 @@ export default function ChatTab({ API_URL }: Props) {
   }, [fetchRooms]);
 
   // 2. Fetch Messages for active room
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+
   const fetchMessages = useCallback(async (roomId: number) => {
     if (!token) return;
     setIsLoadingMessages(true);
+    setHasMore(true);
     try {
-      const res = await authFetch(`${API_URL}/chat/rooms/${roomId}/messages?limit=60`);
+      const res = await authFetch(`${API_URL}/chat/rooms/${roomId}/messages?limit=40`);
       if (res.ok) {
         const data: ChatMessage[] = await res.json();
         setMessages(data);
+        if (data.length < 40) setHasMore(false);
         setTimeout(() => scrollToBottom(false), 50);
       }
       // Mark as read
@@ -142,6 +147,28 @@ export default function ChatTab({ API_URL }: Props) {
       setIsLoadingMessages(false);
     }
   }, [token, API_URL, authFetch]);
+
+  const fetchOlderMessages = async () => {
+    if (!activeRoomId || loadingMore || !hasMore || messages.length === 0) return;
+    const oldestId = messages[0].id;
+    setLoadingMore(true);
+    try {
+      const res = await authFetch(`${API_URL}/chat/rooms/${activeRoomId}/messages?limit=40&before_id=${oldestId}`);
+      if (res.ok) {
+        const older: ChatMessage[] = await res.json();
+        if (older.length < 40) {
+          setHasMore(false);
+        }
+        if (older.length > 0) {
+          setMessages(prev => [...older, ...prev]);
+        }
+      }
+    } catch (e) {
+      console.error("Failed to load older messages", e);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   useEffect(() => {
     if (activeRoomId) {
@@ -621,8 +648,27 @@ export default function ChatTab({ API_URL }: Props) {
                   <p className="text-gray-400 mt-1">Bắt đầu trao đổi bài học, từ vựng hoặc hỏi đáp cùng nhau.</p>
                 </div>
               ) : (
-                messages.map((msg, idx) => {
-                  const isMe = msg.sender_id === user?.id;
+                <>
+                  {hasMore && (
+                    <div className="flex justify-center pb-2">
+                      <button
+                        onClick={fetchOlderMessages}
+                        disabled={loadingMore}
+                        className="px-3.5 py-1.5 bg-white hover:bg-slate-50 text-slate-600 text-xs font-semibold rounded-full border border-slate-200 shadow-2xs transition flex items-center gap-1.5 active:scale-95 cursor-pointer disabled:opacity-60"
+                      >
+                        {loadingMore ? (
+                          <>
+                            <div className="w-3 h-3 border-2 border-slate-400 border-t-transparent rounded-full animate-spin" />
+                            <span>Đang tải tin nhắn cũ...</span>
+                          </>
+                        ) : (
+                          <span>↑ Tải thêm tin nhắn cũ</span>
+                        )}
+                      </button>
+                    </div>
+                  )}
+                  {messages.map((msg, idx) => {
+                    const isMe = msg.sender_id === user?.id;
                   const isSystem = msg.message_type === "system";
 
                   if (isSystem) {
@@ -669,7 +715,8 @@ export default function ChatTab({ API_URL }: Props) {
                       </div>
                     </div>
                   );
-                })
+                })}
+                </>
               )}
 
               {/* Typing indicator */}

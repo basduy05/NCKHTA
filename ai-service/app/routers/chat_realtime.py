@@ -135,14 +135,26 @@ async def chat_websocket(
 ):
     """
     WebSocket endpoint for realtime room messaging.
-    Connect with: ws://<host>/chat/ws/<room_id>?token=<jwt_access_token>
+    Connect with: 
+      - ws://<host>/chat/ws/<room_id>?token=<jwt_access_token>
+      - OR subprotocol: new WebSocket(url, [token])
     """
-    if not token:
+    auth_token = token
+    subprotocol = None
+    if not auth_token:
+        proto_header = websocket.headers.get("sec-websocket-protocol")
+        if proto_header:
+            protocols = [p.strip() for p in proto_header.split(",") if p.strip()]
+            if protocols:
+                auth_token = protocols[0]
+                subprotocol = auth_token
+
+    if not auth_token:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
 
     # Authenticate JWT token
-    payload = auth_service.verify_access_token(token)
+    payload = auth_service.verify_access_token(auth_token)
     if not payload:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
@@ -164,7 +176,7 @@ async def chat_websocket(
     except Exception:
         pass
 
-    await chat_manager.connect(websocket, room_id, user_id)
+    await chat_manager.connect(websocket, room_id, user_id, subprotocol=subprotocol)
 
     # Broadcast user online status
     await chat_manager.broadcast_presence(user_id, True)

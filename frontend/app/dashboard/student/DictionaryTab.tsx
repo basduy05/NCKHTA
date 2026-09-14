@@ -2,7 +2,8 @@
 import React, { useState, useEffect, useRef } from "react";
 import {
   Search, X, AlertCircle, Volume2, Bookmark, CheckCircle2,
-  Star, Network, ArrowRight, RefreshCw, Sparkles, ExternalLink
+  Star, Network, ArrowRight, RefreshCw, Sparkles, ExternalLink,
+  Clock, Trash2
 } from "lucide-react";
 import { Button } from "../../components/ui";
 import { useAuth } from "../../context/AuthContext";
@@ -38,14 +39,55 @@ export default function DictionaryTab({ API_URL }: DictionaryTabProps) {
     };
   }, []);
 
-  useEffect(() => {
+  const fetchHistory = async () => {
+    try {
+      const res = await authFetch(`${API_URL}/student/dictionary/history`);
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
+          const words = data.map((item: any) => item.word);
+          setHistory(words);
+          if (typeof window !== "undefined") {
+            localStorage.setItem("dictionaryHistory", JSON.stringify(words));
+          }
+          return;
+        }
+      }
+    } catch (e) {}
+
     try {
       if (typeof window !== "undefined") {
         const stored = localStorage.getItem("dictionaryHistory");
         if (stored) setHistory(JSON.parse(stored));
       }
-    } catch (e) { }
-  }, []);
+    } catch (e) {}
+  };
+
+  useEffect(() => {
+    fetchHistory();
+  }, [API_URL]);
+
+  const deleteHistoryItem = async (e: React.MouseEvent, targetWord: string) => {
+    e.stopPropagation();
+    try {
+      await authFetch(`${API_URL}/student/dictionary/history/${encodeURIComponent(targetWord)}`, {
+        method: "DELETE"
+      });
+    } catch (err) {}
+    setHistory(prev => {
+      const next = prev.filter(w => w !== targetWord);
+      if (typeof window !== "undefined") localStorage.setItem("dictionaryHistory", JSON.stringify(next));
+      return next;
+    });
+  };
+
+  const clearAllHistory = async () => {
+    try {
+      await authFetch(`${API_URL}/student/dictionary/history`, { method: "DELETE" });
+    } catch (err) {}
+    setHistory([]);
+    if (typeof window !== "undefined") localStorage.removeItem("dictionaryHistory");
+  };
 
   const lookup = async (forceAI: boolean = false, wordOverride?: string) => {
     const trimmedWord = (wordOverride ?? word).trim();
@@ -376,17 +418,41 @@ export default function DictionaryTab({ API_URL }: DictionaryTabProps) {
       </div>
 
       {history.length > 0 && (
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-xs text-[var(--ink-3)]">Gần đây:</span>
-          {history.slice(0, 10).map((h, i) => (
-            <button
-              key={i}
-              onClick={() => { setWord(h); lookup(false, h); }}
-              className="text-xs px-2.5 py-1 bg-[var(--surface-3)] hover:bg-[var(--brand-soft)] hover:text-[var(--brand)] rounded-lg transition font-medium"
-            >
-              {h}
-            </button>
-          ))}
+        <div className="flex items-center gap-2 flex-wrap bg-slate-50/80 dark:bg-gray-800/40 p-2.5 rounded-xl border border-slate-100 dark:border-gray-800">
+          <div className="flex items-center gap-1.5 text-xs text-[var(--ink-3)] shrink-0 font-medium">
+            <Clock size={13} className="text-blue-500" />
+            <span>Đã tra:</span>
+          </div>
+          <div className="flex items-center gap-1.5 flex-wrap flex-1">
+            {history.slice(0, 12).map((h, i) => (
+              <div
+                key={i}
+                className="group flex items-center bg-white dark:bg-gray-800 border border-slate-200 dark:border-gray-700 text-xs text-slate-700 dark:text-gray-300 rounded-lg shadow-2xs hover:border-blue-300 hover:text-blue-600 transition overflow-hidden"
+              >
+                <button
+                  onClick={() => { setWord(h); lookup(false, h); }}
+                  className="px-2.5 py-1 font-medium hover:bg-blue-50/50 dark:hover:bg-gray-700/50 transition cursor-pointer"
+                >
+                  {h}
+                </button>
+                <button
+                  onClick={(e) => deleteHistoryItem(e, h)}
+                  title="Xóa khỏi lịch sử"
+                  className="px-1.5 py-1 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/30 transition border-l border-slate-100 dark:border-gray-700"
+                >
+                  <X size={11} />
+                </button>
+              </div>
+            ))}
+          </div>
+          <button
+            onClick={clearAllHistory}
+            className="text-[11px] text-slate-400 hover:text-rose-500 transition flex items-center gap-1 shrink-0 ml-auto"
+            title="Xóa toàn bộ lịch sử"
+          >
+            <Trash2 size={12} />
+            <span className="hidden sm:inline">Xóa tất cả</span>
+          </button>
         </div>
       )}
       {error && (

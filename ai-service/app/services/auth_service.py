@@ -195,8 +195,14 @@ def verify_access_token(token: str, conn=None):
     except JWTError:
         return None
 
+# In-memory fast cache for revoked token JTIs (Phase 1.2)
+_revoked_tokens_memory_cache: set = set()
+
 def blacklist_token(jti: str, expires_at: int):
-    """Store revoked token ID in the database."""
+    """Store revoked token ID in in-memory cache and persist to database."""
+    if not jti:
+        return
+    _revoked_tokens_memory_cache.add(jti)
     try:
         conn = get_db()
         cursor = conn.cursor()
@@ -207,7 +213,12 @@ def blacklist_token(jti: str, expires_at: int):
         print(f"[AUTH] Blacklist error: {e}")
 
 def is_token_revoked(jti: str, conn=None) -> bool:
-    """Check if token ID is in the revoked list. Optionally reuse existing conn."""
+    """Check if token ID is revoked. Fast path: check in-memory set (O(1))."""
+    if not jti:
+        return False
+    if jti in _revoked_tokens_memory_cache:
+        return True
+
     close_at_end = False
     _conn = conn
     try:
@@ -223,7 +234,10 @@ def is_token_revoked(jti: str, conn=None) -> bool:
         if close_at_end:
             _conn.close()
             
-        return row is not None
+        if row is not None:
+            _revoked_tokens_memory_cache.add(jti)
+            return True
+        return False
     except Exception as e:
         print(f"[AUTH] is_token_revoked error: {e}")
         if _conn and close_at_end:

@@ -10,6 +10,7 @@ from ..services.auth_service import (
     LoginOTPRequest, VerifyLoginOTP, UserRegister, OTPVerify, UserLogin, OTP_EXPIRE_MINUTES
 )
 from ..services import security_service
+from ..services.security_service import rate_limit
 from ..dependencies import get_admin_user
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -165,7 +166,7 @@ def verify_otp(data: OTPVerify, background_tasks: BackgroundTasks):
     return {"message": "Account verified successfully. You can now login."}
 
 
-@router.post("/login")
+@router.post("/login", dependencies=[Depends(rate_limit(max_requests=5, window_seconds=60, prefix="auth_login"))])
 def login(data: UserLogin):
     try:
         # Rate limit check before DB query
@@ -219,7 +220,7 @@ def login(data: UserLogin):
 
 
 # --- Login 2FA OTP endpoints ---
-@router.post("/login/send-otp")
+@router.post("/login/send-otp", dependencies=[Depends(rate_limit(max_requests=5, window_seconds=60, prefix="auth_otp"))])
 def login_send_otp(data: LoginOTPRequest, background_tasks: BackgroundTasks):
     """Send OTP for login 2FA verification."""
     conn = get_db()

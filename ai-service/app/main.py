@@ -254,22 +254,58 @@ def debug_startup_error():
         return {"error": router_load_error}
     return {"message": "Small success: Routers loaded but something else might be wrong."}
 
+_server_start_time = time.time()
 _health_cached_resp = None
 _health_cached_ts = 0.0
 
 @app.api_route("/health", methods=["GET", "HEAD"])
 def health_check():
-    """Fast health check with 5s in-memory cache for Render Load Balancer."""
+    """Fast health check with system metrics, DB status, and 5s in-memory cache."""
     global _health_cached_resp, _health_cached_ts
     now = time.time()
     if _health_cached_resp and (now - _health_cached_ts < 5.0):
         return {**_health_cached_resp, "cached": True}
     
+    # Check Database connection
+    db_ok = False
+    try:
+        from .database import get_db
+        conn = get_db()
+        conn.execute("SELECT 1").fetchone()
+        conn.close()
+        db_ok = True
+    except Exception:
+        db_ok = False
+
+    # Check RAM metrics
+    ram_metrics = {}
+    try:
+        import psutil
+        vm = psutil.virtual_memory()
+        ram_metrics = {
+            "used_percent": vm.percent,
+            "available_mb": round(vm.available / (1024 * 1024), 1)
+        }
+    except Exception:
+        ram_metrics = {"status": "unavailable"}
+
+    # Active online users
+    online_count = 0
+    try:
+        from .services.chat_service import chat_manager
+        online_count = len(chat_manager.online_users)
+    except Exception:
+        pass
+
     _health_cached_ts = now
     _health_cached_resp = {
-        "status": "ok",
+        "status": "ok" if db_ok else "degraded",
         "timestamp": now,
-        "message": "System is running"
+        "uptime_seconds": round(now - _server_start_time, 1),
+        "database_connected": db_ok,
+        "online_users_count": online_count,
+        "system_ram": ram_metrics,
+        "message": "System is running healthy" if db_ok else "Database connection degraded"
     }
     return {**_health_cached_resp, "cached": False}
 

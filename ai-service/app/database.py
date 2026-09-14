@@ -402,6 +402,11 @@ def init_db():
         cursor.execute("ALTER TABLE users ADD COLUMN login_otp_expires INTEGER")
     except SQLITE_OP_ERROR: pass
 
+    # --- MIGRATION: CEFR Level for users (Phase 1.13) ---
+    try:
+        cursor.execute("ALTER TABLE users ADD COLUMN cefr_level TEXT DEFAULT 'B1'")
+    except SQLITE_OP_ERROR: pass
+
     # --- MIGRATION: SET DEFAULT PASSWORDS FOR SEEDED USERS IF MISSING ---
     try:
         cursor.execute("SELECT id FROM users WHERE password_hash IS NULL OR password_hash = '' LIMIT 1")
@@ -1093,6 +1098,45 @@ def init_db():
     except Exception as e:
         print(f"[DB MIGRATION] realtime chat schema error: {e}")
 
+    # --- PHASE 1 MIGRATIONS: search_history, user_point_logs, user_placement_results ---
+    try:
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS search_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                word TEXT NOT NULL,
+                searched_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(user_id, word)
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_search_history_user_date ON search_history(user_id, searched_at DESC)")
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS user_point_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                action TEXT NOT NULL,
+                points INTEGER NOT NULL,
+                details TEXT DEFAULT '',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_user_point_logs_user ON user_point_logs(user_id, created_at DESC)")
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS user_placement_results (
+                user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+                score INTEGER NOT NULL,
+                total_questions INTEGER NOT NULL,
+                cefr_level TEXT NOT NULL,
+                breakdown_json TEXT DEFAULT '{}',
+                completed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        conn.commit()
+    except Exception as e:
+        print(f"[DB MIGRATION] Phase 1 schema error: {e}")
+
 
     # Seed settings from environment variables
     # Use INSERT OR IGNORE so env vars only fill EMPTY slots
@@ -1335,7 +1379,23 @@ def is_provider_failed(provider_name: str, window_minutes: int = 10) -> bool:
         result = cursor.fetchone()
         return result is not None
     except Exception as e:
-        # print(f"[DB LOG ERROR] {e}")
         return False
+
+def award_points(user_id: int, points: int, action: str, details: str = ""):
+    """Award points to student and record transaction in user_point_logs for transparency."""
+    if points <= 0:
+        return
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute("UPDATE users SET points = COALESCE(points, 0) + ? WHERE id = ?", (points, user_id))
+        cursor.execute("""
+            INSERT INTO user_point_logs (user_id, action, points, details)
+            VALUES (?, ?, ?, ?)
+        """, (user_id, action, points, details))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"[POINTS] Error awarding points: {e}")
 
 

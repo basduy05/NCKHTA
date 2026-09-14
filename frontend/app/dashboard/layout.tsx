@@ -89,11 +89,14 @@ function buildBottomNav(role: string, base: string): BottomItem[] {
   ];
 }
 
+import { usePresence } from "../hooks/usePresence";
+
 // ─── Sidebar ─────────────────────────────────────────────────────────────────
 
 function DashboardSidebar({ role, currentTab }: { role: string; currentTab: string }) {
   const links = buildLinks(role);
   const roleLabel = role === "admin" ? "Admin" : role === "teacher" ? "Teacher" : "Student";
+  const { unreadChatCount } = usePresence();
 
   return (
     <aside className="hidden lg:flex flex-col w-[220px] shrink-0 bg-[var(--surface-1)] border-r border-[var(--line)] h-full">
@@ -119,9 +122,16 @@ function DashboardSidebar({ role, currentTab }: { role: string; currentTab: stri
                   : "text-[var(--ink-2)] hover:bg-[var(--surface-3)] hover:text-[var(--ink-1)] font-medium"
               }`}
             >
-              <Icon size={16} className={isActive ? "text-[var(--brand)]" : "text-[var(--ink-3)]"} />
+              <div className="relative shrink-0">
+                <Icon size={16} className={isActive ? "text-[var(--brand)]" : "text-[var(--ink-3)]"} />
+              </div>
               <span className="truncate">{link.name}</span>
-              {isActive && (
+              {link.id === "chat" && unreadChatCount > 0 && (
+                <span className="ml-auto bg-rose-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center shrink-0 shadow-sm animate-pulse">
+                  {unreadChatCount > 99 ? "99+" : unreadChatCount}
+                </span>
+              )}
+              {isActive && (!link.id.includes("chat") || unreadChatCount === 0) && (
                 <span className="ml-auto w-1.5 h-1.5 rounded-full bg-[var(--brand)] shrink-0" />
               )}
             </Link>
