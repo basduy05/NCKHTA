@@ -3,7 +3,8 @@ import React, { useState, useEffect } from "react";
 import { 
   Newspaper, Search, BookOpen, Clock, Globe, Sparkles, 
   Bookmark, CheckCircle, ArrowLeft, Volume2, BookmarkCheck,
-  ChevronRight, ExternalLink, Filter, Lightbulb
+  ChevronRight, ExternalLink, Filter, Lightbulb, Loader2, X,
+  HelpCircle, Award, Check
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import ClickableText from "./ClickableText";
@@ -52,9 +53,98 @@ export default function NewsTab({ API_URL }: NewsTabProps) {
   const [fontSize, setFontSize] = useState<"normal" | "large" | "xl">("normal");
   const [readCompleted, setReadCompleted] = useState<Record<string, boolean>>({});
 
+  // AI Summary state (Phase 2 - Task 2.15)
+  const [summarizing, setSummarizing] = useState(false);
+  const [summaryData, setSummaryData] = useState<any | null>(null);
+  const [showSummaryModal, setShowSummaryModal] = useState(false);
+
+  // Reading Quiz state (Phase 3 - 3.12)
+  const [loadingQuiz, setLoadingQuiz] = useState(false);
+  const [quizData, setQuizData] = useState<any | null>(null);
+  const [showQuizModal, setShowQuizModal] = useState(false);
+  const [userAnswers, setUserAnswers] = useState<Record<number, string>>({});
+  const [quizSubmitted, setQuizSubmitted] = useState(false);
+  const [quizScore, setQuizScore] = useState({ score: 0, total: 0 });
+
+  const handleGenerateQuiz = async () => {
+    if (!activeArticle) return;
+    setLoadingQuiz(true);
+    setShowQuizModal(true);
+    setQuizSubmitted(false);
+    setUserAnswers({});
+    try {
+      const res = await authFetch(`${API_URL}/student/news/generate-quiz`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: activeArticle.title,
+          content: activeArticle.content,
+          article_url: activeArticle.url
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setQuizData(data);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoadingQuiz(false);
+    }
+  };
+
+  const handleSubmitQuiz = async () => {
+    if (!quizData?.questions || !activeArticle) return;
+    let correct = 0;
+    quizData.questions.forEach((q: any) => {
+      if (userAnswers[q.id] === q.correct_answer) {
+        correct++;
+      }
+    });
+    setQuizScore({ score: correct, total: quizData.questions.length });
+    setQuizSubmitted(true);
+    try {
+      await authFetch(`${API_URL}/student/news/submit-quiz`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: activeArticle.title,
+          score: correct,
+          max_score: quizData.questions.length,
+          user_answers: userAnswers
+        })
+      });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   // Popup lookup state
   const [popupWord, setPopupWord] = useState<string | null>(null);
   const [popupPos, setPopupPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+
+  const handleSummarizeArticle = async () => {
+    if (!activeArticle) return;
+    try {
+      setSummarizing(true);
+      setShowSummaryModal(true);
+      const res = await authFetch(`${API_URL}/student/news/summary`, {
+        method: "POST",
+        body: JSON.stringify({
+          title: activeArticle.title,
+          content: activeArticle.content
+        })
+      });
+      if (res.ok) {
+        const json = await res.json();
+        setSummaryData(json);
+      }
+    } catch (e) {
+      console.error("AI Summary error:", e);
+    } finally {
+      setSummarizing(false);
+    }
+  };
 
   const fetchNews = async () => {
     try {
@@ -153,6 +243,27 @@ export default function NewsTab({ API_URL }: NewsTabProps) {
                   A++
                 </button>
               </div>
+
+              {/* AI Summary Button (Phase 2 - Task 2.15) */}
+              <button
+                type="button"
+                onClick={handleSummarizeArticle}
+                disabled={summarizing}
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white shadow-sm transition active:scale-95 disabled:opacity-50"
+              >
+                {summarizing ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                <span>{summarizing ? "Đang tóm tắt..." : "✨ Tóm tắt AI"}</span>
+              </button>
+
+              {/* Phase 3 (3.12): Reading Comprehension Quiz */}
+              <button
+                onClick={handleGenerateQuiz}
+                disabled={loadingQuiz}
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-sm transition active:scale-95 disabled:opacity-50"
+              >
+                {loadingQuiz ? <Loader2 size={14} className="animate-spin" /> : <BookOpen size={14} />}
+                <span>{loadingQuiz ? "Đang tạo đề..." : "📝 Trắc nghiệm đọc hiểu"}</span>
+              </button>
 
               {/* Mark as read */}
               <button
@@ -367,6 +478,268 @@ export default function NewsTab({ API_URL }: NewsTabProps) {
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* AI Summary Modal (Phase 2 - Task 2.15) */}
+      {showSummaryModal && (
+        <div
+          className="fixed inset-0 !mt-0 !m-0 top-0 left-0 right-0 bottom-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+          style={{ margin: 0, top: 0, left: 0, right: 0, bottom: 0 }}
+        >
+          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-3xl p-6 sm:p-8 max-w-2xl w-full shadow-2xl space-y-6 max-h-[85vh] overflow-y-auto animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-800 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400">
+                  <Sparkles size={20} />
+                </div>
+                <div>
+                  <h3 className="text-base sm:text-lg font-bold text-gray-900 dark:text-gray-100">
+                    Tóm Tắt Bài Báo Thông Minh (AI Summary)
+                  </h3>
+                  <p className="text-xs text-gray-500">
+                    Trích xuất 3 ý chính và từ vựng cốt lõi theo cấp độ CEFR
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowSummaryModal(false)}
+                className="p-1.5 rounded-full text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {summarizing ? (
+              <div className="py-12 flex flex-col items-center justify-center gap-3 text-purple-600">
+                <Loader2 size={32} className="animate-spin" />
+                <span className="text-sm font-semibold">Gemini AI đang đọc và phân tích nội dung bài viết...</span>
+              </div>
+            ) : summaryData ? (
+              <div className="space-y-6">
+                {/* Vietnamese Title */}
+                {summaryData.title_vn && (
+                  <div className="p-3.5 rounded-xl bg-purple-50/60 dark:bg-purple-950/30 border border-purple-100 dark:border-purple-900/40">
+                    <span className="text-[11px] font-bold text-purple-700 dark:text-purple-300 uppercase tracking-wider block mb-1">
+                      Tiêu đề tiếng Việt
+                    </span>
+                    <p className="text-base font-bold text-gray-900 dark:text-gray-100">
+                      {summaryData.title_vn}
+                    </p>
+                  </div>
+                )}
+
+                {/* 3 Key Takeaways */}
+                <div className="space-y-2">
+                  <span className="text-xs font-bold text-gray-400 uppercase tracking-wider block">
+                    3 Điểm Cốt Lõi (Key Takeaways)
+                  </span>
+                  <div className="space-y-2">
+                    {(summaryData.key_takeaways_vn || summaryData.key_takeaways_en || []).map((point: string, idx: number) => (
+                      <div key={idx} className="flex items-start gap-2.5 p-3 rounded-xl bg-gray-50 dark:bg-gray-800/60 text-xs sm:text-sm text-gray-800 dark:text-gray-200 leading-relaxed border border-gray-100 dark:border-gray-800">
+                        <span className="w-5 h-5 rounded-full bg-purple-600 text-white flex items-center justify-center font-bold text-xs shrink-0 mt-0.5">
+                          {idx + 1}
+                        </span>
+                        <span>{point}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Key Vocabulary Table */}
+                {summaryData.key_vocabulary && summaryData.key_vocabulary.length > 0 && (
+                  <div className="space-y-2">
+                    <span className="text-xs font-bold text-gray-400 uppercase tracking-wider block">
+                      5 Từ Vựng Đắt Giá Nhất Trong Bài
+                    </span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      {summaryData.key_vocabulary.map((v: any, idx: number) => (
+                        <div key={idx} className="p-3 rounded-xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-800/40 shadow-xs space-y-1">
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-sm text-purple-700 dark:text-purple-300">
+                              {v.word}
+                            </span>
+                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-gray-100 dark:bg-gray-750 text-gray-500">
+                              {v.pos || "vocab"}
+                            </span>
+                          </div>
+                          {v.phonetic && (
+                            <span className="text-[11px] font-mono text-gray-400 block">{v.phonetic}</span>
+                          )}
+                          <p className="text-xs text-gray-700 dark:text-gray-300 font-medium">
+                            {v.meaning_vn}
+                          </p>
+                          {v.example_from_text && (
+                            <p className="text-[11px] text-gray-400 italic line-clamp-2 pt-0.5">
+                              "{v.example_from_text}"
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Discussion prompt */}
+                {summaryData.discussion_prompt && (
+                  <div className="p-3.5 rounded-xl bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200 text-xs text-amber-900 dark:text-amber-300 space-y-1">
+                    <span className="font-bold block flex items-center gap-1.5">
+                      <Lightbulb size={14} className="text-amber-600" /> Chủ đề suy ngẫm & thảo luận:
+                    </span>
+                    <p className="italic leading-relaxed">{summaryData.discussion_prompt}</p>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p className="text-center text-xs text-gray-400 py-6">
+                Chưa có dữ liệu tóm tắt. Vui lòng bấm thử lại.
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Phase 3 (3.12): Reading Comprehension Quiz Modal */}
+      {showQuizModal && (
+        <div
+          className="fixed inset-0 !mt-0 !m-0 top-0 left-0 right-0 bottom-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4"
+          style={{ margin: 0, top: 0, left: 0, right: 0, bottom: 0 }}
+        >
+          <div className="bg-white dark:bg-gray-900 rounded-2xl max-w-2xl w-full max-h-[85vh] flex flex-col shadow-2xl border border-gray-200 dark:border-gray-800 animate-in fade-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="p-4 md:p-5 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40">
+                  <BookOpen size={18} />
+                </div>
+                <div>
+                  <h3 className="text-sm md:text-base font-bold text-gray-900 dark:text-gray-100">
+                    Trắc nghiệm đọc hiểu tin tức
+                  </h3>
+                  <p className="text-[11px] text-gray-500 line-clamp-1">{activeArticle?.title}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowQuizModal(false)}
+                className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-5 md:p-6 overflow-y-auto space-y-6 flex-1">
+              {loadingQuiz ? (
+                <div className="flex flex-col items-center justify-center py-16 space-y-3">
+                  <Loader2 size={32} className="animate-spin text-emerald-600" />
+                  <p className="text-xs text-gray-500 font-medium">AI đang tạo câu hỏi đọc hiểu theo bài viết...</p>
+                </div>
+              ) : quizData?.questions?.length > 0 ? (
+                <div className="space-y-6">
+                  {quizSubmitted && (
+                    <div className="p-4 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 text-emerald-900 dark:text-emerald-300 flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <Award size={24} className="text-emerald-600" />
+                        <div>
+                          <p className="font-bold text-sm">Kết quả bài đọc hiểu: {quizScore.score}/{quizScore.total}</p>
+                          <p className="text-xs text-emerald-700 dark:text-emerald-400">
+                            {quizScore.score === quizScore.total ? "🎉 Xuất sắc! Bạn đã hiểu toàn bộ nội dung bài viết." : "Tiếp tục ôn luyện để nâng cao khả năng đọc hiểu!"}
+                          </p>
+                        </div>
+                      </div>
+                      <span className="text-lg font-black text-emerald-600">
+                        {Math.round((quizScore.score / quizScore.total) * 100)}%
+                      </span>
+                    </div>
+                  )}
+
+                  {quizData.questions.map((q: any, idx: number) => {
+                    const selected = userAnswers[q.id];
+                    const isCorrect = selected === q.correct_answer;
+                    return (
+                      <div key={q.id} className="p-4 rounded-xl border border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/40 space-y-3">
+                        <div className="flex items-start gap-2">
+                          <span className="font-bold text-xs px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 shrink-0 mt-0.5">
+                            Câu {idx + 1}
+                          </span>
+                          <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100">{q.question}</h4>
+                        </div>
+
+                        {/* Options */}
+                        <div className="space-y-2 pt-1">
+                          {q.options?.map((opt: string) => {
+                            let optStyle = "border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800";
+                            if (quizSubmitted) {
+                              if (opt === q.correct_answer) {
+                                optStyle = "bg-green-50 dark:bg-green-950/40 border-green-400 text-green-700 font-semibold";
+                              } else if (selected === opt) {
+                                optStyle = "bg-red-50 dark:bg-red-950/40 border-red-300 text-red-600";
+                              }
+                            } else if (selected === opt) {
+                              optStyle = "bg-blue-50 dark:bg-blue-950/40 border-blue-500 text-blue-700 font-semibold";
+                            }
+
+                            return (
+                              <button
+                                key={opt}
+                                disabled={quizSubmitted}
+                                onClick={() => setUserAnswers(prev => ({ ...prev, [q.id]: opt }))}
+                                className={`w-full p-2.5 text-left text-xs rounded-xl border transition flex items-center justify-between ${optStyle}`}
+                              >
+                                <span>{opt}</span>
+                                {quizSubmitted && opt === q.correct_answer && (
+                                  <Check size={14} className="text-green-600 shrink-0" />
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+
+                        {/* Explanation and Evidence */}
+                        {quizSubmitted && (
+                          <div className="pt-2 border-t border-gray-200/60 dark:border-gray-700/60 text-xs space-y-1.5 animate-in fade-in duration-200">
+                            <p className="text-gray-700 dark:text-gray-300">
+                              <span className="font-semibold text-emerald-600">💡 Giải thích:</span> {q.explanation_vn}
+                            </p>
+                            {q.quote_evidence && (
+                              <p className="text-[11px] italic text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-900 p-2 rounded-lg border border-gray-100 dark:border-gray-800">
+                                <strong>Dẫn chứng từ bài báo:</strong> &ldquo;{q.quote_evidence}&rdquo;
+                              </p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-center text-xs text-gray-400 py-6">Không thể tạo câu hỏi cho bài viết này.</p>
+              )}
+            </div>
+
+            {/* Footer */}
+            {quizData?.questions?.length > 0 && !loadingQuiz && (
+              <div className="p-4 border-t border-gray-100 dark:border-gray-800 flex justify-end gap-2">
+                {!quizSubmitted ? (
+                  <button
+                    onClick={handleSubmitQuiz}
+                    disabled={Object.keys(userAnswers).length === 0}
+                    className="px-5 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition disabled:opacity-50"
+                  >
+                    Nộp bài kiểm tra
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => setShowQuizModal(false)}
+                    className="px-5 py-2 rounded-xl text-xs font-bold bg-gray-900 hover:bg-black text-white transition"
+                  >
+                    Đóng
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       )}
 

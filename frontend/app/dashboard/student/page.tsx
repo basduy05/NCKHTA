@@ -1,54 +1,69 @@
 "use client";
-import React, { useState, useEffect, Suspense } from "react";
+import React, { useState, useEffect, Suspense, useCallback } from "react";
+import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useAuth } from "../../context/AuthContext";
-import { AlertCircle } from "lucide-react";
-
+import { AlertCircle, Crown } from "lucide-react";
 import dynamic from "next/dynamic";
 
-// OverviewTab is loaded statically as the default landing tab
+// Default landing tab loaded statically
 import OverviewTab from "./OverviewTab";
 
-// Loading placeholder for lazy tabs
+// Loading placeholder for lazy domain modules
 const TabLoader = () => (
   <div className="flex justify-center items-center py-20">
     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--brand)]"></div>
   </div>
 );
 
-// Heavy tabs dynamically loaded on-demand
-const ClassesTab = dynamic(() => import("./ClassesTab"), { ssr: false, loading: TabLoader });
-const AssignmentsTab = dynamic(() => import("./AssignmentsTab"), { ssr: false, loading: TabLoader });
-const DictionaryTab = dynamic(() => import("./DictionaryTab"), { ssr: false, loading: TabLoader });
-const VocabularyTab = dynamic(() => import("./VocabularyTab"), { ssr: false, loading: TabLoader });
+// Domain components (consolidating 15 tabs into 7 coherent domains)
+const LearningDomain = dynamic(() => import("./domains/LearningDomain"), { ssr: false, loading: TabLoader });
+const CommunityDomain = dynamic(() => import("./domains/CommunityDomain"), { ssr: false, loading: TabLoader });
+const LanguageDomain = dynamic(() => import("./domains/LanguageDomain"), { ssr: false, loading: TabLoader });
+const PracticeDomain = dynamic(() => import("./domains/PracticeDomain"), { ssr: false, loading: TabLoader });
+const ProgressDomain = dynamic(() => import("./domains/ProgressDomain"), { ssr: false, loading: TabLoader });
 const AIToolsTab = dynamic(() => import("./AIToolsTab"), { ssr: false, loading: TabLoader });
-const GrammarTab = dynamic(() => import("./GrammarTab"), { ssr: false, loading: TabLoader });
-const ScoresTab = dynamic(() => import("./ScoresTab"), { ssr: false, loading: TabLoader });
-const IpaTab = dynamic(() => import("./IpaTab"), { ssr: false, loading: TabLoader });
-const PracticeTab = dynamic(() => import("./PracticeTab"), { ssr: false, loading: TabLoader });
-const RankingTab = dynamic(() => import("./RankingTab"), { ssr: false, loading: TabLoader });
-const RoadmapTab = dynamic(() => import("./RoadmapTab"), { ssr: false, loading: TabLoader });
-const NewsTab = dynamic(() => import("./NewsTab"), { ssr: false, loading: TabLoader });
-const GroupsTab = dynamic(() => import("./GroupsTab"), { ssr: false, loading: TabLoader });
-const ChatTab = dynamic(() => import("./ChatTab"), { ssr: false, loading: TabLoader });
-
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://iedu-ksk7.onrender.com";
 
+// Legacy tab to domain mapping for 100% backward compatibility
+const LEGACY_MAP: Record<string, { domain: string; defaultSub: string }> = {
+  classes:     { domain: "learning",  defaultSub: "classes" },
+  assignments: { domain: "learning",  defaultSub: "assignments" },
+  groups:      { domain: "community", defaultSub: "groups" },
+  chat:        { domain: "community", defaultSub: "chat" },
+  dictionary:  { domain: "language",  defaultSub: "dictionary" },
+  vocabulary:  { domain: "language",  defaultSub: "vocabulary" },
+  grammar:     { domain: "language",  defaultSub: "grammar" },
+  news:        { domain: "language",  defaultSub: "news" },
+  practice:    { domain: "practice",  defaultSub: "practice" },
+  ipa:         { domain: "practice",  defaultSub: "ipa" },
+  scores:      { domain: "progress",  defaultSub: "scores" },
+  ranking:     { domain: "progress",  defaultSub: "ranking" },
+  roadmap:     { domain: "progress",  defaultSub: "roadmap" },
+};
+
 function StudentDashboardContent() {
   const searchParams = useSearchParams();
-  const activeTab = searchParams.get("tab") || "overview";
+  const rawTab = searchParams.get("tab") || "overview";
+  const rawSub = searchParams.get("sub") || "";
+
+  // Resolve domain and subtab (support both new domain URLs and legacy tab URLs)
+  const legacyResolved = LEGACY_MAP[rawTab];
+  const activeDomain = legacyResolved ? legacyResolved.domain : rawTab;
+  const activeSub = rawSub || (legacyResolved ? legacyResolved.defaultSub : "");
+
   const { user, token, isInitialized, refreshUser } = useAuth();
   const router = useRouter();
-  const [visitedTabs, setVisitedTabs] = useState<Set<string>>(new Set([activeTab]));
+  const [visitedDomains, setVisitedDomains] = useState<Set<string>>(new Set([activeDomain]));
   const [showCreditModal, setShowCreditModal] = useState(false);
 
   useEffect(() => {
-    setVisitedTabs(prev => new Set([...prev, activeTab]));
-    if (activeTab === "overview" || activeTab === "ranking" || activeTab === "ai-tools") {
+    setVisitedDomains(prev => new Set([...prev, activeDomain]));
+    if (activeDomain === "overview" || activeDomain === "progress" || activeDomain === "ai-tools") {
       refreshUser();
     }
-  }, [activeTab, refreshUser]);
+  }, [activeDomain, refreshUser]);
 
   useEffect(() => {
     if (!isInitialized) return;
@@ -62,61 +77,113 @@ function StudentDashboardContent() {
     }
   }, [isInitialized, token, user, router]);
 
+  const handleSubTabChange = useCallback((domain: string, sub: string) => {
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      url.searchParams.set("tab", domain);
+      url.searchParams.set("sub", sub);
+      window.history.replaceState(null, "", url.toString());
+    }
+  }, []);
+
   if (!isInitialized || !token || !user) {
-    return <div className="flex justify-center items-center h-64"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-[var(--brand)]"></div></div>;
+    return (
+      <div className="flex justify-center items-center h-64">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-[var(--brand)]"></div>
+      </div>
+    );
   }
 
-  const renderTab = (tabName: string) => {
-    if (!visitedTabs.has(tabName)) return null;
-    
-    const isHidden = activeTab !== tabName;
-    const style = isHidden ? { display: 'none' } : {};
+  const renderDomain = (domainName: string) => {
+    if (!visitedDomains.has(domainName)) return null;
+    const isHidden = activeDomain !== domainName;
+    const style = isHidden ? { display: "none" } : {};
 
     return (
-      <div key={tabName} style={style} className="animate-in fade-in duration-300">
-        {tabName === "overview" && <OverviewTab API_URL={API_URL} />}
-        {tabName === "classes" && <ClassesTab API_URL={API_URL} />}
-        {tabName === "assignments" && <AssignmentsTab API_URL={API_URL} />}
-        {tabName === "news" && <NewsTab API_URL={API_URL} />}
-        {tabName === "groups" && <GroupsTab API_URL={API_URL} />}
-        {tabName === "chat" && <ChatTab API_URL={API_URL} />}
-        {tabName === "dictionary" && <DictionaryTab API_URL={API_URL} />}
-        {tabName === "vocabulary" && <VocabularyTab API_URL={API_URL} />}
-        {tabName === "ai-tools" && <AIToolsTab API_URL={API_URL} setShowCreditModal={setShowCreditModal} />}
-        {tabName === "grammar" && <GrammarTab API_URL={API_URL} />}
-        {tabName === "scores" && <ScoresTab API_URL={API_URL} />}
-        {tabName === "ipa" && <IpaTab API_URL={API_URL} />}
-        {tabName === "practice" && <PracticeTab API_URL={API_URL} setShowCreditModal={setShowCreditModal} />}
-        {tabName === "ranking" && <RankingTab API_URL={API_URL} />}
-        {tabName === "roadmap" && <RoadmapTab API_URL={API_URL} />}
+      <div key={domainName} style={style} className="animate-in fade-in duration-200">
+        {domainName === "overview" && <OverviewTab API_URL={API_URL} />}
+        {domainName === "learning" && (
+          <LearningDomain
+            API_URL={API_URL}
+            initialSubTab={activeSub}
+            onSubTabChange={(sub) => handleSubTabChange("learning", sub)}
+          />
+        )}
+        {domainName === "community" && (
+          <CommunityDomain
+            API_URL={API_URL}
+            initialSubTab={activeSub}
+            onSubTabChange={(sub) => handleSubTabChange("community", sub)}
+          />
+        )}
+        {domainName === "language" && (
+          <LanguageDomain
+            API_URL={API_URL}
+            initialSubTab={activeSub}
+            onSubTabChange={(sub) => handleSubTabChange("language", sub)}
+          />
+        )}
+        {domainName === "practice" && (
+          <PracticeDomain
+            API_URL={API_URL}
+            initialSubTab={activeSub}
+            onSubTabChange={(sub) => handleSubTabChange("practice", sub)}
+            setShowCreditModal={setShowCreditModal}
+          />
+        )}
+        {domainName === "ai-tools" && (
+          <AIToolsTab API_URL={API_URL} setShowCreditModal={setShowCreditModal} />
+        )}
+        {domainName === "progress" && (
+          <ProgressDomain
+            API_URL={API_URL}
+            initialSubTab={activeSub}
+            onSubTabChange={(sub) => handleSubTabChange("progress", sub)}
+          />
+        )}
       </div>
     );
   };
 
   return (
     <div className="space-y-5">
-
+      {/* Credit limit modal with Pro Upgrade CTA */}
       {showCreditModal && (
-        <div className="fixed inset-0 !mt-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-300 border border-gray-100">
-            <div className="w-16 h-16 bg-red-50 rounded-2xl flex items-center justify-center mx-auto mb-5">
-              <AlertCircle size={32} className="text-red-500" />
+        <div className="fixed inset-0 !mt-0 !m-0 z-[120] bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-200 border border-slate-200 dark:border-slate-800 text-center">
+            <div className="w-16 h-16 bg-gradient-to-tr from-amber-100 to-orange-100 dark:from-amber-950/40 dark:to-orange-950/40 rounded-3xl flex items-center justify-center mx-auto mb-4 text-amber-600 dark:text-amber-400 shadow-sm">
+              <Crown size={32} className="fill-amber-500" />
             </div>
-            <h3 className="text-xl font-bold text-gray-900 text-center mb-2">Hết lượt sử dụng AI!</h3>
-            <p className="text-gray-500 text-center mb-6 text-sm">
-              Bạn đã dùng hết credits AI hôm nay. Quay lại vào ngày mai hoặc liên hệ quản trị viên.
+            <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">
+              Hết lượt AI trong ngày!
+            </h3>
+            <p className="text-slate-500 dark:text-slate-400 text-xs sm:text-sm leading-relaxed mb-6">
+              Bạn đã sử dụng hết số credits AI miễn phí hôm nay. Nâng cấp lên <strong className="text-[var(--brand)]">iEdu PRO</strong> để học và hỏi đáp AI không giới hạn cùng nhiều đặc quyền hấp dẫn.
             </p>
-            <button
-              onClick={() => setShowCreditModal(false)}
-              className="w-full bg-[var(--brand)] text-white py-3 rounded-xl font-semibold hover:bg-[var(--brand-dark)] transition"
-            >
-              Đã hiểu
-            </button>
+            <div className="space-y-2.5">
+              <Link
+                href="/upgrade"
+                onClick={() => setShowCreditModal(false)}
+                className="w-full py-3 bg-gradient-to-r from-[var(--brand)] to-indigo-600 hover:opacity-95 text-white rounded-xl font-bold text-sm shadow-md shadow-blue-200 transition flex items-center justify-center gap-2"
+              >
+                <Crown size={16} className="fill-white" />
+                <span>Nâng cấp iEdu PRO ngay</span>
+              </Link>
+              <button
+                type="button"
+                onClick={() => setShowCreditModal(false)}
+                className="w-full py-2.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-semibold rounded-xl text-xs hover:bg-slate-200 transition"
+              >
+                Để sau
+              </button>
+            </div>
           </div>
         </div>
       )}
 
-      {["overview", "classes", "assignments", "chat", "news", "groups", "dictionary", "vocabulary", "ai-tools", "grammar", "scores", "ipa", "practice", "ranking", "roadmap"].map(tab => renderTab(tab))}
+      {["overview", "learning", "community", "language", "practice", "ai-tools", "progress"].map(domain =>
+        renderDomain(domain)
+      )}
     </div>
   );
 }

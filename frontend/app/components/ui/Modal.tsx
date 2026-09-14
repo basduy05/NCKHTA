@@ -47,7 +47,10 @@ export function Modal({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-end md:items-center justify-center p-0 md:p-4">
+    <div
+      className="fixed inset-0 !mt-0 !m-0 top-0 left-0 right-0 bottom-0 z-[200] flex items-end md:items-center justify-center p-0 md:p-4"
+      style={{ margin: 0, top: 0, left: 0, right: 0, bottom: 0 }}
+    >
       <div
         className="absolute inset-0 bg-black/40 backdrop-blur-sm animate-fade-in"
         onClick={() => closeOnBackdrop && onClose()}

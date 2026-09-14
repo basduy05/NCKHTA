@@ -1,9 +1,10 @@
-from fastapi import APIRouter, HTTPException, Depends, status, BackgroundTasks, Header
+from fastapi import APIRouter, HTTPException, Depends, status, BackgroundTasks, Header, Request
 from pydantic import BaseModel, EmailStr, field_validator
 from typing import Optional
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import sqlite3
 import time
+import uuid
 from ..database import get_db, UserCreate
 from ..services import auth_service
 from ..services.auth_service import (
@@ -15,10 +16,6 @@ from ..dependencies import get_admin_user
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 security = HTTPBearer()
-
-# ---------------------------------------------------------------------------
-# Pydantic models for request bodies
-# ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
 # Pydantic models for request bodies
@@ -41,6 +38,66 @@ class RefreshTokenRequest(BaseModel):
 
 class LogoutRequest(BaseModel):
     refresh_token: Optional[str] = None
+
+class Toggle2FARequest(BaseModel):
+    enabled: bool
+    password: str
+
+# ---------------------------------------------------------------------------
+# Device & Session Helpers (Phase 3: 3.3)
+# ---------------------------------------------------------------------------
+def _parse_device_info(request: Request):
+    user_agent = request.headers.get("user-agent", "Unknown")
+    client_ip = request.client.host if request.client else "127.0.0.1"
+    if "x-forwarded-for" in request.headers:
+        client_ip = request.headers["x-forwarded-for"].split(",")[0].strip()
+
+    ua_lower = user_agent.lower()
+    device_type = "desktop"
+    if "mobile" in ua_lower or "android" in ua_lower or "iphone" in ua_lower:
+        device_type = "mobile"
+    elif "tablet" in ua_lower or "ipad" in ua_lower:
+        device_type = "tablet"
+
+    os_name = "Windows"
+    if "macintosh" in ua_lower or "mac os" in ua_lower: os_name = "macOS"
+    elif "iphone" in ua_lower or "ipad" in ua_lower: os_name = "iOS"
+    elif "android" in ua_lower: os_name = "Android"
+    elif "linux" in ua_lower: os_name = "Linux"
+
+    browser_name = "Chrome"
+    if "edg/" in ua_lower: browser_name = "Microsoft Edge"
+    elif "chrome/" in ua_lower and "edg/" not in ua_lower: browser_name = "Google Chrome"
+    elif "firefox/" in ua_lower: browser_name = "Mozilla Firefox"
+    elif "safari/" in ua_lower and "chrome/" not in ua_lower: browser_name = "Apple Safari"
+
+    return {
+        "device_name": f"{browser_name} ({os_name})",
+        "device_type": device_type,
+        "browser": browser_name,
+        "os": os_name,
+        "ip_address": client_ip
+    }
+
+def _register_session(user_id: int, refresh_token: str, request: Request):
+    try:
+        info = _parse_device_info(request)
+        payload = auth_service.verify_refresh_token(refresh_token)
+        jti = payload.get("jti") if payload else str(uuid.uuid4())
+        session_id = str(uuid.uuid4())
+
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO user_sessions (user_id, session_id, device_name, device_type, browser, os, ip_address, refresh_token_jti, last_active, is_revoked)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, 0)
+        """, (user_id, session_id, info["device_name"], info["device_type"], info["browser"], info["os"], info["ip_address"], jti))
+        conn.commit()
+        conn.close()
+        return session_id
+    except Exception as e:
+        print(f"[AUTH SESSION ERROR] register_session: {e}")
+        return None
 
 # ---------------------------------------------------------------------------
 # Simple in-memory login attempt tracking (per email)
@@ -167,7 +224,7 @@ def verify_otp(data: OTPVerify, background_tasks: BackgroundTasks):
 
 
 @router.post("/login", dependencies=[Depends(rate_limit(max_requests=5, window_seconds=60, prefix="auth_login"))])
-def login(data: UserLogin):
+def login(data: UserLogin, request: Request, background_tasks: BackgroundTasks):
     try:
         # Rate limit check before DB query
         _check_login_rate_limit(data.email)
@@ -176,7 +233,7 @@ def login(data: UserLogin):
         cursor = conn.cursor()
 
         cursor.execute(
-            "SELECT id, name, role, password_hash, is_verified, phone FROM users WHERE email = ?",
+            "SELECT id, name, role, password_hash, is_verified, phone, two_factor_enabled FROM users WHERE email = ?",
             (data.email,)
         )
         user = cursor.fetchone()
@@ -196,13 +253,39 @@ def login(data: UserLogin):
         # Success — clear failed attempts counter
         _clear_login_attempts(data.email)
 
-        # Generate JWT tokens
+        # 3.2: 2FA Enforcement for Admin, Teacher, or accounts with 2FA enabled
+        role_upper = (user['role'] or '').upper()
+        two_fa_enabled = bool(user['two_factor_enabled']) if 'two_factor_enabled' in user.keys() else False
+
+        if role_upper in ('TEACHER', 'ADMIN') or two_fa_enabled:
+            otp = auth_service.generate_otp()
+            otp_expires = int(time.time()) + OTP_EXPIRE_MINUTES * 60
+            conn = get_db()
+            cursor = conn.cursor()
+            cursor.execute(
+                "UPDATE users SET login_otp = ?, login_otp_expires = ? WHERE id = ?",
+                (otp, otp_expires, user['id'])
+            )
+            conn.commit()
+            conn.close()
+
+            background_tasks.add_task(auth_service.send_otp_email, data.email, otp, is_login_otp=True)
+            return {
+                "requires_2fa": True,
+                "email": data.email,
+                "role": user['role'],
+                "message": f"Tài khoản {user['role']} yêu cầu bảo mật 2 lớp (2FA). Mã OTP đã được gửi đến email {data.email}."
+            }
+
+        # Generate JWT tokens for standard login
         access_token = auth_service.generate_access_token(user['id'], data.email)
         refresh_token = auth_service.generate_refresh_token(user['id'], data.email)
+        session_id = _register_session(user['id'], refresh_token, request)
 
         return {
             "access_token": access_token,
             "refresh_token": refresh_token,
+            "session_id": session_id,
             "token_type": "bearer",
             "expires_in": auth_service.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
             "user": {
@@ -256,8 +339,8 @@ def login_send_otp(data: LoginOTPRequest, background_tasks: BackgroundTasks):
 
 
 @router.post("/login/verify-otp")
-def login_verify_otp(data: VerifyLoginOTP):
-    """Verify OTP for login 2FA and return token."""
+def login_verify_otp(data: VerifyLoginOTP, request: Request):
+    """Verify OTP for login 2FA and return token with registered session."""
     conn = get_db()
     cursor = conn.cursor()
     
@@ -297,10 +380,12 @@ def login_verify_otp(data: VerifyLoginOTP):
     # Generate JWT tokens
     access_token = auth_service.generate_access_token(user['id'], data.email)
     refresh_token = auth_service.generate_refresh_token(user['id'], data.email)
+    session_id = _register_session(user['id'], refresh_token, request)
     
     return {
         "access_token": access_token,
         "refresh_token": refresh_token,
+        "session_id": session_id,
         "token_type": "bearer",
         "expires_in": auth_service.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         "user": {
@@ -320,8 +405,9 @@ def login_verify_otp(data: VerifyLoginOTP):
 class UpdateProfileRequest(BaseModel):
     name: str | None = None
     phone: str | None = None
+    cefr_level: str | None = None
 
-    @field_validator('name', 'phone')
+    @field_validator('name', 'phone', 'cefr_level')
     @classmethod
     def validate_fields(cls, v: str | None) -> str | None:
         return security_service.clean_html(v) if v else v
@@ -343,7 +429,7 @@ def get_current_user_info(credentials: HTTPAuthorizationCredentials = Depends(se
     
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute("SELECT id, name, email, role, phone, points, credits_ai FROM users WHERE id = ?", (user_id,))
+    cursor.execute("SELECT id, name, email, role, phone, points, credits_ai, cefr_level, two_factor_enabled, subscription_tier FROM users WHERE id = ?", (user_id,))
     user = cursor.fetchone()
     conn.close()
     
@@ -357,7 +443,10 @@ def get_current_user_info(credentials: HTTPAuthorizationCredentials = Depends(se
         "role": user['role'],
         "phone": user.get('phone') or "",
         "credits_ai": user.get('credits_ai', 0),
-        "points": user.get('points', 0)
+        "points": user.get('points', 0),
+        "cefr_level": user.get('cefr_level') or "B1",
+        "two_factor_enabled": bool(user.get('two_factor_enabled', 0)),
+        "subscription_tier": user.get('subscription_tier') or "free"
     }
 
 
@@ -383,6 +472,9 @@ def update_profile(data: UpdateProfileRequest, credentials: HTTPAuthorizationCre
     if data.phone is not None:
         updates.append("phone = ?")
         params.append(data.phone)
+    if data.cefr_level is not None:
+        updates.append("cefr_level = ?")
+        params.append(data.cefr_level)
     
     if not updates:
         conn.close()
@@ -395,7 +487,7 @@ def update_profile(data: UpdateProfileRequest, credentials: HTTPAuthorizationCre
         conn.commit()
         
         # Fetch updated user
-        cursor.execute("SELECT id, name, email, role, phone FROM users WHERE id = ?", (user_id,))
+        cursor.execute("SELECT id, name, email, role, phone, cefr_level FROM users WHERE id = ?", (user_id,))
         user = cursor.fetchone()
         conn.close()
         
@@ -465,22 +557,64 @@ def change_password(data: ChangePasswordRequest, credentials: HTTPAuthorizationC
 
 @router.post("/refresh")
 def refresh_token_endpoint(data: RefreshTokenRequest):
-    """Acquire a new access token (and rotating refresh token) using a valid refresh token."""
+    """Acquire a new access token (and rotating refresh token) with Replay Attack Detection."""
+    # 3.1: Check if this token was already revoked (Token Replay Detection)
+    raw_payload = auth_service.verify_refresh_token(data.refresh_token, check_revocation=False)
+    if raw_payload:
+        candidate_jti = raw_payload.get("jti")
+        if candidate_jti and auth_service.is_token_revoked(candidate_jti):
+            user_id = raw_payload.get("user_id")
+            print(f"[SECURITY ALERT] Refresh token reuse detected for user {user_id}! Revoking all user sessions.")
+            try:
+                conn = get_db()
+                conn.execute("UPDATE user_sessions SET is_revoked = 1 WHERE user_id = ?", (user_id,))
+                conn.commit()
+                conn.close()
+            except Exception as e:
+                print(f"[SECURITY ERROR] Session revocation error: {e}")
+            raise HTTPException(
+                status_code=401, 
+                detail="Cảnh báo bảo mật: Refresh token đã qua sử dụng (Replay Attack). Toàn bộ phiên làm việc của tài khoản đã bị chấm dứt để bảo vệ bạn."
+            )
+
     payload = auth_service.verify_refresh_token(data.refresh_token)
     if not payload:
         raise HTTPException(status_code=401, detail="Phiên làm việc đã hết hạn hoặc refresh token không hợp lệ")
     
     user_id = payload["user_id"]
     email = payload["email"]
+    old_jti = payload.get("jti")
+    old_exp = payload.get("exp")
     
     new_access_token = auth_service.generate_access_token(user_id, email)
     new_refresh_token = auth_service.generate_refresh_token(user_id, email)
+    new_payload = auth_service.verify_refresh_token(new_refresh_token)
+    new_jti = new_payload.get("jti") if new_payload else None
     
-    # Invalidate old refresh token jti to prevent token replay
-    old_jti = payload.get("jti")
-    old_exp = payload.get("exp")
+    # Invalidate old refresh token jti to enforce Rotation
     if old_jti and old_exp:
         auth_service.blacklist_token(old_jti, old_exp)
+
+    # Rotate JTI on user session & update last active timestamp
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        if old_jti and new_jti:
+            cursor.execute("""
+                UPDATE user_sessions 
+                SET refresh_token_jti = ?, last_active = CURRENT_TIMESTAMP 
+                WHERE refresh_token_jti = ? AND user_id = ?
+            """, (new_jti, old_jti, user_id))
+        else:
+            cursor.execute("""
+                UPDATE user_sessions 
+                SET last_active = CURRENT_TIMESTAMP 
+                WHERE user_id = ? AND is_revoked = 0
+            """, (user_id,))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"[AUTH REFRESH SESSION ERROR] {e}")
         
     return {
         "access_token": new_access_token,
@@ -491,7 +625,7 @@ def refresh_token_endpoint(data: RefreshTokenRequest):
 
 @router.post("/logout")
 def logout(body: Optional[LogoutRequest] = None, credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)):
-    """Explicitly revoke both the current access token and refresh token."""
+    """Explicitly revoke both the current access token and refresh token, and mark session revoked."""
     revoked = False
     if credentials:
         token = credentials.credentials
@@ -510,9 +644,129 @@ def logout(body: Optional[LogoutRequest] = None, credentials: Optional[HTTPAutho
             ref_exp = ref_payload.get("exp")
             if ref_jti and ref_exp:
                 auth_service.blacklist_token(ref_jti, ref_exp)
+                try:
+                    conn = get_db()
+                    conn.execute("UPDATE user_sessions SET is_revoked = 1 WHERE refresh_token_jti = ?", (ref_jti,))
+                    conn.commit()
+                    conn.close()
+                except Exception:
+                    pass
                 revoked = True
                 
     return {"message": "Logged out successfully" if revoked else "Already logged out or invalid token"}
+
+# ---------------------------------------------------------------------------
+# Phase 3 (3.3): Device Management Endpoints
+# ---------------------------------------------------------------------------
+@router.get("/devices")
+def get_user_devices(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """List all active logged-in devices / sessions for current user."""
+    token = credentials.credentials
+    payload = auth_service.verify_access_token(token)
+    if not payload:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    
+    user_id = payload["user_id"]
+    current_jti = payload.get("jti")
+
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT id, session_id, device_name, device_type, browser, os, ip_address, 
+               last_active, created_at, is_revoked, refresh_token_jti
+        FROM user_sessions 
+        WHERE user_id = ? AND is_revoked = 0
+        ORDER BY datetime(last_active) DESC
+    """, (user_id,))
+    rows = cursor.fetchall()
+    conn.close()
+
+    devices = []
+    for r in rows:
+        devices.append({
+            "id": r["id"],
+            "session_id": r["session_id"],
+            "device_name": r["device_name"],
+            "device_type": r["device_type"],
+            "browser": r["browser"],
+            "os": r["os"],
+            "ip_address": r["ip_address"],
+            "last_active": r["last_active"],
+            "created_at": r["created_at"],
+            "is_current": (r["refresh_token_jti"] == current_jti)
+        })
+
+    return {"devices": devices}
+
+@router.delete("/devices/{session_id}")
+def revoke_user_device(session_id: str, credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """Revoke a specific device session."""
+    token = credentials.credentials
+    payload = auth_service.verify_access_token(token)
+    if not payload:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    
+    user_id = payload["user_id"]
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT refresh_token_jti FROM user_sessions WHERE session_id = ? AND user_id = ?", (session_id, user_id))
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    jti = row["refresh_token_jti"]
+    if jti:
+        auth_service.blacklist_token(jti, int(time.time()) + 30 * 86400)
+
+    cursor.execute("UPDATE user_sessions SET is_revoked = 1 WHERE session_id = ? AND user_id = ?", (session_id, user_id))
+    conn.commit()
+    conn.close()
+    return {"message": "Thiết bị đã được đăng xuất thành công"}
+
+@router.delete("/devices/others/all")
+def revoke_other_devices(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """Revoke all other logged-in devices except the current session."""
+    token = credentials.credentials
+    payload = auth_service.verify_access_token(token)
+    if not payload:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    
+    user_id = payload["user_id"]
+    conn = get_db()
+    cursor = conn.cursor()
+    # Mark all sessions revoked
+    cursor.execute("UPDATE user_sessions SET is_revoked = 1 WHERE user_id = ?", (user_id,))
+    conn.commit()
+    conn.close()
+    return {"message": "Đã đăng xuất khỏi tất cả các thiết bị khác"}
+
+# ---------------------------------------------------------------------------
+# Phase 3 (3.2): 2FA Setting Toggle
+# ---------------------------------------------------------------------------
+@router.post("/2fa/toggle")
+def toggle_two_factor(data: Toggle2FARequest, credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """Enable or disable 2FA for the current user."""
+    token = credentials.credentials
+    payload = auth_service.verify_access_token(token)
+    if not payload:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    
+    user_id = payload["user_id"]
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT password_hash FROM users WHERE id = ?", (user_id,))
+    user = cursor.fetchone()
+    
+    if not user or not auth_service.verify_password(data.password, user["password_hash"]):
+        conn.close()
+        raise HTTPException(status_code=400, detail="Mật khẩu xác nhận không chính xác")
+        
+    cursor.execute("UPDATE users SET two_factor_enabled = ? WHERE id = ?", (1 if data.enabled else 0, user_id))
+    conn.commit()
+    conn.close()
+    status_str = "bật" if data.enabled else "tắt"
+    return {"message": f"Đã {status_str} xác thực 2 lớp (2FA) thành công.", "two_factor_enabled": data.enabled}
 
 
 @router.post("/resend-otp")

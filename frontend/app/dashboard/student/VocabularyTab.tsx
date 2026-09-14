@@ -2,11 +2,14 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   BookMarked, Clock, Search, PlayCircle, Volume2, Edit3, Trash2,
-  Brain, X, Sparkles, CheckCircle2, ArrowRight, Lightbulb
+  Brain, X, Sparkles, CheckCircle2, ArrowRight, Lightbulb,
+  RotateCw, Shuffle, Layers, ArrowLeft, Award,
+  Download, Upload, FileText, FileSpreadsheet, Printer
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { useNotification } from "../../context/NotificationContext";
 import { Button, Modal, Confetti, useSound, EmptyState, Skeleton } from "../../components/ui";
+import PushNotificationButton from "./PushNotificationButton";
 
 interface VocabularyTabProps {
   API_URL: string;
@@ -23,6 +26,14 @@ export default function VocabularyTab({ API_URL }: VocabularyTabProps) {
   const [levelFilter, setLevelFilter] = useState("");
   const [deleting, setDeleting] = useState<number | null>(null);
   const [debouncedSearch, setDebouncedSearch] = useState("");
+
+  // Flashcard mode states (Phase 2 - Task 2.5)
+  const [showFlashcards, setShowFlashcards] = useState(false);
+  const [flashcardIdx, setFlashcardIdx] = useState(0);
+  const [isFlipped, setIsFlipped] = useState(false);
+  const [flashcardList, setFlashcardList] = useState<any[]>([]);
+  const [flashcardStats, setFlashcardStats] = useState({ again: 0, hard: 0, good: 0, easy: 0 });
+  const [flashcardDone, setFlashcardDone] = useState(false);
 
   // AI Practice states
   const [generatingPractice, setGeneratingPractice] = useState(false);
@@ -70,6 +81,67 @@ export default function VocabularyTab({ API_URL }: VocabularyTabProps) {
   // Edit Vocabulary states
   const [editingWord, setEditingWord] = useState<any | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
+
+  // Phase 3 (3.5 & 3.6): Export & Import Vocabulary states
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importText, setImportText] = useState("");
+  const [isImporting, setIsImporting] = useState(false);
+  const [showExportDropdown, setShowExportDropdown] = useState(false);
+
+  const handleExport = async (format: 'anki' | 'csv' | 'pdf') => {
+    setShowExportDropdown(false);
+    try {
+      const res = await authFetch(`${API_URL}/student/vocabulary/export?format=${format}`);
+      if (!res.ok) throw new Error("Xuất file thất bại");
+      if (format === 'pdf') {
+        const html = await res.text();
+        const win = window.open("", "_blank");
+        if (win) {
+          win.document.write(html);
+          win.document.close();
+        }
+      } else {
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = format === 'anki' ? "eam_anki_deck.txt" : "eam_vocabulary.csv";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+      }
+    } catch (e) {
+      showAlert("Có lỗi xảy ra khi tải file xuất.", "error");
+    }
+  };
+
+  const handleImport = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!importText.trim()) return;
+    setIsImporting(true);
+    try {
+      const res = await authFetch(`${API_URL}/student/vocabulary/import`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ raw_text: importText })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showAlert(`Đã nhập thành công ${data.imported_count} từ vựng!`, "success");
+        setShowImportModal(false);
+        setImportText("");
+        fetchWords();
+        refreshUser();
+      } else {
+        showAlert(data.detail || "Nhập từ vựng thất bại", "error");
+      }
+    } catch (e) {
+      showAlert("Lỗi kết nối máy chủ", "error");
+    } finally {
+      setIsImporting(false);
+    }
+  };
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search), 300);
@@ -266,6 +338,29 @@ export default function VocabularyTab({ API_URL }: VocabularyTabProps) {
     }
   };
 
+  const startFlashcards = () => {
+    if (words.length === 0) return;
+    const shuffled = [...words].sort(() => Math.random() - 0.5);
+    setFlashcardList(shuffled);
+    setFlashcardIdx(0);
+    setIsFlipped(false);
+    setFlashcardStats({ again: 0, hard: 0, good: 0, easy: 0 });
+    setFlashcardDone(false);
+    setShowFlashcards(true);
+  };
+
+  const handleRateFlashcard = (rating: 'again' | 'hard' | 'good' | 'easy') => {
+    setFlashcardStats(prev => ({ ...prev, [rating]: prev[rating] + 1 }));
+    setIsFlipped(false);
+    if (flashcardIdx + 1 < flashcardList.length) {
+      setFlashcardIdx(idx => idx + 1);
+    } else {
+      setFlashcardDone(true);
+      sfx.levelUp();
+      setConfettiTick(t => t + 1);
+    }
+  };
+
   const levels = ["A1", "A2", "B1", "B2", "C1", "C2"];
   const currentEx = practiceExercises[currentExerciseIdx];
 
@@ -303,6 +398,9 @@ export default function VocabularyTab({ API_URL }: VocabularyTabProps) {
             );
           })}
         </div>
+        <div className="ml-auto">
+          <PushNotificationButton API_URL={API_URL} />
+        </div>
       </div>
 
       {/* Toolbar */}
@@ -315,16 +413,72 @@ export default function VocabularyTab({ API_URL }: VocabularyTabProps) {
             value={search} onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <Button
-          intent="brand"
-          onClick={startRichPractice}
-          disabled={generatingPractice || words.length === 0}
-          loading={generatingPractice}
-          iconLeft={!generatingPractice ? <PlayCircle size={16} /> : null}
-          size="sm"
-        >
-          Luyện tập SR
-        </Button>
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Export Dropdown */}
+          <div className="relative">
+            <Button
+              intent="ghost"
+              onClick={() => setShowExportDropdown(!showExportDropdown)}
+              disabled={words.length === 0}
+              iconLeft={<Download size={15} />}
+              size="sm"
+            >
+              Xuất từ vựng
+            </Button>
+            {showExportDropdown && (
+              <div className="absolute right-0 mt-1 w-52 bg-white rounded-xl shadow-lg border border-gray-100 py-1.5 z-30 animate-in fade-in zoom-in-95 duration-150">
+                <button
+                  onClick={() => handleExport('anki')}
+                  className="w-full px-4 py-2 text-left text-xs font-medium text-gray-700 hover:bg-blue-50 hover:text-blue-600 flex items-center gap-2.5 transition"
+                >
+                  <FileText size={15} className="text-blue-500" /> Bộ thẻ Anki Deck (.txt)
+                </button>
+                <button
+                  onClick={() => handleExport('csv')}
+                  className="w-full px-4 py-2 text-left text-xs font-medium text-gray-700 hover:bg-blue-50 hover:text-blue-600 flex items-center gap-2.5 transition"
+                >
+                  <FileSpreadsheet size={15} className="text-emerald-500" /> Bảng tính Excel (.csv)
+                </button>
+                <button
+                  onClick={() => handleExport('pdf')}
+                  className="w-full px-4 py-2 text-left text-xs font-medium text-gray-700 hover:bg-blue-50 hover:text-blue-600 flex items-center gap-2.5 transition"
+                >
+                  <Printer size={15} className="text-indigo-500" /> Bản in Flashcard (PDF)
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Import Button */}
+          <Button
+            intent="ghost"
+            onClick={() => setShowImportModal(true)}
+            iconLeft={<Upload size={15} />}
+            size="sm"
+          >
+            Nhập Quizlet / Anki
+          </Button>
+
+          <Button
+            intent="ghost"
+            onClick={startFlashcards}
+            disabled={words.length === 0}
+            iconLeft={<Layers size={16} />}
+            size="sm"
+          >
+            Thẻ Flashcard
+          </Button>
+          <Button
+            intent="brand"
+            onClick={startRichPractice}
+            disabled={generatingPractice || words.length === 0}
+            loading={generatingPractice}
+            iconLeft={!generatingPractice ? <PlayCircle size={16} /> : null}
+            size="sm"
+          >
+            Luyện tập SR
+          </Button>
+        </div>
       </div>
 
       {words.length === 0 ? (
@@ -709,6 +863,244 @@ export default function VocabularyTab({ API_URL }: VocabularyTabProps) {
           </form>
         )}
       </Modal>
+
+      {/* 3D Flashcard Mode Modal (Phase 2 - Task 2.5) */}
+      <Modal
+        open={showFlashcards}
+        onClose={() => setShowFlashcards(false)}
+        title={flashcardDone ? "Kết Quả Phiên Flashcard" : `Thẻ Ghi Nhớ (${flashcardIdx + 1}/${flashcardList.length || 1})`}
+        size="lg"
+      >
+        {flashcardDone ? (
+          <div className="py-6 text-center space-y-5 animate-in zoom-in-95 duration-300">
+            <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-amber-400 to-amber-500 text-white flex items-center justify-center mx-auto shadow-lg shadow-amber-200">
+              <Award size={36} />
+            </div>
+            <div>
+              <h3 className="text-xl font-bold text-[var(--ink-1)]">Xuất Sắc! Bạn Đã Hoàn Thành Phiên Ôn</h3>
+              <p className="text-sm text-[var(--ink-2)] mt-1">Đã ôn tập toàn bộ {flashcardList.length} thẻ từ vựng trong kho.</p>
+            </div>
+
+            <div className="grid grid-cols-4 gap-2.5 max-w-md mx-auto pt-2">
+              <div className="p-3 bg-red-50 dark:bg-red-950/30 rounded-xl border border-red-100 dark:border-red-900 text-center">
+                <span className="text-lg font-bold text-red-600 block">{flashcardStats.again}</span>
+                <span className="text-[11px] text-red-500 font-medium">Chưa thuộc</span>
+              </div>
+              <div className="p-3 bg-amber-50 dark:bg-amber-950/30 rounded-xl border border-amber-100 dark:border-amber-900 text-center">
+                <span className="text-lg font-bold text-amber-600 block">{flashcardStats.hard}</span>
+                <span className="text-[11px] text-amber-500 font-medium">Hơi khó</span>
+              </div>
+              <div className="p-3 bg-blue-50 dark:bg-blue-950/30 rounded-xl border border-blue-100 dark:border-blue-900 text-center">
+                <span className="text-lg font-bold text-blue-600 block">{flashcardStats.good}</span>
+                <span className="text-[11px] text-blue-500 font-medium">Đã nhớ</span>
+              </div>
+              <div className="p-3 bg-green-50 dark:bg-green-950/30 rounded-xl border border-green-100 dark:border-green-900 text-center">
+                <span className="text-lg font-bold text-green-600 block">{flashcardStats.easy}</span>
+                <span className="text-[11px] text-green-500 font-medium">Rất dễ</span>
+              </div>
+            </div>
+
+            <div className="flex justify-center gap-3 pt-4">
+              <Button intent="ghost" onClick={() => setShowFlashcards(false)}>
+                Đóng
+              </Button>
+              <Button intent="brand" iconLeft={<RotateCw size={15} />} onClick={startFlashcards}>
+                Luyện tập lượt mới
+              </Button>
+            </div>
+          </div>
+        ) : flashcardList.length > 0 ? (
+          <div className="space-y-4">
+            {/* Progress bar */}
+            <div className="w-full bg-[var(--surface-3)] h-1.5 rounded-full overflow-hidden">
+              <div
+                className="bg-[var(--brand)] h-full transition-all duration-300 rounded-full"
+                style={{ width: `${((flashcardIdx + 1) / flashcardList.length) * 100}%` }}
+              />
+            </div>
+
+            {/* 3D Flip Card */}
+            {(() => {
+              const currentCard = flashcardList[flashcardIdx];
+              return (
+                <div
+                  onClick={() => setIsFlipped(!isFlipped)}
+                  className="w-full min-h-[280px] sm:min-h-[310px] rounded-2xl cursor-pointer p-6 sm:p-8 flex flex-col justify-between relative transition-all duration-500 shadow-md border border-[var(--line)] select-none hover:shadow-lg bg-gradient-to-b from-white to-slate-50 dark:from-gray-900 dark:to-gray-950 text-center"
+                >
+                  <div className="flex items-center justify-between w-full">
+                    <span className="text-xs font-semibold px-2.5 py-1 rounded-md bg-[var(--brand-soft)] text-[var(--brand)] uppercase tracking-wide">
+                      {currentCard?.pos || "Từ vựng"}
+                    </span>
+                    <span className="text-xs font-bold px-2.5 py-1 rounded-md bg-slate-100 dark:bg-gray-800 text-[var(--ink-2)]">
+                      {currentCard?.level || "B1"}
+                    </span>
+                  </div>
+
+                  {!isFlipped ? (
+                    /* Front Side */
+                    <div className="my-auto space-y-3">
+                      <h2 className="text-3xl sm:text-4xl font-black text-[var(--ink-1)] tracking-tight">
+                        {currentCard?.word}
+                      </h2>
+                      {currentCard?.phonetic && (
+                        <div className="flex items-center justify-center gap-2">
+                          <span className="text-sm sm:text-base font-mono text-[var(--ink-2)]">
+                            {currentCard.phonetic}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              speak(currentCard.word, currentCard.audio_url);
+                            }}
+                            className="p-1.5 rounded-full bg-blue-50 dark:bg-gray-800 text-blue-600 hover:bg-blue-100 transition"
+                            title="Nghe phát âm"
+                          >
+                            <Volume2 size={16} />
+                          </button>
+                        </div>
+                      )}
+                      <p className="text-xs text-[var(--ink-3)] pt-2 flex items-center justify-center gap-1">
+                        <RotateCw size={12} className="animate-spin-slow" />
+                        Nhấn thẻ để lật xem nghĩa
+                      </p>
+                    </div>
+                  ) : (
+                    /* Back Side */
+                    <div className="my-auto space-y-3 animate-in fade-in duration-300">
+                      <div className="space-y-1">
+                        <h3 className="text-2xl sm:text-3xl font-bold text-[var(--brand)]">
+                          {currentCard?.meaning_vn || "Chưa có nghĩa tiếng Việt"}
+                        </h3>
+                        {currentCard?.meaning_en && (
+                          <p className="text-sm text-[var(--ink-2)] font-medium">
+                            {currentCard.meaning_en}
+                          </p>
+                        )}
+                      </div>
+                      {currentCard?.example && (
+                        <div className="bg-slate-100/70 dark:bg-gray-800/60 p-3 rounded-xl text-xs sm:text-sm text-[var(--ink-2)] italic flex items-center justify-between gap-2 text-left mt-3">
+                          <span className="flex-1">"{currentCard.example}"</span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              speak(currentCard.example, undefined);
+                            }}
+                            className="p-1 rounded text-slate-400 hover:text-blue-600 shrink-0"
+                            title="Nghe câu ví dụ"
+                          >
+                            <Volume2 size={14} />
+                          </button>
+                        </div>
+                      )}
+                      <p className="text-xs text-[var(--ink-3)] pt-1">
+                        Chọn mức độ nhớ bên dưới để tiếp tục
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="text-[11px] text-[var(--ink-3)] font-medium flex items-center justify-between w-full pt-3 border-t border-[var(--line)]/50">
+                    <span>Thẻ {flashcardIdx + 1} / {flashcardList.length}</span>
+                    <span>{isFlipped ? "Đang xem mặt sau" : "Đang xem mặt trước"}</span>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Spaced Repetition Rating Buttons */}
+            <div className="grid grid-cols-4 gap-2 pt-1">
+              <button
+                onClick={() => handleRateFlashcard('again')}
+                className="py-2.5 px-1 rounded-xl bg-red-50 hover:bg-red-100 text-red-700 dark:bg-red-950/30 dark:hover:bg-red-900/50 text-xs font-semibold border border-red-200 dark:border-red-900 transition flex flex-col items-center gap-0.5 cursor-pointer"
+              >
+                <span>Chưa thuộc</span>
+                <span className="text-[10px] text-red-500 font-normal">&lt; 1 ngày</span>
+              </button>
+              <button
+                onClick={() => handleRateFlashcard('hard')}
+                className="py-2.5 px-1 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-700 dark:bg-amber-950/30 dark:hover:bg-amber-900/50 text-xs font-semibold border border-amber-200 dark:border-amber-900 transition flex flex-col items-center gap-0.5 cursor-pointer"
+              >
+                <span>Hơi khó</span>
+                <span className="text-[10px] text-amber-500 font-normal">2 ngày</span>
+              </button>
+              <button
+                onClick={() => handleRateFlashcard('good')}
+                className="py-2.5 px-1 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 dark:bg-blue-950/30 dark:hover:bg-blue-900/50 text-xs font-semibold border border-blue-200 dark:border-blue-900 transition flex flex-col items-center gap-0.5 cursor-pointer"
+              >
+                <span>Đã nhớ</span>
+                <span className="text-[10px] text-blue-500 font-normal">4 ngày</span>
+              </button>
+              <button
+                onClick={() => handleRateFlashcard('easy')}
+                className="py-2.5 px-1 rounded-xl bg-green-50 hover:bg-green-100 text-green-700 dark:bg-green-950/30 dark:hover:bg-green-900/50 text-xs font-semibold border border-green-200 dark:border-green-900 transition flex flex-col items-center gap-0.5 cursor-pointer"
+              >
+                <span>Rất dễ</span>
+                <span className="text-[10px] text-green-500 font-normal">7 ngày</span>
+              </button>
+            </div>
+          </div>
+        ) : null}
+      </Modal>
+
+      {/* Phase 3 (3.6): Import Quizlet / Anki Modal */}
+      {showImportModal && (
+        <div
+          className="fixed inset-0 !mt-0 !m-0 top-0 left-0 right-0 bottom-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          style={{ margin: 0, top: 0, left: 0, right: 0, bottom: 0 }}
+        >
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl space-y-4">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <h3 className="text-base font-bold text-gray-900 flex items-center gap-2">
+                <Upload size={18} className="text-indigo-600" />
+                Nhập từ vựng từ Quizlet / Anki / CSV
+              </h3>
+              <button
+                onClick={() => setShowImportModal(false)}
+                className="p-1 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <p className="text-xs text-gray-500">
+              Dán nội dung sao chép từ Quizlet (Word &lt;Tab&gt; Definition) hoặc CSV (Word, Meaning):
+            </p>
+
+            <textarea
+              rows={8}
+              value={importText}
+              onChange={e => setImportText(e.target.value)}
+              placeholder={"apple\tquả táo\nbanana\tquả chuối\nchallenge\tthử thách"}
+              className="w-full p-3 font-mono text-xs border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none resize-none"
+            />
+
+            <div className="flex items-center justify-between pt-2">
+              <span className="text-[11px] text-gray-400">
+                Tự động chuẩn hóa IPA CMU và thuật toán FSRS
+              </span>
+              <div className="flex gap-2">
+                <Button
+                  intent="ghost"
+                  size="sm"
+                  onClick={() => setShowImportModal(false)}
+                >
+                  Hủy
+                </Button>
+                <Button
+                  intent="brand"
+                  size="sm"
+                  onClick={handleImport}
+                  loading={isImporting}
+                  disabled={!importText.trim() || isImporting}
+                >
+                  Xác nhận nhập
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

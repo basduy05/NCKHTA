@@ -116,15 +116,57 @@ async def lifespan(app: FastAPI):
     if graph_service:
         asyncio.create_task(_warmup_neo4j_background())
 
+    # Start background job queue (Task 3.15)
+    try:
+        from .services.job_queue_service import job_queue
+        asyncio.create_task(job_queue.start())
+    except Exception as je:
+        print(f"[STARTUP] Job queue start error: {je}")
+
     print("[STARTUP] App ready for traffic!")
     yield
     # Shutdown: cleanup
     print("[SHUTDOWN] Cleaning up...")
 
 
+tags_metadata = [
+    {
+        "name": "Auth",
+        "description": "Authentication, Refresh Token Rotation with Replay Attack Detection, 2FA OTP, Device Management",
+    },
+    {
+        "name": "Student",
+        "description": "Student endpoints: FSRS Vocabulary, CMU IPA, Anki/Quizlet Export & Import, News Quiz, Adaptive Roadmap, ETA Calculator, Parent Portal, Subscription",
+    },
+    {
+        "name": "Teacher",
+        "description": "Teacher endpoints: Classes, Assignments, Quiz Builder, Analytics, Grading & Feedback",
+    },
+    {
+        "name": "Realtime Chat",
+        "description": "Group Chat & Realtime Messaging with AI Teacher Bot (@ai, @teacher), Presence & Emoji Reactions",
+    },
+    {
+        "name": "Admin",
+        "description": "System administration, user roles, security audits, AI provider fallbacks, feedback",
+    }
+]
+
 app = FastAPI(
-    title="EAM AI Service",
-    description="Powered by Neo4j & GenAI",
+    title="iEdu Intelligent English Learning API",
+    description="""
+## iEdu AI Platform (Production Scale)
+Hệ thống học tiếng Anh thông minh ứng dụng Trí tuệ Nhân tạo thế hệ mới (GenAI & Knowledge Graph):
+- **Auth & Security**: Refresh token rotation, 2FA OTP, quản lý thiết bị đa phiên.
+- **Vocabulary & FSRS**: Thuật toán lặp lại ngắt quãng FSRS v4, phiên âm chuẩn CMU IPA, xuất nhập Anki / Quizlet.
+- **AI Teacher Bot**: Hỗ trợ giải đáp bài học tự động trong phòng chat nhóm.
+- **Teacher Quiz Builder**: Soạn thảo và giao bài trắc nghiệm thông minh.
+- **Parent Portal**: Báo cáo học tập trực quan dành cho phụ huynh không cần đăng nhập.
+- **Adaptive Roadmap & ETA**: Tự động tinh chỉnh lộ trình theo lỗ hổng kiến thức và dự báo ngày cán đích.
+- **Monetization**: Gói iEdu PRO tích hợp điểm thưởng.
+    """,
+    version="3.0.0",
+    openapi_tags=tags_metadata,
     lifespan=lifespan,
 )
 
@@ -132,9 +174,19 @@ app = FastAPI(
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 
-# ALL REQUIRED DEPENDENCIES:
-# uvicorn, fastapi, python-multipart, python-dotenv, neo4j, langchain
-# langchain-community, google-generativeai, openai
+# ─── CDN & CACHE CONTROL MIDDLEWARE (Task 3.14) ──────────────────────────────
+@app.middleware("http")
+async def cdn_cache_middleware(request: Request, call_next):
+    """Set optimal edge caching headers for static assets, dictionary lookups, and grammar rules."""
+    response = await call_next(request)
+    path = request.url.path
+    if path.startswith(("/static", "/public")) or any(path.endswith(ext) for ext in [".png", ".jpg", ".jpeg", ".svg", ".css", ".js", ".woff2"]):
+        response.headers["Cache-Control"] = "public, max-age=604800, immutable"
+        response.headers["Cloudflare-CDN-Cache-Control"] = "max-age=2592000"
+    elif "/dictionary/cmu-ipa" in path or "/grammar/rules" in path:
+        response.headers["Cache-Control"] = "public, max-age=86400, stale-while-revalidate=43200"
+    return response
+
 
 # ─── SECURITY HEADERS MIDDLEWARE ─────────────────────────────────────────────
 @app.middleware("http")
@@ -193,6 +245,14 @@ if auth:
 
 if teacher:
     app.include_router(teacher.router, dependencies=[Depends(get_teacher_user)])
+
+# ─── PUBLIC PARENT REPORT (NO AUTH REQUIRED) ──────────────────────────────────
+@app.get("/student/public/report/{link_code}", tags=["Student"])
+@app.get("/public/report/{link_code}", tags=["Student"])
+def public_student_report_direct(link_code: str):
+    """Direct public access for parents without JWT authentication."""
+    from .routers.student import get_public_student_report
+    return get_public_student_report(link_code)
 
 if student:
     app.include_router(student.router, dependencies=[Depends(get_current_user)])

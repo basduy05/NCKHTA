@@ -145,14 +145,14 @@ def generate_refresh_token(user_id: int, email: str):
     }
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
-def verify_refresh_token(token: str, conn=None):
+def verify_refresh_token(token: str, conn=None, check_revocation: bool = True):
     """Verify JWT refresh token and check against blacklist. Returns payload dict or None."""
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         if payload.get("token_use") != "refresh":
             return None
         jti = payload.get("jti")
-        if jti and is_token_revoked(jti, conn=conn):
+        if check_revocation and jti and is_token_revoked(jti, conn=conn):
             print(f"[AUTH] Blocked revoked refresh token: {jti}")
             return None
             

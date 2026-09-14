@@ -3,7 +3,7 @@ import React, { useState, useEffect } from "react";
 import { 
   BarChart3, Trophy, CheckCircle2, TrendingUp, Sparkles, 
   GraduationCap, Clock, Award, Users, ChevronRight, CheckCircle, 
-  AlertCircle, HelpCircle, X
+  AlertCircle, HelpCircle, X, Target, Flame
 } from "lucide-react";
 import { EmptyState, Button } from "../../components/ui";
 import { useAuth } from "../../context/AuthContext";
@@ -17,6 +17,13 @@ export default function ScoresTab({ API_URL }: ScoresTabProps) {
   const { token, user, authFetch, refreshUser } = useAuth();
   const [scores, setScores] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Daily Challenges & Streak Milestones state (Phase 2 - Tasks 2.13 & 2.14)
+  const [dailyChallenges, setDailyChallenges] = useState<any | null>(null);
+  const [claimingChallenge, setClaimingChallenge] = useState<string | null>(null);
+  const [streakDays, setStreakDays] = useState(0);
+  const [claimingMilestone, setClaimingMilestone] = useState<number | null>(null);
+  const [milestoneMessage, setMilestoneMessage] = useState<string | null>(null);
 
   // Leaderboard state
   const [leaderboardPeriod, setLeaderboardPeriod] = useState<"all" | "week" | "month" | "class">("all");
@@ -33,6 +40,30 @@ export default function ScoresTab({ API_URL }: ScoresTabProps) {
   const [placementAnswers, setPlacementAnswers] = useState<Record<string, number>>({});
   const [submittingTest, setSubmittingTest] = useState(false);
   const [testResult, setTestResult] = useState<any>(null);
+
+  // Fetch daily challenges
+  const fetchDailyChallenges = async () => {
+    try {
+      const res = await authFetch(`${API_URL}/student/daily-challenges`);
+      if (res.ok) setDailyChallenges(await res.json());
+    } catch (e) {}
+  };
+
+  // Fetch streak info
+  const fetchStreak = async () => {
+    try {
+      const res = await authFetch(`${API_URL}/student/streak-calendar?days=60`);
+      if (res.ok) {
+        const d = await res.json();
+        setStreakDays(d.streak_days || 0);
+      }
+    } catch (e) {}
+  };
+
+  useEffect(() => {
+    fetchDailyChallenges();
+    fetchStreak();
+  }, [token, authFetch, API_URL]);
 
   // Fetch student scores
   useEffect(() => {
@@ -130,6 +161,46 @@ export default function ScoresTab({ API_URL }: ScoresTabProps) {
     }
   };
 
+  const handleClaimChallenge = async (key: string) => {
+    setClaimingChallenge(key);
+    try {
+      const res = await authFetch(`${API_URL}/student/daily-challenges/${key}/claim`, {
+        method: "POST"
+      });
+      if (res.ok) {
+        await fetchDailyChallenges();
+        refreshUser();
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setClaimingChallenge(null);
+    }
+  };
+
+  const handleClaimMilestone = async (days: number) => {
+    setClaimingMilestone(days);
+    setMilestoneMessage(null);
+    try {
+      const res = await authFetch(`${API_URL}/student/streak/claim-milestone`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ milestone_days: days })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setMilestoneMessage(data.message || `Đã mở khóa phần thưởng mốc ${days} ngày!`);
+        refreshUser();
+      } else {
+        setMilestoneMessage(data.detail || "Chưa thể nhận phần thưởng mốc này.");
+      }
+    } catch (e) {
+      setMilestoneMessage("Lỗi kết nối máy chủ");
+    } finally {
+      setClaimingMilestone(null);
+    }
+  };
+
   if (loading) return (
     <div className="space-y-6 animate-pulse">
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -212,6 +283,150 @@ export default function ScoresTab({ API_URL }: ScoresTabProps) {
           >
             {placementStatus?.completed ? "Làm lại bài Test" : "Bắt đầu Test ngay (50 pts)"}
           </button>
+        </div>
+      </div>
+
+      {/* 2.5 Daily Challenges & Streak Milestones (Phase 2 - Tasks 2.13 & 2.14) */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Daily Challenges (2 cols) */}
+        <div className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="p-2 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-600">
+                <Target size={18} />
+              </div>
+              <div>
+                <h3 className="font-bold text-sm sm:text-base text-gray-900 dark:text-white">
+                  Nhiệm Vụ Hằng Ngày (Daily Challenges)
+                </h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  Tích lũy điểm thưởng mỗi ngày để nâng hạng và mở khóa huy hiệu
+                </p>
+              </div>
+            </div>
+            {dailyChallenges?.all_completed && (
+              <span className="text-xs font-bold px-2.5 py-1 bg-green-50 text-green-700 border border-green-200 rounded-lg">
+                Đã hoàn thành tất cả 🎉
+              </span>
+            )}
+          </div>
+
+          <div className="space-y-3">
+            {dailyChallenges?.challenges?.map((ch: any) => (
+              <div
+                key={ch.key}
+                className="p-3.5 rounded-xl border border-gray-100 dark:border-gray-750 bg-gray-50/50 dark:bg-gray-800/40 flex items-center justify-between gap-4"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <span className="text-2xl shrink-0">{ch.icon}</span>
+                  <div className="min-w-0">
+                    <h4 className="text-sm font-semibold text-gray-900 dark:text-white truncate">
+                      {ch.title}
+                    </h4>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      {ch.description} ({ch.progress}/{ch.target})
+                    </p>
+                    {/* Mini progress bar */}
+                    <div className="w-32 sm:w-48 bg-gray-200 dark:bg-gray-700 h-1.5 rounded-full mt-1.5 overflow-hidden">
+                      <div
+                        className="bg-amber-500 h-full rounded-full transition-all"
+                        style={{ width: `${Math.min(100, (ch.progress / ch.target) * 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="shrink-0">
+                  {ch.claimed ? (
+                    <span className="text-xs font-semibold text-green-600 dark:text-green-400 flex items-center gap-1">
+                      <CheckCircle2 size={14} /> Đã nhận (+{ch.points}đ)
+                    </span>
+                  ) : ch.completed ? (
+                    <button
+                      onClick={() => handleClaimChallenge(ch.key)}
+                      disabled={claimingChallenge === ch.key}
+                      className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-xs font-bold shadow-xs transition active:scale-95 cursor-pointer disabled:opacity-50"
+                    >
+                      {claimingChallenge === ch.key ? "Đang nhận..." : `Nhận +${ch.points}đ`}
+                    </button>
+                  ) : (
+                    <span className="text-xs font-medium text-gray-400 bg-gray-100 dark:bg-gray-700 px-2.5 py-1 rounded-md">
+                      Chưa xong (+{ch.points}đ)
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Streak Milestone Rewards (1 col) */}
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm p-5 space-y-4 flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-orange-50 dark:bg-orange-950/40 text-orange-600">
+                  <Flame size={18} />
+                </div>
+                <h3 className="font-bold text-sm sm:text-base text-gray-900 dark:text-white">
+                  Mốc Thưởng Streak
+                </h3>
+              </div>
+              <span className="text-xs font-bold px-2.5 py-1 bg-orange-100 dark:bg-orange-950/60 text-orange-700 dark:text-orange-300 rounded-full">
+                🔥 {streakDays} ngày
+              </span>
+            </div>
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              Duy trì chuỗi học liên tiếp để nhận những phần thưởng điểm khổng lồ:
+            </p>
+
+            {milestoneMessage && (
+              <div className="p-2.5 rounded-lg bg-blue-50 text-blue-700 text-xs mt-2 font-medium">
+                {milestoneMessage}
+              </div>
+            )}
+
+            <div className="space-y-2.5 mt-3">
+              {[
+                { days: 7, points: 100, label: "Chiến binh 7 ngày" },
+                { days: 30, points: 500, label: "Thói quen Vàng 30 ngày" },
+                { days: 100, points: 2000, label: "Bậc thầy 100 ngày" },
+              ].map((m) => {
+                const reached = streakDays >= m.days;
+                return (
+                  <div
+                    key={m.days}
+                    className="p-3 rounded-xl border border-gray-100 dark:border-gray-750 flex items-center justify-between bg-slate-50/50 dark:bg-gray-800/30"
+                  >
+                    <div>
+                      <span className="text-xs font-bold text-gray-900 dark:text-white block">
+                        {m.label}
+                      </span>
+                      <span className="text-[11px] text-orange-600 dark:text-orange-400 font-semibold">
+                        +{m.points.toLocaleString()} điểm
+                      </span>
+                    </div>
+
+                    <button
+                      onClick={() => handleClaimMilestone(m.days)}
+                      disabled={!reached || claimingMilestone === m.days}
+                      className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
+                        reached
+                          ? "bg-orange-500 hover:bg-orange-600 text-white shadow-xs"
+                          : "bg-gray-100 dark:bg-gray-700 text-gray-400 cursor-not-allowed"
+                      }`}
+                    >
+                      {claimingMilestone === m.days ? "Đang kiểm tra..." : reached ? "Nhận thưởng" : `Cần ${m.days}d`}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <p className="text-[11px] text-gray-400 text-center pt-2">
+            Điểm thưởng streak được cộng tự động vào Bảng Xếp Hạng.
+          </p>
         </div>
       </div>
 
@@ -380,7 +595,10 @@ export default function ScoresTab({ API_URL }: ScoresTabProps) {
 
       {/* 6. Placement Test Modal (Phase 1.13) */}
       {showPlacementModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in">
+        <div
+          className="fixed inset-0 !mt-0 !m-0 top-0 left-0 right-0 bottom-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in"
+          style={{ margin: 0, top: 0, left: 0, right: 0, bottom: 0 }}
+        >
           <div className="bg-white dark:bg-gray-850 w-full max-w-2xl rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-700 overflow-hidden flex flex-col max-h-[90vh]">
             {/* Modal Header */}
             <div className="px-6 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white flex items-center justify-between">

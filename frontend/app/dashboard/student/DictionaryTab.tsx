@@ -583,9 +583,16 @@ export default function DictionaryTab({ API_URL }: DictionaryTabProps) {
                 {m.examples?.length > 0 && (
                   <div className="mt-3 space-y-1.5">
                     {m.examples.map((ex: string, j: number) => (
-                      <div key={j} className="flex items-start gap-2">
+                      <div key={j} className="flex items-start gap-2 group/ex">
                         <ArrowRight size={14} className="text-gray-400 mt-1 shrink-0" />
-                        <p className="text-gray-600 italic">{ex}</p>
+                        <p className="text-gray-600 italic flex-1">{ex}</p>
+                        <button
+                          onClick={() => speak(ex, "en-US")}
+                          title="Phát âm câu ví dụ (Web Speech API)"
+                          className="opacity-0 group-hover/ex:opacity-100 p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-gray-800 rounded transition shrink-0"
+                        >
+                          <Volume2 size={13} />
+                        </button>
                       </div>
                     ))}
                   </div>

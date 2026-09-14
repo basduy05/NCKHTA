@@ -11,6 +11,8 @@ type User = {
   phone?: string;
   points?: number;
   credits_ai?: number;
+  cefr_level?: string;
+  subscription_tier?: string;
 };
 
 type AuthContextType = {
@@ -18,7 +20,7 @@ type AuthContextType = {
   token: string | null;
   register: (name: string, email: string, password: string, role: string, phone?: string) => Promise<boolean>;
   verifyOTP: (email: string, otp: string) => Promise<boolean>;
-  login: (email: string, password: string) => Promise<boolean>;
+  login: (email: string, password: string) => Promise<boolean | { requires_2fa: boolean; message?: string }>;
   loginSendOTP: (email: string) => Promise<boolean>;
   loginVerifyOTP: (email: string, otp: string) => Promise<boolean>;
   logout: (showConfirm?: boolean) => Promise<boolean>;
@@ -286,6 +288,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const data = await res.json();
       if (!res.ok) {
         return false;
+      }
+
+      if (data.requires_2fa) {
+        return { requires_2fa: true, message: data.message };
       }
 
       const { access_token, refresh_token, user: userData } = data;

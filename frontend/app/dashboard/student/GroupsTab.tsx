@@ -1,9 +1,7 @@
 "use client";
 import React, { useState, useEffect } from "react";
 import {
-  Users, Plus, LogIn, Trophy, Target, Copy, Check, Sparkles,
-  ArrowRight, ShieldCheck, Flame, BookMarked, UserPlus, LogOut,
-  Calendar, Layers, Clock
+  Users, Plus, Trophy, Target, Copy, Check, ArrowRight, LogOut
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { useNotification } from "../../context/NotificationContext";
@@ -511,7 +509,10 @@ export default function GroupsTab({ API_URL }: GroupsTabProps) {
 
       {/* Create Group Modal */}
       {showCreateModal && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+        <div
+          className="fixed inset-0 !mt-0 !m-0 top-0 left-0 right-0 bottom-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4"
+          style={{ margin: 0, top: 0, left: 0, right: 0, bottom: 0 }}
+        >
           <div className="bg-white dark:bg-gray-900 rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl animate-in zoom-in-95">
             <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">
               Tạo nhóm học tập mới
@@ -561,7 +562,10 @@ export default function GroupsTab({ API_URL }: GroupsTabProps) {
 
       {/* Create Challenge Modal */}
       {showChallengeModal && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+        <div
+          className="fixed inset-0 !mt-0 !m-0 top-0 left-0 right-0 bottom-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4"
+          style={{ margin: 0, top: 0, left: 0, right: 0, bottom: 0 }}
+        >
           <div className="bg-white dark:bg-gray-900 rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl animate-in zoom-in-95">
             <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">
               Tạo thử thách cho nhóm

@@ -18,21 +18,34 @@ export default function SpeechPracticeModal({
   const [isRecording, setIsRecording] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
+  const [userAudioUrl, setUserAudioUrl] = useState<string | null>(null);
+  const [isPlayingUserAudio, setIsPlayingUserAudio] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [recordSeconds, setRecordSeconds] = useState(0);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<any>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const animationFrameRef = useRef<number | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const userAudioPlayerRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
+      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+      if (audioContextRef.current && audioContextRef.current.state !== "closed") {
+        audioContextRef.current.close().catch(() => {});
+      }
       if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
         mediaRecorderRef.current.stop();
       }
+      if (userAudioUrl) {
+        URL.revokeObjectURL(userAudioUrl);
+      }
     };
-  }, []);
+  }, [userAudioUrl]);
 
   const playTargetAudio = () => {
     if (typeof window !== "undefined" && window.speechSynthesis) {
@@ -44,16 +57,77 @@ export default function SpeechPracticeModal({
     }
   };
 
+  const playUserRecording = () => {
+    if (!userAudioUrl) return;
+    if (userAudioPlayerRef.current) {
+      userAudioPlayerRef.current.pause();
+    }
+    const audio = new Audio(userAudioUrl);
+    userAudioPlayerRef.current = audio;
+    setIsPlayingUserAudio(true);
+    audio.onended = () => setIsPlayingUserAudio(false);
+    audio.onerror = () => setIsPlayingUserAudio(false);
+    audio.play().catch(() => setIsPlayingUserAudio(false));
+  };
+
+  const startLiveWaveform = (stream: MediaStream) => {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      const audioCtx = new AudioCtx();
+      audioContextRef.current = audioCtx;
+      const analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 64;
+      const source = audioCtx.createMediaStreamSource(stream);
+      source.connect(analyser);
+
+      const bufferLength = analyser.frequencyBinCount;
+      const dataArray = new Uint8Array(bufferLength);
+
+      const draw = () => {
+        if (!canvasRef.current) return;
+        const canvas = canvasRef.current;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
+
+        animationFrameRef.current = requestAnimationFrame(draw);
+        analyser.getByteFrequencyData(dataArray);
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        const barWidth = (canvas.width / bufferLength) * 1.8;
+        let x = 0;
+
+        for (let i = 0; i < bufferLength; i++) {
+          const barHeight = (dataArray[i] / 255) * canvas.height * 0.85 + 4;
+          const gradient = ctx.createLinearGradient(0, canvas.height, 0, 0);
+          gradient.addColorStop(0, "#4f46e5");
+          gradient.addColorStop(1, "#ec4899");
+          ctx.fillStyle = gradient;
+          ctx.beginPath();
+          ctx.roundRect(x, (canvas.height - barHeight) / 2, barWidth - 2, barHeight, 3);
+          ctx.fill();
+          x += barWidth;
+        }
+      };
+      draw();
+    } catch (e) {
+      console.warn("Waveform visualization error:", e);
+    }
+  };
+
   const startRecording = async () => {
     try {
       setResult(null);
       setAudioBlob(null);
+      if (userAudioUrl) URL.revokeObjectURL(userAudioUrl);
+      setUserAudioUrl(null);
       setRecordSeconds(0);
       audioChunksRef.current = [];
 
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mediaRecorder = new MediaRecorder(stream);
       mediaRecorderRef.current = mediaRecorder;
+
+      startLiveWaveform(stream);
 
       mediaRecorder.ondataavailable = (e) => {
         if (e.data.size > 0) {
@@ -62,9 +136,15 @@ export default function SpeechPracticeModal({
       };
 
       mediaRecorder.onstop = async () => {
+        if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+        if (audioContextRef.current && audioContextRef.current.state !== "closed") {
+          audioContextRef.current.close().catch(() => {});
+        }
         stream.getTracks().forEach((t) => t.stop());
         const blob = new Blob(audioChunksRef.current, { type: "audio/webm" });
         setAudioBlob(blob);
+        const url = URL.createObjectURL(blob);
+        setUserAudioUrl(url);
         await analyzeAudioBlob(blob);
       };
 
@@ -112,7 +192,10 @@ export default function SpeechPracticeModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div
+      className="fixed inset-0 !mt-0 !m-0 top-0 left-0 right-0 bottom-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+      style={{ margin: 0, top: 0, left: 0, right: 0, bottom: 0 }}
+    >
       <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-2xl space-y-6 animate-in zoom-in-95 duration-200">
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -153,8 +236,13 @@ export default function SpeechPracticeModal({
           )}
         </div>
 
-        {/* Recording Controls */}
-        <div className="flex flex-col items-center justify-center py-4 space-y-3">
+        {/* Recording Controls & Live Waveform */}
+        <div className="flex flex-col items-center justify-center py-2 space-y-3">
+          {/* Live Waveform Canvas */}
+          <div className={`w-full max-w-[280px] h-12 flex items-center justify-center rounded-xl bg-slate-50 dark:bg-gray-800/80 border border-slate-200 dark:border-gray-700 transition-opacity ${isRecording ? "opacity-100" : "opacity-40"}`}>
+            <canvas ref={canvasRef} width={260} height={44} className="w-full h-full" />
+          </div>
+
           {isRecording ? (
             <button
               onClick={stopRecording}
@@ -176,9 +264,33 @@ export default function SpeechPracticeModal({
             {isRecording
               ? `Đang ghi âm (${recordSeconds}s)... Nhấn để hoàn tất`
               : analyzing
-              ? "AI đang chấm điểm phát âm..."
+              ? "AI đang đối chiếu sóng âm & chấm điểm phát âm..."
               : "Nhấn vào micro và đọc to rõ ràng"}
           </p>
+
+          {/* User Recording Playback vs Native Speaker */}
+          {userAudioUrl && !isRecording && (
+            <div className="flex items-center gap-3 pt-1">
+              <button
+                onClick={playUserRecording}
+                className={`px-3.5 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5 transition ${
+                  isPlayingUserAudio
+                    ? "bg-rose-100 text-rose-700 border border-rose-300 animate-pulse"
+                    : "bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 border border-indigo-200"
+                }`}
+              >
+                <Volume2 className="w-3.5 h-3.5" />
+                <span>{isPlayingUserAudio ? "Đang phát giọng bạn..." : "Nghe lại giọng bạn"}</span>
+              </button>
+              <button
+                onClick={playTargetAudio}
+                className="px-3.5 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5 bg-slate-100 dark:bg-gray-800 text-slate-700 dark:text-gray-300 hover:bg-slate-200 border border-slate-200"
+              >
+                <Volume2 className="w-3.5 h-3.5" />
+                <span>Nghe giọng mẫu</span>
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Results */}

@@ -269,9 +269,10 @@ def get_room_messages(room_id: int, user_id: int, limit: int = 50, before_id: Op
     if before_id:
         cursor.execute("""
             SELECT m.id, m.room_id, m.sender_id, m.message_type, m.content, m.created_at,
-                   u.name as sender_name, u.role as sender_role
+                   COALESCE(u.name, 'AI Teacher 🤖') as sender_name,
+                   COALESCE(u.role, 'TEACHER') as sender_role
             FROM chat_messages m
-            JOIN users u ON m.sender_id = u.id
+            LEFT JOIN users u ON m.sender_id = u.id
             WHERE m.room_id = ? AND m.id < ?
             ORDER BY m.id DESC
             LIMIT ?
@@ -279,9 +280,10 @@ def get_room_messages(room_id: int, user_id: int, limit: int = 50, before_id: Op
     else:
         cursor.execute("""
             SELECT m.id, m.room_id, m.sender_id, m.message_type, m.content, m.created_at,
-                   u.name as sender_name, u.role as sender_role
+                   COALESCE(u.name, 'AI Teacher 🤖') as sender_name,
+                   COALESCE(u.role, 'TEACHER') as sender_role
             FROM chat_messages m
-            JOIN users u ON m.sender_id = u.id
+            LEFT JOIN users u ON m.sender_id = u.id
             WHERE m.room_id = ?
             ORDER BY m.id DESC
             LIMIT ?
@@ -289,11 +291,71 @@ def get_room_messages(room_id: int, user_id: int, limit: int = 50, before_id: Op
 
     rows = cursor.fetchall()
     conn.close()
-    # Return chronologically ascending (oldest first)
-    return [dict(r) for r in reversed(rows)]
+    message_list = [dict(r) for r in reversed(rows)]
+
+    # Attach reactions if any
+    if message_list:
+        try:
+            msg_ids = [m["id"] for m in message_list]
+            placeholders = ",".join(["?"] * len(msg_ids))
+            conn2 = get_db()
+            rx_rows = conn2.execute(f"""
+                SELECT message_id, emoji, user_id FROM chat_reactions
+                WHERE message_id IN ({placeholders})
+            """, tuple(msg_ids)).fetchall()
+            conn2.close()
+
+            rx_map = {}
+            for rx in rx_rows:
+                mid = rx["message_id"]
+                if mid not in rx_map:
+                    rx_map[mid] = []
+                rx_map[mid].append({"emoji": rx["emoji"], "user_id": rx["user_id"]})
+
+            for m in message_list:
+                m["reactions"] = rx_map.get(m["id"], [])
+        except Exception:
+            for m in message_list:
+                m["reactions"] = []
+
+    return message_list
 
 
-def save_message(room_id: int, sender_id: int, content: str, message_type: str = "text") -> dict:
+def toggle_message_reaction(message_id: int, user_id: int, emoji: str) -> dict:
+    """Toggle an emoji reaction on a message (add if not exists, remove if exists)."""
+    clean_emoji = emoji.strip()
+    if not clean_emoji:
+        raise ValueError("Emoji cannot be empty")
+
+    conn = get_db()
+    cursor = conn.cursor()
+    existing = cursor.execute(
+        "SELECT id FROM chat_reactions WHERE message_id = ? AND user_id = ? AND emoji = ?",
+        (message_id, user_id, clean_emoji)
+    ).fetchone()
+
+    if existing:
+        cursor.execute("DELETE FROM chat_reactions WHERE id = ?", (existing["id"],))
+        action = "removed"
+    else:
+        cursor.execute(
+            "INSERT INTO chat_reactions (message_id, user_id, emoji) VALUES (?, ?, ?)",
+            (message_id, user_id, clean_emoji)
+        )
+        action = "added"
+    conn.commit()
+
+    rows = cursor.execute("SELECT emoji, user_id FROM chat_reactions WHERE message_id = ?", (message_id,)).fetchall()
+    conn.close()
+    return {
+        "message_id": message_id,
+        "action": action,
+        "emoji": clean_emoji,
+        "reactions": [dict(r) for r in rows]
+    }
+
+
+def save_message(room_id: int, sender_id: Optional[int], content: str, message_type: str = "text", is_bot: bool = False) -> dict:
     """Save a chat message and update room updated_at."""
     clean_content = content.strip()
     if not clean_content:
@@ -302,11 +364,12 @@ def save_message(room_id: int, sender_id: int, content: str, message_type: str =
     conn = get_db()
     cursor = conn.cursor()
 
-    # Check sender is member
-    cursor.execute("SELECT role FROM chat_members WHERE room_id = ? AND user_id = ?", (room_id, sender_id))
-    if not cursor.fetchone():
-        conn.close()
-        raise PermissionError("Sender is not a member of this chat room")
+    if not is_bot and sender_id is not None:
+        # Check sender is member
+        cursor.execute("SELECT role FROM chat_members WHERE room_id = ? AND user_id = ?", (room_id, sender_id))
+        if not cursor.fetchone():
+            conn.close()
+            raise PermissionError("Sender is not a member of this chat room")
 
     cursor.execute("""
         INSERT INTO chat_messages (room_id, sender_id, message_type, content)
@@ -316,18 +379,36 @@ def save_message(room_id: int, sender_id: int, content: str, message_type: str =
 
     # Update room updated_at
     cursor.execute("UPDATE chat_rooms SET updated_at = CURRENT_TIMESTAMP WHERE id = ?", (room_id,))
-    # Update sender last_read_at
-    cursor.execute("UPDATE chat_members SET last_read_at = CURRENT_TIMESTAMP WHERE room_id = ? AND user_id = ?", (room_id, sender_id))
+    if sender_id is not None:
+        cursor.execute("UPDATE chat_members SET last_read_at = CURRENT_TIMESTAMP WHERE room_id = ? AND user_id = ?", (room_id, sender_id))
     conn.commit()
+
+    if is_bot or sender_id is None:
+        conn.close()
+        import datetime
+        return {
+            "id": msg_id,
+            "room_id": room_id,
+            "sender_id": 0,
+            "message_type": message_type,
+            "content": clean_content,
+            "created_at": datetime.datetime.now().isoformat(),
+            "sender_name": "AI Teacher 🤖",
+            "sender_role": "TEACHER",
+            "is_bot": True,
+            "reactions": []
+        }
 
     cursor.execute("""
         SELECT m.id, m.room_id, m.sender_id, m.message_type, m.content, m.created_at,
-               u.name as sender_name, u.role as sender_role
+               COALESCE(u.name, 'Người dùng') as sender_name, 
+               COALESCE(u.role, 'STUDENT') as sender_role
         FROM chat_messages m
         JOIN users u ON m.sender_id = u.id
         WHERE m.id = ?
     """, (msg_id,))
     saved = dict(cursor.fetchone())
+    saved["reactions"] = []
     conn.close()
     return saved
 

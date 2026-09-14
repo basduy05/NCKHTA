@@ -2,9 +2,9 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { X, AlertCircle, CheckCircle, Info, Wifi, AlertTriangle } from 'lucide-react';
 
-type ModalType = 'info' | 'success' | 'error' | 'warning';
+export type ModalType = 'info' | 'success' | 'error' | 'warning';
 
-interface ModalState {
+export interface ModalState {
   isOpen: boolean;
   type: ModalType;
   title: string;
@@ -12,23 +12,40 @@ interface ModalState {
   isConfirm: boolean;
 }
 
-interface ToastItem {
+export interface ToastItem {
   id: string;
   title: string;
   message: string;
   type: 'info' | 'success' | 'warning' | 'error';
 }
 
+export interface NotificationRecord {
+  id: string;
+  title: string;
+  message: string;
+  type: 'info' | 'success' | 'warning' | 'error';
+  category: 'assignment' | 'chat' | 'grade' | 'system';
+  timestamp: string;
+  isRead: boolean;
+  link?: string;
+}
+
 interface NotificationContextType {
   showAlert: (message: string, type?: ModalType, title?: string) => void;
   showConfirm: (message: string, title?: string) => Promise<boolean>;
-  showToast: (title: string, message: string, type?: 'info' | 'success' | 'warning' | 'error') => void;
+  showToast: (title: string, message: string, type?: 'info' | 'success' | 'warning' | 'error', category?: 'assignment' | 'chat' | 'grade' | 'system', link?: string) => void;
   isOffline: boolean;
+  notifications: NotificationRecord[];
+  unreadCount: number;
+  markAsRead: (id: string) => void;
+  markAllAsRead: () => void;
+  clearAllNotifications: () => void;
 }
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+const NOTIFICATIONS_STORAGE_KEY = "iedu_notifications_history";
 
 export function NotificationProvider({ children }: { children: React.ReactNode }) {
   const [modal, setModal] = useState<ModalState>({
@@ -42,49 +59,197 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [confirmPromise, setConfirmPromise] = useState<{ resolve: (val: boolean) => void } | null>(null);
   const [isOffline, setIsOffline] = useState(false);
+  const [notifications, setNotifications] = useState<NotificationRecord[]>([]);
 
-  const showToast = useCallback((title: string, message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info') => {
+  // Load notification history
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const saved = localStorage.getItem(NOTIFICATIONS_STORAGE_KEY);
+      if (saved) {
+        setNotifications(JSON.parse(saved));
+      } else {
+        const initial: NotificationRecord[] = [
+          {
+            id: 'welcome-1',
+            title: 'Chào mừng bạn đến với iEdu!',
+            message: 'Khám phá ngay lộ trình học tập thông minh và các bài luyện thi thực tế.',
+            type: 'info',
+            category: 'system',
+            timestamp: new Date().toISOString(),
+            isRead: false,
+          },
+          {
+            id: 'welcome-2',
+            title: 'Trợ lý AI Coach đã sẵn sàng',
+            message: 'Nhận diện và hỗ trợ bạn luyện phát âm IPA chuẩn xác bất cứ lúc nào.',
+            type: 'success',
+            category: 'system',
+            timestamp: new Date(Date.now() - 3600000).toISOString(),
+            isRead: true,
+          }
+        ];
+        setNotifications(initial);
+        localStorage.setItem(NOTIFICATIONS_STORAGE_KEY, JSON.stringify(initial));
+      }
+    } catch (e) {
+      console.error('Failed to load notifications history', e);
+    }
+  }, []);
+
+  const markAsRead = useCallback((id: string) => {
+    setNotifications(prev => {
+      const next = prev.map(n => n.id === id ? { ...n, isRead: true } : n);
+      try {
+        localStorage.setItem(NOTIFICATIONS_STORAGE_KEY, JSON.stringify(next));
+      } catch (e) {}
+      return next;
+    });
+  }, []);
+
+  const markAllAsRead = useCallback(() => {
+    setNotifications(prev => {
+      const next = prev.map(n => ({ ...n, isRead: true }));
+      try {
+        localStorage.setItem(NOTIFICATIONS_STORAGE_KEY, JSON.stringify(next));
+      } catch (e) {}
+      return next;
+    });
+  }, []);
+
+  const clearAllNotifications = useCallback(() => {
+    setNotifications([]);
+    try {
+      localStorage.removeItem(NOTIFICATIONS_STORAGE_KEY);
+    } catch (e) {}
+  }, []);
+
+  const unreadCount = notifications.filter(n => !n.isRead).length;
+
+  const showToast = useCallback((
+    title: string,
+    message: string,
+    type: 'info' | 'success' | 'warning' | 'error' = 'info',
+    category: 'assignment' | 'chat' | 'grade' | 'system' = 'system',
+    link?: string
+  ) => {
     const id = Date.now().toString() + Math.random().toString(36).substring(2, 6);
     setToasts(prev => [...prev, { id, title, message, type }]);
     setTimeout(() => {
       setToasts(prev => prev.filter(t => t.id !== id));
     }, 6000);
+
+    // Save into notification history
+    setNotifications(prev => {
+      const newRecord: NotificationRecord = {
+        id,
+        title,
+        message,
+        type,
+        category,
+        timestamp: new Date().toISOString(),
+        isRead: false,
+        link,
+      };
+      const next = [newRecord, ...prev].slice(0, 50);
+      try {
+        localStorage.setItem(NOTIFICATIONS_STORAGE_KEY, JSON.stringify(next));
+      } catch (e) {}
+      return next;
+    });
   }, []);
 
-  // Connect to SSE notifications stream
+  // Connect to SSE notifications stream with resilient exponential backoff
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const token = localStorage.getItem('eam_token');
     if (!token) return;
 
     let eventSource: EventSource | null = null;
-    try {
-      eventSource = new EventSource(`${API_URL}/notifications/stream?token=${encodeURIComponent(token)}`);
-      
-      eventSource.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          if (data && data.type && data.type !== 'CONNECTED') {
-            const toastType = data.type === 'ERROR' ? 'error' : 
-                              data.type === 'NEW_ASSIGNMENT' ? 'success' : 'info';
-            showToast(data.title || 'Thông báo', data.message || '', toastType);
-          }
-        } catch (e) {
-          // ignore non-json pings
-        }
-      };
+    let reconnectTimeout: NodeJS.Timeout | null = null;
+    let retryDelay = 1000; // start with 1s
+    const MAX_RETRY_DELAY = 30000; // max 30s
+    let isCleanedUp = false;
 
-      eventSource.onerror = () => {
-        // SSE auto-reconnects on error
-      };
-    } catch (err) {
-      console.warn('[SSE] Connection error:', err);
-    }
-
-    return () => {
+    const connectSSE = () => {
+      if (isCleanedUp) return;
       if (eventSource) {
         eventSource.close();
+        eventSource = null;
       }
+
+      try {
+        eventSource = new EventSource(`${API_URL}/notifications/stream?token=${encodeURIComponent(token)}`);
+
+        eventSource.onopen = () => {
+          // Reset retry delay on successful connection
+          retryDelay = 1000;
+        };
+
+        eventSource.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            if (data && data.type && data.type !== 'CONNECTED') {
+              const toastType = data.type === 'ERROR' ? 'error' : 
+                                data.type === 'NEW_ASSIGNMENT' ? 'success' : 'info';
+              const category = data.type === 'NEW_ASSIGNMENT' ? 'assignment' :
+                               data.type === 'CHAT' ? 'chat' :
+                               data.type === 'GRADE' ? 'grade' : 'system';
+              showToast(data.title || 'Thông báo mới', data.message || '', toastType, category, data.link);
+            }
+          } catch (e) {
+            // ignore non-json heartbeat pings
+          }
+        };
+
+        eventSource.onerror = () => {
+          if (isCleanedUp) return;
+          if (eventSource) {
+            eventSource.close();
+            eventSource = null;
+          }
+
+          // Schedule reconnect with exponential backoff
+          if (reconnectTimeout) clearTimeout(reconnectTimeout);
+          reconnectTimeout = setTimeout(() => {
+            connectSSE();
+          }, retryDelay);
+
+          // Double the backoff up to max
+          retryDelay = Math.min(retryDelay * 2, MAX_RETRY_DELAY);
+        };
+      } catch (err) {
+        if (isCleanedUp) return;
+        if (reconnectTimeout) clearTimeout(reconnectTimeout);
+        reconnectTimeout = setTimeout(() => {
+          connectSSE();
+        }, retryDelay);
+        retryDelay = Math.min(retryDelay * 2, MAX_RETRY_DELAY);
+      }
+    };
+
+    connectSSE();
+
+    // Reconnect immediately when browser comes back online or tab becomes visible
+    const handleImmediateReconnect = () => {
+      if (document.visibilityState === "visible" && !isCleanedUp) {
+        retryDelay = 1000;
+        connectSSE();
+      }
+    };
+
+    window.addEventListener("online", handleImmediateReconnect);
+    document.addEventListener("visibilitychange", handleImmediateReconnect);
+
+    return () => {
+      isCleanedUp = true;
+      if (reconnectTimeout) clearTimeout(reconnectTimeout);
+      if (eventSource) {
+        eventSource.close();
+        eventSource = null;
+      }
+      window.removeEventListener("online", handleImmediateReconnect);
+      document.removeEventListener("visibilitychange", handleImmediateReconnect);
     };
   }, [showToast]);
 
@@ -150,7 +315,17 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   }, [confirmPromise]);
 
   return (
-    <NotificationContext.Provider value={{ showAlert, showConfirm, showToast, isOffline }}>
+    <NotificationContext.Provider value={{
+      showAlert,
+      showConfirm,
+      showToast,
+      isOffline,
+      notifications,
+      unreadCount,
+      markAsRead,
+      markAllAsRead,
+      clearAllNotifications
+    }}>
       {children}
       
       {/* Toast Notification Container */}

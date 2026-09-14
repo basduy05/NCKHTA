@@ -6,7 +6,7 @@ import { usePresence } from "../../hooks/usePresence";
 import {
   Search, Plus, Send, Users, User, Smile, MoreVertical,
   Check, CheckCheck, RefreshCw, X, Hash, MessageSquare,
-  Sparkles, Circle
+  Sparkles, Circle, Image as ImageIcon, Heart, ThumbsUp
 } from "lucide-react";
 
 interface ChatMember {
@@ -46,6 +46,7 @@ interface ChatMessage {
   message_type: "text" | "system" | "image";
   content: string;
   created_at: string;
+  reactions?: { emoji: string; user_id: number }[];
 }
 
 interface Props {
@@ -86,6 +87,12 @@ export default function ChatTab({ API_URL }: Props) {
   const [selectedUserIds, setSelectedUserIds] = useState<number[]>([]);
   const [isCreatingGroup, setIsCreatingGroup] = useState(false);
 
+  // Image & Emoji Reaction states (Phase 2 - Tasks 2.9 & 2.10)
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+  const [activeReactionMsgId, setActiveReactionMsgId] = useState<number | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
   // Refs
   const socketRef = useRef<WebSocket | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
@@ -97,6 +104,73 @@ export default function ChatTab({ API_URL }: Props) {
   // Scroll to bottom helper
   const scrollToBottom = (smooth = true) => {
     messagesEndRef.current?.scrollIntoView({ behavior: smooth ? "smooth" : "auto" });
+  };
+
+  const handleToggleReaction = async (messageId: number, emoji: string) => {
+    try {
+      setActiveReactionMsgId(null);
+      const res = await authFetch(`${API_URL}/chat/messages/${messageId}/reactions`, {
+        method: "POST",
+        body: JSON.stringify({ emoji })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setMessages(prev => prev.map(m => m.id === messageId ? { ...m, reactions: data.reactions } : m));
+      }
+    } catch (err) {
+      console.error("Reaction error:", err);
+    }
+  };
+
+  const handleImageFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !activeRoomId) return;
+    if (file.size > 5 * 1024 * 1024) {
+      alert("Kích thước ảnh tối đa 5MB");
+      return;
+    }
+    setIsUploadingImage(true);
+    try {
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const base64 = reader.result as string;
+        const res = await authFetch(`${API_URL}/chat/upload-image`, {
+          method: "POST",
+          body: JSON.stringify({ image_base64: base64, file_name: file.name })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+            socketRef.current.send(JSON.stringify({
+              type: "message",
+              content: data.image_url,
+              message_type: "image"
+            }));
+          }
+        }
+      };
+      reader.readAsDataURL(file);
+    } catch (err) {
+      console.error("Image upload error:", err);
+    } finally {
+      setIsUploadingImage(false);
+      if (e.target) e.target.value = "";
+    }
+  };
+
+  const getReactionSummary = (reactions?: { emoji: string; user_id: number }[]) => {
+    if (!reactions || reactions.length === 0) return [];
+    const map: Record<string, { emoji: string; count: number; hasMe: boolean }> = {};
+    for (const r of reactions) {
+      if (!map[r.emoji]) {
+        map[r.emoji] = { emoji: r.emoji, count: 0, hasMe: false };
+      }
+      map[r.emoji].count += 1;
+      if (r.user_id === user?.id) {
+        map[r.emoji].hasMe = true;
+      }
+    }
+    return Object.values(map);
   };
 
   // 1. Fetch Rooms List
@@ -240,6 +314,9 @@ export default function ChatTab({ API_URL }: Props) {
               return updated;
             });
           }
+        } else if (data.type === "reaction") {
+          const { message_id, reactions } = data;
+          setMessages(prev => prev.map(m => m.id === message_id ? { ...m, reactions } : m));
         }
       } catch (err) {
         console.error("WS message parse error:", err);
@@ -684,7 +761,7 @@ export default function ChatTab({ API_URL }: Props) {
                   return (
                     <div
                       key={msg.id || idx}
-                      className={`flex items-end space-x-2 ${isMe ? "justify-end" : "justify-start"}`}
+                      className={`flex items-end space-x-2 group/msg ${isMe ? "justify-end" : "justify-start"}`}
                     >
                       {!isMe && (
                         <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-slate-400 to-slate-600 text-white flex items-center justify-center text-xs font-bold flex-shrink-0">
@@ -699,15 +776,79 @@ export default function ChatTab({ API_URL }: Props) {
                           </span>
                         )}
 
-                        <div
-                          className={`px-4 py-2.5 rounded-2xl text-sm break-words shadow-2xs ${
-                            isMe
-                              ? "bg-[var(--brand)] text-white rounded-br-xs"
-                              : "bg-white text-gray-800 border border-gray-200/80 rounded-bl-xs"
-                          }`}
-                        >
-                          {msg.content}
+                        <div className="relative">
+                          {msg.message_type === "image" ? (
+                            <div
+                              onClick={() => setLightboxUrl(msg.content)}
+                              className="rounded-2xl overflow-hidden cursor-pointer max-w-xs sm:max-w-sm max-h-72 border border-gray-200/80 shadow-xs hover:opacity-95 transition bg-slate-50"
+                            >
+                              <img
+                                src={msg.content}
+                                alt="Image attachment"
+                                className="w-full h-full object-cover"
+                              />
+                            </div>
+                          ) : (
+                            <div
+                              className={`px-4 py-2.5 rounded-2xl text-sm break-words shadow-2xs ${
+                                isMe
+                                  ? "bg-[var(--brand)] text-white rounded-br-xs"
+                                  : "bg-white text-gray-800 border border-gray-200/80 rounded-bl-xs"
+                              }`}
+                            >
+                              {msg.content}
+                            </div>
+                          )}
+
+                          {/* Quick Emoji Reaction Trigger Button on Hover */}
+                          <div className={`absolute top-0 ${isMe ? "-left-8" : "-right-8"} opacity-0 group-hover/msg:opacity-100 transition-opacity flex items-center`}>
+                            <button
+                              type="button"
+                              onClick={() => setActiveReactionMsgId(activeReactionMsgId === msg.id ? null : msg.id)}
+                              className="p-1 rounded-full bg-white border border-gray-200 shadow-xs hover:bg-gray-50 text-gray-400 hover:text-gray-700"
+                              title="Thả biểu cảm"
+                            >
+                              <Smile size={14} />
+                            </button>
+                          </div>
+
+                          {/* Emoji Picker Popover */}
+                          {activeReactionMsgId === msg.id && (
+                            <div className={`absolute z-30 -top-10 ${isMe ? "right-0" : "left-0"} bg-white border border-gray-200 shadow-lg rounded-full px-2 py-1 flex items-center gap-1.5 animate-in zoom-in-95`}>
+                              {["❤️", "👍", "😂", "😮", "😢", "🔥"].map(em => (
+                                <button
+                                  key={em}
+                                  type="button"
+                                  onClick={() => handleToggleReaction(msg.id, em)}
+                                  className="hover:scale-125 transition-transform text-sm px-1 py-0.5"
+                                >
+                                  {em}
+                                </button>
+                              ))}
+                            </div>
+                          )}
                         </div>
+
+                        {/* Reaction badges summary */}
+                        {getReactionSummary(msg.reactions).length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-1 px-1">
+                            {getReactionSummary(msg.reactions).map(rx => (
+                              <button
+                                key={rx.emoji}
+                                type="button"
+                                onClick={() => handleToggleReaction(msg.id, rx.emoji)}
+                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold border transition ${
+                                  rx.hasMe
+                                    ? "bg-blue-50 border-blue-300 text-blue-700 font-bold"
+                                    : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50"
+                                }`}
+                              >
+                                <span>{rx.emoji}</span>
+                                <span className="text-[10px]">{rx.count}</span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
 
                         <span className="text-[10px] text-gray-400 mt-1 px-1">
                           {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -750,9 +891,25 @@ export default function ChatTab({ API_URL }: Props) {
               ))}
             </div>
 
-            {/* Message Input Bar */}
+            {/* Message Input Bar with Image Attachment */}
             <div className="p-4 bg-white border-t border-gray-100">
               <form onSubmit={handleSendMessage} className="flex items-center space-x-2">
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  accept="image/*"
+                  onChange={handleImageFileChange}
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isUploadingImage}
+                  className="p-3 text-gray-500 hover:text-blue-600 bg-gray-100 hover:bg-gray-200 rounded-xl transition flex items-center justify-center shrink-0 disabled:opacity-50"
+                  title="Gửi hình ảnh"
+                >
+                  {isUploadingImage ? <RefreshCw size={18} className="animate-spin text-blue-600" /> : <ImageIcon size={18} />}
+                </button>
                 <input
                   type="text"
                   placeholder="Nhập tin nhắn..."
@@ -786,7 +943,10 @@ export default function ChatTab({ API_URL }: Props) {
       {/* ── MODAL: New Direct Chat ─────────────────────────────────────── */}
       {/* ── MODAL: New Direct Chat ─────────────────────────────────────── */}
       {mounted && showNewChatModal && createPortal(
-        <div className="fixed inset-0 z-[9999] bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200">
+        <div
+          className="fixed inset-0 !mt-0 !m-0 top-0 left-0 right-0 bottom-0 z-[9999] bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200"
+          style={{ margin: 0, top: 0, left: 0, right: 0, bottom: 0 }}
+        >
           <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl border border-gray-100 animate-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between pb-4 border-b border-gray-100">
               <h3 className="text-base font-bold text-gray-900">Tin nhắn mới</h3>
@@ -863,7 +1023,10 @@ export default function ChatTab({ API_URL }: Props) {
 
       {/* ── MODAL: New Group Chat ──────────────────────────────────────── */}
       {mounted && showNewGroupModal && createPortal(
-        <div className="fixed inset-0 z-[9999] bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200">
+        <div
+          className="fixed inset-0 !mt-0 !m-0 top-0 left-0 right-0 bottom-0 z-[9999] bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200"
+          style={{ margin: 0, top: 0, left: 0, right: 0, bottom: 0 }}
+        >
           <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl border border-gray-100 animate-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between pb-4 border-b border-gray-100">
               <h3 className="text-base font-bold text-gray-900">Tạo nhóm học tập mới</h3>
@@ -960,6 +1123,31 @@ export default function ChatTab({ API_URL }: Props) {
               </div>
             </form>
           </div>
+        </div>,
+        document.body
+      )}
+
+      {/* ── MODAL: Image Lightbox (Phase 2 - Task 2.10) ────────────────── */}
+      {mounted && lightboxUrl && createPortal(
+        <div
+          onClick={() => setLightboxUrl(null)}
+          className="fixed inset-0 !mt-0 !m-0 top-0 left-0 right-0 bottom-0 z-[99999] bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 cursor-zoom-out animate-in fade-in"
+          style={{ margin: 0, top: 0, left: 0, right: 0, bottom: 0 }}
+        >
+          <button
+            type="button"
+            onClick={() => setLightboxUrl(null)}
+            className="absolute top-6 right-6 text-white/80 hover:text-white p-2 rounded-full bg-black/40 hover:bg-black/60 transition"
+            title="Đóng (Esc)"
+          >
+            <X size={24} />
+          </button>
+          <img
+            src={lightboxUrl}
+            alt="Enlarged preview"
+            className="max-h-[85vh] max-w-full rounded-xl object-contain shadow-2xl"
+            onClick={e => e.stopPropagation()}
+          />
         </div>,
         document.body
       )}

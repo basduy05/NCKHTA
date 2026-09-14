@@ -1,9 +1,12 @@
 "use client";
 import React, { useState, useEffect, useCallback } from "react";
 import { 
-  TrendingUp, Clock, Sparkles, Layers, Lightbulb, AlertCircle 
+  TrendingUp, Clock, Sparkles, Layers, Lightbulb, AlertCircle, 
+  Calendar, Zap, CheckCircle2, ArrowUpRight, Compass, RefreshCw
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
+import { useNotification } from "../../context/NotificationContext";
+import Link from "next/link";
 
 interface RoadmapTabProps {
   API_URL: string;
@@ -11,8 +14,12 @@ interface RoadmapTabProps {
 
 export default function RoadmapTab({ API_URL }: RoadmapTabProps) {
   const { token, authFetch } = useAuth();
+  const { showAlert } = useNotification();
   const [roadmap, setRoadmap] = useState<any>(null);
+  const [eta, setEta] = useState<any>(null);
+  const [adaptiveRecs, setAdaptiveRecs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [adapting, setAdapting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const fetchRoadmap = useCallback(async (refresh = false) => {
@@ -37,9 +44,43 @@ export default function RoadmapTab({ API_URL }: RoadmapTabProps) {
     }
   }, [authFetch, API_URL]);
 
+  const fetchEta = useCallback(async () => {
+    try {
+      const res = await authFetch(`${API_URL}/student/roadmap/eta`);
+      if (res.ok) {
+        const data = await res.json();
+        setEta(data);
+      }
+    } catch (e) {
+      console.warn("ETA fetch error:", e);
+    }
+  }, [authFetch, API_URL]);
+
+  const handleRecalculateAdaptive = async () => {
+    setAdapting(true);
+    try {
+      const res = await authFetch(`${API_URL}/student/roadmap/recalculate-adaptive`, {
+        method: "POST"
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setAdaptiveRecs(data.recommendations || []);
+        showAlert(data.message || "Đã tối ưu lộ trình học tập!", "success");
+        await fetchEta();
+      } else {
+        showAlert("Không thể tính toán lại lộ trình lúc này.", "warning");
+      }
+    } catch (e) {
+      showAlert("Lỗi kết nối khi tối ưu lộ trình", "error");
+    } finally {
+      setAdapting(false);
+    }
+  };
+
   useEffect(() => {
     fetchRoadmap();
-  }, [fetchRoadmap]);
+    fetchEta();
+  }, [fetchRoadmap, fetchEta]);
 
   if (loading) return (
     <div className="space-y-4 animate-pulse">
@@ -64,7 +105,7 @@ export default function RoadmapTab({ API_URL }: RoadmapTabProps) {
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
-      {/* 1. Profile Summary Card (What we know about you) */}
+      {/* 1. Profile Summary Card */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="md:col-span-3 bg-[var(--brand)] rounded-[var(--r-2xl)] p-8 text-white shadow-[var(--sh-md)] relative overflow-hidden">
           <div className="relative z-10">
@@ -118,6 +159,99 @@ export default function RoadmapTab({ API_URL }: RoadmapTabProps) {
         </div>
       </div>
 
+      {/* 2. ETA & Goal Velocity Widget (Task 3.11) */}
+      {eta && (
+        <div className="bg-gradient-to-r from-blue-900 to-indigo-900 rounded-2xl p-6 text-white shadow-md relative overflow-hidden">
+          <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+            <div className="space-y-2 max-w-lg">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/15 text-xs font-semibold uppercase tracking-wider text-blue-200">
+                <Compass size={14} /> Dự báo tiến độ hoàn thành mục tiêu (ETA)
+              </div>
+              <h3 className="text-2xl font-bold">
+                Mục tiêu: {eta.target_level}
+              </h3>
+              <p className="text-blue-100 text-sm">
+                Dự kiến về đích vào ngày <strong className="text-yellow-300 font-extrabold">{eta.projected_completion_date}</strong> ({eta.days_remaining} ngày nữa).
+                Duy trì tốc độ <strong className="text-white">{eta.daily_rate_words} từ vựng/ngày</strong> và {eta.recommended_daily_minutes} phút mỗi ngày.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-4 bg-white/10 backdrop-blur-md px-6 py-4 rounded-xl border border-white/15">
+              <div className="text-right">
+                <p className="text-xs text-blue-200 uppercase font-semibold">Tiến độ tổng thể</p>
+                <p className="text-3xl font-black text-yellow-400">{eta.current_progress_percent}%</p>
+                <p className="text-[11px] text-blue-100">{eta.study_velocity}</p>
+              </div>
+              <div className="w-16 h-16 rounded-full border-4 border-yellow-400/40 border-t-yellow-400 flex items-center justify-center font-bold text-sm">
+                <Zap size={22} className="text-yellow-300" />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 3. Adaptive Roadmap Recommendation Injector (Task 3.10) */}
+      <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+              <Zap size={20} className="text-amber-500" /> Tối Ưu Lộ Trình Thích Ứng (Adaptive Roadmap)
+            </h3>
+            <p className="text-xs text-gray-500">
+              Phân tích dữ liệu thực tế từ FSRS Spaced Repetition và các bài quiz để tinh chỉnh lộ trình cá nhân hoá.
+            </p>
+          </div>
+          <button
+            onClick={handleRecalculateAdaptive}
+            disabled={adapting}
+            className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-semibold shadow-sm transition disabled:opacity-50 self-start sm:self-auto"
+          >
+            <RefreshCw size={16} className={adapting ? "animate-spin" : ""} />
+            {adapting ? "AI đang tính toán..." : "Tối ưu lộ trình với AI"}
+          </button>
+        </div>
+
+        {adaptiveRecs.length > 0 && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
+            {adaptiveRecs.map((rec, idx) => (
+              <div
+                key={idx}
+                className={`p-4 rounded-xl border flex items-start justify-between gap-3 ${
+                  rec.priority === "high"
+                    ? "bg-red-50/50 border-red-200"
+                    : "bg-blue-50/50 border-blue-200"
+                }`}
+              >
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
+                        rec.priority === "high"
+                          ? "bg-red-100 text-red-700"
+                          : "bg-blue-100 text-blue-700"
+                      }`}
+                    >
+                      {rec.priority === "high" ? "Ưu tiên cao" : "Đề xuất"}
+                    </span>
+                    <h4 className="text-sm font-bold text-gray-900">{rec.title}</h4>
+                  </div>
+                  <p className="text-xs text-gray-600">{rec.description}</p>
+                </div>
+                {rec.action_link && (
+                  <Link
+                    href={rec.action_link}
+                    className="p-2 bg-white rounded-lg border border-gray-200 text-gray-700 hover:text-indigo-600 hover:border-indigo-300 transition flex-shrink-0"
+                  >
+                    <ArrowUpRight size={16} />
+                  </Link>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* 4. Learning Phases Breakdown */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-6">
           <h3 className="text-2xl font-semibold text-gray-900 flex items-center gap-3">
@@ -191,3 +325,4 @@ export default function RoadmapTab({ API_URL }: RoadmapTabProps) {
     </div>
   );
 }
+

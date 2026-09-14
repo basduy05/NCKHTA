@@ -110,6 +110,13 @@ export default function GrammarTab({ API_URL }: GrammarTabProps) {
   const [editingIdx, setEditingIdx] = useState<number | null>(null);
   const [editDraft, setEditDraft] = useState<any>(null);
 
+  // Grammar Checker & Vocab Practice states (Phase 2 - Tasks 2.7 & 2.8)
+  const [activeGrammarTab, setActiveGrammarTab] = useState<"rules" | "checker" | "vocab_practice">("rules");
+  const [checkInputText, setCheckInputText] = useState("");
+  const [checkingGrammar, setCheckingGrammar] = useState(false);
+  const [grammarCheckResult, setGrammarCheckResult] = useState<any | null>(null);
+  const [generatingVocabGrammar, setGeneratingVocabGrammar] = useState(false);
+
   const fetchRules = async () => {
     setLoading(true);
     try {
@@ -134,6 +141,65 @@ export default function GrammarTab({ API_URL }: GrammarTabProps) {
     if (u === c) return true;
     if (u.length === 1 && c.startsWith(u + '.')) return true;
     return false;
+  };
+
+  const handleCheckGrammar = async () => {
+    const text = checkInputText.trim();
+    if (!text) return showAlert("Vui lòng nhập câu tiếng Anh cần kiểm tra", "warning");
+    setCheckingGrammar(true);
+    setGrammarCheckResult(null);
+    try {
+      const res = await authFetch(`${API_URL}/student/grammar/check`, {
+        method: "POST",
+        body: JSON.stringify({ text })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setGrammarCheckResult(data);
+        if (data.is_correct) {
+          sfx.correct();
+        } else {
+          sfx.wrong();
+        }
+      } else {
+        showAlert("Không thể kiểm tra ngữ pháp lúc này", "error");
+      }
+    } catch {
+      showAlert("Lỗi kết nối máy chủ", "error");
+    } finally {
+      setCheckingGrammar(false);
+    }
+  };
+
+  const handleStartVocabGrammarPractice = async (diff: string = "B1") => {
+    setGeneratingVocabGrammar(true);
+    try {
+      const res = await authFetch(`${API_URL}/student/grammar/practice-from-vocab`, {
+        method: "POST",
+        body: JSON.stringify({ difficulty: diff, word_count: 5 })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const rawQs = data.questions || [];
+        if (rawQs.length > 0) {
+          setQuestions(rawQs);
+          setAnswers({});
+          setSubmitted(false);
+          setCurrentIdx(0);
+          setQuestionSubmitted(false);
+          setPracticing(true);
+          sfx.click();
+        } else {
+          showAlert("Không thể tạo bài tập từ vựng", "error");
+        }
+      } else {
+        showAlert("Lỗi tạo bài tập ngữ pháp liên kết từ vựng", "error");
+      }
+    } catch {
+      showAlert("Lỗi kết nối máy chủ", "error");
+    } finally {
+      setGeneratingVocabGrammar(false);
+    }
   };
 
   const startAIPractice = async () => {
@@ -620,73 +686,286 @@ export default function GrammarTab({ API_URL }: GrammarTabProps) {
         </div>
       </div>
 
-      {/* ── Browse by Level ── */}
-      <div className="mb-5">
-        <h2 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2 uppercase tracking-widest">
-          <SlidersHorizontal size={16} className="text-[var(--brand)]" /> Browse by Level
-        </h2>
-        <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
-          {CEFR_LEVELS.map(lvl => {
-            const count = levelCounts[lvl.id] || 0;
-            const isActive = activeLevel === lvl.id;
-            return (
-              <button key={lvl.id} onClick={() => setActiveLevel(isActive ? null : lvl.id)}
-                className={`group rounded-2xl p-3 text-left transition-all duration-200 ${isActive ? "bg-[var(--brand)] text-white shadow-lg scale-[1.03] ring-2 ring-[var(--brand)]/30" : "bg-white border border-gray-100 shadow-sm hover:shadow-md hover:scale-[1.01]"}`}>
-                <p className={`text-xl font-bold tracking-tighter mb-0.5 ${isActive ? "text-white" : "text-gray-900"}`}>{lvl.label}</p>
-                <p className={`text-[10px] font-medium mb-1 ${isActive ? "text-white/70" : "text-gray-400"}`}>{lvl.sublabel}</p>
-                <p className={`font-semibold text-sm ${isActive ? "text-white" : "text-gray-700"}`}>{count}<span className={`text-[9px] font-medium ml-0.5 ${isActive ? "text-white/60" : "text-gray-400"}`}> ct</span></p>
-              </button>
-            );
-          })}
-        </div>
-        {activeLevel && <button onClick={() => setActiveLevel(null)} className="mt-2 text-xs font-semibold text-[var(--brand)] hover:underline flex items-center gap-1"><X size={11} /> Tất cả</button>}
+      {/* ── Sub-navigation Tabs (Phase 2 - Tasks 2.7 & 2.8) ── */}
+      <div className="flex items-center gap-2 mb-5 p-1 bg-gray-100 dark:bg-gray-800/80 rounded-xl w-fit">
+        <button
+          onClick={() => setActiveGrammarTab("rules")}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs md:text-sm font-semibold transition ${
+            activeGrammarTab === "rules"
+              ? "bg-white dark:bg-gray-900 text-blue-600 dark:text-blue-400 shadow-sm"
+              : "text-gray-600 dark:text-gray-400 hover:text-gray-900"
+          }`}
+        >
+          <BookText size={15} />
+          Kho Chủ Đề Ngữ Pháp
+        </button>
+        <button
+          onClick={() => setActiveGrammarTab("checker")}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs md:text-sm font-semibold transition ${
+            activeGrammarTab === "checker"
+              ? "bg-white dark:bg-gray-900 text-purple-600 dark:text-purple-400 shadow-sm"
+              : "text-gray-600 dark:text-gray-400 hover:text-gray-900"
+          }`}
+        >
+          <Sparkles size={15} />
+          Kiểm Tra Ngữ Pháp AI (Grammar Checker)
+        </button>
+        <button
+          onClick={() => setActiveGrammarTab("vocab_practice")}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs md:text-sm font-semibold transition ${
+            activeGrammarTab === "vocab_practice"
+              ? "bg-white dark:bg-gray-900 text-teal-600 dark:text-teal-400 shadow-sm"
+              : "text-gray-600 dark:text-gray-400 hover:text-gray-900"
+          }`}
+        >
+          <GraduationCap size={15} />
+          Luyện Tập Với Từ Vựng Của Tôi
+        </button>
       </div>
 
-      {/* ── Search ── */}
-      <div className="relative mb-4">
-        <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
-        <input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-          placeholder="Tìm kiếm chủ đề ngữ pháp..."
-          className="w-full pl-9 pr-4 py-2.5 bg-white border border-[var(--line)] focus:border-[var(--brand)] rounded-xl outline-none font-medium text-sm text-gray-700 placeholder-gray-400 transition-all shadow-sm" />
-      </div>
+      {/* ── Grammar Rules Panel ── */}
+      {activeGrammarTab === "rules" && (
+        <>
+          {/* ── Browse by Level ── */}
+          <div className="mb-5">
+            <h2 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2 uppercase tracking-widest">
+              <SlidersHorizontal size={16} className="text-[var(--brand)]" /> Browse by Level
+            </h2>
+            <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+              {CEFR_LEVELS.map(lvl => {
+                const count = levelCounts[lvl.id] || 0;
+                const isActive = activeLevel === lvl.id;
+                return (
+                  <button key={lvl.id} onClick={() => setActiveLevel(isActive ? null : lvl.id)}
+                    className={`group rounded-2xl p-3 text-left transition-all duration-200 ${isActive ? "bg-[var(--brand)] text-white shadow-lg scale-[1.03] ring-2 ring-[var(--brand)]/30" : "bg-white border border-gray-100 shadow-sm hover:shadow-md hover:scale-[1.01]"}`}>
+                    <p className={`text-xl font-bold tracking-tighter mb-0.5 ${isActive ? "text-white" : "text-gray-900"}`}>{lvl.label}</p>
+                    <p className={`text-[10px] font-medium mb-1 ${isActive ? "text-white/70" : "text-gray-400"}`}>{lvl.sublabel}</p>
+                    <p className={`font-semibold text-sm ${isActive ? "text-white" : "text-gray-700"}`}>{count}<span className={`text-[9px] font-medium ml-0.5 ${isActive ? "text-white/60" : "text-gray-400"}`}> ct</span></p>
+                  </button>
+                );
+              })}
+            </div>
+            {activeLevel && <button onClick={() => setActiveLevel(null)} className="mt-2 text-xs font-semibold text-[var(--brand)] hover:underline flex items-center gap-1"><X size={11} /> Tất cả</button>}
+          </div>
 
-      {/* ── Topic Tree ── */}
-      <div className="app-card p-4 sm:p-5">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-1.5">
-            {activeLevel ? `${activeLevel} · ${getLevelConfig(activeLevel).sublabel}` : "Tất cả chủ đề"}
-            <span className="text-xs font-semibold text-gray-400">({flatFiltered.length})</span>
-          </h3>
-          <div className="flex items-center gap-3">
-            {!searchQuery && !activeLevel && (
-              <button onClick={() => { const allIds = rules.filter(r=>r.children||true).map(r=>r.id); setExpandedNodes(expandedNodes.size > 0 ? new Set() : new Set(allIds)); }}
-                className="text-xs font-semibold text-[var(--brand)] hover:underline flex items-center gap-1">
-                {expandedNodes.size > 0 ? <><ChevronUp size={12} /> Thu gọn</> : <><ChevronDown size={12} /> Mở rộng</>}
-              </button>
-            )}
-            {selectedRules.length > 0 && (
-              <button onClick={() => setSelectedRules([])} className="text-xs font-semibold text-rose-500 hover:underline flex items-center gap-1">
-                <X size={11} /> Bỏ chọn ({selectedRules.length})
-              </button>
+          {/* ── Search ── */}
+          <div className="relative mb-4">
+            <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+              placeholder="Tìm kiếm chủ đề ngữ pháp..."
+              className="w-full pl-9 pr-4 py-2.5 bg-white border border-[var(--line)] focus:border-[var(--brand)] rounded-xl outline-none font-medium text-sm text-gray-700 placeholder-gray-400 transition-all shadow-sm" />
+          </div>
+
+          {/* ── Topic Tree ── */}
+          <div className="app-card p-4 sm:p-5">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-1.5">
+                {activeLevel ? `${activeLevel} · ${getLevelConfig(activeLevel).sublabel}` : "Tất cả chủ đề"}
+                <span className="text-xs font-semibold text-gray-400">({flatFiltered.length})</span>
+              </h3>
+              <div className="flex items-center gap-3">
+                {!searchQuery && !activeLevel && (
+                  <button onClick={() => { const allIds = rules.filter(r=>r.children||true).map(r=>r.id); setExpandedNodes(expandedNodes.size > 0 ? new Set() : new Set(allIds)); }}
+                    className="text-xs font-semibold text-[var(--brand)] hover:underline flex items-center gap-1">
+                    {expandedNodes.size > 0 ? <><ChevronUp size={12} /> Thu gọn</> : <><ChevronDown size={12} /> Mở rộng</>}
+                  </button>
+                )}
+                {selectedRules.length > 0 && (
+                  <button onClick={() => setSelectedRules([])} className="text-xs font-semibold text-rose-500 hover:underline flex items-center gap-1">
+                    <X size={11} /> Bỏ chọn ({selectedRules.length})
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {loading ? (
+              <div className="space-y-2">{Array(5).fill(0).map((_,i) => <div key={i} className="h-14 bg-gray-50 rounded-xl animate-pulse" />)}</div>
+            ) : treeRoots.length === 0 ? (
+              <div className="py-12 text-center">
+                <BookText size={48} className="mx-auto text-gray-100 mb-3" />
+                <p className="text-gray-400 font-bold text-sm uppercase tracking-widest">
+                  {searchQuery ? "Không tìm thấy chủ đề" : "Kho ngữ pháp đang được cập nhật"}
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                {treeRoots.map(r => <RuleCard key={r.id} rule={r} depth={0} />)}
+              </div>
             )}
           </div>
-        </div>
+        </>
+      )}
 
-        {loading ? (
-          <div className="space-y-2">{Array(5).fill(0).map((_,i) => <div key={i} className="h-14 bg-gray-50 rounded-xl animate-pulse" />)}</div>
-        ) : treeRoots.length === 0 ? (
-          <div className="py-12 text-center">
-            <BookText size={48} className="mx-auto text-gray-100 mb-3" />
-            <p className="text-gray-400 font-bold text-sm uppercase tracking-widest">
-              {searchQuery ? "Không tìm thấy chủ đề" : "Kho ngữ pháp đang được cập nhật"}
+      {/* ── Grammar Checker Panel (Phase 2 - Task 2.7) ── */}
+      {activeGrammarTab === "checker" && (
+        <div className="space-y-6">
+          <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                  <Sparkles className="text-purple-600" size={20} /> Kiểm tra Ngữ pháp AI (Grammar Checker)
+                </h2>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Nhập câu tiếng Anh bất kỳ để AI phân tích chi tiết lỗi thì, giới từ, mạo từ, chia động từ và giải thích bằng tiếng Việt.
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <textarea
+                rows={4}
+                value={checkInputText}
+                onChange={(e) => setCheckInputText(e.target.value)}
+                placeholder="Ví dụ: She go to school yesterday and have many friend..."
+                className="w-full p-4 bg-slate-50 border border-gray-200 rounded-2xl text-sm sm:text-base outline-none focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100 transition resize-none"
+              />
+              <div className="flex items-center justify-between text-xs text-gray-400 px-1">
+                <span>{checkInputText.length}/2000 ký tự</span>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setCheckInputText("She go to school yesterday and have many friend.")}
+                    className="hover:text-blue-600 underline"
+                  >
+                    Thử câu mẫu
+                  </button>
+                  {checkInputText && (
+                    <button type="button" onClick={() => setCheckInputText("")} className="hover:text-red-500">
+                      Xóa
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={handleCheckGrammar}
+                disabled={checkingGrammar || !checkInputText.trim()}
+                className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-xl font-semibold text-sm flex items-center gap-2 shadow-md hover:shadow-lg transition-all active:scale-95 disabled:opacity-50"
+              >
+                {checkingGrammar ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
+                {checkingGrammar ? "AI đang phân tích câu..." : "Kiểm tra ngữ pháp"}
+              </button>
+            </div>
+          </div>
+
+          {/* Results display */}
+          {grammarCheckResult && (
+            <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm space-y-6 animate-in fade-in">
+              {/* Score and Status banner */}
+              <div className={`p-4 rounded-2xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 ${
+                grammarCheckResult.is_correct
+                  ? "bg-emerald-50/70 border-emerald-200 text-emerald-900"
+                  : "bg-amber-50/70 border-amber-200 text-amber-900"
+              }`}>
+                <div className="flex items-center gap-3">
+                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center font-bold text-white shadow-sm ${
+                    grammarCheckResult.is_correct ? "bg-emerald-600" : "bg-amber-600"
+                  }`}>
+                    {grammarCheckResult.overall_score || (grammarCheckResult.is_correct ? 100 : 70)}
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-base">
+                      {grammarCheckResult.is_correct ? "Câu hoàn toàn chính xác!" : `Phát hiện ${grammarCheckResult.errors?.length || 1} điểm cần hoàn thiện`}
+                    </h3>
+                    <p className="text-xs opacity-80 mt-0.5">
+                      {grammarCheckResult.detailed_feedback_vn || "Nhận xét tổng thể từ AI"}
+                    </p>
+                  </div>
+                </div>
+                {grammarCheckResult.cefr_level && (
+                  <span className="text-xs font-bold px-3 py-1 bg-white/80 rounded-full border border-gray-200 text-gray-700">
+                    Cấp độ: {grammarCheckResult.cefr_level}
+                  </span>
+                )}
+              </div>
+
+              {/* Polished Corrected Version */}
+              <div className="space-y-2">
+                <span className="text-xs font-bold text-gray-400 uppercase tracking-wider block">
+                  Phương án sửa tối ưu (Polished Sentence)
+                </span>
+                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-sm sm:text-base font-semibold text-blue-900 flex items-center justify-between gap-3">
+                  <span>{grammarCheckResult.corrected_text}</span>
+                </div>
+              </div>
+
+              {/* Detailed Errors breakdown */}
+              {grammarCheckResult.errors && grammarCheckResult.errors.length > 0 && (
+                <div className="space-y-3">
+                  <span className="text-xs font-bold text-gray-400 uppercase tracking-wider block">
+                    Chi tiết các lỗi và giải thích ngữ pháp ({grammarCheckResult.errors.length})
+                  </span>
+                  <div className="space-y-3">
+                    {grammarCheckResult.errors.map((err: any, idx: number) => (
+                      <div key={idx} className="p-4 rounded-xl border border-gray-100 bg-gray-50/60 space-y-2">
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <span className="text-xs font-bold px-2.5 py-0.5 rounded-md bg-rose-100 text-rose-700 border border-rose-200">
+                            {err.error_type || "Ngữ pháp"}
+                          </span>
+                          {err.rule_name && (
+                            <span className="text-xs text-gray-500 font-medium">
+                              Quy tắc: {err.rule_name}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-3 text-sm">
+                          <span className="line-through text-red-600 bg-red-50 px-2 py-0.5 rounded border border-red-100">
+                            {err.original_fragment || "Lỗi"}
+                          </span>
+                          <ArrowRight size={14} className="text-gray-400" />
+                          <span className="font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                            {err.suggestion || "Sửa đúng"}
+                          </span>
+                        </div>
+                        {err.explanation_vn && (
+                          <p className="text-xs text-gray-600 leading-relaxed pt-1">
+                            💡 <b>Giải thích:</b> {err.explanation_vn}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Vocabulary-Linked Practice Panel (Phase 2 - Task 2.8) ── */}
+      {activeGrammarTab === "vocab_practice" && (
+        <div className="bg-white rounded-2xl border border-gray-100 p-6 sm:p-8 shadow-sm space-y-6 text-center max-w-2xl mx-auto">
+          <div className="w-16 h-16 rounded-2xl bg-teal-50 text-teal-600 flex items-center justify-center mx-auto shadow-sm">
+            <GraduationCap size={32} />
+          </div>
+          <div>
+            <h2 className="text-xl font-bold text-gray-900">
+              Luyện Tập Ngữ Pháp Cá Nhân Hóa
+            </h2>
+            <p className="text-sm text-gray-500 mt-1 max-w-md mx-auto">
+              AI sẽ tự động lấy các từ vựng bạn đã lưu trong kho từ vựng cá nhân để tạo các câu hỏi bài tập ngữ pháp thực hành!
             </p>
           </div>
-        ) : (
-          <div className="space-y-1.5">
-            {treeRoots.map(r => <RuleCard key={r.id} rule={r} depth={0} />)}
+
+          <div className="flex items-center justify-center gap-2 pt-2">
+            {["A2", "B1", "B2"].map((diff) => (
+              <button
+                key={diff}
+                type="button"
+                onClick={() => handleStartVocabGrammarPractice(diff)}
+                disabled={generatingVocabGrammar}
+                className="px-5 py-3 rounded-xl font-semibold text-sm bg-slate-50 hover:bg-teal-600 hover:text-white border border-gray-200 transition active:scale-95 disabled:opacity-50 flex items-center gap-1.5"
+              >
+                {generatingVocabGrammar && <Loader2 size={14} className="animate-spin" />}
+                <span>{generatingVocabGrammar ? "Đang tạo..." : `Luyện cấp độ ${diff}`}</span>
+              </button>
+            ))}
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
 
       {/* ── Sticky Practice Bar ── */}

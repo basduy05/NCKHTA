@@ -1,4 +1,6 @@
 import json
+import asyncio
+import re
 from typing import List, Optional
 from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect, status
@@ -12,10 +14,50 @@ from ..services.chat_service import (
     get_room_messages,
     save_message,
     mark_room_read,
-    search_users_for_chat
+    search_users_for_chat,
+    toggle_message_reaction
 )
 
 router = APIRouter(prefix="/chat", tags=["Realtime Chat"])
+
+# ---------------------------------------------------------------------------
+# Phase 3 (3.7): AI Teacher Bot in Group Chat
+# ---------------------------------------------------------------------------
+async def _handle_ai_teacher_bot(room_id: int, user_message: str, user_name: str):
+    """Generate and broadcast AI Teacher Bot response when invoked with @ai or @teacher."""
+    from ..services.llm_service import query_llm
+
+    prompt_query = re.sub(r"@(?:ai|bot|teacher|giaovien)\b", "", user_message, flags=re.IGNORECASE).strip()
+    if not prompt_query:
+        prompt_query = "Xin chào AI Teacher, bạn có thể hướng dẫn tôi học tiếng Anh không?"
+
+    system_prompt = (
+        "Bạn là 'AI Teacher 🤖' - trợ lý giáo viên tiếng Anh thông minh, ân cần của hệ thống iEdu. "
+        "Bạn đang tham gia nhóm học tập của học sinh. Hãy trả lời câu hỏi ngắn gọn (tối đa 3-4 câu), "
+        "chuẩn xác ngữ pháp, từ vựng hoặc phát âm, có ví dụ song ngữ Anh-Việt và sử dụng emoji sinh động."
+    )
+    user_prompt = f"Học sinh {user_name} hỏi: {prompt_query}"
+
+    try:
+        await asyncio.sleep(0.4)
+        bot_reply = query_llm(system_prompt, user_prompt, temperature=0.7)
+        if not bot_reply or len(bot_reply.strip()) == 0:
+            bot_reply = f"Chào {user_name}! Thầy/Cô AI luôn sẵn sàng hỗ trợ. Bạn hãy đặt câu hỏi cụ thể về từ vựng, ngữ pháp nhé!"
+
+        bot_saved = save_message(
+            room_id=room_id,
+            sender_id=None,
+            content=bot_reply,
+            message_type="text",
+            is_bot=True
+        )
+
+        await chat_manager.broadcast_to_room(room_id, {
+            "type": "message",
+            "message": bot_saved
+        })
+    except Exception as e:
+        print(f"[AI TEACHER BOT ERROR] room_id={room_id}: {e}")
 
 class DirectRoomRequest(BaseModel):
     target_user_id: int
@@ -125,6 +167,70 @@ def presence_heartbeat(current_user: dict = Depends(get_current_user)):
     return {"status": "ok", "user_id": user_id}
 
 
+class ReactionRequest(BaseModel):
+    emoji: str
+
+@router.post("/messages/{message_id}/reactions")
+async def react_to_message(
+    message_id: int,
+    data: ReactionRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Phase 2 - Task 2.10: Emoji reaction on chat message.
+    Toggles reaction (adds if not present, removes if clicked again)
+    and broadcasts event to all room members via WebSocket.
+    """
+    try:
+        res = toggle_message_reaction(message_id, current_user["id"], data.emoji)
+        
+        # Broadcast reaction to room members
+        from ..database import get_db
+        conn = get_db()
+        row = conn.execute("SELECT room_id FROM chat_messages WHERE id = ?", (message_id,)).fetchone()
+        conn.close()
+        if row:
+            room_id = row["room_id"]
+            await chat_manager.broadcast_to_room(room_id, {
+                "type": "reaction",
+                "message_id": message_id,
+                "reactions": res.get("reactions", [])
+            })
+
+        return res
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Lỗi thêm biểu cảm: {str(e)}")
+
+
+class UploadImageRequest(BaseModel):
+    image_base64: str
+    file_name: Optional[str] = "image.png"
+
+@router.post("/upload-image")
+def upload_chat_image(data: UploadImageRequest, current_user: dict = Depends(get_current_user)):
+    """
+    Phase 2 - Task 2.10: Image attachment upload for chat.
+    Validates base64 image data and returns clean data URI / storage path.
+    """
+    raw = data.image_base64.strip()
+    if not raw:
+        raise HTTPException(status_code=400, detail="Dữ liệu ảnh không được để trống")
+    
+    # Ensure proper data URI prefix
+    if not raw.startswith("data:image/"):
+        raw = f"data:image/png;base64,{raw}"
+
+    # Basic size limit (approx 5MB base64 ~ 3.7MB file)
+    if len(raw) > 7_000_000:
+        raise HTTPException(status_code=400, detail="Kích thước ảnh tối đa 5MB")
+
+    return {
+        "status": "success",
+        "image_url": raw,
+        "sender_id": current_user["id"]
+    }
+
+
 # --- WEBSOCKET REALTIME ENDPOINT ---
 
 @router.websocket("/ws/{room_id}")
@@ -209,6 +315,11 @@ async def chat_websocket(
                         "type": "message",
                         "message": saved
                     })
+
+                    # Phase 3 (3.7): Trigger AI Teacher Bot if tagged
+                    lower_content = content.lower()
+                    if any(t in lower_content for t in ["@ai", "@bot", "@teacher", "@giaovien"]):
+                        asyncio.create_task(_handle_ai_teacher_bot(room_id, content, user_name))
                 except Exception as e:
                     await websocket.send_text(json.dumps({
                         "type": "error",

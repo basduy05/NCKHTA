@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 import { useEffect, useState } from "react";
 import { Mail, Lock, LogIn, ArrowLeft, Eye, EyeOff } from "lucide-react";
 import Image from "next/image";
@@ -27,8 +27,11 @@ export default function LoginPage() {
     setIsLoading(true);
     setError("");
 
-    const success = await login(email, password);
-    if (!success) {
+    const result: any = await login(email, password);
+    if (result && typeof result === "object" && result.requires_2fa) {
+      setShowOTP(true);
+      setError("");
+    } else if (!result) {
       setError("Đăng nhập thất bại. Vui lòng kiểm tra lại thông tin.");
     }
     setIsLoading(false);

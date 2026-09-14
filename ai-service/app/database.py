@@ -407,6 +407,17 @@ def init_db():
         cursor.execute("ALTER TABLE users ADD COLUMN cefr_level TEXT DEFAULT 'B1'")
     except SQLITE_OP_ERROR: pass
 
+    # --- MIGRATION: Gamification points & streak for users ---
+    for col, col_def in [
+        ("points", "INTEGER DEFAULT 0"),
+        ("streak", "INTEGER DEFAULT 0"),
+        ("streak_days", "INTEGER DEFAULT 0"),
+        ("last_study_date", "TEXT")
+    ]:
+        try:
+            cursor.execute(f"ALTER TABLE users ADD COLUMN {col} {col_def}")
+        except SQLITE_OP_ERROR: pass
+
     # --- MIGRATION: SET DEFAULT PASSWORDS FOR SEEDED USERS IF MISSING ---
     try:
         cursor.execute("SELECT id FROM users WHERE password_hash IS NULL OR password_hash = '' LIMIT 1")
@@ -1137,6 +1148,65 @@ def init_db():
     except Exception as e:
         print(f"[DB MIGRATION] Phase 1 schema error: {e}")
 
+    # --- PHASE 2 SCHEMA MIGRATIONS ---
+    try:
+        # 1. Daily challenges
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS user_daily_challenges (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                challenge_key TEXT NOT NULL,
+                challenge_date TEXT NOT NULL,
+                progress INTEGER DEFAULT 0,
+                target INTEGER DEFAULT 1,
+                completed INTEGER DEFAULT 0,
+                claimed INTEGER DEFAULT 0,
+                claimed_at TIMESTAMP,
+                UNIQUE(user_id, challenge_key, challenge_date)
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_user_daily_ch ON user_daily_challenges(user_id, challenge_date)")
+
+        # 2. Streak milestones
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS user_streak_milestones (
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                milestone_days INTEGER NOT NULL,
+                claimed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                points_awarded INTEGER NOT NULL,
+                PRIMARY KEY (user_id, milestone_days)
+            )
+        """)
+
+        # 3. Chat reactions
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS chat_reactions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                message_id INTEGER NOT NULL REFERENCES chat_messages(id) ON DELETE CASCADE,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                emoji TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(message_id, user_id, emoji)
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_chat_reactions_msg ON chat_reactions(message_id)")
+
+        # 4. Student scores review & feedback columns
+        for col, col_type in [
+            ("ai_feedback", "TEXT DEFAULT ''"),
+            ("teacher_feedback", "TEXT DEFAULT ''"),
+            ("teacher_reviewed", "INTEGER DEFAULT 0"),
+            ("answers_data", "TEXT DEFAULT ''")
+        ]:
+            try:
+                cursor.execute(f"ALTER TABLE student_scores ADD COLUMN {col} {col_type}")
+            except Exception:
+                pass
+
+        conn.commit()
+    except Exception as e:
+        print(f"[DB MIGRATION] Phase 2 schema error: {e}")
+
 
     # Seed settings from environment variables
     # Use INSERT OR IGNORE so env vars only fill EMPTY slots
@@ -1158,7 +1228,78 @@ def init_db():
     conn.commit()
     
     cursor.execute("SELECT COUNT(*) FROM classes")
-    if cursor.fetchone()[0] == 0:
+    # --- PHASE 3: USER SESSIONS & DEVICE MANAGEMENT (3.3) ---
+    try:
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS user_sessions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                session_id TEXT UNIQUE NOT NULL,
+                device_name TEXT DEFAULT 'Web Browser',
+                device_type TEXT DEFAULT 'desktop',
+                browser TEXT DEFAULT 'Chrome/Edge',
+                os TEXT DEFAULT 'Windows',
+                ip_address TEXT DEFAULT '127.0.0.1',
+                refresh_token_jti TEXT,
+                last_active TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                is_revoked INTEGER DEFAULT 0,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_user_sessions_user ON user_sessions(user_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_user_sessions_jti ON user_sessions(refresh_token_jti)")
+        conn.commit()
+    except Exception as e:
+        print(f"[DB MIGRATION] user_sessions error: {e}")
+
+    # --- PHASE 3: 2FA & SUBSCRIPTION TIER (3.2 & 3.13) ---
+    try:
+        cursor.execute("ALTER TABLE users ADD COLUMN two_factor_enabled INTEGER DEFAULT 0")
+    except SQLITE_OP_ERROR: pass
+    try:
+        cursor.execute("ALTER TABLE users ADD COLUMN two_factor_secret TEXT")
+    except SQLITE_OP_ERROR: pass
+    try:
+        cursor.execute("ALTER TABLE users ADD COLUMN subscription_tier TEXT DEFAULT 'free'")
+    except SQLITE_OP_ERROR: pass
+    try:
+        cursor.execute("ALTER TABLE users ADD COLUMN subscription_expires_at TIMESTAMP")
+    except SQLITE_OP_ERROR: pass
+
+    # --- PHASE 3: PARENT PORTAL LINKS (3.9) ---
+    try:
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS parent_student_links (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                student_id INTEGER NOT NULL,
+                parent_id INTEGER,
+                link_code TEXT UNIQUE NOT NULL,
+                code_expires_at TIMESTAMP,
+                is_active INTEGER DEFAULT 1,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_parent_links_code ON parent_student_links(link_code)")
+        conn.commit()
+    except Exception as e:
+        print(f"[DB MIGRATION] parent_student_links error: {e}")
+
+    # --- PHASE 3: PERFORMANCE INDEXES (3.16) ---
+    try:
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_saved_vocab_user ON saved_vocabulary(user_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_saved_vocab_sched ON saved_vocabulary(user_id, scheduled_at)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_scores_student ON student_scores(student_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_chat_messages_room ON chat_messages(room_id, created_at)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_exams_user ON generated_exams(user_id)")
+        conn.commit()
+    except Exception as e:
+        print(f"[DB MIGRATION] performance indexes error: {e}")
+
+    cursor.execute("SELECT COUNT(*) FROM classes")
+    row_count = cursor.fetchone()
+    if row_count and row_count[0] == 0:
         try:
             from .services.auth_service import get_password_hash
             default_pwd = get_password_hash("123456")
