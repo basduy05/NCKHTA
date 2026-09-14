@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException, Depends, status, BackgroundTasks, Header
 from pydantic import BaseModel, EmailStr, field_validator
+from typing import Optional
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import sqlite3
 import time
