@@ -33,7 +33,8 @@ if not SECRET_KEY:
 else:
     print(f"[AUTH] SECRET_KEY loaded successfully: {SECRET_KEY[:20]}...")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 30  # 30 days
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))  # 60 minutes
+REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "30"))  # 30 days
 OTP_EXPIRE_MINUTES = 10  # OTP expires in 10 minutes
 
 # --- MODELS ---
@@ -119,21 +120,63 @@ def generate_otp(length=6):
     return "".join(secrets.choice(string.digits) for _ in range(length))
 
 def generate_access_token(user_id: int, email: str):
-    """Create JWT access token"""
+    """Create JWT access token (15 mins by default)"""
     now = datetime.now(timezone.utc)
     payload = {
         "sub": str(user_id),
         "email": email,
+        "token_use": "access",
         "exp": now + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
         "iat": now,
         "jti": secrets.token_urlsafe(16),  # Unique token ID for future blacklisting
     }
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
+def generate_refresh_token(user_id: int, email: str):
+    """Create JWT refresh token (30 days)"""
+    now = datetime.now(timezone.utc)
+    payload = {
+        "sub": str(user_id),
+        "email": email,
+        "token_use": "refresh",
+        "exp": now + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS),
+        "iat": now,
+        "jti": secrets.token_urlsafe(16),
+    }
+    return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+
+def verify_refresh_token(token: str, conn=None):
+    """Verify JWT refresh token and check against blacklist. Returns payload dict or None."""
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        if payload.get("token_use") != "refresh":
+            return None
+        jti = payload.get("jti")
+        if jti and is_token_revoked(jti, conn=conn):
+            print(f"[AUTH] Blocked revoked refresh token: {jti}")
+            return None
+            
+        user_id = int(payload.get("sub"))
+        email = payload.get("email")
+        if user_id is None or email is None:
+            return None
+        return {
+            "user_id": user_id, 
+            "email": email,
+            "jti": jti,
+            "exp": payload.get("exp")
+        }
+    except JWTError:
+        return None
+
 def verify_access_token(token: str, conn=None):
     """Verify JWT and return user_id, email. Checks against blacklist. Optionally reuse conn."""
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        # Prevent using refresh token as access token
+        if payload.get("token_use") == "refresh":
+            return None
+            
         jti = payload.get("jti")
         if jti and is_token_revoked(jti, conn=conn):
             print(f"[AUTH] Blocked revoked token: {jti}")

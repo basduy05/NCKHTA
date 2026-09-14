@@ -13,8 +13,9 @@ if hasattr(sys.stderr, "buffer"):
     except (AttributeError, Exception):
         pass
 
-from fastapi import FastAPI, UploadFile, File, Body, Request, Depends
+from fastapi import FastAPI, UploadFile, File, Body, Request, Depends, Form
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from contextlib import asynccontextmanager
@@ -50,6 +51,9 @@ try:
     from .routers import teacher  # Import Teacher Router
     from .routers import student  # Import Student Router
     from .routers import chat    # Import AI Chat Router
+    from .routers import notifications # Import SSE Notification Router
+    from .routers import groups  # Import Study Groups Router
+    from .routers import chat_realtime  # Import Realtime Chat Router
     print("[STARTUP] Routers loaded OK", flush=True)
 except Exception as e:
     import traceback
@@ -61,6 +65,9 @@ except Exception as e:
     teacher = None
     student = None
     chat = None
+    notifications = None
+    groups = None
+    chat_realtime = None
     
 from .dependencies import get_admin_user, get_teacher_user, get_current_user
 
@@ -72,6 +79,17 @@ class TextRequest(BaseModel):
 
 
 # ─── LIFESPAN: warm up connections at startup ─────────────────────────────────
+async def _warmup_neo4j_background():
+    """Warm up Neo4j in the background so it doesn't block server startup / Render health check."""
+    try:
+        if graph_service:
+            print("[STARTUP] Pre-warming Neo4j connection in background...", flush=True)
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(None, graph_service.get_graph)
+            print("[STARTUP] Neo4j background warm-up completed successfully.", flush=True)
+    except Exception as e:
+        print(f"[STARTUP] Neo4j background warm-up skipped/error: {e}", flush=True)
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup: Initialize Database
@@ -83,9 +101,6 @@ async def lifespan(app: FastAPI):
         print(f"[STARTUP ERROR] Database initialization failed: {e}")
         traceback.print_exc()
 
-    # Startup: pre-warm Neo4j connection
-    print("[STARTUP] Pre-warming Neo4j connection...")
-
     # Verification: Check for SECRET_KEY
     if not os.getenv("SECRET_KEY"):
         print("=" * 60)
@@ -96,12 +111,11 @@ async def lifespan(app: FastAPI):
     else:
         print("[STARTUP] SECRET_KEY verified OK")
 
+    # Non-blocking background warm-up for Neo4j
     if graph_service:
-        try:
-            graph_service.get_graph()
-        except Exception as e:
-            print(f"[STARTUP] Neo4j warm-up skipped: {e}")
-    print("[STARTUP] App ready!")
+        asyncio.create_task(_warmup_neo4j_background())
+
+    print("[STARTUP] App ready for traffic!")
     yield
     # Shutdown: cleanup
     print("[SHUTDOWN] Cleaning up...")
@@ -112,6 +126,10 @@ app = FastAPI(
     description="Powered by Neo4j & GenAI",
     lifespan=lifespan,
 )
+
+# 1.3 🗜️ GZip Response Compression (reduce 60-70% bandwidth for JSON payload >= 1KB)
+app.add_middleware(GZipMiddleware, minimum_size=1000)
+
 
 # ALL REQUIRED DEPENDENCIES:
 # uvicorn, fastapi, python-multipart, python-dotenv, neo4j, langchain
@@ -181,6 +199,15 @@ if student:
 if chat:
     app.include_router(chat.router, dependencies=[Depends(get_current_user)])
 
+if notifications:
+    app.include_router(notifications.router)
+
+if groups:
+    app.include_router(groups.router, dependencies=[Depends(get_current_user)])
+
+if chat_realtime:
+    app.include_router(chat_realtime.router)
+
 # CORS: Allow specific origins
 # MUST BE ADDED LAST TO BE OUTERMOST IN FASTAPI (wraps all other middlewares)
 _raw_origins = os.getenv(
@@ -226,10 +253,24 @@ def debug_startup_error():
         return {"error": router_load_error}
     return {"message": "Small success: Routers loaded but something else might be wrong."}
 
+_health_cached_resp = None
+_health_cached_ts = 0.0
+
 @app.api_route("/health", methods=["GET", "HEAD"])
 def health_check():
-    """Fast health check for Render Load Balancer."""
-    return {"status": "ok", "timestamp": time.time(), "message": "System is running"}
+    """Fast health check with 5s in-memory cache for Render Load Balancer."""
+    global _health_cached_resp, _health_cached_ts
+    now = time.time()
+    if _health_cached_resp and (now - _health_cached_ts < 5.0):
+        return {**_health_cached_resp, "cached": True}
+    
+    _health_cached_ts = now
+    _health_cached_resp = {
+        "status": "ok",
+        "timestamp": now,
+        "message": "System is running"
+    }
+    return {**_health_cached_resp, "cached": False}
 
 @app.get("/health/graph")
 def health_graph():
@@ -273,13 +314,57 @@ async def generate_quiz_endpoint(request: TextRequest):
     """
     return await llm_service.generate_quiz_from_text(request.text, request.num_questions)
 
+class SpeechTextRequest(BaseModel):
+    transcript: str
+    expected_text: str
+
 @app.post("/speech/analyze")
-async def analyze_speech(audio_file: UploadFile = File(...)):
+async def analyze_speech(
+    transcript: Optional[str] = Form(None),
+    expected_text: Optional[str] = Form(""),
+    audio_file: Optional[UploadFile] = File(None)
+):
     """
-    Receives audio blob from frontend -> STT (Speech-to-Text) -> Phoneme Analysis.
-    For NCKH demo, we can use OpenAI Whisper API or Google Speech API here.
+    Intelligent pronunciation analysis:
+    Transcribes audio blob with Gemini/Whisper STT if audio_file provided,
+    then computes Levenshtein distance, WER, and word-level accuracy.
     """
-    return {"score": 85, "feedback": "Good pronunciation of 'th' sound."} 
+    from .services.speech_service import evaluate_speech_transcript, transcribe_audio_bytes
+    spoken_text = transcript or ""
+    
+    if audio_file:
+        try:
+            audio_bytes = await audio_file.read()
+            mime_type = audio_file.content_type or "audio/webm"
+            stt_result = await transcribe_audio_bytes(audio_bytes, mime_type)
+            if stt_result:
+                spoken_text = stt_result
+        except Exception as e:
+            print(f"[SPEECH] Audio transcribe error: {e}")
+
+    return evaluate_speech_transcript(spoken_text, expected_text or "")
+
+@app.post("/speech/transcribe")
+async def transcribe_speech_endpoint(
+    audio_file: UploadFile = File(...),
+    expected_text: Optional[str] = Form("")
+):
+    """Direct STT transcription endpoint accepting audio blob."""
+    from .services.speech_service import evaluate_speech_transcript, transcribe_audio_bytes
+    audio_bytes = await audio_file.read()
+    mime_type = audio_file.content_type or "audio/webm"
+    transcript = await transcribe_audio_bytes(audio_bytes, mime_type)
+    evaluation = evaluate_speech_transcript(transcript, expected_text or "") if expected_text else {}
+    return {
+        "transcript": transcript,
+        "evaluation": evaluation
+    }
+
+@app.post("/speech/analyze-text")
+async def analyze_speech_json(data: SpeechTextRequest):
+    """JSON body version for pronunciation analysis from Web Speech API transcript."""
+    from .services.speech_service import evaluate_speech_transcript
+    return evaluate_speech_transcript(data.transcript, data.expected_text) 
 
 if __name__ == "__main__":
     import uvicorn

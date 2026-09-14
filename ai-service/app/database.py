@@ -163,6 +163,11 @@ class LibsqlClientCursorWrapper:
         self.lastrowid = rs.last_insert_rowid
         return self
 
+    def executemany(self, query, seq_of_params):
+        for params in seq_of_params:
+            self.execute(query, params)
+        return self
+
     def fetchone(self):
         if not self.last_rs or self.row_idx >= len(self.last_rs.rows):
             return None
@@ -540,10 +545,14 @@ def init_db():
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_enrollments_student_id ON enrollments(student_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_assignments_class_id ON assignments(class_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_student_scores_student_id ON student_scores(student_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_student_scores_user ON student_scores(student_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_saved_vocabulary_user_id ON saved_vocabulary(user_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_saved_vocabulary_scheduled_at ON saved_vocabulary(scheduled_at)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_saved_vocab_user_scheduled ON saved_vocabulary(user_id, scheduled_at)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_study_logs_user_id ON study_logs(user_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_study_logs_user_date ON study_logs(user_id, review_at)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_study_logs_word_id ON study_logs(word_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_revoked_tokens_jti ON revoked_tokens(jti)")
     except Exception: pass
 
     # --- ENROLLMENTS TABLE ---
@@ -764,6 +773,12 @@ def init_db():
         )
     """)
 
+    try:
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_study_logs_user_id ON study_logs(user_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_study_logs_user_date ON study_logs(user_id, review_at)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_study_logs_word_id ON study_logs(word_id)")
+    except Exception: pass
+
     # --- STUDENT ROADMAPS TABLE ---
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS student_roadmaps (
@@ -906,6 +921,178 @@ def init_db():
             print("[DB MIGRATION] saved_vocabulary migrated OK")
     except Exception as e:
         print(f"[DB MIGRATION] saved_vocabulary migration error: {e}")
+
+    # --- GAMIFICATION: BADGES TABLE ---
+    try:
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS badges (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                key TEXT UNIQUE NOT NULL,
+                name TEXT NOT NULL,
+                description_vn TEXT,
+                icon TEXT NOT NULL,
+                tier TEXT DEFAULT 'bronze',
+                condition_type TEXT NOT NULL,
+                condition_value INTEGER NOT NULL
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS user_badges (
+                user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+                badge_id INTEGER REFERENCES badges(id) ON DELETE CASCADE,
+                earned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (user_id, badge_id)
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_user_badges_user ON user_badges(user_id)")
+        
+        # Seed initial badges if empty
+        cursor.execute("SELECT COUNT(*) FROM badges")
+        if cursor.fetchone()[0] == 0:
+            initial_badges = [
+                ('first_word', 'First Step', 'Lưu từ vựng đầu tiên vào sổ tay', '👣', 'bronze', 'vocab_count', 1),
+                ('word_10', 'Word Explorer', 'Đã tích lũy 10 từ vựng', '🌱', 'bronze', 'vocab_count', 10),
+                ('word_50', 'Word Warrior', 'Đã tích lũy 50 từ vựng', '⚔️', 'silver', 'vocab_count', 50),
+                ('word_200', 'Vocabulary Master', 'Kho từ vựng đạt 200 từ', '💎', 'gold', 'vocab_count', 200),
+                ('streak_3', 'Warm Up', 'Duy trì học 3 ngày liên tiếp', '⚡', 'bronze', 'streak', 3),
+                ('streak_7', 'Streak Master', 'Duy trì học 7 ngày liên tiếp', '🔥', 'silver', 'streak', 7),
+                ('streak_30', 'Habit Champion', 'Chiến binh thói quen 30 ngày', '🏆', 'gold', 'streak', 30),
+                ('perfect_quiz', 'Perfect Score', 'Đạt điểm tuyệt đối 100% trong bài kiểm tra', '💯', 'silver', 'quiz_perfect', 1),
+                ('grammar_10', 'Grammar Seeker', 'Hoàn thành 10 bài ngữ pháp', '📖', 'bronze', 'grammar_done', 10),
+            ]
+            for b in initial_badges:
+                cursor.execute("""
+                    INSERT OR IGNORE INTO badges (key, name, description_vn, icon, tier, condition_type, condition_value)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                """, b)
+        conn.commit()
+    except Exception as e:
+        print(f"[DB MIGRATION] badges setup error: {e}")
+
+    # --- PUSH NOTIFICATIONS SUBSCRIPTIONS ---
+    try:
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS push_subscriptions (
+                user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+                endpoint TEXT NOT NULL,
+                p256dh TEXT NOT NULL,
+                auth TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (user_id, endpoint)
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_push_subs_user ON push_subscriptions(user_id)")
+        conn.commit()
+    except Exception as e:
+        print(f"[DB MIGRATION] push_subscriptions error: {e}")
+
+    # --- AI LONG-TERM MEMORY (LEARNING PROFILE) ---
+    try:
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS user_learning_profile (
+                user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+                weak_grammar_topics TEXT DEFAULT '[]',
+                strong_grammar_topics TEXT DEFAULT '[]',
+                weak_vocab_categories TEXT DEFAULT '[]',
+                total_study_minutes INTEGER DEFAULT 0,
+                preferred_difficulty TEXT DEFAULT 'medium',
+                mistake_log TEXT DEFAULT '{}',
+                ai_notes TEXT DEFAULT '',
+                last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        conn.commit()
+    except Exception as e:
+        print(f"[DB MIGRATION] user_learning_profile error: {e}")
+
+    # --- STUDY GROUPS ---
+    try:
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS study_groups (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                description TEXT DEFAULT '',
+                owner_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+                invite_code TEXT UNIQUE NOT NULL,
+                max_members INTEGER DEFAULT 20,
+                is_public BOOLEAN DEFAULT 1,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS group_members (
+                group_id INTEGER REFERENCES study_groups(id) ON DELETE CASCADE,
+                user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+                role TEXT DEFAULT 'member',
+                joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (group_id, user_id)
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS group_challenges (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                group_id INTEGER REFERENCES study_groups(id) ON DELETE CASCADE,
+                title TEXT NOT NULL,
+                target_type TEXT DEFAULT 'words_learned',
+                target_value INTEGER DEFAULT 50,
+                end_date TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_group_members_user ON group_members(user_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_study_groups_code ON study_groups(invite_code)")
+        conn.commit()
+    except Exception as e:
+        print(f"[DB MIGRATION] study_groups error: {e}")
+
+    # --- REALTIME CHAT & PRESENCE ---
+    try:
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS chat_rooms (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT,
+                room_type TEXT DEFAULT 'direct',
+                created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+                avatar_url TEXT DEFAULT '',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS chat_members (
+                room_id INTEGER REFERENCES chat_rooms(id) ON DELETE CASCADE,
+                user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+                role TEXT DEFAULT 'member',
+                last_read_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (room_id, user_id)
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS chat_messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                room_id INTEGER REFERENCES chat_rooms(id) ON DELETE CASCADE,
+                sender_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+                message_type TEXT DEFAULT 'text',
+                content TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS user_presence (
+                user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+                is_online BOOLEAN DEFAULT 0,
+                last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                status_text TEXT DEFAULT ''
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_chat_members_user ON chat_members(user_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_chat_messages_room ON chat_messages(room_id, created_at)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_user_presence_online ON user_presence(is_online, last_seen)")
+        conn.commit()
+    except Exception as e:
+        print(f"[DB MIGRATION] realtime chat schema error: {e}")
+
 
     # Seed settings from environment variables
     # Use INSERT OR IGNORE so env vars only fill EMPTY slots

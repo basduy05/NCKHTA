@@ -370,14 +370,22 @@ def get_knowledge_subgraph(topic: str = "all", limit: int = 100) -> Dict:
         return {"nodes": [], "links": [], "error": str(e)}
 
 
+_WORD_CONNECTIONS_CACHE = {}
+
 def get_word_connections(word: str) -> Dict:
-    """Get all connections for a specific word."""
+    """Get all connections for a specific word with in-memory caching."""
+    word_lower = word.lower().strip()
+    now = time.time()
+    if word_lower in _WORD_CONNECTIONS_CACHE:
+        entry = _WORD_CONNECTIONS_CACHE[word_lower]
+        if now - entry["ts"] < 300:
+            return entry["data"]
+
     g = get_graph()
     if not g:
         return {"word": word, "connections": [], "message": "Graph DB not connected"}
     try:
         # Try exact match first
-        word_lower = word.lower().strip()
         query = """
         MATCH (w:Word {text: $word})-[r]-(related:Word)
         RETURN type(r) as relation, related.text as related_word,
@@ -435,7 +443,9 @@ def get_word_connections(word: str) -> Dict:
                         "type": "Word",
                     })
         
-        return {"word": word, "connections": connections}
+        res = {"word": word, "connections": connections}
+        _WORD_CONNECTIONS_CACHE[word_lower] = {"data": res, "ts": time.time()}
+        return res
     except Exception as e:
         return {"word": word, "connections": [], "error": str(e)}
 

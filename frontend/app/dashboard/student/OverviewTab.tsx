@@ -7,6 +7,11 @@ import {
 import { useAuth } from "../../context/AuthContext";
 import Link from "next/link";
 
+import StreakCalendar from "./StreakCalendar";
+import BadgesCard from "./BadgesCard";
+import PushNotificationButton from "./PushNotificationButton";
+import { Newspaper } from "lucide-react";
+
 interface OverviewTabProps {
   API_URL: string;
 }
@@ -73,6 +78,7 @@ export default function OverviewTab({ API_URL }: OverviewTabProps) {
   };
 
   const quickLinks = [
+    { label: "Đọc báo tra từ", href: "/dashboard/student?tab=news",        icon: Newspaper,  color: "bg-indigo-600" },
     { label: "Tra từ điển",    href: "/dashboard/student?tab=dictionary",  icon: BookMarked, color: "bg-[var(--brand)]" },
     { label: "Luyện thi",      href: "/dashboard/student?tab=practice",    icon: Trophy,     color: "bg-blue-600" },
     { label: "Kho ngữ pháp",   href: "/dashboard/student?tab=grammar",     icon: Layers,     color: "bg-teal-600" },
@@ -82,46 +88,57 @@ export default function OverviewTab({ API_URL }: OverviewTabProps) {
   return (
     <div className="space-y-6">
       {/* Hero banner */}
-      <div className="bg-[var(--brand)] rounded-[var(--r-xl)] p-8 text-white relative overflow-hidden">
+      <div className="bg-[var(--brand)] rounded-[var(--r-xl)] p-5 sm:p-6 text-white relative overflow-hidden shadow-sm">
         <div className="absolute inset-0 opacity-10">
           <div className="absolute top-0 right-0 w-64 h-64 bg-white rounded-full -mr-20 -mt-20" />
           <div className="absolute bottom-0 left-0 w-40 h-40 bg-white rounded-full -ml-10 -mb-10" />
         </div>
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <p className="text-blue-200 text-sm font-medium mb-1">Xin chào trở lại</p>
-            <h2 className="text-2xl font-bold mb-1">{user?.name} 👋</h2>
-            <p className="text-blue-100">Tiếp tục hành trình học tiếng Anh của bạn.</p>
+            <p className="text-blue-200 text-xs sm:text-sm font-medium mb-0.5">Xin chào trở lại</p>
+            <h2 className="text-xl sm:text-2xl font-bold mb-0.5">{user?.name} 👋</h2>
+            <p className="text-blue-100 text-xs sm:text-sm">Tiếp tục hành trình học tiếng Anh của bạn.</p>
           </div>
-          {stats && (
-            <div className="flex items-center gap-3 bg-white/15 backdrop-blur-sm px-5 py-3 rounded-xl border border-white/20 self-start md:self-auto">
-              <Trophy size={22} className="text-yellow-300 flex-shrink-0" />
-              <div>
-                <p className="text-xs text-blue-200">Điểm trung bình</p>
-                <p className="text-2xl font-bold">{stats?.average_percent ?? 0}%</p>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+            {stats && (
+              <div className="flex items-center gap-3 bg-white/15 backdrop-blur-sm px-4 py-2.5 rounded-xl border border-white/20 self-start md:self-auto">
+                <Trophy size={20} className="text-yellow-300 flex-shrink-0" />
+                <div>
+                  <p className="text-[11px] text-blue-200">Điểm trung bình</p>
+                  <p className="text-xl font-bold">{stats?.average_percent ?? 0}%</p>
+                </div>
               </div>
+            )}
+            <div className="bg-white/10 backdrop-blur-sm p-1 rounded-xl border border-white/20">
+              <PushNotificationButton API_URL={API_URL} />
             </div>
-          )}
+          </div>
         </div>
       </div>
 
       {/* Stats grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
         {statCards.map((c, i) => {
           const col = colorMap[c.color];
           return (
             <Link key={i} href={c.href}
-              className="bg-white rounded-xl p-5 border border-gray-100 shadow-sm hover:shadow-md hover:border-gray-200 transition-all group">
-              <div className={`w-10 h-10 ${col.bg} rounded-xl flex items-center justify-center mb-4`}>
-                <c.icon size={19} className={col.icon} />
+              className="bg-white rounded-xl p-4 sm:p-4.5 border border-gray-100 shadow-xs hover:shadow-sm hover:border-gray-200 transition-all group">
+              <div className={`w-9 h-9 ${col.bg} rounded-xl flex items-center justify-center mb-3`}>
+                <c.icon size={18} className={col.icon} />
               </div>
-              <p className="text-2xl font-bold text-gray-900">{c.value}</p>
-              <p className="text-sm text-gray-500 mt-0.5">{c.label}</p>
-              <ArrowRight size={14} className={`mt-3 ${col.icon} opacity-0 group-hover:opacity-100 transition-opacity`} />
+              <p className="text-xl font-bold text-gray-900">{c.value}</p>
+              <p className="text-xs text-gray-500 mt-0.5">{c.label}</p>
+              <ArrowRight size={13} className={`mt-2 ${col.icon} opacity-0 group-hover:opacity-100 transition-opacity`} />
             </Link>
           );
         })}
       </div>
+
+      {/* 1. Streak Calendar Heatmap */}
+      <StreakCalendar API_URL={API_URL} />
+
+      {/* 2. Achievement Badges */}
+      <BadgesCard API_URL={API_URL} />
 
       {/* Score summary */}
       {stats && stats.assignments_submitted > 0 && (
@@ -149,7 +166,7 @@ export default function OverviewTab({ API_URL }: OverviewTabProps) {
         <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
           <TrendingUp size={18} className="text-[var(--brand)]" /> Truy cập nhanh
         </h3>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           {quickLinks.map((ql, i) => (
             <Link key={i} href={ql.href}
               className="flex flex-col items-center gap-3 p-5 rounded-xl bg-gray-50 hover:bg-gray-100 border border-gray-100 hover:border-gray-200 transition-all group text-center">

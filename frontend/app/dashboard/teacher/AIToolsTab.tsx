@@ -172,7 +172,7 @@ export function AIToolsTab({ authFetch, user, API_URL, setShowCreditModal, handl
   const handleLoadGraph = async () => {
     setGraphLoading(true);
     try {
-      const res = await authFetch(`${API_URL}/teacher/ai/knowledge-graph?topic=${graphTopic}`);
+      const res = await authFetch(`${API_URL}/teacher/knowledge-graph?topic=${graphTopic}`);
       if (!res.ok) throw new Error("Graph failed");
       const data = await res.json();
       setGraphData(data);

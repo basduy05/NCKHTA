@@ -28,3 +28,7 @@ libsql-experimental; sys_platform != "win32"
 libsql-client
 cohere
 typing-extensions
+# Fast event loop for Linux/Render (not supported on Windows)
+uvloop; sys_platform != "win32"
+# Adaptive system resource monitoring
+psutil

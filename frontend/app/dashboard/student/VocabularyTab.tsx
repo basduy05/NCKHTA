@@ -279,8 +279,9 @@ export default function VocabularyTab({ API_URL }: VocabularyTabProps) {
   );
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-300">
+    <div className="space-y-5 animate-in fade-in duration-300">
       <Confetti trigger={confettiTick} />
+
       {/* Stats row */}
       <div className="flex flex-wrap items-center gap-2">
         <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-blue-50 text-[var(--brand)] border border-blue-100">

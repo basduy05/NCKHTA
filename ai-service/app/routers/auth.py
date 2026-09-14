@@ -34,6 +34,12 @@ class NotifyRequest(BaseModel):
     title: str
     message: str
 
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str
+
+class LogoutRequest(BaseModel):
+    refresh_token: Optional[str] = None
+
 # ---------------------------------------------------------------------------
 # Simple in-memory login attempt tracking (per email)
 # ---------------------------------------------------------------------------
@@ -188,12 +194,15 @@ def login(data: UserLogin):
         # Success — clear failed attempts counter
         _clear_login_attempts(data.email)
 
-        # Generate JWT token
+        # Generate JWT tokens
         access_token = auth_service.generate_access_token(user['id'], data.email)
+        refresh_token = auth_service.generate_refresh_token(user['id'], data.email)
 
         return {
             "access_token": access_token,
+            "refresh_token": refresh_token,
             "token_type": "bearer",
+            "expires_in": auth_service.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
             "user": {
                 "id": user['id'],
                 "name": user['name'],
@@ -283,12 +292,15 @@ def login_verify_otp(data: VerifyLoginOTP):
     conn.commit()
     conn.close()
     
-    # Generate JWT token
+    # Generate JWT tokens
     access_token = auth_service.generate_access_token(user['id'], data.email)
+    refresh_token = auth_service.generate_refresh_token(user['id'], data.email)
     
     return {
         "access_token": access_token,
+        "refresh_token": refresh_token,
         "token_type": "bearer",
+        "expires_in": auth_service.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         "user": {
             "id": user['id'],
             "name": user['name'],
@@ -449,18 +461,56 @@ def change_password(data: ChangePasswordRequest, credentials: HTTPAuthorizationC
         print(f"[AUTH ERROR] change_password: {e}")
         raise HTTPException(status_code=500, detail="Lỗi kết nối cơ sở dữ liệu")
 
+@router.post("/refresh")
+def refresh_token_endpoint(data: RefreshTokenRequest):
+    """Acquire a new access token (and rotating refresh token) using a valid refresh token."""
+    payload = auth_service.verify_refresh_token(data.refresh_token)
+    if not payload:
+        raise HTTPException(status_code=401, detail="Phiên làm việc đã hết hạn hoặc refresh token không hợp lệ")
+    
+    user_id = payload["user_id"]
+    email = payload["email"]
+    
+    new_access_token = auth_service.generate_access_token(user_id, email)
+    new_refresh_token = auth_service.generate_refresh_token(user_id, email)
+    
+    # Invalidate old refresh token jti to prevent token replay
+    old_jti = payload.get("jti")
+    old_exp = payload.get("exp")
+    if old_jti and old_exp:
+        auth_service.blacklist_token(old_jti, old_exp)
+        
+    return {
+        "access_token": new_access_token,
+        "refresh_token": new_refresh_token,
+        "token_type": "bearer",
+        "expires_in": auth_service.ACCESS_TOKEN_EXPIRE_MINUTES * 60
+    }
+
 @router.post("/logout")
-def logout(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    """Explicitly revoke the current access token."""
-    token = credentials.credentials
-    payload = auth_service.verify_access_token(token)
-    if payload:
-        jti = payload.get("jti")
-        exp = payload.get("exp")
-        if jti:
-            auth_service.blacklist_token(jti, exp)
-            return {"message": "Logged out successfully"}
-    return {"message": "Already logged out or invalid token"}
+def logout(body: Optional[LogoutRequest] = None, credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)):
+    """Explicitly revoke both the current access token and refresh token."""
+    revoked = False
+    if credentials:
+        token = credentials.credentials
+        payload = auth_service.verify_access_token(token)
+        if payload:
+            jti = payload.get("jti")
+            exp = payload.get("exp")
+            if jti and exp:
+                auth_service.blacklist_token(jti, exp)
+                revoked = True
+                
+    if body and body.refresh_token:
+        ref_payload = auth_service.verify_refresh_token(body.refresh_token)
+        if ref_payload:
+            ref_jti = ref_payload.get("jti")
+            ref_exp = ref_payload.get("exp")
+            if ref_jti and ref_exp:
+                auth_service.blacklist_token(ref_jti, ref_exp)
+                revoked = True
+                
+    return {"message": "Logged out successfully" if revoked else "Already logged out or invalid token"}
 
 
 @router.post("/resend-otp")

@@ -1,10 +1,11 @@
 "use client";
 import React, { useState } from "react";
 import { 
-  Volume2, Sparkles, Brain, CheckCircle2, X, Info
+  Volume2, Sparkles, Brain, CheckCircle2, X, Info, Mic
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { Button, Card, Confetti, useSound } from "../../components/ui";
+import SpeechPracticeModal from "./SpeechPracticeModal";
 
 const IPA_DATA = {
   vowels: [
@@ -111,6 +112,7 @@ export default function IpaTab({ API_URL }: IpaTabProps) {
   const [quizSubmitted, setQuizSubmitted] = useState(false);
   const [quizScore, setQuizScore] = useState(0);
   const [practiceResults, setPracticeResults] = useState<Record<number, boolean>>({});
+  const [practiceModalWord, setPracticeModalWord] = useState<{ word: string; ipa?: string } | null>(null);
 
   const generateLesson = async () => {
     setLoading(true);
@@ -323,7 +325,10 @@ export default function IpaTab({ API_URL }: IpaTabProps) {
                               return (
                                   <div key={i} className="flex items-center justify-between p-6 bg-gray-50/50 rounded-3xl hover:bg-blue-50/50 transition-all border-2 border-transparent hover:border-blue-100 group/item">
                                       <div className="flex items-center gap-6">
-                                          <button onClick={() => speak(ex.word)} className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-blue-600 shadow-sm border border-gray-100 group-hover/item:scale-110 transition-all"><Volume2 size={24} /></button>
+                                          <div className="flex items-center gap-2">
+                                            <button onClick={() => speak(ex.word)} className="w-11 h-11 bg-white rounded-2xl flex items-center justify-center text-blue-600 shadow-sm border border-gray-100 group-hover/item:scale-110 transition-all" title="Nghe mẫu"><Volume2 size={20} /></button>
+                                            <button onClick={() => setPracticeModalWord({ word: ex.word, ipa: ex.ipa })} className="w-11 h-11 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-2xl flex items-center justify-center shadow-sm border border-indigo-100 group-hover/item:scale-110 transition-all" title="Luyện phát âm với AI"><Mic size={20} /></button>
+                                          </div>
                                           <div>
                                               <p className="text-xl font-bold text-gray-900 uppercase tracking-tight">{ex.word}</p>
                                               <p className="text-sm text-[var(--brand)] font-semibold font-mono">/{ex.ipa}/</p>
@@ -471,6 +476,14 @@ export default function IpaTab({ API_URL }: IpaTabProps) {
           </div>
       )}
 
+      {practiceModalWord && (
+        <SpeechPracticeModal
+          targetText={practiceModalWord.word}
+          targetIpa={practiceModalWord.ipa}
+          API_URL={API_URL}
+          onClose={() => setPracticeModalWord(null)}
+        />
+      )}
     </div>
   );
 }

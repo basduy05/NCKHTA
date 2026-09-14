@@ -3,7 +3,7 @@ AI Chatbot router — multilingual, context-aware, streaming responses.
 Endpoint prefix: /chat  (no auth dependency; uses get_current_user from main.py router inclusion)
 """
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Header
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Optional, List
@@ -93,6 +93,7 @@ class ChatRequest(BaseModel):
     context_data: Optional[dict] = None   # {word, meaning_vn, pos, rule, ...}
     history: Optional[List[dict]] = None  # [{role:"user"|"assistant", content:"..."}]
     language: str = "vi"                  # "vi" | "en"
+    user_id: Optional[int] = None
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -128,7 +129,7 @@ def _build_context_block(feature: str, ctx: Optional[dict]) -> str:
             parts.append(f"Skill: {ctx['skill']}")
     return "\n".join(parts)
 
-def _build_system_prompt(feature: str, ctx: Optional[dict], language: str) -> str:
+def _build_system_prompt(feature: str, ctx: Optional[dict], language: str, user_id: Optional[int] = None) -> str:
     lang_rule = (
         "ALWAYS respond in Vietnamese (tiếng Việt). Use English only for English words, terms, and examples."
         if language == "vi"
@@ -146,6 +147,16 @@ def _build_system_prompt(feature: str, ctx: Optional[dict], language: str) -> st
         "general": "Provide helpful, concise English learning guidance.",
     }.get(feature, "Provide helpful, concise English learning guidance.")
 
+    # Injected AI Long-term Memory
+    student_memory = ""
+    uid = user_id or (ctx.get("user_id") if ctx else None)
+    if uid:
+        try:
+            from ..services.llm.memory import build_student_context
+            student_memory = build_student_context(int(uid))
+        except Exception:
+            pass
+
     return f"""You are EAM Assistant — an expert AI English learning tutor for the EAM (English AI Mentor) platform used by Vietnamese students.
 
 {lang_rule}
@@ -153,6 +164,7 @@ def _build_system_prompt(feature: str, ctx: Optional[dict], language: str) -> st
 Current feature: {feature}
 Your role: {feature_hint}
 {f"Context:{chr(10)}{context_block}" if context_block else ""}
+{f"{chr(10)}{student_memory}" if student_memory else ""}
 
 Guidelines:
 - Be concise but comprehensive (aim for 150-300 words unless detail is needed)
@@ -247,7 +259,7 @@ def get_suggestions(feature: str):
     return {"feature": feature, "suggestions": questions}
 
 @router.post("/send")
-async def chat_send(req: ChatRequest):
+async def chat_send(req: ChatRequest, authorization: Optional[str] = Header(None)):
     """
     Send a message and receive a streaming AI response.
     SSE format: data: {"text": "...", "done": false|true}\n\n
@@ -257,7 +269,21 @@ async def chat_send(req: ChatRequest):
     if len(req.message) > 2000:
         raise HTTPException(status_code=400, detail="Message too long (max 2000 chars)")
 
+    # Long-term AI tutor memory integration
+    student_memory = ""
+    if authorization and authorization.startswith("Bearer "):
+        try:
+            from ..services.auth_service import verify_access_token
+            from ..services.llm.memory import build_student_context
+            payload = verify_access_token(authorization[7:])
+            if payload and "user_id" in payload:
+                student_memory = build_student_context(payload["user_id"])
+        except Exception as e:
+            print(f"[CHAT MEMORY] Could not load profile: {e}")
+
     system_prompt = _build_system_prompt(req.feature, req.context_data, req.language)
+    if student_memory:
+        system_prompt += f"\n\n{student_memory}"
 
     # Build message list — keep last 12 messages for context window efficiency
     messages = [{"role": "system", "content": system_prompt}]

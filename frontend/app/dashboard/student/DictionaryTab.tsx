@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import {
   Search, X, AlertCircle, Volume2, Bookmark, CheckCircle2,
-  Star, Network, ArrowRight, RefreshCw
+  Star, Network, ArrowRight, RefreshCw, Sparkles, ExternalLink
 } from "lucide-react";
 import { Button } from "../../components/ui";
 import { useAuth } from "../../context/AuthContext";
@@ -10,6 +10,7 @@ import { useChatContext } from "../../context/ChatContext";
 import {
   ALL_WORDS_DATABASE, getPosColor, POS_MAP
 } from "../../components/DictionaryData";
+import KnowledgeGraph from "./KnowledgeGraph";
 
 interface DictionaryTabProps {
   API_URL: string;
@@ -25,6 +26,8 @@ export default function DictionaryTab({ API_URL }: DictionaryTabProps) {
   const [saved, setSaved] = useState(false);
   const [history, setHistory] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<"lookup" | "graph">("lookup");
+  const [targetGraphWord, setTargetGraphWord] = useState<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
@@ -106,6 +109,34 @@ export default function DictionaryTab({ API_URL }: DictionaryTabProps) {
         throw new Error(err.detail || "Lookup failed");
       }
 
+      const contentType = res.headers.get("content-type") || "";
+      if (contentType.includes("application/json")) {
+        const json = await res.json();
+        const fullResult = {
+          ...json,
+          status: "result",
+        };
+        setResult(fullResult);
+        if (json.is_saved !== undefined) setSaved(json.is_saved);
+        if (fullResult.word) {
+          const firstMeaning = fullResult.meanings?.[0] ?? {};
+          updateChatContext("dictionary", {
+            word: fullResult.word,
+            pos: fullResult.pos || firstMeaning.pos || "",
+            meaning_vn: firstMeaning.definition_vn || "",
+            meaning_en: firstMeaning.definition_en || "",
+            level: fullResult.level || "",
+          });
+        }
+        setHistory(prev => {
+          const next = [localWord, ...prev.filter(w => w !== localWord)].slice(0, 10);
+          if (typeof window !== "undefined") localStorage.setItem("dictionaryHistory", JSON.stringify(next));
+          return next;
+        });
+        setLoading(false);
+        return;
+      }
+
       const reader = res.body?.getReader();
       const decoder = new TextDecoder();
       let done = false;
@@ -133,7 +164,7 @@ export default function DictionaryTab({ API_URL }: DictionaryTabProps) {
               finalData = { ...finalData, ...chunkData };
 
               const now = Date.now();
-              if (now - lastUpdate > 150) {
+              if (chunkData.is_preview || now - lastUpdate > 80 || chunkData.status === "result") {
                 setResult({ ...finalData });
                 lastUpdate = now;
               }
@@ -143,7 +174,7 @@ export default function DictionaryTab({ API_URL }: DictionaryTabProps) {
           }
         }
       }
-      setResult({ ...finalData });
+      setResult({ ...finalData, status: "result" });
 
       // Update chatbot context with the looked-up word
       if (finalData.word) {
@@ -165,7 +196,7 @@ export default function DictionaryTab({ API_URL }: DictionaryTabProps) {
             const chunkData = JSON.parse(rawJson);
             if (chunkData.status === "result" && chunkData.is_saved !== undefined) setSaved(chunkData.is_saved);
             finalData = { ...finalData, ...chunkData };
-            setResult({ ...finalData });
+            setResult({ ...finalData, status: "result" });
           }
         } catch (e) {
           console.warn("[DEBUG] Error parsing final buffer:", buffer, e);
@@ -263,6 +294,48 @@ export default function DictionaryTab({ API_URL }: DictionaryTabProps) {
 
   return (
     <div className="space-y-6">
+      {/* Mode Switcher */}
+      <div className="flex items-center gap-2 p-1.5 bg-gray-100 dark:bg-gray-800 rounded-xl w-fit">
+        <button
+          onClick={() => setViewMode("lookup")}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs md:text-sm font-semibold transition ${
+            viewMode === "lookup"
+              ? "bg-white dark:bg-gray-900 text-blue-600 dark:text-blue-400 shadow-sm"
+              : "text-gray-600 dark:text-gray-400 hover:text-gray-900"
+          }`}
+        >
+          <Search size={15} />
+          Tra từ điển
+        </button>
+        <button
+          onClick={() => {
+            if (result?.word) setTargetGraphWord(result.word);
+            setViewMode("graph");
+          }}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs md:text-sm font-semibold transition ${
+            viewMode === "graph"
+              ? "bg-white dark:bg-gray-900 text-blue-600 dark:text-blue-400 shadow-sm"
+              : "text-gray-600 dark:text-gray-400 hover:text-gray-900"
+          }`}
+        >
+          <Network size={15} />
+          Bản đồ Tri thức (Knowledge Graph)
+        </button>
+      </div>
+
+      {viewMode === "graph" ? (
+        <KnowledgeGraph
+          API_URL={API_URL}
+          targetWord={targetGraphWord || (result?.word ? result.word : undefined)}
+          activeLookupResult={result}
+          onWordClick={(clickedWord) => {
+            setWord(clickedWord);
+            setViewMode("lookup");
+            lookup(false, clickedWord);
+          }}
+        />
+      ) : (
+        <>
       <div className="app-card p-4 sm:p-5">
         <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
           <div className="relative flex-1">
@@ -308,7 +381,7 @@ export default function DictionaryTab({ API_URL }: DictionaryTabProps) {
           {history.slice(0, 10).map((h, i) => (
             <button
               key={i}
-              onClick={() => { setWord(h); }}
+              onClick={() => { setWord(h); lookup(false, h); }}
               className="text-xs px-2.5 py-1 bg-[var(--surface-3)] hover:bg-[var(--brand-soft)] hover:text-[var(--brand)] rounded-lg transition font-medium"
             >
               {h}
@@ -391,6 +464,16 @@ export default function DictionaryTab({ API_URL }: DictionaryTabProps) {
                   </button>
                 )}
                 <button
+                  onClick={() => {
+                    if (result?.word) setTargetGraphWord(result.word);
+                    setViewMode("graph");
+                  }}
+                  className="flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg transition font-medium bg-white/20 hover:bg-white/30 text-white border border-white/20 text-sm"
+                  title="Xem từ này và các liên kết trên Bản đồ Tri thức"
+                >
+                  <Network size={14} /> <span className="hidden sm:inline">Bản đồ</span>
+                </button>
+                <button
                   onClick={saveWord}
                   disabled={saving || saved}
                   className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg transition font-medium text-sm ${saved ? "bg-green-500 text-white" : "bg-white text-blue-600 hover:bg-blue-50"}`}
@@ -447,7 +530,7 @@ export default function DictionaryTab({ API_URL }: DictionaryTabProps) {
                     <div>
                       <span className="text-gray-400 text-xs uppercase font-semibold">Đồng nghĩa: </span>
                       {m.synonyms.map((s: string, k: number) => (
-                        <button key={k} onClick={() => setWord(s)} className="text-green-600 hover:underline mr-2">{s}</button>
+                        <button key={k} onClick={() => { setWord(s); lookup(false, s); }} className="text-green-600 hover:underline mr-2">{s}</button>
                       ))}
                     </div>
                   )}
@@ -455,7 +538,7 @@ export default function DictionaryTab({ API_URL }: DictionaryTabProps) {
                     <div>
                       <span className="text-gray-400 text-xs uppercase font-semibold">Trái nghĩa: </span>
                       {m.antonyms.map((a: string, k: number) => (
-                        <button key={k} onClick={() => setWord(a)} className="text-red-500 hover:underline mr-2">{a}</button>
+                        <button key={k} onClick={() => { setWord(a); lookup(false, a); }} className="text-red-500 hover:underline mr-2">{a}</button>
                       ))}
                     </div>
                   )}
@@ -464,81 +547,143 @@ export default function DictionaryTab({ API_URL }: DictionaryTabProps) {
             );
           })}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 pt-4 border-t border-gray-100">
+            {/* Vocabulary Expansion & Contextual Connections */}
+            <div className="pt-5 border-t border-gray-100 space-y-4">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-gray-500 flex items-center gap-1.5">
+                  <Sparkles size={14} className="text-blue-600" />
+                  Mở rộng từ vựng & Ngữ cảnh ứng dụng
+                </h4>
+
+                {/* Direct shortcut to full Knowledge Graph view */}
+                <button
+                  onClick={() => {
+                    if (result?.word) setTargetGraphWord(result.word);
+                    setViewMode("graph");
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold text-blue-600 hover:text-blue-700 hover:bg-blue-50 transition border border-blue-200/80"
+                >
+                  <Network size={13} />
+                  <span>Xem trên Bản đồ Tri thức</span>
+                </button>
+              </div>
+
+              {/* Word Family & Connected Concepts */}
               {Array.isArray(result.word_family) && result.word_family.length > 0 && (
-                <div className="bg-purple-50 rounded-xl p-4">
-                  <h4 className="text-sm font-bold text-purple-700 mb-2">Họ từ (Word Family)</h4>
-                  <div className="flex flex-wrap gap-2">
+                <div className="bg-slate-50/80 rounded-xl p-3.5 border border-slate-200/80">
+                  <span className="text-xs font-bold text-slate-700 block mb-2">
+                    Họ từ vựng (Word Family):
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
                     {result.word_family.map((w: string, i: number) => (
-                      <button key={i} onClick={() => setWord(w)} className="bg-white text-purple-700 text-sm px-2.5 py-1 rounded-lg border border-purple-200 hover:bg-purple-100 transition">{w}</button>
+                      <button
+                        key={i}
+                        onClick={() => { setWord(w); lookup(false, w); }}
+                        className="bg-white text-purple-700 hover:text-purple-800 hover:bg-purple-50 text-xs px-2.5 py-1 rounded-lg border border-purple-200/80 transition font-medium shadow-xs"
+                      >
+                        {w}
+                      </button>
                     ))}
                   </div>
                 </div>
               )}
+
+              {/* Collocations & Common Phrases */}
               {Array.isArray(result.collocations) && result.collocations.length > 0 && (
-                <div className="bg-orange-50 rounded-xl p-4">
-                  <h4 className="text-sm font-bold text-orange-700 mb-2">Kết hợp từ (Collocations)</h4>
-                  <div className="flex flex-wrap gap-2">
+                <div className="bg-slate-50/80 rounded-xl p-3.5 border border-slate-200/80">
+                  <span className="text-xs font-bold text-slate-700 block mb-2">
+                    Cụm từ thường đi kèm (Collocations):
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
                     {result.collocations.map((c: string, i: number) => (
-                      <span key={i} className="bg-white text-orange-700 text-sm px-2.5 py-1 rounded-lg border border-orange-200">{c}</span>
+                      <span
+                        key={i}
+                        className="bg-white text-slate-700 text-xs px-2.5 py-1 rounded-lg border border-slate-200 font-medium"
+                      >
+                        {c}
+                      </span>
                     ))}
                   </div>
                 </div>
               )}
+
+              {/* Idioms */}
               {Array.isArray(result.idioms) && result.idioms.length > 0 && (
-                <div className="bg-green-50 rounded-xl p-4">
-                  <h4 className="text-sm font-bold text-green-700 mb-2">Thành ngữ (Idioms)</h4>
-                  <div className="space-y-3">
+                <div className="bg-slate-50/80 rounded-xl p-3.5 border border-slate-200/80">
+                  <span className="text-xs font-bold text-slate-700 block mb-2">
+                    Thành ngữ phổ biến (Idioms):
+                  </span>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                     {result.idioms.map((idm: any, i: number) => {
                       const isString = typeof idm === "string";
                       const idiomText = isString ? idm.split(":")[0]?.trim() : idm.idiom;
                       const idiomMeaning = isString ? idm.split(":")[1]?.trim() : idm.meaning_vn;
                       return (
-                        <div key={i} className="bg-white p-3 rounded-lg border border-green-200">
-                          <p className="font-bold text-green-800 text-sm">{idiomText}</p>
-                          <p className="text-green-600 text-xs mt-1">{idiomMeaning}</p>
+                        <div key={i} className="bg-white p-2.5 rounded-lg border border-slate-200 text-xs">
+                          <p className="font-semibold text-slate-900">{idiomText}</p>
+                          {idiomMeaning && <p className="text-slate-600 mt-0.5">{idiomMeaning}</p>}
                         </div>
                       );
                     })}
                   </div>
                 </div>
               )}
+
+              {/* Semantic Graph Connections Preview */}
               {Array.isArray(result.graph_connections) && result.graph_connections.length > 0 && (
-                <div className="bg-cyan-50 rounded-xl p-4">
-                  <h4 className="text-sm font-bold text-cyan-700 mb-2 flex items-center gap-1"><Network size={14} /> Đồ thị tri thức</h4>
-                  <div className="space-y-1">
+                <div className="bg-slate-50/80 rounded-xl p-3.5 border border-slate-200/80">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-bold text-slate-700">
+                      Từ vựng có liên quan trong mạng lưới:
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
                     {result.graph_connections.map((c: any, i: number) => (
-                      <div key={i} className="flex items-center gap-2 text-sm bg-white p-2 rounded-lg border border-cyan-100">
-                        <span className="text-cyan-600 font-mono text-xs bg-cyan-100 px-1.5 rounded min-w-[50px] text-center">{c.relation}</span>
-                        <button onClick={() => setWord(c.word)} className="text-cyan-800 hover:underline font-medium">{c.word}</button>
-                      </div>
+                      <button
+                        key={i}
+                        onClick={() => { setWord(c.word); lookup(false, c.word); }}
+                        className="inline-flex items-center gap-1.5 bg-white text-slate-800 hover:text-blue-700 hover:bg-blue-50 text-xs px-2.5 py-1 rounded-lg border border-slate-200 transition font-medium"
+                      >
+                        <span className="text-[10px] text-blue-600 font-bold bg-blue-50 px-1.5 py-0.2 rounded">
+                          {c.relation}
+                        </span>
+                        <span>{c.word}</span>
+                      </button>
                     ))}
                   </div>
                 </div>
               )}
+
+              {/* Wikipedia Reference */}
               {result.wikipedia && (
-                <div className="bg-blue-50 rounded-xl p-4">
-                  <h4 className="text-sm font-bold text-blue-700 mb-2 flex items-center gap-1">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><line x1="2" y1="12" x2="22" y2="12" /><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" /></svg>
-                    Wikipedia
-                  </h4>
-                  {result.wikipedia.thumbnail && (
-                    <img src={result.wikipedia.thumbnail} alt={result.wikipedia.title} className="w-full h-32 object-cover rounded-lg mb-2" />
-                  )}
-                  {result.wikipedia.title && (
-                    <p className="font-bold text-blue-800 text-sm">{result.wikipedia.title}</p>
-                  )}
-                  {result.wikipedia.description && (
-                    <p className="text-blue-600 text-xs mt-1">{result.wikipedia.description}</p>
-                  )}
-                  {result.wikipedia.extract && (
-                    <p className="text-blue-700 text-xs mt-2 line-clamp-4">{result.wikipedia.extract}</p>
-                  )}
-                  {result.wikipedia.url && (
-                    <a href={result.wikipedia.url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-500 hover:underline mt-2 inline-block">
-                      Đọc thêm trên Wikipedia →
-                    </a>
-                  )}
+                <div className="bg-slate-50/80 rounded-xl p-3.5 border border-slate-200/80">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-blue-100 text-blue-800">
+                          Bách khoa toàn thư
+                        </span>
+                        <h5 className="font-bold text-slate-900 text-xs">{result.wikipedia.title}</h5>
+                      </div>
+                      {result.wikipedia.description && (
+                        <p className="text-xs text-slate-500 mb-1">{result.wikipedia.description}</p>
+                      )}
+                      {result.wikipedia.extract && (
+                        <p className="text-xs text-slate-700 line-clamp-2 leading-relaxed">{result.wikipedia.extract}</p>
+                      )}
+                    </div>
+                    {result.wikipedia.url && (
+                      <a
+                        href={result.wikipedia.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-blue-600 hover:underline shrink-0 flex items-center gap-1 self-start font-medium"
+                      >
+                        <span>Wikipedia</span>
+                        <ExternalLink size={12} />
+                      </a>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
@@ -554,6 +699,8 @@ export default function DictionaryTab({ API_URL }: DictionaryTabProps) {
             )}
           </div>
         </div>
+      )}
+      </>
       )}
 
     </div>

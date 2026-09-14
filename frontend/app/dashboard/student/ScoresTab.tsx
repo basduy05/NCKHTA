@@ -3,6 +3,7 @@ import React, { useState, useEffect } from "react";
 import { BarChart3, Trophy, CheckCircle2, TrendingUp } from "lucide-react";
 import { EmptyState } from "../../components/ui";
 import { useAuth } from "../../context/AuthContext";
+import BadgesCard from "./BadgesCard";
 
 interface ScoresTabProps {
   API_URL: string;
@@ -111,6 +112,9 @@ export default function ScoresTab({ API_URL }: ScoresTabProps) {
           })}
         </div>
       </div>
+
+      {/* Achievement Badges Section */}
+      <BadgesCard API_URL={API_URL} />
     </div>
   );
 }

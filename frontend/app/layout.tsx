@@ -6,11 +6,15 @@ import ScreenTips from './components/ScreenTips';
 import ErrorBoundary from './components/ErrorBoundary';
 import { NotificationProvider } from './context/NotificationContext';
 
+import PWARegister from './components/PWARegister';
+
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
   title: 'iEdu - Nền tảng Học tập Thông minh',
   description: 'Nền tảng học tiếng Anh thông minh với Đồ thị Tri thức và Trí tuệ Nhân tạo',
+  manifest: '/manifest.json',
+  themeColor: '#4f46e5',
 };
 
 if (typeof window !== 'undefined') {
@@ -37,6 +41,7 @@ export default function RootLayout({
             <AuthProvider>
               {children}
               <ScreenTips />
+              <PWARegister />
             </AuthProvider>
           </NotificationProvider>
         </ErrorBoundary>

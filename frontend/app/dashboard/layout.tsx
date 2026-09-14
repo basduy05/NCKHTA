@@ -7,6 +7,7 @@ import {
   BookOpen, Users, LayoutDashboard, Component, Database, GraduationCap,
   BookText, LogOut, Settings, ClipboardList, Sparkles, Search, BookMarked,
   Mic, Award, Trophy, TrendingUp, MessageCircleWarning, User, ChevronDown,
+  Newspaper, MessageSquare,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { ChatProvider } from "../context/ChatContext";
@@ -37,13 +38,17 @@ function buildLinks(role: string): NavItem[] {
     { name: "Quản lý Bài học",    href: "/dashboard/teacher?tab=lessons",     icon: BookOpen,        id: "lessons" },
     { name: "Bài tập & Kiểm tra", href: "/dashboard/teacher?tab=assignments", icon: ClipboardList,   id: "assignments" },
     { name: "Kho Ngữ Pháp",       href: "/dashboard/teacher?tab=grammar",     icon: BookText,        id: "grammar" },
+    { name: "Chat Trực Tuyến",    href: "/dashboard/teacher?tab=chat",        icon: MessageSquare,   id: "chat" },
     { name: "Công cụ AI",         href: "/dashboard/teacher?tab=ai-tools",    icon: Sparkles,        id: "ai-tools" },
   ];
   // student (default)
   return [
     { name: "Tổng quan",          href: "/dashboard/student?tab=overview",    icon: LayoutDashboard, id: "overview" },
     { name: "Lớp học của tôi",    href: "/dashboard/student?tab=classes",     icon: GraduationCap,   id: "classes" },
+    { name: "Nhóm học tập",       href: "/dashboard/student?tab=groups",      icon: Users,           id: "groups" },
+    { name: "Chat Trực Tuyến",    href: "/dashboard/student?tab=chat",        icon: MessageSquare,   id: "chat" },
     { name: "Bài tập & Kiểm tra", href: "/dashboard/student?tab=assignments", icon: ClipboardList,   id: "assignments" },
+    { name: "Đọc báo tiếng Anh",  href: "/dashboard/student?tab=news",        icon: Newspaper,       id: "news" },
     { name: "Tra từ điển",        href: "/dashboard/student?tab=dictionary",  icon: Search,          id: "dictionary" },
     { name: "Từ vựng đã lưu",     href: "/dashboard/student?tab=vocabulary",  icon: BookMarked,      id: "vocabulary" },
     { name: "Kho Ngữ Pháp",       href: "/dashboard/student?tab=grammar",     icon: BookText,        id: "grammar" },
@@ -76,8 +81,8 @@ function buildBottomNav(role: string, base: string): BottomItem[] {
   ];
   // student
   return [
-    { name: "Tổng quan", href: `${base}?tab=overview`,   icon: LayoutDashboard, ids: ["overview", "classes", "assignments"] },
-    { name: "Học",       href: `${base}?tab=vocabulary`, icon: BookOpen,        ids: ["vocabulary", "dictionary", "grammar"] },
+    { name: "Tổng quan", href: `${base}?tab=overview`,   icon: LayoutDashboard, ids: ["overview", "classes", "assignments", "groups", "chat"] },
+    { name: "Học",       href: `${base}?tab=vocabulary`, icon: BookOpen,        ids: ["vocabulary", "dictionary", "grammar", "news"] },
     { name: "Luyện",     href: `${base}?tab=practice`,   icon: Award,           ids: ["practice", "ipa"] },
     { name: "AI",        href: `${base}?tab=ai-tools`,   icon: Sparkles,        ids: ["ai-tools"] },
     { name: "Tiến độ",   href: `${base}?tab=scores`,     icon: TrendingUp,      ids: ["scores", "ranking", "roadmap"] },

@@ -56,6 +56,17 @@ class FSRS:
     def get_retrievability(stability, elapsed_days):
         return math.pow(1 + 0.1 * elapsed_days / stability, -1) if stability > 0 else 0
 
+    @staticmethod
+    def select_question_type(difficulty: float) -> str:
+        """Adaptive question type selection based on FSRS difficulty rating (1.0 to 10.0)."""
+        import random
+        if difficulty >= 7.0:
+            return random.choice(["SPELLING", "FIB"])      # Active recall (hardest)
+        elif difficulty >= 4.5:
+            return random.choice(["FIB", "MCQ"])           # Intermediate retrieval
+        else:
+            return random.choice(["MCQ", "PARAPHRASE", "MATCHING"])  # Recognition (easier)
+
     @classmethod
     def update_card(cls, card, rating):
         # card = {stability, difficulty, scheduled_at, last_reviewed_at, reps, lapses}
@@ -302,7 +313,7 @@ async def start_vocab_practice(req: VocabPracticeReq, authorization: str = Heade
             # FSRS-based: select words never reviewed (scheduled_at IS NULL) OR due now
             conn = get_db()
             cursor = conn.execute(
-                """SELECT id, word, meaning_en, meaning_vn FROM saved_vocabulary 
+                """SELECT id, word, meaning_en, meaning_vn, COALESCE(difficulty, 5.0) as difficulty FROM saved_vocabulary 
                    WHERE user_id = ? AND (scheduled_at IS NULL OR datetime(scheduled_at) <= CURRENT_TIMESTAMP)
                    ORDER BY stability ASC LIMIT 10""",
                 (student["id"],)
@@ -313,7 +324,7 @@ async def start_vocab_practice(req: VocabPracticeReq, authorization: str = Heade
             conn = get_db()
             placeholders = ', '.join(['?'] * len(req.word_ids))
             cursor = conn.execute(
-                f"SELECT id, word, meaning_en, meaning_vn FROM saved_vocabulary WHERE user_id = ? AND id IN ({placeholders})",
+                f"SELECT id, word, meaning_en, meaning_vn, COALESCE(difficulty, 5.0) as difficulty FROM saved_vocabulary WHERE user_id = ? AND id IN ({placeholders})",
                 (student["id"], *req.word_ids)
             )
             words = [dict(row) for row in cursor.fetchall()]
@@ -323,11 +334,15 @@ async def start_vocab_practice(req: VocabPracticeReq, authorization: str = Heade
             # Fallback: if no words need review, just take the 10 oldest ones
             conn = get_db()
             cursor = conn.execute(
-                "SELECT id, word, meaning_en, meaning_vn FROM saved_vocabulary WHERE user_id = ? ORDER BY last_reviewed_at ASC LIMIT 10",
+                "SELECT id, word, meaning_en, meaning_vn, COALESCE(difficulty, 5.0) as difficulty FROM saved_vocabulary WHERE user_id = ? ORDER BY last_reviewed_at ASC LIMIT 10",
                 (student["id"],)
             )
             words = [dict(row) for row in cursor.fetchall()]
             conn.close()
+
+        # Tag each word with its optimal FSRS adaptive question type
+        for w in words:
+            w["target_type"] = FSRS.select_question_type(float(w.get("difficulty") or 5.0))
 
         if not words:
             raise HTTPException(status_code=404, detail="No words found. Save some vocabulary first!")
@@ -418,7 +433,7 @@ async def handle_quiz_error(req: dict, authorization: str = Header(...)):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/vocabulary/practice/complete")
-def complete_vocab_practice(req: VocabPracticeComplete, authorization: str = Header(...)):
+async def complete_vocab_practice(req: VocabPracticeComplete, authorization: str = Header(...)):
     student = _get_current_student(authorization)
     conn = get_db()
     try:
@@ -438,7 +453,7 @@ def complete_vocab_practice(req: VocabPracticeComplete, authorization: str = Hea
             (*word_ids, student["id"])
         )
         # Create a lookup map for efficiency
-        cards_map = {row["id"]: dict(row) for row in cursor.fetchall()}
+        cards_map = {row["id"]: row for row in cursor.fetchall()}
 
         for res in req.results:
             word_id = res.get("word_id")
@@ -490,8 +505,12 @@ def complete_vocab_practice(req: VocabPracticeComplete, authorization: str = Hea
         # Award points
         conn.execute("UPDATE users SET points = points + ? WHERE id = ?", (points_earned, student["id"]))
         conn.execute("COMMIT")
-        
         conn.close()
+        conn = None
+
+        # Check & award badges
+        await check_and_award_badges(student["id"])
+        
         return {
             "status": "success",
             "message": "Practice results saved with FSRS scheduler", 
@@ -504,6 +523,347 @@ def complete_vocab_practice(req: VocabPracticeComplete, authorization: str = Hea
             conn.close()
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/analytics")
+def get_student_analytics(authorization: str = Header(...)):
+    """
+    Returns learning analytics:
+    - Study streak (consecutive days with at least one review)
+    - Vocabulary retention counts (mastered vs learning vs due)
+    - CEFR progress distribution
+    """
+    student = _get_current_student(authorization)
+    user_id = student["id"]
+    conn = get_db()
+    try:
+        # 1. Streak calculation from study_logs
+        cur = conn.execute(
+            """SELECT DISTINCT date(review_at) as review_date 
+               FROM study_logs 
+               WHERE user_id = ? 
+               ORDER BY review_date DESC""",
+            (user_id,)
+        )
+        dates = [row[0] for row in cur.fetchall() if row[0]]
+        
+        from datetime import date, timedelta
+        today = date.today()
+        yesterday = today - timedelta(days=1)
+        streak = 0
+        
+        date_objs = []
+        for d_str in dates:
+            try:
+                date_objs.append(date.fromisoformat(d_str[:10]))
+            except Exception:
+                pass
+                
+        if date_objs:
+            current_check = today if date_objs[0] == today else yesterday
+            if date_objs[0] in (today, yesterday):
+                for d in date_objs:
+                    if d == current_check:
+                        streak += 1
+                        current_check -= timedelta(days=1)
+                    elif d > current_check:
+                        continue
+                    else:
+                        break
+
+        # 2. Vocabulary retention stats
+        cur = conn.execute(
+            """SELECT 
+                 COUNT(*) as total,
+                 SUM(CASE WHEN stability >= 8.0 THEN 1 ELSE 0 END) as mastered,
+                 SUM(CASE WHEN datetime(scheduled_at) <= CURRENT_TIMESTAMP THEN 1 ELSE 0 END) as due
+               FROM saved_vocabulary WHERE user_id = ?""",
+            (user_id,)
+        )
+        row = cur.fetchone()
+        total_vocab = row[0] or 0
+        mastered_vocab = row[1] or 0
+        due_vocab = row[2] or 0
+        learning_vocab = max(0, total_vocab - mastered_vocab)
+
+        # 3. CEFR Level progress
+        cur = conn.execute(
+            """SELECT COALESCE(level, 'B1') as lvl, COUNT(*) 
+               FROM saved_vocabulary WHERE user_id = ? 
+               GROUP BY lvl""",
+            (user_id,)
+        )
+        cefr_counts = {"A1": 0, "A2": 0, "B1": 0, "B2": 0, "C1": 0}
+        for r in cur.fetchall():
+            lvl = (r[0] or "B1").upper()
+            if lvl in cefr_counts:
+                cefr_counts[lvl] = r[1]
+                
+        conn.close()
+        return {
+            "streak_days": streak,
+            "total_vocab": total_vocab,
+            "mastered_vocab": mastered_vocab,
+            "learning_vocab": learning_vocab,
+            "due_vocab": due_vocab,
+            "cefr_progress": cefr_counts
+        }
+    except Exception as e:
+        if conn: conn.close()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+async def check_and_award_badges(user_id: int):
+    """Checks criteria and awards newly earned badges, sending SSE notification."""
+    conn = get_db()
+    try:
+        # 1. Vocab count
+        v_count_row = conn.execute("SELECT COUNT(*) FROM saved_vocabulary WHERE user_id = ?", (user_id,)).fetchone()
+        v_count = v_count_row[0] if v_count_row else 0
+        
+        # 2. Perfect quiz count
+        p_quiz_row = conn.execute(
+            "SELECT COUNT(*) FROM student_scores WHERE student_id = ? AND score >= max_score AND max_score > 0", 
+            (user_id,)
+        ).fetchone()
+        p_quiz = p_quiz_row[0] if p_quiz_row else 0
+        
+        # 3. Grammar completed count
+        g_count_row = conn.execute(
+            "SELECT COUNT(DISTINCT topic) FROM ai_practice_history WHERE student_id = ? AND feature_name = 'grammar'", 
+            (user_id,)
+        ).fetchone()
+        g_count = g_count_row[0] if g_count_row else 0
+        
+        # 4. Streak
+        from datetime import date, timedelta
+        today = date.today()
+        cur_dates = conn.execute(
+            "SELECT DISTINCT date(review_at) FROM study_logs WHERE user_id = ? ORDER BY date(review_at) DESC", 
+            (user_id,)
+        ).fetchall()
+        streak = 0
+        date_objs = []
+        for r in cur_dates:
+            if r and r[0]:
+                try: date_objs.append(date.fromisoformat(r[0][:10]))
+                except Exception: pass
+        if date_objs and date_objs[0] in (today, today - timedelta(days=1)):
+            check_d = today if date_objs[0] == today else today - timedelta(days=1)
+            for d in date_objs:
+                if d == check_d:
+                    streak += 1
+                    check_d -= timedelta(days=1)
+                elif d > check_d: continue
+                else: break
+
+        stats = {
+            "vocab_count": v_count,
+            "streak": streak,
+            "quiz_perfect": p_quiz,
+            "grammar_done": g_count,
+        }
+
+        all_badges = conn.execute("SELECT * FROM badges").fetchall()
+        existing_badge_ids = set(r[0] for r in conn.execute("SELECT badge_id FROM user_badges WHERE user_id = ?", (user_id,)).fetchall())
+
+        newly_awarded = []
+        for b in all_badges:
+            b_id = b["id"]
+            if b_id in existing_badge_ids:
+                continue
+            cond_type = b["condition_type"]
+            cond_val = b["condition_value"]
+            if stats.get(cond_type, 0) >= cond_val:
+                conn.execute("INSERT OR IGNORE INTO user_badges (user_id, badge_id) VALUES (?, ?)", (user_id, b_id))
+                newly_awarded.append(b)
+
+        conn.commit()
+
+        if newly_awarded:
+            from ..services.notification_service import notify_user
+            for b in newly_awarded:
+                try:
+                    await notify_user(
+                        user_id=user_id,
+                        event_type="badge",
+                        title=f"🏆 Mở khóa Huy hiệu: {b['name']}!",
+                        message=f"{b['icon']} {b['description_vn']}",
+                        data={"badge_id": b["id"], "key": b["key"], "icon": b["icon"]}
+                    )
+                except Exception:
+                    pass
+    except Exception as e:
+        print(f"[BADGES] Error check_and_award_badges: {e}")
+    finally:
+        conn.close()
+
+
+@router.get("/streak-calendar")
+def get_streak_calendar(days: int = 60, authorization: str = Header(...)):
+    """Returns 60-day contribution heatmap and current streak."""
+    student = _get_current_student(authorization)
+    user_id = student["id"]
+    conn = get_db()
+    try:
+        from datetime import date, timedelta
+        cur = conn.execute("""
+            SELECT date(review_at) as review_date, COUNT(*) as review_count
+            FROM study_logs
+            WHERE user_id = ? AND review_at >= datetime('now', ? || ' days')
+            GROUP BY date(review_at)
+            ORDER BY review_date ASC
+        """, (user_id, f"-{days}"))
+        rows = cur.fetchall()
+        calendar_map = {row["review_date"][:10]: row["review_count"] for row in rows if row and row["review_date"]}
+        
+        today = date.today()
+        history = []
+        for i in range(days - 1, -1, -1):
+            d = (today - timedelta(days=i)).isoformat()
+            history.append({
+                "date": d,
+                "count": calendar_map.get(d, 0)
+            })
+            
+        # Calculate current streak
+        streak = 0
+        cur_dates = conn.execute(
+            """SELECT DISTINCT date(review_at) as review_date 
+               FROM study_logs 
+               WHERE user_id = ? 
+               ORDER BY review_date DESC""",
+            (user_id,)
+        ).fetchall()
+        date_objs = []
+        for r in cur_dates:
+            if r and r[0]:
+                try: date_objs.append(date.fromisoformat(r[0][:10]))
+                except Exception: pass
+        if date_objs:
+            yesterday = today - timedelta(days=1)
+            if date_objs[0] in (today, yesterday):
+                check_d = today if date_objs[0] == today else yesterday
+                for d in date_objs:
+                    if d == check_d:
+                        streak += 1
+                        check_d -= timedelta(days=1)
+                    elif d > check_d: continue
+                    else: break
+        
+        total_reviews = sum(calendar_map.values())
+        return {
+            "streak_days": streak,
+            "total_reviews": total_reviews,
+            "calendar": history
+        }
+    finally:
+        conn.close()
+
+
+@router.get("/badges")
+async def get_student_badges(authorization: str = Header(...)):
+    """Returns all badges with unlock status and progress for current student."""
+    student = _get_current_student(authorization)
+    user_id = student["id"]
+    
+    # Re-evaluate any newly earned badges
+    await check_and_award_badges(user_id)
+    
+    conn = get_db()
+    try:
+        badges = conn.execute("""
+            SELECT b.id, b.key, b.name, b.description_vn, b.icon, b.tier, b.condition_type, b.condition_value,
+                   ub.earned_at
+            FROM badges b
+            LEFT JOIN user_badges ub ON b.id = ub.badge_id AND ub.user_id = ?
+            ORDER BY b.id ASC
+        """, (user_id,)).fetchall()
+        
+        v_count_row = conn.execute("SELECT COUNT(*) FROM saved_vocabulary WHERE user_id = ?", (user_id,)).fetchone()
+        v_count = v_count_row[0] if v_count_row else 0
+        
+        p_quiz_row = conn.execute("SELECT COUNT(*) FROM student_scores WHERE student_id = ? AND score >= max_score AND max_score > 0", (user_id,)).fetchone()
+        p_quiz = p_quiz_row[0] if p_quiz_row else 0
+        
+        result = []
+        for b in badges:
+            earned = bool(b["earned_at"])
+            cond_type = b["condition_type"]
+            cond_val = b["condition_value"]
+            curr_val = v_count if cond_type == "vocab_count" else (p_quiz if cond_type == "quiz_perfect" else 0)
+            result.append({
+                "id": b["id"],
+                "key": b["key"],
+                "name": b["name"],
+                "description_vn": b["description_vn"],
+                "icon": b["icon"],
+                "tier": b["tier"],
+                "condition_type": cond_type,
+                "condition_value": cond_val,
+                "is_earned": earned,
+                "earned_at": b["earned_at"],
+                "current_progress": min(curr_val, cond_val) if not earned else cond_val
+            })
+        return {"badges": result}
+    finally:
+        conn.close()
+
+
+@router.get("/news/reading")
+async def get_student_news_reading(
+    level: str = "B1", 
+    topic: str = "general", 
+    limit: int = 6, 
+    authorization: str = Header(...)
+):
+    """Fetch curated reading news tailored to CEFR level with click-to-lookup support."""
+    _get_current_student(authorization)
+    from ..services.news_service import get_reading_sources_by_level
+    articles = await get_reading_sources_by_level(level=level, topic=topic, limit=limit)
+    if not articles:
+        articles = [
+            {
+                "title": "The Wonders of the Deep Ocean and Marine Ecosystems",
+                "content": "The ocean covers more than seventy percent of the Earth's surface and contains some of the planet's most fascinating creatures. Scientists continue to explore the mysteries of hydrothermal vents and deep-sea trenches. In these extreme environments, unique organisms thrive without sunlight, using chemosynthesis instead of photosynthesis to generate energy. Protecting these fragile marine ecosystems is essential for preserving global biodiversity and combating climate change.",
+                "url": "https://www.theguardian.com/environment",
+                "thumbnail": "https://images.unsplash.com/photo-1544551763-46a013bb70d5?w=600&auto=format&fit=crop",
+                "source": "iEdu Science Reading",
+                "cefr_level": level.upper()
+            },
+            {
+                "title": "How Artificial Intelligence is Transforming Modern Education",
+                "content": "Artificial intelligence is reshaping the educational landscape across the globe. From personalized tutoring systems that adapt to a student's individual learning speed to automated language analysis, modern learners have access to tools that were unimaginable decades ago. However, educators emphasize that human empathy and critical thinking remain the heart of authentic pedagogy.",
+                "url": "https://www.theguardian.com/technology",
+                "thumbnail": "https://images.unsplash.com/photo-1485827404703-89b55fcc595e?w=600&auto=format&fit=crop",
+                "source": "iEdu Tech Reading",
+                "cefr_level": level.upper()
+            },
+            {
+                "title": "Sustainable Urban Living: Green Cities of the Future",
+                "content": "As global populations concentrate in urban centers, city planners are innovating green architecture and sustainable transit networks. Vertical gardens, solar-powered public transit, and walkable neighborhoods help reduce carbon emissions while improving the physical and mental well-being of city dwellers.",
+                "url": "https://www.theguardian.com/cities",
+                "thumbnail": "https://images.unsplash.com/photo-1477959858617-67f30bc75b82?w=600&auto=format&fit=crop",
+                "source": "iEdu Environment",
+                "cefr_level": level.upper()
+            }
+        ]
+    return {"articles": articles}
+
+
+@router.get("/memory-profile")
+def get_student_memory_profile(authorization: str = Header(...)):
+    """Return student learning profile & weak areas tracked by AI tutor."""
+    student = _get_current_student(authorization)
+    from ..services.llm.memory import get_learning_profile
+    profile = get_learning_profile(student["id"])
+    return {
+        "student_id": student["id"],
+        "name": student["name"],
+        "current_level": student.get("current_level", "B1"),
+        "target_goal": student.get("target_goal", "General English"),
+        "profile": profile
+    }
+
 
 @router.post("/grammar/practice")
 async def start_grammar_practice(req: GrammarPracticeReq, authorization: str = Header(...)):
@@ -1176,6 +1536,12 @@ async def submit_assignment(assignment_id: int, submission: Union[QuizSubmission
         conn.commit()
         conn.close()
 
+        # Trigger badge evaluation
+        try:
+            await check_and_award_badges(student["id"])
+        except Exception as e:
+            print(f"[BADGES] Error evaluating badges on quiz submit: {e}")
+
         return {
             "score": score,
             "max_score": max_score,
@@ -1188,7 +1554,7 @@ async def submit_assignment(assignment_id: int, submission: Union[QuizSubmission
             conn.close()
             raise HTTPException(status_code=400, detail="Text required for writing assignment")
             
-        prompt_text = row["title"] + "\\n" + (row["description"] or "")
+        prompt_text = row["title"] + "\n" + (row["description"] or "")
         
         # Assume IELTS by default, unless title suggests otherwise
         test_type = "TOEIC" if "toeic" in row["title"].lower() else "IELTS"
@@ -1209,6 +1575,13 @@ async def submit_assignment(assignment_id: int, submission: Union[QuizSubmission
             )
             conn.commit()
             conn.close()
+
+            # Trigger badge evaluation
+            try:
+                await check_and_award_badges(student["id"])
+            except Exception as e:
+                print(f"[BADGES] Error evaluating badges on writing submit: {e}")
+
             return {"message": "Writing submitted successfully", "evaluation": evaluation}
         except Exception as e:
             conn.close()
@@ -1636,7 +2009,7 @@ async def dictionary_lookup(req: DictionaryRequest, authorization: str = Header(
             final_result_data = None
             stream_start = time.time()
 
-            async for chunk in llm_service.lookup_dictionary_stream(lookup_key, free_data=free_data, wikipedia_data=wikipedia_data, force_ai=req.force_ai):
+            async for chunk in llm_service.lookup_dictionary_stream(lookup_key, free_data=free_data if free_data is not None else {}, wikipedia_data=wikipedia_data if wikipedia_data is not None else {}, force_ai=req.force_ai):
                 if not chunk: continue
                 # Parse JSON properly instead of fragile string check
                 try:
@@ -1669,7 +2042,15 @@ async def dictionary_lookup(req: DictionaryRequest, authorization: str = Header(
         
         yield "data: [DONE]\n\n"
 
-    return StreamingResponse(stream_generator(), media_type="text/event-stream")
+    return StreamingResponse(
+        stream_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        }
+    )
 
 
 # ─── SAVED VOCABULARY ─────────────────────────────────────────────────────────
@@ -1687,7 +2068,7 @@ class SaveVocabRequest(BaseModel):
 
 
 @router.post("/vocabulary/save")
-def save_vocabulary(req: SaveVocabRequest, authorization: str = Header(...)):
+async def save_vocabulary(req: SaveVocabRequest, authorization: str = Header(...)):
     """Save a word to personal vocabulary list + Neo4j graph."""
     student = _get_current_student(authorization)
     word = req.word.strip().lower()
@@ -1717,6 +2098,9 @@ def save_vocabulary(req: SaveVocabRequest, authorization: str = Header(...)):
         "example": req.example, "level": req.level,
     })
 
+    # Check & award badges
+    await check_and_award_badges(student["id"])
+
     return {"status": "saved", "word": word}
 
 
@@ -1744,6 +2128,296 @@ def list_vocabulary(
     rows = conn.execute(query, tuple(params)).fetchall()
     conn.close()
     return [dict(r) for r in rows]
+
+
+@router.get("/vocabulary/knowledge-graph")
+def get_vocabulary_knowledge_graph(authorization: str = Header(...)):
+    """
+    Returns an interactive knowledge graph representation of the student's saved words.
+    Includes rich multi-type semantic connection edges:
+    - Synonyms (Đồng nghĩa)
+    - Antonyms (Trái nghĩa)
+    - Word Family (Cùng họ từ)
+    - Semantic Topic (Cùng chủ đề)
+    - Collocation / Contextual
+    - CEFR Level & Part of Speech
+    """
+    student = _get_current_student(authorization)
+    conn = get_db()
+    try:
+        rows = conn.execute("""
+            SELECT id, word, phonetic, pos, meaning_en, meaning_vn, example, level, audio_url
+            FROM saved_vocabulary
+            WHERE user_id = ?
+            ORDER BY created_at DESC
+            LIMIT 50
+        """, (student["id"],)).fetchall()
+        vocab_list = [dict(r) for r in rows]
+
+        # Rich curated clusters if student has few saved words
+        if len(vocab_list) < 6:
+            starter_words = [
+                {"id": 9991, "word": "resilient", "phonetic": "/rɪˈzɪl.jənt/", "pos": "adjective", "meaning_en": "able to recover quickly", "meaning_vn": "kiên cường, nhanh chóng phục hồi", "example": "Children are remarkably resilient.", "level": "B2", "audio_url": ""},
+                {"id": 9992, "word": "ecosystem", "phonetic": "/ˈiː.kəʊˌsɪs.təm/", "pos": "noun", "meaning_en": "all living things in an area", "meaning_vn": "hệ sinh thái", "example": "Pollution destroys the marine ecosystem.", "level": "B1", "audio_url": ""},
+                {"id": 9993, "word": "sustainable", "phonetic": "/səˈsteɪ.nə.bəl/", "pos": "adjective", "meaning_en": "able to continue over time", "meaning_vn": "bền vững", "example": "We need sustainable energy sources.", "level": "B2", "audio_url": ""},
+                {"id": 9994, "word": "innovate", "phonetic": "/ˈɪn.ə.veɪt/", "pos": "verb", "meaning_en": "introduce new ideas or methods", "meaning_vn": "đổi mới, sáng tạo", "example": "Companies must innovate to survive.", "level": "B2", "audio_url": ""},
+                {"id": 9995, "word": "pedagogy", "phonetic": "/ˈped.ə.ɡɒdʒ.i/", "pos": "noun", "meaning_en": "method and practice of teaching", "meaning_vn": "phương pháp sư phạm", "example": "Modern pedagogy emphasizes active learning.", "level": "C1", "audio_url": ""},
+                {"id": 9996, "word": "empathy", "phonetic": "/ˈem.pə.θi/", "pos": "noun", "meaning_en": "ability to share someone's feelings", "meaning_vn": "sự thấu cảm", "example": "Empathy is vital for teachers.", "level": "B2", "audio_url": ""},
+                {"id": 9997, "word": "biodiversity", "phonetic": "/ˌbaɪ.əʊ.daɪˈvɜː.sə.ti/", "pos": "noun", "meaning_en": "number and types of plants and animals", "meaning_vn": "đa dạng sinh học", "example": "Rainforests have rich biodiversity.", "level": "B2", "audio_url": ""},
+                {"id": 9998, "word": "adaptable", "phonetic": "/əˈdæp.tə.bəl/", "pos": "adjective", "meaning_en": "able or willing to change", "meaning_vn": "dễ thích nghi", "example": "Successful leaders are highly adaptable.", "level": "B2", "audio_url": ""},
+                {"id": 9999, "word": "innovation", "phonetic": "/ˌɪn.əˈveɪ.ʃən/", "pos": "noun", "meaning_en": "a new idea or method", "meaning_vn": "sự đổi mới", "example": "Technological innovation drives progress.", "level": "B2", "audio_url": ""},
+            ]
+            vocab_list.extend(starter_words)
+
+        # Also include recent looked up words from dictionary_cache so freshly searched words appear in graph
+        try:
+            cache_recent = conn.execute("""
+                SELECT word, data_json FROM dictionary_cache
+                ORDER BY id DESC LIMIT 15
+            """).fetchall()
+            existing_words = {w["word"].lower().strip() for w in vocab_list}
+            for cr in cache_recent:
+                try:
+                    import json
+                    d = json.loads(cr["data_json"])
+                    w_str = cr["word"].strip().lower()
+                    if w_str not in existing_words and len(vocab_list) < 30:
+                        first_m = (d.get("meanings") or [{}])[0]
+                        vocab_list.append({
+                            "id": 8000 + len(vocab_list),
+                            "word": w_str,
+                            "phonetic": d.get("phonetic_uk") or d.get("phonetic_us") or "",
+                            "pos": d.get("pos") or first_m.get("pos") or "noun",
+                            "meaning_en": first_m.get("definition_en", ""),
+                            "meaning_vn": first_m.get("definition_vn", ""),
+                            "example": (first_m.get("examples") or [""])[0],
+                            "level": d.get("level", "B1"),
+                            "audio_url": d.get("audio_url", ""),
+                        })
+                        existing_words.add(w_str)
+                except Exception:
+                    pass
+        except Exception as e:
+            print(f"[KG] Error fetching recent lookups: {e}")
+
+        nodes = []
+        node_map = {}
+        words_list = []
+        for w in vocab_list:
+            word_key = w["word"].strip().lower()
+            if word_key in node_map:
+                continue
+            pos = (w.get("pos") or "noun").lower()
+            lvl = (w.get("level") or "B1").upper()
+            node = {
+                "id": word_key,
+                "label": word_key,
+                "pos": pos,
+                "level": lvl,
+                "phonetic": w.get("phonetic") or "",
+                "meaning_vn": w.get("meaning_vn") or "",
+                "meaning_en": w.get("meaning_en") or "",
+                "example": w.get("example") or "",
+                "audio_url": w.get("audio_url") or "",
+            }
+            nodes.append(node)
+            node_map[word_key] = node
+            words_list.append(word_key)
+
+        # Pull cached semantic relations from dictionary_cache
+        dict_metadata = {}
+        try:
+            placeholders = ",".join(["?"] * len(words_list))
+            cache_rows = conn.execute(
+                f"SELECT word, data_json FROM dictionary_cache WHERE word IN ({placeholders})",
+                tuple(words_list)
+            ).fetchall()
+            for r in cache_rows:
+                try:
+                    import json
+                    d = json.loads(r["data_json"])
+                    syns = set()
+                    ants = set()
+                    for m in d.get("meanings", []):
+                        for s in m.get("synonyms", []): syns.add(s.lower().strip())
+                        for a in m.get("antonyms", []): ants.add(a.lower().strip())
+                    dict_metadata[r["word"].lower().strip()] = {
+                        "synonyms": syns,
+                        "antonyms": ants,
+                        "word_family": [f.lower().strip() for f in d.get("word_family", [])],
+                        "collocations": [c.lower().strip() for c in d.get("collocations", [])],
+                    }
+                except Exception:
+                    pass
+        except Exception as e:
+            print(f"[KG] Error fetching dictionary_cache relations: {e}")
+
+        # Static fallback semantic links for starters
+        static_semantics = {
+            "resilient": {"synonyms": {"adaptable", "flexible", "tough"}, "antonyms": {"fragile", "weak"}, "topic": "Tâm lý & Tính cách"},
+            "adaptable": {"synonyms": {"resilient", "flexible"}, "antonyms": {"rigid"}, "topic": "Tâm lý & Tính cách"},
+            "empathy": {"synonyms": {"compassion", "understanding"}, "antonyms": {"apathy"}, "topic": "Tâm lý & Tính cách"},
+            "ecosystem": {"collocates": {"biodiversity", "sustainable"}, "topic": "Môi trường & Sinh thái"},
+            "sustainable": {"synonyms": {"renewable", "green"}, "antonyms": {"depleting", "wasteful"}, "collocates": {"ecosystem"}, "topic": "Môi trường & Sinh thái"},
+            "biodiversity": {"collocates": {"ecosystem", "sustainable"}, "topic": "Môi trường & Sinh thái"},
+            "innovate": {"family": {"innovation", "innovative"}, "synonyms": {"create", "invent"}, "topic": "Công nghệ & Giáo dục"},
+            "innovation": {"family": {"innovate", "innovative"}, "synonyms": {"invention", "novelty"}, "topic": "Công nghệ & Giáo dục"},
+            "pedagogy": {"collocates": {"empathy", "innovate"}, "topic": "Công nghệ & Giáo dục"},
+        }
+
+        links = []
+        link_keys = set()
+
+        def ensure_node(word_str: str, pos: str = "noun", level: str = "B1", meaning_vn: str = ""):
+            key = word_str.strip().lower()
+            if not key or len(key) > 25 or " " in key or len(key) < 2:
+                return None
+            if key not in node_map and len(nodes) < 55:
+                new_node = {
+                    "id": key,
+                    "label": key,
+                    "pos": pos,
+                    "level": level,
+                    "phonetic": "",
+                    "meaning_vn": meaning_vn,
+                    "meaning_en": "",
+                    "example": "",
+                    "audio_url": "",
+                }
+                nodes.append(new_node)
+                node_map[key] = new_node
+                words_list.append(key)
+            return key if key in node_map else None
+
+        def add_link(source: str, target: str, rel: str, rel_type: str, color: str = "#6366f1"):
+            if not source or not target or source == target:
+                return
+            if source not in node_map or target not in node_map:
+                return
+            pair = tuple(sorted([source, target]))
+            if pair not in link_keys:
+                link_keys.add(pair)
+                links.append({
+                    "source": source,
+                    "target": target,
+                    "relation": rel,
+                    "type": rel_type,
+                    "color": color
+                })
+
+        # 1. Expand Synonyms, Antonyms, and Word Families as connected nodes
+        initial_words = list(words_list)
+        for i, w1 in enumerate(initial_words):
+            meta1 = dict_metadata.get(w1, {})
+            syns1 = meta1.get("synonyms", set()) | static_semantics.get(w1, {}).get("synonyms", set())
+            ants1 = meta1.get("antonyms", set()) | static_semantics.get(w1, {}).get("antonyms", set())
+            fams1 = set(meta1.get("word_family", [])) | static_semantics.get(w1, {}).get("family", set())
+            w_pos = node_map.get(w1, {}).get("pos", "noun")
+            w_lvl = node_map.get(w1, {}).get("level", "B1")
+
+            # Expand Synonyms (Green)
+            for s in list(syns1)[:3]:
+                s_key = ensure_node(s, pos=w_pos, level=w_lvl, meaning_vn=f"Từ đồng nghĩa với '{w1}'")
+                if s_key:
+                    add_link(w1, s_key, "Đồng nghĩa (Synonym)", "synonym", "#10b981")
+
+            # Expand Antonyms (Red)
+            for a in list(ants1)[:2]:
+                a_key = ensure_node(a, pos=w_pos, level=w_lvl, meaning_vn=f"Từ trái nghĩa với '{w1}'")
+                if a_key:
+                    add_link(w1, a_key, "Trái nghĩa (Antonym)", "antonym", "#ef4444")
+
+            # Expand Word Family (Purple)
+            for f in list(fams1)[:2]:
+                f_key = ensure_node(f, pos="family", level=w_lvl, meaning_vn=f"Cùng họ từ với '{w1}'")
+                if f_key:
+                    add_link(w1, f_key, "Cùng họ từ (Word Family)", "word_family", "#8b5cf6")
+
+            for j in range(i + 1, len(words_list)):
+                w2 = words_list[j]
+                meta2 = dict_metadata.get(w2, {})
+                syns2 = meta2.get("synonyms", set()) | static_semantics.get(w2, {}).get("synonyms", set())
+                ants2 = meta2.get("antonyms", set()) | static_semantics.get(w2, {}).get("antonyms", set())
+                fams2 = set(meta2.get("word_family", [])) | static_semantics.get(w2, {}).get("family", set())
+
+                # Synonym match
+                if w2 in syns1 or w1 in syns2:
+                    add_link(w1, w2, "Đồng nghĩa (Synonym)", "synonym", "#10b981")
+                # Antonym match
+                elif w2 in ants1 or w1 in ants2:
+                    add_link(w1, w2, "Trái nghĩa (Antonym)", "antonym", "#ef4444")
+                # Word Family match
+                elif w2 in fams1 or w1 in fams2 or (len(w1) >= 5 and len(w2) >= 5 and (w1.startswith(w2[:5]) or w2.startswith(w1[:5]))):
+                    add_link(w1, w2, "Cùng họ từ (Word Family)", "word_family", "#8b5cf6")
+
+        # 2. Topic Clustering (Blue)
+        TOPIC_CLUSTERS = {
+            "Môi trường & Tự nhiên": ["ecosystem", "sustainable", "biodiversity", "nature", "green", "climate", "planet", "animal", "ocean", "water", "tree", "forest", "pollution"],
+            "Công nghệ & Đổi mới": ["innovate", "innovation", "technology", "digital", "data", "smart", "device", "computer", "system", "future", "science", "software", "network"],
+            "Giáo dục & Học tập": ["pedagogy", "curriculum", "learn", "student", "teacher", "class", "knowledge", "lesson", "school", "exam", "reading", "grammar", "vocabulary"],
+            "Tâm lý & Cảm xúc": ["empathy", "resilient", "adaptable", "happy", "feel", "mind", "behavior", "emotion", "attitude", "patience", "kindness", "courage"],
+            "Xã hội & Giao tiếp": ["society", "community", "culture", "language", "speak", "communicate", "relationship", "people", "citizen", "public"]
+        }
+
+        for topic_name, cluster_words in TOPIC_CLUSTERS.items():
+            matched_words = [w for w in words_list if w in cluster_words]
+            for i in range(len(matched_words) - 1):
+                add_link(matched_words[i], matched_words[i + 1], f"Chủ đề ({topic_name})", "topic", "#3b82f6")
+
+        # 3. Query Neo4j Graph for existing edges
+        try:
+            g = graph_service.get_graph()
+            if g:
+                cypher = """
+                MATCH (w1:Word)-[r]-(w2:Word)
+                WHERE toLower(w1.text) IN $words AND toLower(w2.text) IN $words
+                RETURN toLower(w1.text) as s, type(r) as rel, toLower(w2.text) as t
+                LIMIT 40
+                """
+                neo_results = graph_service._safe_query(cypher, {"words": words_list}, endpoint="kg_subgraph_edges")
+                if neo_results:
+                    for nr in neo_results:
+                        s, t, r = nr.get("s"), nr.get("t"), nr.get("rel", "RELATED")
+                        rel_label = "Quan hệ ngữ nghĩa"
+                        rel_type = "semantic"
+                        color = "#0ea5e9"
+                        if "SYN" in r:
+                            rel_label = "Đồng nghĩa (Synonym)"
+                            rel_type = "synonym"
+                            color = "#10b981"
+                        elif "ANT" in r:
+                            rel_label = "Trái nghĩa (Antonym)"
+                            rel_type = "antonym"
+                            color = "#ef4444"
+                        add_link(s, t, rel_label, rel_type, color)
+        except Exception as e:
+            print(f"[KG] Neo4j edge discovery skipped: {e}")
+
+        # 4. Same CEFR Level (Slate)
+        by_level = {}
+        for n in nodes:
+            by_level.setdefault(n["level"], []).append(n["id"])
+        for lvl, word_ids in by_level.items():
+            for i in range(len(word_ids) - 1):
+                add_link(word_ids[i], word_ids[i + 1], f"Cùng cấp độ ({lvl})", "level", "#94a3b8")
+
+        # 5. Same POS (Purple/Indigo)
+        by_pos = {}
+        for n in nodes:
+            by_pos.setdefault(n["pos"], []).append(n["id"])
+        for pos, word_ids in by_pos.items():
+            for i in range(0, len(word_ids) - 1, 2):
+                add_link(word_ids[i], word_ids[i + 1], f"Cùng từ loại ({pos})", "pos", "#a855f7")
+
+        return {
+            "nodes": nodes,
+            "links": links,
+            "total_nodes": len(nodes),
+            "total_links": len(links),
+        }
+    finally:
+        conn.close()
+
 
 
 @router.delete("/vocabulary/{vocab_id}")
@@ -1978,6 +2652,7 @@ async def generate_reading(req: ReadingRequest, authorization: str = Header(...)
         
     return {"error": "Failed to generate reading passage", "detail": result.get("error") if isinstance(result, dict) else "Unknown error"}
 
+
 class WritingRequest(BaseModel):
     text: str
     task_type: str = "essay"
@@ -2098,3 +2773,41 @@ def get_grammar_file(rule_id: int):
     return Response(content=file_data, media_type=media_type, headers={
         "Content-Disposition": f'inline; filename="{file_name}"'
     })
+
+
+# ==================== PUSH NOTIFICATIONS ====================
+
+class PushSubscribeRequest(BaseModel):
+    endpoint: str
+    p256dh: str
+    auth: str
+
+@router.post("/push/subscribe")
+def subscribe_push(data: PushSubscribeRequest, authorization: str = Header(...)):
+    """Registers browser push subscription keys for student."""
+    student = _get_current_student(authorization)
+    from ..services.push_service import save_push_subscription
+    ok = save_push_subscription(student["id"], data.endpoint, data.p256dh, data.auth)
+    return {"success": ok}
+
+@router.get("/push/status")
+def get_push_status(authorization: str = Header(...)):
+    """Checks if the current student has active push subscriptions."""
+    student = _get_current_student(authorization)
+    from ..services.push_service import get_user_subscriptions
+    subs = get_user_subscriptions(student["id"])
+    return {"subscribed": len(subs) > 0, "device_count": len(subs)}
+
+@router.post("/push/test")
+async def send_test_push(authorization: str = Header(...)):
+    """Sends immediate test push notification to user's registered browsers."""
+    student = _get_current_student(authorization)
+    from ..services.push_service import send_push_notification
+    res = await send_push_notification(
+        student["id"],
+        title="🎉 iEdu Thông Báo Thử Nghiệm",
+        body="Hệ thống thông báo đẩy trên trình duyệt của bạn đã hoạt động hoàn hảo!",
+        url="/dashboard/student?tab=overview"
+    )
+    return res
+

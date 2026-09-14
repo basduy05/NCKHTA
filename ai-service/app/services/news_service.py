@@ -84,3 +84,34 @@ async def get_reading_sources(query: str = "science", limit: int = 5) -> List[Di
     # Filter out empty content
     articles = [a for a in articles if a["content"] and len(a["content"]) > 100]
     return articles
+
+async def get_reading_sources_by_level(level: str = "B1", topic: str = "general", limit: int = 5) -> List[Dict[str, Any]]:
+    """
+    Fetch articles tailored to student CEFR level:
+    - A1/A2: shorter length, everyday topics (lifestyle, animals, sports)
+    - B1/B2: medium length, cultural, technology, environmental topics
+    - C1/C2: full articles, scientific, global affairs, in-depth analysis
+    """
+    level_queries = {
+        "A1": "animals lifestyle hobbies",
+        "A2": "travel food sports daily life",
+        "B1": "environment education technology culture",
+        "B2": "science climate innovation society",
+        "C1": "economics philosophy global politics research",
+        "C2": "advanced scientific research international diplomacy"
+    }
+    
+    selected_query = topic if topic and topic != "general" else level_queries.get(level.upper(), "technology science")
+    articles = await get_reading_sources(query=selected_query, limit=limit)
+    
+    # Adapt length based on CEFR level
+    max_words_map = {"A1": 150, "A2": 250, "B1": 400, "B2": 600, "C1": 1000, "C2": 2000}
+    max_words = max_words_map.get(level.upper(), 500)
+    
+    for a in articles:
+        words = a["content"].split()
+        if len(words) > max_words:
+            a["content"] = " ".join(words[:max_words]) + "..."
+        a["cefr_level"] = level.upper()
+        
+    return articles

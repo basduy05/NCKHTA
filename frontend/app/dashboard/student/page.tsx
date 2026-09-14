@@ -4,19 +4,34 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { useAuth } from "../../context/AuthContext";
 import { AlertCircle } from "lucide-react";
 
-// Modularized Tab Components
+import dynamic from "next/dynamic";
+
+// OverviewTab is loaded statically as the default landing tab
 import OverviewTab from "./OverviewTab";
-import ClassesTab from "./ClassesTab";
-import AssignmentsTab from "./AssignmentsTab";
-import DictionaryTab from "./DictionaryTab";
-import VocabularyTab from "./VocabularyTab";
-import AIToolsTab from "./AIToolsTab";
-import GrammarTab from "./GrammarTab";
-import ScoresTab from "./ScoresTab";
-import IpaTab from "./IpaTab";
-import PracticeTab from "./PracticeTab";
-import RankingTab from "./RankingTab";
-import RoadmapTab from "./RoadmapTab";
+
+// Loading placeholder for lazy tabs
+const TabLoader = () => (
+  <div className="flex justify-center items-center py-20">
+    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--brand)]"></div>
+  </div>
+);
+
+// Heavy tabs dynamically loaded on-demand
+const ClassesTab = dynamic(() => import("./ClassesTab"), { ssr: false, loading: TabLoader });
+const AssignmentsTab = dynamic(() => import("./AssignmentsTab"), { ssr: false, loading: TabLoader });
+const DictionaryTab = dynamic(() => import("./DictionaryTab"), { ssr: false, loading: TabLoader });
+const VocabularyTab = dynamic(() => import("./VocabularyTab"), { ssr: false, loading: TabLoader });
+const AIToolsTab = dynamic(() => import("./AIToolsTab"), { ssr: false, loading: TabLoader });
+const GrammarTab = dynamic(() => import("./GrammarTab"), { ssr: false, loading: TabLoader });
+const ScoresTab = dynamic(() => import("./ScoresTab"), { ssr: false, loading: TabLoader });
+const IpaTab = dynamic(() => import("./IpaTab"), { ssr: false, loading: TabLoader });
+const PracticeTab = dynamic(() => import("./PracticeTab"), { ssr: false, loading: TabLoader });
+const RankingTab = dynamic(() => import("./RankingTab"), { ssr: false, loading: TabLoader });
+const RoadmapTab = dynamic(() => import("./RoadmapTab"), { ssr: false, loading: TabLoader });
+const NewsTab = dynamic(() => import("./NewsTab"), { ssr: false, loading: TabLoader });
+const GroupsTab = dynamic(() => import("./GroupsTab"), { ssr: false, loading: TabLoader });
+const ChatTab = dynamic(() => import("./ChatTab"), { ssr: false, loading: TabLoader });
+
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://iedu-ksk7.onrender.com";
 
@@ -62,6 +77,9 @@ function StudentDashboardContent() {
         {tabName === "overview" && <OverviewTab API_URL={API_URL} />}
         {tabName === "classes" && <ClassesTab API_URL={API_URL} />}
         {tabName === "assignments" && <AssignmentsTab API_URL={API_URL} />}
+        {tabName === "news" && <NewsTab API_URL={API_URL} />}
+        {tabName === "groups" && <GroupsTab API_URL={API_URL} />}
+        {tabName === "chat" && <ChatTab API_URL={API_URL} />}
         {tabName === "dictionary" && <DictionaryTab API_URL={API_URL} />}
         {tabName === "vocabulary" && <VocabularyTab API_URL={API_URL} />}
         {tabName === "ai-tools" && <AIToolsTab API_URL={API_URL} setShowCreditModal={setShowCreditModal} />}
@@ -98,7 +116,7 @@ function StudentDashboardContent() {
         </div>
       )}
 
-      {["overview", "classes", "assignments", "dictionary", "vocabulary", "ai-tools", "grammar", "scores", "ipa", "practice", "ranking", "roadmap"].map(tab => renderTab(tab))}
+      {["overview", "classes", "assignments", "chat", "news", "groups", "dictionary", "vocabulary", "ai-tools", "grammar", "scores", "ipa", "practice", "ranking", "roadmap"].map(tab => renderTab(tab))}
     </div>
   );
 }

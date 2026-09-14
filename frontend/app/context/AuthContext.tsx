@@ -26,6 +26,7 @@ type AuthContextType = {
   resetPassword: (email: string, token: string, newPassword: string) => Promise<boolean>;
   updateUser: (userData: Partial<User>) => void;
   refreshUser: () => Promise<void>;
+  tryRefreshToken: () => Promise<string | null>;
   authFetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
   isLoading: boolean;
   isInitialized: boolean;
@@ -38,17 +39,24 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://iedu-ksk7.onrender.c
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
+  const [refreshToken, setRefreshToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
   const router = useRouter();
   const { showConfirm } = useNotification();
+  const refreshPromiseRef = React.useRef<Promise<string | null> | null>(null);
+  const lastActiveRef = React.useRef<number>(Date.now());
 
   useEffect(() => {
     const storedToken = localStorage.getItem('eam_token');
+    const storedRefreshToken = localStorage.getItem('eam_refresh_token');
     const storedUser = localStorage.getItem('eam_user');
     if (storedToken && storedUser) {
       setToken(storedToken);
       setUser(JSON.parse(storedUser));
+    }
+    if (storedRefreshToken) {
+      setRefreshToken(storedRefreshToken);
     }
     setIsInitialized(true);
 
@@ -59,8 +67,117 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     };
     window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
+
+    // Track user activity to prevent idle logout
+    const updateActivity = () => {
+      lastActiveRef.current = Date.now();
+    };
+    const activityEvents = ['mousedown', 'keydown', 'scroll', 'touchstart'];
+    activityEvents.forEach(evt => window.addEventListener(evt, updateActivity, { passive: true }));
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      activityEvents.forEach(evt => window.removeEventListener(evt, updateActivity));
+    };
   }, []);
+
+  // Decode JWT expiration timestamp
+  const parseJwtExp = (t: string): number | null => {
+    try {
+      const parts = t.split('.');
+      if (parts.length < 2) return null;
+      const base64Url = parts[1];
+      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+      const jsonPayload = decodeURIComponent(
+        atob(base64)
+          .split('')
+          .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+          .join('')
+      );
+      const parsed = JSON.parse(jsonPayload);
+      return parsed.exp ? parsed.exp * 1000 : null;
+    } catch {
+      return null;
+    }
+  };
+
+  // Mutex-protected refresh token function
+  const tryRefreshToken = async (): Promise<string | null> => {
+    if (refreshPromiseRef.current) {
+      return refreshPromiseRef.current;
+    }
+
+    const currentRefreshToken = refreshToken || (typeof window !== 'undefined' ? localStorage.getItem('eam_refresh_token') : null);
+    if (!currentRefreshToken) {
+      console.warn("[AUTH] No refresh token available.");
+      return null;
+    }
+
+    const executeRefresh = async (): Promise<string | null> => {
+      try {
+        console.log("[AUTH] Refreshing access token...");
+        const res = await fetch(`${API_URL}/auth/refresh`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refresh_token: currentRefreshToken })
+        });
+
+        if (!res.ok) {
+          console.warn("[AUTH] Refresh token failed with status:", res.status);
+          return null;
+        }
+
+        const data = await res.json();
+        const newAccess = data.access_token;
+        const newRefresh = data.refresh_token;
+
+        if (newAccess) {
+          setToken(newAccess);
+          localStorage.setItem('eam_token', newAccess);
+        }
+        if (newRefresh) {
+          setRefreshToken(newRefresh);
+          localStorage.setItem('eam_refresh_token', newRefresh);
+        }
+
+        console.log("[AUTH] Token refreshed successfully.");
+        return newAccess;
+      } catch (err) {
+        console.error("[AUTH] Error refreshing token:", err);
+        return null;
+      } finally {
+        refreshPromiseRef.current = null;
+      }
+    };
+
+    refreshPromiseRef.current = executeRefresh();
+    return refreshPromiseRef.current;
+  };
+
+  // Proactive token refresh timer (refreshes 5 mins before expiration if user is active)
+  useEffect(() => {
+    if (!token) return;
+
+    const expTime = parseJwtExp(token);
+    if (!expTime) return;
+
+    const now = Date.now();
+    const msUntilExp = expTime - now;
+    // Refresh 5 minutes (300,000 ms) before expiration, or at 30 seconds if already close
+    const refreshDelay = Math.max(10000, msUntilExp - 5 * 60 * 1000);
+
+    const timer = setTimeout(async () => {
+      // Check user activity: only refresh proactively if active within past 2 hours
+      const inactiveMs = Date.now() - lastActiveRef.current;
+      if (inactiveMs < 2 * 60 * 60 * 1000) {
+        await tryRefreshToken();
+      } else {
+        console.log("[AUTH] User inactive for > 2 hours, skipping proactive refresh.");
+      }
+    }, refreshDelay);
+
+    return () => clearTimeout(timer);
+  }, [token, refreshToken]);
 
   // Helper: retry fetch logic
   async function retryFetch(url: string, options: any, maxRetries = 2): Promise<Response> {
@@ -72,7 +189,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return res;
       } catch (err: any) {
         lastErr = err;
-        // If the request was aborted, don't retry - it was intentional
         if (err.name === 'AbortError') throw err;
         if (i < maxRetries) await new Promise(r => setTimeout(r, 1500));
       }
@@ -81,9 +197,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   const authFetch = async (input: RequestInfo | URL, init: RequestInit = {}) => {
+    let currentToken = token || (typeof window !== 'undefined' ? localStorage.getItem('eam_token') : null);
     const headers = new Headers(init.headers);
-    if (token) {
-      headers.set("Authorization", `Bearer ${token}`);
+    if (currentToken) {
+      headers.set("Authorization", `Bearer ${currentToken}`);
     }
     
     // Automatically set Content-Type for JSON if not provided and body exists
@@ -92,12 +209,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     try {
-      const resp = await fetch(input, { ...init, headers });
+      let resp = await fetch(input, { ...init, headers });
       
+      // If 401 Unauthorized, attempt a silent token refresh before giving up
       if (resp.status === 401) {
-        console.warn("[AUTH] Received 401 Unauthorized. Clearing session...");
-        // Auto logout if unauthorized (session expired or invalid token)
-        logout(false);
+        console.warn("[AUTH] Received 401 Unauthorized. Attempting silent refresh...");
+        const newToken = await tryRefreshToken();
+        if (newToken) {
+          headers.set("Authorization", `Bearer ${newToken}`);
+          resp = await fetch(input, { ...init, headers });
+        } else {
+          console.warn("[AUTH] Refresh failed or token invalid. Logging out...");
+          logout(false);
+        }
       }
       
       return resp;
@@ -164,11 +288,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return false;
       }
 
-      const { access_token, user: userData } = data;
+      const { access_token, refresh_token, user: userData } = data;
       setToken(access_token);
       setUser(userData);
       localStorage.setItem('eam_token', access_token);
       localStorage.setItem('eam_user', JSON.stringify(userData));
+      if (refresh_token) {
+        setRefreshToken(refresh_token);
+        localStorage.setItem('eam_refresh_token', refresh_token);
+      }
 
       router.push(`/dashboard/${userData.role.toLowerCase()}`);
       return true;
@@ -191,6 +319,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // 2. Clear all storage immediately
     localStorage.removeItem('eam_token');
+    localStorage.removeItem('eam_refresh_token');
     localStorage.removeItem('eam_user');
     localStorage.removeItem('dictionaryHistory');
     sessionStorage.clear();
@@ -201,6 +330,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // 4. Clear React state
     setUser(null);
     setToken(null);
+    setRefreshToken(null);
 
     // 5. Navigate immediately — do not wait for backend call
     window.location.href = '/login';
@@ -251,11 +381,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return false;
       }
 
-      const { access_token, user: userData } = data;
+      const { access_token, refresh_token, user: userData } = data;
       setToken(access_token);
       setUser(userData);
       localStorage.setItem('eam_token', access_token);
       localStorage.setItem('eam_user', JSON.stringify(userData));
+      if (refresh_token) {
+        setRefreshToken(refresh_token);
+        localStorage.setItem('eam_refresh_token', refresh_token);
+      }
 
       router.push(`/dashboard/${userData.role.toLowerCase()}`);
       return true;
@@ -333,7 +467,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, register, verifyOTP, login, loginSendOTP, loginVerifyOTP, logout, forgotPassword, resetPassword, updateUser, refreshUser, authFetch, isLoading, isInitialized }}>
+    <AuthContext.Provider value={{ user, token, register, verifyOTP, login, loginSendOTP, loginVerifyOTP, logout, forgotPassword, resetPassword, updateUser, refreshUser, tryRefreshToken, authFetch, isLoading, isInitialized }}>
       {children}
     </AuthContext.Provider>
   );
