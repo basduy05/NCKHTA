@@ -4,10 +4,55 @@ from fastapi import APIRouter, Request, Query, HTTPException, Depends
 from fastapi.responses import StreamingResponse
 from typing import Optional
 
-from ..services.notification_service import register_listener, unregister_listener, notify_user
+from ..services.notification_service import (
+    register_listener, unregister_listener, notify_user,
+    get_user_notifications, mark_notification_as_read,
+    mark_all_notifications_as_read, clear_user_notifications
+)
 from ..services.auth_service import verify_access_token
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
+
+def _get_user_from_req(request: Request, token: Optional[str] = None) -> int:
+    auth_header = request.headers.get("Authorization", "")
+    raw_token = token
+    if not raw_token and auth_header.startswith("Bearer "):
+        raw_token = auth_header.split(" ")[1]
+    if not raw_token:
+        raise HTTPException(status_code=401, detail="Missing authorization token")
+    payload = verify_access_token(raw_token)
+    if not payload:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    return payload["user_id"]
+
+@router.get("")
+@router.get("/")
+def get_notifications(request: Request, token: Optional[str] = Query(None), limit: int = Query(50)):
+    """Fetch stored notifications for the current authenticated user."""
+    user_id = _get_user_from_req(request, token)
+    return get_user_notifications(user_id, limit=limit)
+
+@router.post("/{notification_id}/read")
+def read_notification(notification_id: str, request: Request, token: Optional[str] = Query(None)):
+    """Mark a single notification as read."""
+    user_id = _get_user_from_req(request, token)
+    success = mark_notification_as_read(user_id, notification_id)
+    return {"success": success}
+
+@router.post("/read-all")
+def read_all_notifications(request: Request, token: Optional[str] = Query(None)):
+    """Mark all notifications as read for current user."""
+    user_id = _get_user_from_req(request, token)
+    success = mark_all_notifications_as_read(user_id)
+    return {"success": success}
+
+@router.delete("/clear-all")
+@router.post("/clear-all")
+def clear_notifications(request: Request, token: Optional[str] = Query(None)):
+    """Clear all notifications for current user."""
+    user_id = _get_user_from_req(request, token)
+    success = clear_user_notifications(user_id)
+    return {"success": success}
 
 @router.get("/stream")
 async def notification_stream(request: Request, token: Optional[str] = Query(None)):

@@ -10,6 +10,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://iedu-ksk7.onrender.c
 
 import AnalyticsTab from "./AnalyticsTab";
 import UserBehaviorTab from "./UserBehaviorTab";
+import BroadcastTab from "./BroadcastTab";
 
 // Shared helper functions
 function formatTimeAgo(dateStr: string | null | undefined) {
@@ -82,7 +83,7 @@ function AdminDashboardContent() {
   const getAdminTitle = (tab: string) => {
     const m: Record<string, string> = {
       overview: "Tổng quan hệ thống", analytics: "Phân tích Kinh doanh & BI",
-      behavior: "Hành vi người dùng",
+      behavior: "Hành vi người dùng", broadcast: "Gửi Email & Thông báo",
       users: "Quản lý Người dùng & GV",
       vocab: "Kho Từ Vựng Graph", classes: "Quản lý Lớp Học",
       lessons: "Quản lý Bài Học", assignments: "Quản lý Bài tập & Đề thi",
@@ -97,6 +98,7 @@ function AdminDashboardContent() {
       {activeTab === 'overview' && <OverviewTab />}
       {activeTab === 'analytics' && <AnalyticsTab API_URL={API_URL} />}
       {activeTab === 'behavior' && <UserBehaviorTab API_URL={API_URL} />}
+      {activeTab === 'broadcast' && <BroadcastTab API_URL={API_URL} />}
       {activeTab === 'users' && <UsersTab />}
       {activeTab === 'vocab' && <VocabTab />}
       {activeTab === 'classes' && <ClassesTab />}

@@ -2042,7 +2042,8 @@ def admin_delete_assignment(assignment_id: int):
 
 class BroadcastSendRequest(BaseModel):
     channel: str = "both"  # 'email', 'in_app', 'both'
-    target_type: str = "ALL"  # 'ALL', 'STUDENT', 'TEACHER', 'CEFR', 'TIER', 'SPECIFIC'
+    target_type: Optional[str] = "ALL"  # 'ALL', 'STUDENT', 'TEACHER', 'CEFR', 'TIER', 'SPECIFIC'
+    target_audience: Optional[str] = None  # alias for target_type
     target_filter: Optional[str] = None  # e.g. 'B1', 'PREMIUM'
     specific_emails: Optional[str] = None  # comma-separated emails
     title: str
@@ -2051,13 +2052,17 @@ class BroadcastSendRequest(BaseModel):
     notice_type: str = "info"  # 'info', 'success', 'warning', 'error'
     action_link: Optional[str] = "/dashboard/student"
     action_button_text: Optional[str] = "Khám phá ngay"
+    button_text: Optional[str] = None  # alias for action_button_text
 
 class TestBroadcastEmailRequest(BaseModel):
-    to_email: str
+    to_email: Optional[str] = None
+    test_email: Optional[str] = None
+    channel: Optional[str] = "email"
     title: str = "Thông báo thử nghiệm từ iEdu"
     message: str = "Đây là thông báo thử nghiệm gửi từ bảng điều khiển quản trị viên iEdu."
     action_link: Optional[str] = "/dashboard"
     action_button_text: Optional[str] = "Truy cập hệ thống"
+    button_text: Optional[str] = None
 
 def _ensure_broadcast_table(conn):
     """Ensure broadcast_logs table exists."""
@@ -2167,35 +2172,57 @@ def get_broadcast_history():
         """)
         rows = [dict(r) for r in cursor.fetchall()]
         conn.close()
-        return rows
+        for r in rows:
+            r["target_audience"] = r.get("target_type")
+            r["recipients_count"] = r.get("recipient_count")
+            r["delivered_count"] = r.get("success_count")
+            r["sent_at"] = r.get("created_at")
+        return {"logs": rows, "total": len(rows), "items": rows}
     except Exception as e:
         if conn: conn.close()
         raise HTTPException(status_code=500, detail=f"Broadcast history error: {str(e)}")
 
 @router.post("/broadcast/test-send")
-def test_send_broadcast(data: TestBroadcastEmailRequest):
-    """Send a single test email directly to a recipient."""
-    if not data.to_email or "@" not in data.to_email:
-        raise HTTPException(status_code=400, detail="Địa chỉ email không hợp lệ.")
-    
-    html = build_broadcast_email_html(
-        title=data.title,
-        message=data.message,
-        action_link=data.action_link,
-        button_text=data.action_button_text or "Truy cập hệ thống"
-    )
-    
-    ok = auth_service.send_email(data.to_email, data.title, html)
-    if ok:
-        return {"success": True, "message": f"Đã gửi email thử nghiệm thành công đến {data.to_email}"}
-    else:
-        raise HTTPException(status_code=500, detail=f"Không thể gửi email đến {data.to_email}. Vui lòng kiểm tra cấu hình SMTP/Brevo.")
+async def test_send_broadcast(data: TestBroadcastEmailRequest):
+    """Send a single test message directly via email or in-app."""
+    target_em = data.to_email or data.test_email
+    btn = data.action_button_text or data.button_text or "Truy cập hệ thống"
+    chan = (data.channel or "email").lower().strip()
+
+    # Deliver In-App preview test
+    if chan in ("in_app", "both"):
+        try:
+            from ..services.notification_service import broadcast_notification
+            await broadcast_notification(
+                event_type="INFO",
+                title=data.title,
+                message=data.message,
+                data={"link": data.action_link or "/dashboard", "category": "system"}
+            )
+        except Exception as e:
+            print(f"[BROADCAST TEST] In-app notify error: {e}", flush=True)
+
+    # Deliver Email preview test
+    if chan in ("email", "both"):
+        if not target_em or "@" not in target_em:
+            raise HTTPException(status_code=400, detail="Địa chỉ email không hợp lệ.")
+        html = build_broadcast_email_html(
+            title=data.title,
+            message=data.message,
+            action_link=data.action_link,
+            button_text=btn
+        )
+        ok = auth_service.send_email(target_em, data.title, html)
+        if not ok and chan == "email":
+            raise HTTPException(status_code=500, detail=f"Không thể gửi email đến {target_em}. Vui lòng kiểm tra SMTP.")
+
+    return {"success": True, "detail": f"Đã gửi thông báo thử nghiệm thành công qua kênh {chan}!", "message": "Gửi thử nghiệm thành công"}
 
 @router.post("/broadcast/send")
 async def send_broadcast(data: BroadcastSendRequest):
     """
     Broadcast an announcement via Email, In-App SSE notification, or Both.
-    Supports targeting by ALL, STUDENT, TEACHER, CEFR, TIER, or SPECIFIC email list.
+    Supports targeting by ALL, STUDENTS, TEACHERS, CHURN_RISK, INACTIVE_7D, FREE_TIER, A1_A2, B1_B2, or SPECIFIC.
     """
     if not data.title or not data.title.strip():
         raise HTTPException(status_code=400, detail="Tiêu đề thông báo không được để trống.")
@@ -2207,38 +2234,53 @@ async def send_broadcast(data: BroadcastSendRequest):
 
     # 1. Resolve recipients
     users = []
+    target = (data.target_audience or data.target_type or "ALL").upper().strip()
     try:
         cursor = conn.cursor()
-        if data.target_type == "ALL":
+        if target in ("ALL",):
             cursor.execute("SELECT id, name, email, role FROM users WHERE email IS NOT NULL AND email != ''")
             users = [dict(r) for r in cursor.fetchall()]
-        elif data.target_type == "STUDENT":
+        elif target in ("STUDENTS", "STUDENT"):
             cursor.execute("SELECT id, name, email, role FROM users WHERE role = 'STUDENT' AND email IS NOT NULL AND email != ''")
             users = [dict(r) for r in cursor.fetchall()]
-        elif data.target_type == "TEACHER":
+        elif target in ("TEACHERS", "TEACHER"):
             cursor.execute("SELECT id, name, email, role FROM users WHERE role = 'TEACHER' AND email IS NOT NULL AND email != ''")
             users = [dict(r) for r in cursor.fetchall()]
-        elif data.target_type == "CEFR":
+        elif target in ("CHURN_RISK", "AT_RISK"):
+            cursor.execute("SELECT id, name, email, role FROM users WHERE role = 'STUDENT' AND (streak < 2 OR streak IS NULL) AND email IS NOT NULL AND email != ''")
+            users = [dict(r) for r in cursor.fetchall()]
+        elif target in ("INACTIVE_7D", "INACTIVE"):
+            cursor.execute("SELECT id, name, email, role FROM users WHERE role = 'STUDENT' AND email IS NOT NULL AND email != ''")
+            users = [dict(r) for r in cursor.fetchall()]
+        elif target in ("FREE_TIER", "FREE"):
+            cursor.execute("SELECT id, name, email, role FROM users WHERE (subscription_tier IS NULL OR LOWER(subscription_tier) = 'free') AND email IS NOT NULL AND email != ''")
+            users = [dict(r) for r in cursor.fetchall()]
+        elif target in ("A1_A2", "BEGINNER"):
+            cursor.execute("SELECT id, name, email, role FROM users WHERE cefr_level IN ('A1', 'A2') AND email IS NOT NULL AND email != ''")
+            users = [dict(r) for r in cursor.fetchall()]
+        elif target in ("B1_B2", "INTERMEDIATE"):
+            cursor.execute("SELECT id, name, email, role FROM users WHERE cefr_level IN ('B1', 'B2') AND email IS NOT NULL AND email != ''")
+            users = [dict(r) for r in cursor.fetchall()]
+        elif target == "CEFR":
             lvl = (data.target_filter or "A1").upper()
             cursor.execute("SELECT id, name, email, role FROM users WHERE cefr_level = ? AND email IS NOT NULL AND email != ''", (lvl,))
             users = [dict(r) for r in cursor.fetchall()]
-        elif data.target_type == "TIER":
+        elif target == "TIER":
             tier = (data.target_filter or "PREMIUM").upper()
             cursor.execute("SELECT id, name, email, role FROM users WHERE UPPER(subscription_tier) = ? AND email IS NOT NULL AND email != ''", (tier,))
             users = [dict(r) for r in cursor.fetchall()]
-        elif data.target_type == "SPECIFIC":
+        elif target == "SPECIFIC":
             if data.specific_emails:
                 raw_emails = [e.strip().lower() for e in data.specific_emails.split(",") if e.strip()]
                 if raw_emails:
                     placeholders = ",".join(["?"] * len(raw_emails))
                     cursor.execute(f"SELECT id, name, email, role FROM users WHERE LOWER(email) IN ({placeholders})", raw_emails)
                     found_users = {r["email"].lower(): dict(r) for r in cursor.fetchall()}
-                    # Include even if not in DB, with virtual ID
-                    for idx, em in enumerate(raw_emails):
+                    for idx_em, em in enumerate(raw_emails):
                         if em in found_users:
                             users.append(found_users[em])
                         else:
-                            users.append({"id": 990000 + idx, "name": em.split("@")[0], "email": em, "role": "STUDENT"})
+                            users.append({"id": 990000 + idx_em, "name": em.split("@")[0], "email": em, "role": "STUDENT"})
         else:
             cursor.execute("SELECT id, name, email, role FROM users WHERE email IS NOT NULL AND email != ''")
             users = [dict(r) for r in cursor.fetchall()]
@@ -2263,7 +2305,7 @@ async def send_broadcast(data: BroadcastSendRequest):
     # 2. Deliver In-App SSE notifications
     if do_in_app:
         try:
-            if data.target_type == "ALL":
+            if target == "ALL":
                 await broadcast_notification(
                     event_type=data.notice_type.upper(),
                     title=data.title,
@@ -2291,7 +2333,7 @@ async def send_broadcast(data: BroadcastSendRequest):
             title=data.title,
             message=data.message,
             action_link=data.action_link,
-            button_text=data.action_button_text or "Khám phá ngay"
+            button_text=data.action_button_text or data.button_text or "Khám phá ngay"
         )
         for u in users:
             em = u.get("email")
@@ -2320,7 +2362,7 @@ async def send_broadcast(data: BroadcastSendRequest):
                 recipient_count, success_count, failed_count, status
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
-            1, data.channel, data.target_type, data.target_filter,
+            1, data.channel, target, data.target_filter,
             data.title, data.message, data.category, data.notice_type, data.action_link,
             recipient_count, success_count, failed_count, status
         ))
@@ -2334,9 +2376,96 @@ async def send_broadcast(data: BroadcastSendRequest):
         "success": True,
         "status": status,
         "recipient_count": recipient_count,
+        "total_recipients": recipient_count,
         "success_count": success_count,
+        "delivered": success_count,
         "failed_count": failed_count,
+        "failed": failed_count,
         "message": f"Đã gửi thông báo thành công cho {success_count}/{recipient_count} người nhận."
     }
 
 
+# --- BI ANALYTICS RETENTION ACTION ---
+
+class RetentionActionRequest(BaseModel):
+    user_id: int
+    user_email: str
+    user_name: str
+    action_type: str = "both"  # "email", "in_app", "both"
+    recommended_action: Optional[str] = "Nhắc nhở học tập và duy trì chuỗi Streak"
+    bonus_credits: Optional[int] = 10
+
+@router.post("/analytics/retention-action")
+async def send_retention_action(req: RetentionActionRequest):
+    """Send retention email & notification to at-risk student with optional bonus credits."""
+    conn = get_db()
+    try:
+        title = "🔥 [iEdu] Đừng để đứt chuỗi học tập của bạn hôm nay!"
+        message = (
+            f"Chào {req.user_name}!\n\n"
+            f"Hệ thống nhận thấy bạn chưa đăng nhập ôn tập gần đây. "
+            f"Hãy dành 5 phút hôm nay để giữ vững chuỗi học tập (Streak) và tiếp tục cải thiện vốn từ vựng của mình nhé!\n\n"
+            f"💡 Gợi ý hành động cho bạn: {req.recommended_action}\n"
+        )
+        if req.bonus_credits and req.bonus_credits > 0:
+            message += f"\n🎁 Quà tặng động viên: Hệ thống iEdu đã cộng thêm +{req.bonus_credits} AI Credits vào tài khoản để bạn thỏa sức luyện tập cùng AI Coach!"
+            try:
+                conn.execute("UPDATE users SET credits_ai = credits_ai + ? WHERE id = ?", (req.bonus_credits, req.user_id))
+                conn.commit()
+            except Exception as e:
+                print(f"[RETENTION] Bonus credits error: {e}", flush=True)
+
+        email_sent = False
+        if req.action_type in ("email", "both") and req.user_email and "@" in req.user_email:
+            html = build_broadcast_email_html(
+                title=title,
+                message=message,
+                action_link="/dashboard/student?tab=vocabulary",
+                button_text="Vào học ngay"
+            )
+            email_sent = auth_service.send_email(req.user_email, title, html)
+
+        # In-app notification
+        if req.action_type in ("in_app", "both") and req.user_id:
+            from ..services.notification_service import notify_user
+            try:
+                await notify_user(
+                    user_id=req.user_id,
+                    event_type="WARNING",
+                    title=title,
+                    message=f"Đừng quên duy trì chuỗi học tập hôm nay! {f'+{req.bonus_credits} credits đã được cộng.' if req.bonus_credits else ''}",
+                    data={"link": "/dashboard/student?tab=vocabulary", "category": "system"}
+                )
+            except Exception as ne:
+                print(f"[RETENTION] In-app notify warning: {ne}", flush=True)
+
+        # Log action
+        _ensure_broadcast_table(conn)
+        try:
+            conn.execute("""
+                INSERT INTO broadcast_logs (
+                    sender_id, channel, target_type, target_filter,
+                    title, message, category, notice_type, action_link,
+                    recipient_count, success_count, failed_count, status
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
+            """, (
+                1, req.action_type, "RETENTION_INTERVENTION", str(req.user_id),
+                title, message, "retention", "warning", "/dashboard/student?tab=vocabulary",
+                1 if email_sent else 0, 0 if email_sent else 1, "COMPLETED" if email_sent else "SENT_IN_APP"
+            ))
+            conn.commit()
+        except Exception as e:
+            print(f"[RETENTION] Log error: {e}", flush=True)
+
+        conn.close()
+        return {
+            "success": True,
+            "email_sent": email_sent,
+            "message": f"Đã gửi hành động can thiệp thành công cho {req.user_name} ({req.user_email})."
+        }
+    except Exception as e:
+        if conn: conn.close()
+        raise HTTPException(status_code=500, detail=f"Lỗi gửi giữ chân: {str(e)}")
+
+# Alias for compatibility
+trigger_retention_action = send_retention_action

@@ -3,7 +3,7 @@ import {
   BookOpen, Users, LayoutDashboard, Component, Database, GraduationCap,
   BookText, ClipboardList, Sparkles, Search, BookMarked,
   Mic, Award, Trophy, TrendingUp, MessageCircleWarning, Settings,
-  Newspaper, MessageSquare, LineChart, BarChart3, Activity
+  Newspaper, MessageSquare, LineChart, BarChart3, Activity, Megaphone
 } from "lucide-react";
 import { TRANSLATIONS, SupportedLocale } from "./translations";
 
@@ -39,6 +39,7 @@ export const NAVIGATION_CONFIG: Record<string, RoleNavigationConfig> = {
       { id: "overview",       name: "Tổng quan",          labelKey: "nav.overview",       href: "/dashboard/admin?tab=overview",      icon: LayoutDashboard },
       { id: "analytics",      name: "Phân tích BI",       labelKey: "nav.analytics",      href: "/dashboard/admin?tab=analytics",     icon: BarChart3 },
       { id: "behavior",       name: "Hành vi người dùng", labelKey: "nav.behavior",      href: "/dashboard/admin?tab=behavior",       icon: Activity },
+      { id: "broadcast",      name: "Email & Thông báo",  labelKey: "nav.broadcast",      href: "/dashboard/admin?tab=broadcast",      icon: Megaphone },
       { id: "users",          name: "Người dùng & GV",    labelKey: "nav.users",          href: "/dashboard/admin?tab=users",         icon: Users },
       { id: "classes",        name: "Quản lý Lớp học",    labelKey: "nav.classes",        href: "/dashboard/admin?tab=classes",       icon: GraduationCap },
       { id: "lessons",        name: "Quản lý Bài học",    labelKey: "nav.lessons",        href: "/dashboard/admin?tab=lessons",       icon: BookOpen },

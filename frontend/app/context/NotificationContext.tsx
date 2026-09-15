@@ -61,41 +61,40 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const [isOffline, setIsOffline] = useState(false);
   const [notifications, setNotifications] = useState<NotificationRecord[]>([]);
 
-  // Load notification history
+  // Fetch real notifications from backend
+  const fetchBackendNotifications = useCallback(async () => {
+    if (typeof window === 'undefined') return;
+    const token = localStorage.getItem('eam_token');
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_URL}/notifications?limit=50`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data && Array.isArray(data.notifications) && data.notifications.length > 0) {
+          setNotifications(data.notifications);
+          localStorage.setItem(NOTIFICATIONS_STORAGE_KEY, JSON.stringify(data.notifications));
+        }
+      }
+    } catch (e) {
+      // Offline fallback: keep localStorage data
+    }
+  }, []);
+
+  // Load notification history on mount and sync with backend
   useEffect(() => {
     if (typeof window === 'undefined') return;
     try {
       const saved = localStorage.getItem(NOTIFICATIONS_STORAGE_KEY);
       if (saved) {
         setNotifications(JSON.parse(saved));
-      } else {
-        const initial: NotificationRecord[] = [
-          {
-            id: 'welcome-1',
-            title: 'Chào mừng bạn đến với iEdu!',
-            message: 'Khám phá ngay lộ trình học tập thông minh và các bài luyện thi thực tế.',
-            type: 'info',
-            category: 'system',
-            timestamp: new Date().toISOString(),
-            isRead: false,
-          },
-          {
-            id: 'welcome-2',
-            title: 'Trợ lý AI Coach đã sẵn sàng',
-            message: 'Nhận diện và hỗ trợ bạn luyện phát âm IPA chuẩn xác bất cứ lúc nào.',
-            type: 'success',
-            category: 'system',
-            timestamp: new Date(Date.now() - 3600000).toISOString(),
-            isRead: true,
-          }
-        ];
-        setNotifications(initial);
-        localStorage.setItem(NOTIFICATIONS_STORAGE_KEY, JSON.stringify(initial));
       }
     } catch (e) {
       console.error('Failed to load notifications history', e);
     }
-  }, []);
+    fetchBackendNotifications();
+  }, [fetchBackendNotifications]);
 
   const markAsRead = useCallback((id: string) => {
     setNotifications(prev => {
@@ -105,6 +104,13 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       } catch (e) {}
       return next;
     });
+    const token = typeof window !== 'undefined' ? localStorage.getItem('eam_token') : null;
+    if (token) {
+      fetch(`${API_URL}/notifications/${id}/read`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` }
+      }).catch(() => {});
+    }
   }, []);
 
   const markAllAsRead = useCallback(() => {
@@ -115,6 +121,13 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       } catch (e) {}
       return next;
     });
+    const token = typeof window !== 'undefined' ? localStorage.getItem('eam_token') : null;
+    if (token) {
+      fetch(`${API_URL}/notifications/read-all`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` }
+      }).catch(() => {});
+    }
   }, []);
 
   const clearAllNotifications = useCallback(() => {
@@ -122,6 +135,13 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     try {
       localStorage.removeItem(NOTIFICATIONS_STORAGE_KEY);
     } catch (e) {}
+    const token = typeof window !== 'undefined' ? localStorage.getItem('eam_token') : null;
+    if (token) {
+      fetch(`${API_URL}/notifications/clear-all`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` }
+      }).catch(() => {});
+    }
   }, []);
 
   const unreadCount = notifications.filter(n => !n.isRead).length;
@@ -191,11 +211,13 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
             const data = JSON.parse(event.data);
             if (data && data.type && data.type !== 'CONNECTED') {
               const toastType = data.type === 'ERROR' ? 'error' : 
-                                data.type === 'NEW_ASSIGNMENT' ? 'success' : 'info';
-              const category = data.type === 'NEW_ASSIGNMENT' ? 'assignment' :
+                                data.type === 'WARNING' ? 'warning' :
+                                data.type === 'SUCCESS' || data.type === 'NEW_ASSIGNMENT' ? 'success' : 'info';
+              const category = data.category || (data.type === 'NEW_ASSIGNMENT' ? 'assignment' :
                                data.type === 'CHAT' ? 'chat' :
-                               data.type === 'GRADE' ? 'grade' : 'system';
+                               data.type === 'GRADE' ? 'grade' : 'system');
               showToast(data.title || 'Thông báo mới', data.message || '', toastType, category, data.link);
+              fetchBackendNotifications();
             }
           } catch (e) {
             // ignore non-json heartbeat pings

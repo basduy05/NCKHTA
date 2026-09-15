@@ -1833,4 +1833,78 @@ def teacher_build_quiz(data: QuizBuilderCreate, authorization: str = Header(...)
     }
 
 
+# ===================== TEACHER BROADCAST ANNOUNCEMENT =====================
 
+class TeacherBroadcastRequest(BaseModel):
+    title: str
+    message: str
+    class_id: Optional[int] = None
+
+@router.post("/broadcast")
+async def teacher_send_broadcast(data: TeacherBroadcastRequest, authorization: str = Header(...)):
+    """Allow teachers to broadcast announcements to students in their classes."""
+    teacher = _get_current_teacher(authorization)
+    if not data.title or not data.title.strip():
+        raise HTTPException(status_code=400, detail="Tiêu đề thông báo không được để trống.")
+    if not data.message or not data.message.strip():
+        raise HTTPException(status_code=400, detail="Nội dung thông báo không được để trống.")
+
+    conn = get_db()
+    student_ids = []
+    try:
+        cur = conn.cursor()
+        if data.class_id:
+            cur.execute("""
+                SELECT DISTINCT e.student_id 
+                FROM enrollments e 
+                JOIN classes c ON e.class_id = c.id 
+                WHERE c.teacher_id = ? AND c.id = ?
+            """, (teacher["id"], data.class_id))
+            student_ids = [r[0] for r in cur.fetchall()]
+        else:
+            cur.execute("""
+                SELECT DISTINCT e.student_id 
+                FROM enrollments e 
+                JOIN classes c ON e.class_id = c.id 
+                WHERE c.teacher_id = ?
+            """, (teacher["id"],))
+            student_ids = [r[0] for r in cur.fetchall()]
+
+        # Fallback if no enrollments in current teacher classes: send to all students
+        if not student_ids:
+            cur.execute("SELECT id FROM users WHERE role = 'STUDENT'")
+            student_ids = [r[0] for r in cur.fetchall()]
+    except Exception as e:
+        print(f"[TEACHER BROADCAST ERROR]: {e}", flush=True)
+    finally:
+        try: conn.close()
+        except Exception: pass
+
+    from ..services.notification_service import notify_user
+    delivered = 0
+    for sid in student_ids:
+        try:
+            await notify_user(
+                user_id=sid,
+                event_type="INFO",
+                title=f"📢 [{teacher['name']}]: {data.title}",
+                message=data.message,
+                data={
+                    "link": "/dashboard/student?tab=learning",
+                    "category": "assignment",
+                    "teacher_id": teacher["id"],
+                    "teacher_name": teacher["name"]
+                },
+                persist=True,
+                sender_id=teacher["id"]
+            )
+            delivered += 1
+        except Exception as e:
+            print(f"[TEACHER BROADCAST DELIVER ERROR] student {sid}: {e}", flush=True)
+
+    return {
+        "success": True,
+        "delivered": delivered,
+        "total_recipients": len(student_ids),
+        "message": f"Đã phát thông báo thành công đến {delivered} học sinh!"
+    }

@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useRef, useEffect } from "react";
-import { Globe, ChevronDown, Check } from "lucide-react";
+import { Globe, Languages, ChevronDown, Check } from "lucide-react";
 import { useI18n } from "../context/I18nContext";
 import { SupportedLocale } from "../config/translations";
 
@@ -25,12 +25,14 @@ export default function LanguageSelector({ compact = false }: { compact?: boolea
       <button
         type="button"
         onClick={() => setOpen((prev) => !prev)}
-        className="flex items-center gap-1.5 h-8 px-2.5 rounded-lg border border-[var(--line)] bg-[var(--surface-1)] text-xs text-[var(--ink-2)] hover:border-slate-300 hover:text-[var(--ink-1)] transition cursor-pointer"
+        className="flex items-center gap-1.5 h-8 px-2.5 rounded-lg border border-[var(--line)] bg-[var(--surface-1)] text-xs text-[var(--ink-2)] hover:border-slate-300 hover:text-[var(--ink-1)] transition cursor-pointer shadow-2xs group"
         title="Chọn ngôn ngữ / Language / ភាសា"
       >
+        {/* Prominent Language Icon requested by user */}
+        <Languages size={15} className="text-[var(--brand)] shrink-0 group-hover:scale-110 transition-transform" />
         <span className="text-sm leading-none">{currentLocaleInfo.flag}</span>
         {!compact && (
-          <span className="font-semibold hidden sm:inline uppercase text-[11px] tracking-wide">
+          <span className="font-bold hidden sm:inline uppercase text-[11px] tracking-wide text-[var(--ink-1)]">
             {currentLocaleInfo.code}
           </span>
         )}
@@ -38,9 +40,10 @@ export default function LanguageSelector({ compact = false }: { compact?: boolea
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-1.5 w-40 bg-[var(--surface-1)] border border-[var(--line)] rounded-xl shadow-[var(--sh-md)] z-50 overflow-hidden py-1 animate-duo-pop">
-          <div className="px-3 py-1.5 text-[10px] font-bold text-[var(--ink-3)] uppercase tracking-wider border-b border-[var(--line)]">
-            Ngôn ngữ / Language
+        <div className="absolute right-0 top-full mt-1.5 w-44 bg-[var(--surface-1)] border border-[var(--line)] rounded-xl shadow-[var(--sh-md)] z-50 overflow-hidden py-1 animate-duo-pop">
+          <div className="px-3 py-1.5 text-[10px] font-bold text-[var(--ink-3)] uppercase tracking-wider border-b border-[var(--line)] flex items-center gap-1.5">
+            <Globe size={11} className="text-[var(--brand)]" />
+            <span>Ngôn ngữ / Language</span>
           </div>
           {locales.map((item) => {
             const isSelected = item.code === locale;

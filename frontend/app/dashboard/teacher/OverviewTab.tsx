@@ -42,14 +42,27 @@ export function OverviewTab({ API_URL = process.env.NEXT_PUBLIC_API_URL || "http
     }
     setIsSendingBroadcast(true);
     try {
-      showToast(broadcastTitle, broadcastContent, "info", "assignment");
-      showAlert("Đã phát thông báo thành công đến học sinh toàn lớp!", "success");
-      setShowBroadcastModal(false);
-      setBroadcastTitle("");
-      setBroadcastContent("");
-    } catch (e) {
+      const res = await authFetch(`${API_URL}/teacher/broadcast`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: broadcastTitle.trim(),
+          message: broadcastContent.trim(),
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
+        showToast(broadcastTitle, broadcastContent, "info", "assignment");
+        showAlert(data.message || `Đã phát thông báo thành công đến ${data.delivered || 0} học sinh!`, "success");
+        setShowBroadcastModal(false);
+        setBroadcastTitle("");
+        setBroadcastContent("");
+      } else {
+        showAlert(data.detail || "Không thể phát thông báo đến học sinh.", "error");
+      }
+    } catch (e: any) {
       console.error(e);
-      showAlert("Lỗi khi gửi thông báo", "error");
+      showAlert(e.message || "Lỗi khi gửi thông báo", "error");
     } finally {
       setIsSendingBroadcast(false);
     }

@@ -7,8 +7,10 @@ import {
   Info, ExternalLink
 } from "lucide-react";
 import { useNotification, NotificationRecord } from "../context/NotificationContext";
+import { useI18n } from "../context/I18nContext";
 
 export default function NotificationDropdown() {
+  const { t } = useI18n();
   const [isOpen, setIsOpen] = useState(false);
   const [filter, setFilter] = useState<"all" | "assignment" | "chat" | "grade" | "system">("all");
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -101,10 +103,10 @@ export default function NotificationDropdown() {
             <div>
               <h3 className="text-sm font-bold text-[var(--ink-1)] flex items-center gap-1.5">
                 <Bell size={15} className="text-[var(--brand)]" />
-                Thông báo
+                {t("notification.title", "Thông báo")}
               </h3>
               <p className="text-[11px] text-[var(--ink-3)]">
-                {unreadCount > 0 ? `${unreadCount} thông báo chưa đọc` : "Đã đọc tất cả"}
+                {unreadCount > 0 ? `${unreadCount} ${t("notification.unread", "thông báo chưa đọc")}` : t("notification.all_read", "Đã đọc tất cả")}
               </p>
             </div>
             <div className="flex items-center gap-1">
@@ -115,7 +117,7 @@ export default function NotificationDropdown() {
                   title="Đánh dấu tất cả đã đọc"
                 >
                   <CheckCheck size={13} />
-                  <span>Đọc hết</span>
+                  <span>{t("notification.read_all", "Đọc hết")}</span>
                 </button>
               )}
               {notifications.length > 0 && (
@@ -133,10 +135,10 @@ export default function NotificationDropdown() {
           {/* Filter Tabs */}
           <div className="flex items-center gap-1 px-3 py-2 border-b border-[var(--line)] bg-[var(--surface-2)] text-[11px] overflow-x-auto">
             {[
-              { id: "all", label: "Tất cả" },
-              { id: "assignment", label: "Bài tập" },
-              { id: "chat", label: "Chat" },
-              { id: "system", label: "Hệ thống" },
+              { id: "all", label: t("notification.filter_all", "Tất cả") },
+              { id: "assignment", label: t("notification.filter_assignment", "Bài tập") },
+              { id: "chat", label: t("notification.filter_chat", "Chat") },
+              { id: "system", label: t("notification.filter_system", "Hệ thống") },
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -157,9 +159,9 @@ export default function NotificationDropdown() {
             {filteredNotifications.length === 0 ? (
               <div className="py-12 text-center text-[var(--ink-3)] px-4">
                 <Bell size={28} className="mx-auto mb-2 opacity-30 text-slate-400" />
-                <p className="text-xs font-medium text-slate-500">Không có thông báo nào</p>
+                <p className="text-xs font-medium text-slate-500">{t("notification.empty", "Không có thông báo nào")}</p>
                 <p className="text-[10px] text-slate-400 mt-0.5">
-                  Các thông báo bài tập, tin nhắn và lớp học sẽ xuất hiện ở đây.
+                  {t("notification.empty_desc", "Các thông báo bài tập, tin nhắn và lớp học sẽ xuất hiện ở đây.")}
                 </p>
               </div>
             ) : (
