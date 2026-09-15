@@ -18,11 +18,14 @@ import { usePresence } from "../hooks/usePresence";
 import CommandSearchModal from "../components/CommandSearchModal";
 import NotificationDropdown from "../components/NotificationDropdown";
 import { usePersonalizedNav } from "../hooks/usePersonalizedNav";
+import { I18nProvider, useI18n } from "../context/I18nContext";
+import LanguageSelector from "../components/LanguageSelector";
 
 // ─── Sidebar ─────────────────────────────────────────────────────────────────
 
 function DashboardSidebar({ role, currentTab }: { role: string; currentTab: string }) {
-  const links = getSidebarLinks(role);
+  const { locale, t } = useI18n();
+  const links = getSidebarLinks(role, locale);
   const roleLabel = role === "admin" ? "Admin" : role === "teacher" ? "Teacher" : "Student";
   const { unreadChatCount } = usePresence();
   const { pinnedIds, togglePin, isPinned, trackVisit } = usePersonalizedNav(role);
@@ -45,7 +48,7 @@ function DashboardSidebar({ role, currentTab }: { role: string; currentTab: stri
         </span>
         {pinnedLinks.length > 0 && (
           <span className="text-[10px] text-amber-500 font-semibold flex items-center gap-1">
-            <Star size={10} className="fill-amber-500" /> {pinnedLinks.length} đã ghim
+            <Star size={10} className="fill-amber-500" /> {pinnedLinks.length} {t("header.pinned", "đã ghim")}
           </span>
         )}
       </div>
@@ -56,7 +59,7 @@ function DashboardSidebar({ role, currentTab }: { role: string; currentTab: stri
         {pinnedLinks.length > 0 && (
           <div className="mb-2 pb-2 border-b border-[var(--line)]">
             <div className="px-2.5 py-1 text-[10px] font-bold text-[var(--ink-3)] uppercase tracking-wider flex items-center justify-between">
-              <span>Ghim nhanh</span>
+              <span>{t("header.quick_pin", "Ghim nhanh")}</span>
               <Star size={10} className="text-amber-500 fill-amber-500" />
             </div>
             <div className="space-y-0.5 mt-1">
@@ -112,7 +115,7 @@ function DashboardSidebar({ role, currentTab }: { role: string; currentTab: stri
                   e.stopPropagation();
                   togglePin(link.id);
                 }}
-                title={pinned ? "Bỏ ghim" : "Ghim lên đầu"}
+                title={pinned ? t("header.unpin", "Bỏ ghim") : t("header.pin_to_top", "Ghim lên đầu")}
                 className={`ml-auto p-1 rounded-md transition-all ${
                   pinned
                     ? "text-amber-500 hover:text-amber-600"
@@ -157,6 +160,7 @@ function UserDropdown({ user, logout, currentFeature }: { user: any; logout: () 
     return () => document.removeEventListener("mousedown", handler);
   }, [open]);
 
+  const { t } = useI18n();
   const initials = user?.name ? user.name.charAt(0).toUpperCase() : "U";
 
   return (
@@ -188,14 +192,14 @@ function UserDropdown({ user, logout, currentFeature }: { user: any; logout: () 
               onClick={() => setOpen(false)}
               className="flex items-center gap-2.5 px-4 py-2.5 text-[13px] text-[var(--ink-2)] hover:bg-[var(--surface-3)] transition"
             >
-              <User size={15} /> Hồ sơ cá nhân
+              <User size={15} /> {t("header.profile", "Hồ sơ cá nhân")}
             </Link>
 
             <button
               onClick={() => { setOpen(false); setShowFeedback(true); }}
               className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[13px] text-[var(--ink-2)] hover:bg-[var(--surface-3)] transition"
             >
-              <MessageCircleWarning size={15} /> Góp ý & Báo lỗi
+              <MessageCircleWarning size={15} /> {t("header.feedback", "Góp ý & Báo lỗi")}
             </button>
 
             <div className="my-1 border-t border-[var(--line)]" />
@@ -204,7 +208,7 @@ function UserDropdown({ user, logout, currentFeature }: { user: any; logout: () 
               onClick={() => { setOpen(false); logout(); }}
               className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[13px] text-red-600 hover:bg-red-50 transition"
             >
-              <LogOut size={15} /> Đăng xuất
+              <LogOut size={15} /> {t("header.logout", "Đăng xuất")}
             </button>
           </div>
         </div>
@@ -357,6 +361,7 @@ function FeedbackModal({ feature, onClose }: { feature: string; onClose: () => v
 function AppHeader({ user, logout, currentTab, refreshUser }: { user: any; logout: () => void; currentTab: string; refreshUser: () => void }) {
   const isStudent = (user?.role ?? "").toString().toLowerCase() === "student";
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const { t } = useI18n();
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -388,11 +393,14 @@ function AppHeader({ user, logout, currentTab, refreshUser }: { user: any; logou
               <button
                 onClick={() => refreshUser()}
                 className="flex items-center gap-1.5 bg-amber-50 text-amber-700 px-2.5 py-1 rounded-lg border border-amber-100 font-semibold text-xs hover:bg-amber-100 transition"
-                title="Điểm tích lũy"
+                title={t("header.points", "Điểm tích lũy")}
               >
                 <Trophy size={12} className="text-amber-500" /> {user?.points || 0} pts
               </button>
-              <div className="flex items-center gap-1.5 bg-blue-50 text-[var(--brand)] px-2.5 py-1 rounded-lg border border-blue-100 font-semibold text-xs">
+              <div
+                className="flex items-center gap-1.5 bg-blue-50 text-[var(--brand)] px-2.5 py-1 rounded-lg border border-blue-100 font-semibold text-xs"
+                title={t("header.credits", "AI Credits")}
+              >
                 <Sparkles size={12} /> {user?.credits_ai || 0}
               </div>
             </div>
@@ -405,9 +413,12 @@ function AppHeader({ user, logout, currentTab, refreshUser }: { user: any; logou
             title="Tìm kiếm tính năng (Ctrl+K / ⌘K)"
           >
             <Search size={13} />
-            <span>Tìm kiếm...</span>
+            <span>{t("header.search", "Tìm kiếm...")}</span>
             <span className="hidden md:inline ml-1 text-[10px] bg-[var(--surface-3)] px-1 py-0.5 rounded">⌘K</span>
           </button>
+
+          {/* Language Selector */}
+          <LanguageSelector />
 
           {/* Notification dropdown */}
           <NotificationDropdown />
@@ -428,7 +439,8 @@ function AppHeader({ user, logout, currentTab, refreshUser }: { user: any; logou
 // ─── Bottom nav (mobile) ─────────────────────────────────────────────────────
 
 function BottomNav({ role, currentTab, basePath }: { role: string; currentTab: string; basePath: string }) {
-  const items = getBottomNavItems(role, basePath);
+  const { locale } = useI18n();
+  const items = getBottomNavItems(role, basePath, locale);
   return (
     <nav className="lg:hidden fixed bottom-0 inset-x-0 z-30 bg-[var(--surface-1)] border-t border-[var(--line)] flex pb-safe">
       {items.map((item) => {
@@ -507,18 +519,20 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
-    <ChatProvider>
-      <Suspense
-        fallback={
-          <div className="flex h-screen items-center justify-center bg-[var(--surface-2)]">
-            <div className="animate-spin rounded-full h-9 w-9 border-b-2 border-[var(--brand)]" />
-          </div>
-        }
-      >
-        <DashboardLayoutInner>{children}</DashboardLayoutInner>
-      </Suspense>
-      <AIChatbot />
-      <ChatTriggerButton />
-    </ChatProvider>
+    <I18nProvider>
+      <ChatProvider>
+        <Suspense
+          fallback={
+            <div className="flex h-screen items-center justify-center bg-[var(--surface-2)]">
+              <div className="animate-spin rounded-full h-9 w-9 border-b-2 border-[var(--brand)]" />
+            </div>
+          }
+        >
+          <DashboardLayoutInner>{children}</DashboardLayoutInner>
+        </Suspense>
+        <AIChatbot />
+        <ChatTriggerButton />
+      </ChatProvider>
+    </I18nProvider>
   );
 }

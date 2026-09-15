@@ -38,6 +38,8 @@ const LEGACY_MAP: Record<string, { domain: string; defaultSub: string }> = {
   news:        { domain: "language",  defaultSub: "news" },
   practice:    { domain: "practice",  defaultSub: "practice" },
   ipa:         { domain: "practice",  defaultSub: "ipa" },
+  "cambridge-test": { domain: "practice", defaultSub: "cambridge-test" },
+  cambridge:   { domain: "practice",  defaultSub: "cambridge-test" },
   scores:      { domain: "progress",  defaultSub: "scores" },
   ranking:     { domain: "progress",  defaultSub: "ranking" },
   roadmap:     { domain: "progress",  defaultSub: "roadmap" },

@@ -3,6 +3,9 @@ import React, { useState, useEffect } from "react";
 import dynamic from "next/dynamic";
 import { Award, Mic } from "lucide-react";
 import DomainShortcutsBanner from "../../../components/DomainShortcutsBanner";
+import { useDomainPlugins } from "../../../plugins/pluginRegistry";
+import "../../../plugins/cambridge-mock/CambridgeMockPlugin"; // Ensure default partner plugins are registered
+import { useI18n } from "../../../context/I18nContext";
 
 const TabLoader = () => (
   <div className="flex justify-center items-center py-20">
@@ -26,12 +29,13 @@ export default function PracticeDomain({
   onSubTabChange,
   setShowCreditModal
 }: PracticeDomainProps) {
-  const [activeSub, setActiveSub] = useState<string>(
-    initialSubTab === "ipa" ? "ipa" : "practice"
-  );
+  const { t, localize } = useI18n();
+  const plugins = useDomainPlugins("practice");
+
+  const [activeSub, setActiveSub] = useState<string>(initialSubTab || "practice");
 
   useEffect(() => {
-    if (initialSubTab && (initialSubTab === "practice" || initialSubTab === "ipa")) {
+    if (initialSubTab) {
       setActiveSub(initialSubTab);
     }
   }, [initialSubTab]);
@@ -40,6 +44,8 @@ export default function PracticeDomain({
     setActiveSub(sub);
     onSubTabChange?.(sub);
   };
+
+  const activePlugin = plugins.find((p) => p.id === activeSub);
 
   return (
     <div className="space-y-4 animate-in fade-in duration-200">
@@ -55,7 +61,7 @@ export default function PracticeDomain({
           }`}
         >
           <Award size={15} className={activeSub === "practice" ? "text-[var(--brand)]" : "text-[var(--ink-3)]"} />
-          <span>Luyện thi & Đề test</span>
+          <span>{t("sub.practice", "Luyện thi & Đề test")}</span>
         </button>
 
         <button
@@ -68,8 +74,35 @@ export default function PracticeDomain({
           }`}
         >
           <Mic size={15} className={activeSub === "ipa" ? "text-[var(--brand)]" : "text-[var(--ink-3)]"} />
-          <span>Phát âm chuẩn IPA</span>
+          <span>{t("sub.ipa", "Phát âm chuẩn IPA")}</span>
         </button>
+
+        {/* Dynamic Registered Plugins */}
+        {plugins.map((plugin) => {
+          const isSelected = activeSub === plugin.id;
+          const PluginIcon = plugin.icon || Award;
+          const label = localize(plugin.label, plugin.id);
+          return (
+            <button
+              key={plugin.id}
+              type="button"
+              onClick={() => handleSelectSub(plugin.id)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs transition-all whitespace-nowrap ${
+                isSelected
+                  ? "bg-white text-[var(--ink-1)] shadow-xs font-bold"
+                  : "text-[var(--ink-2)] hover:text-[var(--ink-1)] font-medium"
+              }`}
+            >
+              <PluginIcon size={15} className={isSelected ? "text-amber-600" : "text-[var(--ink-3)]"} />
+              <span>{label}</span>
+              {plugin.badge && (
+                <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 tracking-wider">
+                  {plugin.badge}
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
       {/* Sub-tab content */}
@@ -80,6 +113,13 @@ export default function PracticeDomain({
         <div style={{ display: activeSub === "ipa" ? "block" : "none" }}>
           <IpaTab API_URL={API_URL} />
         </div>
+
+        {/* Plugin Tab Content */}
+        {activePlugin && (
+          <div>
+            <activePlugin.component API_URL={API_URL} setShowCreditModal={setShowCreditModal} />
+          </div>
+        )}
       </div>
 
       {/* Contextual next-steps */}

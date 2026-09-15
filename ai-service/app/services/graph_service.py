@@ -47,7 +47,8 @@ def get_graph():
             url=uri,
             username=username,
             password=password,
-            database=db_name
+            database=db_name,
+            refresh_schema=False
         )
         print("[Neo4j] Connected successfully.", flush=True)
         last_error = None
