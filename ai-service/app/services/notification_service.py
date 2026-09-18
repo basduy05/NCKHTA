@@ -21,7 +21,7 @@ def _ensure_notifications_table(conn):
                 category TEXT DEFAULT 'system',
                 link TEXT,
                 is_read BOOLEAN DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                created_at TIMESTAMP DEFAULT (DATETIME('now', '+7 hours'))
             )
         """)
         try:
@@ -49,8 +49,8 @@ def save_notification(
     try:
         cur = conn.cursor()
         cur.execute("""
-            INSERT INTO notifications (user_id, sender_id, title, message, type, category, link, is_read)
-            VALUES (?, ?, ?, ?, ?, ?, ?, 0)
+            INSERT INTO notifications (user_id, sender_id, title, message, type, category, link, is_read, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 0, DATETIME('now', '+7 hours'))
         """, (user_id, sender_id, title, message, notif_type.lower(), category.lower(), link))
         conn.commit()
         notif_id = getattr(cur, "lastrowid", None) or cur.last_insert_rowid if hasattr(cur, "last_insert_rowid") else None
@@ -64,8 +64,9 @@ def save_notification(
     return notif_id
 
 def get_user_notifications(user_id: int, limit: int = 50) -> Dict:
-    """Fetch user's notifications and unread count."""
+    """Fetch user's notifications and unread count with Vietnam Time (GMT+7)."""
     from ..database import get_db
+    from .time_utils import to_vn_iso
     conn = get_db()
     _ensure_notifications_table(conn)
     items = []
@@ -90,7 +91,7 @@ def get_user_notifications(user_id: int, limit: int = 50) -> Dict:
                 "category": d.get("category", "system"),
                 "link": d.get("link"),
                 "isRead": bool(d.get("is_read")),
-                "timestamp": d.get("created_at") or datetime.now(timezone.utc).isoformat()
+                "timestamp": to_vn_iso(d.get("created_at"))
             })
 
         cur.execute("SELECT COUNT(*) FROM notifications WHERE user_id = ? AND (is_read = 0 OR is_read IS NULL)", (user_id,))
@@ -205,6 +206,8 @@ async def notify_user(
         except Exception as e:
             print(f"[NOTIFY_USER DB ERROR]: {e}", flush=True)
 
+    from .time_utils import now_vn_iso
+
     payload = {
         "id": str(notif_id) if notif_id else str(int(datetime.now().timestamp() * 1000)),
         "type": event_type,
@@ -213,7 +216,7 @@ async def notify_user(
         "message": message,
         "link": link,
         "data": data,
-        "timestamp": datetime.now(timezone.utc).isoformat()
+        "timestamp": now_vn_iso()
     }
 
     queues = _notification_queues.get(user_id, [])
@@ -233,6 +236,7 @@ async def broadcast_notification(
     sender_id: Optional[int] = None
 ):
     """Broadcast notification to all currently connected users and persist in DB."""
+    from .time_utils import now_vn_iso
     data = data or {}
     link = data.get("link")
     category = data.get("category", "system")
@@ -271,7 +275,7 @@ async def broadcast_notification(
         "message": message,
         "link": link,
         "data": data,
-        "timestamp": datetime.now(timezone.utc).isoformat()
+        "timestamp": now_vn_iso()
     }
 
     for user_id, queues in list(_notification_queues.items()):
